@@ -252,6 +252,12 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
 
+  // Tracks whether the user has manually typed an exchange rate for the
+  // currently-selected currency. While true, the auto-fetch effect below
+  // will not overwrite what the user typed. Reset whenever the currency
+  // itself changes, so a genuinely new currency still gets its DB rate.
+  const [exRateTouched, setExRateTouched] = useState(false);
+
   const setField = (key: string, value: string) => setInvoice((prev: any) => ({ ...prev, [key]: value }));
 
   const prinCode = getValue(invoice, "prin_code") || "";
@@ -264,7 +270,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const isNew = !hasExistingData;
 
   // -------------------------------------------------------------------------
-  // Currency dropdown + exchange rate lookup (unchanged)
+  // Currency dropdown + exchange rate lookup
   // -------------------------------------------------------------------------
 
   useEffect(() => {
@@ -288,8 +294,10 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     };
   }, [user?.company_code]);
 
+  // Auto-fetch the DB exchange rate whenever the currency changes, unless
+  // the user has manually overridden the rate for this currency selection.
   useEffect(() => {
-    if (!invoice.curr_code) return;
+    if (!invoice.curr_code || exRateTouched) return;
     let cancelled = false;
     (async () => {
       try {
@@ -303,7 +311,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     return () => {
       cancelled = true;
     };
-  }, [invoice.curr_code]);
+  }, [invoice.curr_code, exRateTouched]);
 
   // -------------------------------------------------------------------------
   // Job rows — auto-loaded straight into the grid once a principal is picked
@@ -643,13 +651,27 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
                     return [];
                   }
                 }}
-                onChange={(value) => setInvoice((prev: any) => ({ ...prev, curr_code: value }))}
+                onChange={(value) => {
+                  // A genuinely new currency selection should re-fetch its own
+                  // DB rate, so clear the "touched" flag here.
+                  setExRateTouched(false);
+                  setInvoice((prev: any) => ({ ...prev, curr_code: value }));
+                }}
                 disabled={viewMode || loadingCurrencies}
                 placeholder={loadingCurrencies ? "Loading…" : "Select currency"}
               />
             </FieldLabel>
             <FieldLabel label="Exchange rate">
-              <Input className="h-8 text-sm" value={getValue(invoice, "ex_rate") ?? ""} placeholder="Auto" />
+              <Input
+                className="h-8 text-sm"
+                value={getValue(invoice, "ex_rate") ?? ""}
+                onChange={(e) => {
+                  setExRateTouched(true);
+                  setField("ex_rate", e.target.value);
+                }}
+                disabled={viewMode}
+                placeholder="Auto"
+              />
             </FieldLabel>
           </div>
         </section>
