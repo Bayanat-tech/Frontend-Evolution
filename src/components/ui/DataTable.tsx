@@ -305,7 +305,7 @@ export function DataTable<TData, TValue>({
   // STANDARD WIDE-TABLE PATTERN — condensed page-number list (1 2 3 … 42)
   // instead of only first/prev/next/last controls, so pagination reads the
   // same regardless of how many pages there are.
-  const pageNumbers = useMemo(() => getPaginationRange(currentPageIndex, pageCount), [currentPageIndex, pageCount]);
+  // const pageNumbers = useMemo(() => getPaginationRange(currentPageIndex, pageCount), [currentPageIndex, pageCount]);
 
   useEffect(() => {
     if (!manualPagination) table.setPageSize(pageSize);
