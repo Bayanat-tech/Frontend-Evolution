@@ -947,35 +947,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             >
               Freight Quotation
             </h2>
-            <span
-              className="px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-              style={{ fontSize: "10px", letterSpacing: "0.03em", fontWeight: 700 }}
-            >
-              QUOTATION
-            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {notice && <NoticeChip notice={notice} />}
-            <span className="px-2.5 py-1 rounded-xl border border-border bg-card text-muted-foreground text-xs font-semibold">
-              Records: {rows.length}
-            </span>
-            <button
-              type="button"
-              onClick={loadRows}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-colors text-xs font-medium cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-              {loading ? "Loading" : "Refresh"}
-            </button>
-            <button
-              type="button"
-              onClick={startNew}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add Quotation
-            </button>
+
           </div>
         </div>
 
@@ -1005,13 +980,19 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         <DataTable
           columns={columns}
           data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Quotation Records`}
-          subtitle="Freight Quotation"
+          toolbar={<button
+              type="button"
+              onClick={startNew}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Quotation
+            </button>}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search quotation, principal, port..."
           loading={loading}
-          height="calc(100vh - 240px)"
+          height="calc(100dvh - 180px)"
           density="grid"
           enablePagination
           pageSize={25}

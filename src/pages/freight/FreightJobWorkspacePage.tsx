@@ -191,17 +191,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       <section className="freight-list-screen grid gap-2">
         <div className="freight-job-list-hero">
           <div>
-            <p className="eyebrow">Freight Operations</p>
             <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
             {/* <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p> */}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-              <RefreshCw size={15} /> Refresh
-            </Button>
-            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
-              <Plus size={15} /> Add Job
-            </Button>
           </div>
         </div>
 
@@ -229,13 +220,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
         <DataTable
           columns={columns}
           data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Jobs`}
-          subtitle={`${modeLabel[targetMode]} / ${directionLabel[targetDirection]}`}
+          toolbar={<Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
+              <Plus size={15} /> Add Job
+            </Button>}
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Filter visible jobs..."
-          height="calc(100vh - 258px)"
+          height="calc(100dvh - 180px)"
           minWidth={1320}
           density="grid"
           enablePagination
