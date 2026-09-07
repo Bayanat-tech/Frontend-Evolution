@@ -226,6 +226,7 @@ interface InvoiceFormProps {
 
 export default function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
+  const { company_code: authCompanyCode, loginid } = user ?? {};
 
   const [invoice, setInvoice] = useState<any>(() => {
     if (existingData && Object.keys(existingData).length > 0) return existingData;
@@ -252,6 +253,12 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
 
+  // The company's own base/home currency (from MS_COMPANYINFO). Job and
+  // storage bill/cost figures come out of the source tables in this
+  // currency — we only need to convert them when the invoice itself is
+  // being raised in a different currency.
+  const [companyCurrCode, setCompanyCurrCode] = useState<string>("");
+
   // Tracks whether the user has manually typed an exchange rate for the
   // currently-selected currency. While true, the auto-fetch effect below
   // will not overwrite what the user typed. Reset whenever the currency
@@ -268,6 +275,36 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
   const isNew = !hasExistingData;
+
+  // -------------------------------------------------------------------------
+  // Company base currency — used to decide whether/how to convert
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!authCompanyCode) {
+      setCompanyCurrCode("");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await executeWmsInboundSql(`
+          SELECT * FROM MS_COMPANYINFO
+          WHERE COMPANY_CODE = '${authCompanyCode}'
+          ORDER BY COMPANY_CODE
+        `);
+        const row = Array.isArray(rows) ? rows[0] : undefined;
+        // NOTE: adjust this key if MS_COMPANYINFO's currency column isn't CURR_CODE
+        const curr = getValue(row, "curr_code");
+        if (!cancelled) setCompanyCurrCode(String(curr ?? "").trim());
+      } catch {
+        if (!cancelled) setCompanyCurrCode("");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authCompanyCode]);
 
   // -------------------------------------------------------------------------
   // Currency dropdown + exchange rate lookup
@@ -312,6 +349,24 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
       cancelled = true;
     };
   }, [invoice.curr_code, exRateTouched]);
+
+  // -------------------------------------------------------------------------
+  // Exchange conversion factor
+  // -------------------------------------------------------------------------
+  // Job/storage bill & cost figures come out of the source tables in the
+  // company's base currency. If the invoice is being raised in a different
+  // currency, convert: base_amount / ex_rate = invoice_currency_amount
+  // (matches EX_RATE meaning "1 unit of invoice currency = EX_RATE units
+  // of base currency" — e.g. USD invoice, EX_RATE 0.385 for an OMR base).
+  // Same currency (or missing data) => factor of 1, i.e. no conversion.
+
+  const exchangeFactor = useMemo(() => {
+    const invCurr = String(currCode || "").trim().toUpperCase();
+    const baseCurr = String(companyCurrCode || "").trim().toUpperCase();
+    if (!invCurr || !baseCurr || invCurr === baseCurr) return 1;
+    const rate = Number(invoice.ex_rate);
+    return rate > 0 ? 1 / rate : 1;
+  }, [currCode, companyCurrCode, invoice.ex_rate]);
 
   // -------------------------------------------------------------------------
   // Job rows — auto-loaded straight into the grid once a principal is picked
@@ -406,6 +461,31 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   }, [prinCode, consolidatedInvNo, fromDate, toDate, user?.loginid, user?.company_code]);
 
   // -------------------------------------------------------------------------
+  // Currency-converted views of the source rows — used for display,
+  // totals, and the save payload, so all three always agree.
+  // -------------------------------------------------------------------------
+
+  const displayJobRows = useMemo<NormalizedJobRow[]>(
+    () =>
+      jobRows.map((row) => ({
+        ...row,
+        bill: row.bill * exchangeFactor,
+        bill_rate: row.bill_rate * exchangeFactor,
+        cost_rate: row.cost_rate * exchangeFactor,
+      })),
+    [jobRows, exchangeFactor],
+  );
+
+  const displayStorageRows = useMemo(
+    () =>
+      storageRows.map((row: any) => ({
+        ...row,
+        AMOUNT: Number(row.AMOUNT ?? 0) * exchangeFactor,
+      })),
+    [storageRows, exchangeFactor],
+  );
+
+  // -------------------------------------------------------------------------
   // Selection state
   // -------------------------------------------------------------------------
 
@@ -443,10 +523,13 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     });
   };
 
-  const selectedJobRows = useMemo(() => jobRows.filter((r) => selectedJobKeys.has(jobRowKey(r))), [jobRows, selectedJobKeys]);
+  const selectedJobRows = useMemo(
+    () => displayJobRows.filter((r) => selectedJobKeys.has(jobRowKey(r))),
+    [displayJobRows, selectedJobKeys],
+  );
   const selectedStorageRows = useMemo(
-    () => storageRows.filter((r, i) => selectedStorageKeys.has(storageRowKey(r, i))),
-    [storageRows, selectedStorageKeys],
+    () => displayStorageRows.filter((r: any, i: number) => selectedStorageKeys.has(storageRowKey(r, i))),
+    [displayStorageRows, selectedStorageKeys],
   );
 
   const billingTotals = useMemo(() => {
@@ -458,7 +541,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const lineCount = selectedJobRows.length + selectedStorageRows.length;
 
   // -------------------------------------------------------------------------
-  // Save — checked rows are the payload
+  // Save — checked rows are the payload (already currency-converted)
   // -------------------------------------------------------------------------
 
   const handleSave = async () => {
@@ -722,14 +805,14 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
                         Select a principal to load job details.
                       </TableCell>
                     </TableRow>
-                  ) : jobRows.length === 0 ? (
+                  ) : displayJobRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="py-8 text-center text-[12px] text-muted-foreground">
                         No jobs found for this principal.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    jobRows.map((row) => {
+                    displayJobRows.map((row) => {
                       const key = jobRowKey(row);
                       const isSelected = selectedJobKeys.has(key);
                       return (
@@ -799,14 +882,14 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
                         Select a principal to load storage details.
                       </TableCell>
                     </TableRow>
-                  ) : storageRows.length === 0 ? (
+                  ) : displayStorageRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="py-8 text-center text-[12px] text-muted-foreground">
                         No storage records found for this principal.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    storageRows.map((row: any, index) => {
+                    displayStorageRows.map((row: any, index) => {
                       const key = storageRowKey(row, index);
                       const isSelected = selectedStorageKeys.has(key);
                       return (
