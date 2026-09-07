@@ -26,12 +26,15 @@ import {
   newId,
   numberOrZero,
   text,
+  DiscAmountPercentage,
+  TotalUnitPrice,
+  Totalunitprice,
 } from "../../purchase_sales/purchase/Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSO, SalesConfig, SO_DOC_TYPE  } from "./SalesOrdertypes";
+import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { getSOrderReportHtml } from "../../../api/transactions";
@@ -78,33 +81,34 @@ export function SalesOrderEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
-
+  const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   useEffect(() => {
     if (!editor) return;
     // const initialForm = emptyForm(editor);
     // setForm(initialForm);
     const initialForm = emptyForm(editor) as unknown as PurchaseOrderForm;
-setForm(initialForm);
+    setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
-  useEffect(() => {
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+ useEffect(() => {
+
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price && !form.tx_compnt_1_expmt) return;
+    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
+    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
       current.map((row) => ({
         ...row,
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: row.disc_percent || form.disc_hdr_percent,
-        tx_compnt_1_expmt: row.tx_compnt_1_expmt
+        disc_percent: pct > 0 ? pct : row.disc_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: taxPerc,
       }))
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt]);
-
-
-
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -145,8 +149,8 @@ setForm(initialForm);
           dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
           dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_price: Number(headerRaw.disc_price || 0),
-          disc_pct: Number(headerRaw.disc_pct || 0),
+          disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
+          disc_hdr_price: numberOrZero(headerRaw.disc_hdr_price),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
           expense_ac_post: text(headerRaw.expense_ac_post || current.expense_ac_post),
@@ -156,6 +160,7 @@ setForm(initialForm);
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt)
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -205,10 +210,31 @@ setForm(initialForm);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
-
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      let updated = { ...current, [field]: value };
+
+      if (field === "disc_hdr_price") {
+        updated.disc_hdr_percent = Number(value) > 0 ? DiscAmountPercentage(updated, rows) : 0;
+      }
+
+      return updated;
+    });
+
+    if (field === "disc_hdr_price") {
+      const pct = Number(value) > 0 ? DiscAmountPercentage({ ...form, disc_hdr_price: Number(value) }, rows) : 0;
+      setRows((current) => current.map((row) => ({
+        ...row,
+        disc_price: Number(value) || 0,
+        disc_percent: pct
+      })));
+    }
+
+    if (field === "disc_hdr_percent") {
+      setRows((current) => current.map((row) => ({ ...row, disc_percent: Number(value) || 0 })));
+    }
   };
+
 
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -219,8 +245,8 @@ setForm(initialForm);
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_name,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
@@ -256,10 +282,10 @@ setForm(initialForm);
     printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
 
     getSOrderReportHtml({
-  company_code: user?.company_code,
-  doc_type: SO_DOC_TYPE.SO,
-  doc_no: form.doc_no,
-})
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.SO,
+      doc_no: form.doc_no,
+    })
       .then((html) => {
         printWindow.document.open();
         printWindow.document.write(html);
@@ -275,18 +301,23 @@ setForm(initialForm);
       });
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
+   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order saved as draft");
-
+    }, "Purchase Quotation saved as draft");
+  };
+  
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
+      await runWorkflow("SUBMITTED",SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
   };
 
   const handleCancel = () =>
@@ -451,6 +482,7 @@ setForm(initialForm);
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                rows={rows}
               />
 
               <PurchaseOrderLinesTable

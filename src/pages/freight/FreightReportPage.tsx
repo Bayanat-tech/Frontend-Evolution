@@ -21,18 +21,23 @@ export type FreightReportKey =
   | "query_report"
   | "deposits"
   | "container_deposit"
-  | "freight_summary";
+  | "freight_summary"
+  | "freight_tracking"
+  | "daily_activity_report"
+  | "etd_report"
+  | "eta_report"
+  | "petty_cash_report";
 
 type ReportColumn = { key: string; label: string; kind?: "date" | "amount" | "status" | "mode" | "type" };
 type FilterKey = "date" | "principal" | "job" | "mode" | "type" | "status" | "search";
 type AdvancedFilterKey =
   | "principalRange" | "documentRange" | "jobRange" | "confirmDate" | "scheduleDate" | "collectionDate" | "depositDate" | "expiryDate" | "etaDate" | "ataDate"
   | "division" | "departmentRange" | "portRange" | "brokerRange" | "periodMode" | "variant" | "invoice" | "vessel" | "voyage" | "container" | "bl" | "be"
-  | "claimExit" | "cleared" | "docRef" | "po" | "summaryParties" | "classification";
+  | "claimExit" | "cleared" | "docRef" | "po" | "summaryParties" | "classification" | "cashier" | "pettyDocumentRange";
 type ReportConfig = {
   title: string;
   subtitle: string;
-  family: string;
+    // family: string;
   icon: typeof FileSpreadsheet;
   columns: ReportColumn[];
   amountFields: string[];
@@ -97,6 +102,7 @@ type ReportFilters = {
   forwarder_code: string;
   doc_ref: string;
   po_no: string;
+  cashier_id: string;
   search: string;
 };
 
@@ -104,7 +110,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   enquiry_list: {
     title: "Enquiry List",
     subtitle: "Customer freight requirements captured before RFQ or quotation.",
-    family: "Commercial Register",
+    // family: "Commercial Register",
     icon: FileSpreadsheet,
     amountFields: [],
     filters: ["date", "mode", "type", "status", "search"],
@@ -127,7 +133,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   rfq_list: {
     title: "RFQ List",
     subtitle: "Request-for-quote register sourced from approved enquiries.",
-    family: "Supplier Rate Request",
+    // family: "Supplier Rate Request",
     icon: FileSpreadsheet,
     amountFields: [],
     filters: ["date", "mode", "type", "status", "search"],
@@ -148,7 +154,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   quotation_list: {
     title: "Quotation List",
     subtitle: "Customer quotation register with cost, sell, and margin.",
-    family: "Commercial Offer",
+    // family: "Commercial Offer",
     icon: BarChart3,
     amountFields: ["TOTAL_SELL", "TOTAL_COST", "PROFIT"],
     filters: ["date", "mode", "type", "status", "search"],
@@ -171,7 +177,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_job_list: {
     title: "Freight Job List",
     subtitle: "Operational jobs created from approved freight quotations.",
-    family: "Operations",
+    // family: "Operations",
     icon: Ship,
     amountFields: [],
     filters: ["date", "mode", "type", "status", "search"],
@@ -194,9 +200,9 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_profit: {
     title: "Freight Profit",
     subtitle: "Job profitability with revenue, expense, and margin control.",
-    family: "Finance Control",
+    // family: "Finance Control",
     icon: BarChart3,
-    amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
+    amountFields: ["REVENUE", "EXPENSE", "PARTNERS_SHARE", "TRANSPORT_PRICE", "PROFIT"],
     filters: ["date", "search"],
     advancedFilters: ["principalRange", "division", "periodMode", "variant"],
     primaryMetric: "Profit",
@@ -216,7 +222,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_expense: {
     title: "Freight Expense",
     subtitle: "Cost lines posted against freight job activities.",
-    family: "Cost Report",
+    // family: "Cost Report",
     icon: BarChart3,
     amountFields: ["EXPENSE"],
     filters: ["date", "search"],
@@ -238,7 +244,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_revenue: {
     title: "Freight Revenue",
     subtitle: "Billing and revenue lines posted against freight jobs.",
-    family: "Revenue Report",
+    // family: "Revenue Report",
     icon: BarChart3,
     amountFields: ["REVENUE"],
     filters: ["date", "search"],
@@ -260,7 +266,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_brokerage: {
     title: "Freight Brokerage",
     subtitle: "Broker-linked jobs and brokerage base values.",
-    family: "Brokerage",
+    // family: "Brokerage",
     icon: WalletCards,
     amountFields: ["BROKERAGE_BASE"],
     filters: ["date", "search"],
@@ -281,7 +287,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   query_report: {
     title: "Query Report",
     subtitle: "Shipment query with invoice, vessel, BL, container, and date filters.",
-    family: "Operations Query",
+    // family: "Operations Query",
     icon: FileSpreadsheet,
     amountFields: [],
     filters: ["date", "mode", "type", "search"],
@@ -303,7 +309,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   deposits: {
     title: "Deposits",
     subtitle: "Shipment deposits and demurrage values by job.",
-    family: "Settlement",
+    // family: "Settlement",
     icon: WalletCards,
     amountFields: ["AMOUNT"],
     filters: ["date", "status"],
@@ -325,7 +331,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   container_deposit: {
     title: "Container Deposit",
     subtitle: "Container deposit follow-up, expiry, claim, and collection status.",
-    family: "Settlement",
+    // family: "Settlement",
     icon: Boxes,
     amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
     filters: ["date", "type", "status"],
@@ -348,21 +354,111 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_summary: {
     title: "Freight Summary Report",
     subtitle: "Mode-wise summary/detail report with PB commercial filters.",
-    family: "Modewise Summary",
+    // family: "Modewise Summary",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
     filters: ["date", "mode", "type", "search"],
     advancedFilters: ["principalRange", "division", "summaryParties", "classification", "periodMode", "variant"],
     primaryMetric: "Rows",
     columns: [
+      { key: "TRANS_MONTH", label: "Month" },
+      { key: "TRANS_YEAR", label: "Year" },
       { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" },
-      { key: "JOB_TYPE", label: "Type", kind: "type" },
       { key: "PRIN_CODE", label: "Principal" },
-      { key: "PRIN_NAME", label: "Principal Name" },
-      { key: "JOB_NO", label: "Job No" },
+      { key: "GROSS_WT", label: "Gross Weight", kind: "amount" },
+      { key: "VOLUME", label: "Volume", kind: "amount" },
+      { key: "TEUS", label: "TEUs", kind: "amount" },
+      { key: "FEUS", label: "FEUs", kind: "amount" },
       { key: "REVENUE", label: "Revenue", kind: "amount" },
       { key: "EXPENSE", label: "Expense", kind: "amount" },
+      { key: "PARTNERS_SHARE", label: "Partner Share", kind: "amount" },
+      { key: "TRANSPORT_PRICE", label: "Transport", kind: "amount" },
       { key: "PROFIT", label: "Profit", kind: "amount" },
+    ],
+  },
+  freight_tracking: {
+    title: "Freight Tracking",
+    subtitle: "PowerBuilder shipment tracking details by principal and freight job.",
+    icon: Ship,
+    amountFields: [],
+    filters: ["search"],
+    advancedFilters: ["principalRange", "jobRange"],
+    primaryMetric: "Shipments",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "PRIN_CODE", label: "Principal" },
+      { key: "DOC_REF", label: "Document Ref" }, { key: "JOB_TYPE", label: "Type", kind: "type" },
+      { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" }, { key: "SHIPPER_NAME", label: "Shipper" },
+      { key: "CONSIGNEE_NAME", label: "Consignee" }, { key: "CONTAINER_NO", label: "Container No" },
+      { key: "VESSEL_NAME", label: "Vessel" }, { key: "PORT_CODE", label: "Origin" },
+      { key: "DESTINATION_PORT", label: "Destination" }, { key: "ETA", label: "ETA", kind: "date" },
+      { key: "ETD", label: "ETD", kind: "date" }, { key: "GROSS_WT", label: "Gross Weight", kind: "amount" },
+    ],
+  },
+  daily_activity_report: {
+    title: "Daily Activity Report",
+    subtitle: "Confirmed freight jobs and daily container/document activity.",
+    icon: CalendarDays,
+    amountFields: [],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "jobRange"],
+    primaryMetric: "Jobs",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "CONFIRM_DATE", label: "Confirm Date", kind: "date" },
+      { key: "PRIN_CODE", label: "Principal" }, { key: "PRIN_NAME", label: "Principal Name" },
+      { key: "DOC_REF", label: "Document Ref" }, { key: "JOB_TYPE", label: "Type", kind: "type" },
+      { key: "CONTAINER_SIZE", label: "Container Size" }, { key: "NO_OF_CONTAINERS", label: "Containers" },
+      { key: "NO_OF_DOCUMENTS", label: "Documents" }, { key: "REMARKS", label: "Remarks" },
+    ],
+  },
+  etd_report: {
+    title: "ETD Report",
+    subtitle: "PowerBuilder expected-time-of-departure report for export shipments.",
+    icon: Ship,
+    amountFields: [],
+    filters: ["date", "status", "search"],
+    advancedFilters: ["principalRange", "jobRange", "portRange"],
+    primaryMetric: "Shipments",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "ORDER_NO", label: "Order No" },
+      { key: "MOVEMENT", label: "Movement" }, { key: "LOADING_PORT", label: "Loading Port" },
+      { key: "DISCHARGE_PORT", label: "Discharge Port" }, { key: "CONTAINER_NO", label: "Container No" },
+      { key: "BL_NO", label: "BL No" }, { key: "ETD", label: "ETD", kind: "date" },
+      { key: "ETA", label: "ETA", kind: "date" }, { key: "ATA", label: "ATA", kind: "date" },
+      { key: "TRANSIT_TIME", label: "Transit Time" }, { key: "DOC_RCVD", label: "Documents Received" },
+    ],
+  },
+  eta_report: {
+    title: "ETA Report",
+    subtitle: "PowerBuilder expected-time-of-arrival report for sea-import shipments.",
+    icon: Ship,
+    amountFields: [],
+    filters: ["date", "status", "search"],
+    advancedFilters: ["principalRange", "jobRange", "portRange"],
+    primaryMetric: "Shipments",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "PO_NO", label: "PO No" },
+      { key: "CONTAINER_NO", label: "Container No" }, { key: "DOC_REF", label: "Document Ref" },
+      { key: "COUNTRY_ORIGIN", label: "Country Origin" }, { key: "PORT_CODE", label: "Origin Port" },
+      { key: "DESTINATION_PORT", label: "Destination Port" }, { key: "ETD", label: "ETD", kind: "date" },
+      { key: "ETA", label: "ETA", kind: "date" }, { key: "ATA", label: "ATA", kind: "date" },
+      { key: "HEALTH_STATUS", label: "Health Status", kind: "status" }, { key: "REMARKS", label: "Remarks" },
+    ],
+  },
+  petty_cash_report: {
+    title: "Petty Cash Report",
+    subtitle: "PowerBuilder representative-wise petty cash statement and running balance.",
+    icon: WalletCards,
+    amountFields: ["CREDIT", "DEBIT", "BALANCE"],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "jobRange", "pettyDocumentRange", "cashier"],
+    primaryMetric: "Balance",
+    columns: [
+      { key: "CASHIER_ID", label: "Representative" }, { key: "DOC_NO", label: "Document No" },
+      { key: "CONFIRM_DATE", label: "Document Date", kind: "date" }, { key: "HAWB", label: "Receipt / Ref No" },
+      { key: "OTHER_SERVICES", label: "Description" }, { key: "JOB_NO", label: "Job No" },
+      { key: "REMARKS", label: "Remarks" }, { key: "PRIN_CODE", label: "Principal / Customer" },
+      { key: "CREDIT", label: "Credit", kind: "amount" }, { key: "DEBIT", label: "Debit", kind: "amount" },
+      { key: "BALANCE", label: "Balance", kind: "amount" },
     ],
   },
 };
@@ -388,6 +484,12 @@ const statusOptions = [
   { label: "Cancelled", value: "C" },
   { label: "Open", value: "O" },
   { label: "Closed", value: "Y" },
+];
+
+const shipmentHealthStatusOptions = [
+  { label: "All", value: "" },
+  { label: "Cleared For Export", value: "CL" },
+  { label: "Under Process", value: "UP" },
 ];
 
 const periodOptions = [
@@ -478,6 +580,7 @@ const emptyFilters: ReportFilters = {
   forwarder_code: "",
   doc_ref: "",
   po_no: "",
+  cashier_id: "",
   search: "",
 };
 
@@ -486,7 +589,6 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const config = reportConfigs[reportKey];
-  const Icon = config.icon;
   const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
   const [principalText, setPrincipalText] = useState("");
   const [principalFromText, setPrincipalFromText] = useState("");
@@ -549,20 +651,12 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   }
 
   return (
-    <section className="freight-ui-standard grid gap-3">
-      <div className="rounded-md border bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
-              <Icon size={20} />
-            </span>
-            <div className="min-w-0">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{config.family}</p>
-              <h1 className="m-0 truncate text-xl font-semibold leading-tight text-foreground">{config.title}</h1>
-              <p className="m-0 text-xs text-muted-foreground">{config.subtitle}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+    <section className="freight-ui-standard freight-report-screen">
+      <div className="freight-report-card">
+        <div className="freight-report-titlebar">
+          <h1>{config.title}</h1>
+          <span className="freight-report-title-dot" aria-hidden="true" />
+          {/* <div className="flex flex-wrap items-center gap-2">
             <SummaryBadge label="Records" value={String(rows.length)} />
             {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
             <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
@@ -580,7 +674,63 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           </div>
         </div>
 
-        <div className="grid gap-2 p-3 xl:grid-cols-[1fr_1fr_1.35fr_0.9fr_0.8fr_0.8fr_0.85fr_auto]">
+                 <div className="flex flex-wrap items-center gap-2">
+            <SummaryBadge label="Records" value={String(rows.length)} />
+            {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
+            <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
+              <Printer size={14} /> Print
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!rows.length}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
+            >
+              <Download size={14} /> Excel
+            </Button>
+          </div>
+
+        <div className="flex flex-wrap items-stretch gap-0 border-b bg-slate-50/80 px-4 py-2.5">
+          <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
+          <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
+          <SummaryStripItem icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
+          {visibleFilters.includes("status") && (
+            <SummaryStripItem icon={Filter} label="Status" value={optionLabel(statusOptions, filters.status)} last />
+          )}
+        </div> */}
+ 
+                  <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
+            <SummaryBadge label="Records" value={String(rows.length)} />
+            {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
+            <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
+              <Printer size={14} /> Print
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!rows.length}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
+            >
+              <Download size={14} /> Excel
+            </Button>
+          </div>
+        </div>
+
+        <div className="freight-report-filter-heading">
+          <div className="freight-report-filter-title"><span><Filter size={16} /></span>Report Filters</div>
+          <button type="button" onClick={resetFilters}><RefreshCw size={14} /> Clear All</button>
+        </div>
+
+        <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
+          <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
+          <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
+          <SummaryStripItem icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
+          <SummaryStripItem icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
+        </div>
+
+        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
           {visibleFilters.includes("date") && (
             <>
               <Field label="From"><DateField value={filters.from_date} onChange={(value) => setFilter(setFilters, "from_date", value)} /></Field>
@@ -607,19 +757,11 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           {visibleFilters.includes("job") && <Field label="Job No"><Input className="h-8" value={filters.job_no} onChange={(event) => setFilter(setFilters, "job_no", event.target.value)} /></Field>}
           {visibleFilters.includes("mode") && <Field label="Mode"><Select value={filters.transport_mode} options={modeOptions} onChange={(value) => setFilter(setFilters, "transport_mode", value)} /></Field>}
           {visibleFilters.includes("type") && <Field label="Type"><Select value={filters.job_type} options={jobTypeOptions} onChange={(value) => setFilter(setFilters, "job_type", value)} /></Field>}
-          {visibleFilters.includes("status") && <Field label="Status"><Select value={filters.status} options={statusOptions} onChange={(value) => setFilter(setFilters, "status", value)} /></Field>}
-          <div className="flex items-end gap-2">
-            <Button type="button" size="sm" className="h-8" onClick={runReport} disabled={loading}>
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Run
-            </Button>
-            <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={resetFilters} title="Reset">
-              <RefreshCw size={14} />
-            </Button>
-          </div>
+          {visibleFilters.includes("status") && <Field label="Status"><Select value={filters.status} options={reportKey === "eta_report" || reportKey === "etd_report" ? shipmentHealthStatusOptions : statusOptions} onChange={(value) => setFilter(setFilters, "status", value)} /></Field>}
         </div>
 
         {visibleFilters.includes("search") && (
-          <div className="border-t bg-muted/20 p-3">
+          <div className="freight-report-search border-t bg-muted/20 p-3">
             <Field label="Search">
               <Input className="h-8" value={filters.search} onChange={(event) => setFilter(setFilters, "search", event.target.value)} placeholder="Document, job, principal..." />
             </Field>
@@ -634,25 +776,43 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             onPrincipalToSelect={(row) => setPrincipalToText(row ? lookupText(row, "PRIN_CODE") : "")}
    />
         )}
+
+        <div className="freight-report-actions">
+          <Button type="button" size="sm" onClick={runReport} disabled={loading}>
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
+            <Printer size={15} /> Print
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!rows.length}
+            onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
+          >
+            <Download size={15} /> Excel Format
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-4">
+      {/* <div className="grid gap-2 md:grid-cols-4">
         <ReportTile icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} - ${toDisplayDate(filters.to_date) || "Today"}`} />
         <ReportTile icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
         <ReportTile icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
         <ReportTile icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
-      </div>
+      </div> */}
 
-      <ReportLaunchPanel
+      {/* <ReportLaunchPanel
         config={config}
         rows={rows}
         totals={totals}
         loading={loading}
         message={message}
         onOpen={() => printReport()}
-      />
-    </section>
-  );
+      /> */}
+     </section>
+   );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -680,7 +840,7 @@ function AdvancedReportFilters({
 }) {
   const items = config.advancedFilters || [];
   return (
-    <div className="border-t bg-background p-3">
+    <div className="freight-report-advanced border-t bg-background p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Advanced Filters</div>
@@ -821,6 +981,8 @@ function AdvancedReportFilters({
             <Field label="INCO Terms"><Input className="h-8" value={filters.inco_terms} onChange={(event) => setFilter(setFilters, "inco_terms", event.target.value)} /></Field>
           </>
         )}
+        {items.includes("cashier") && <TextFilter label="Representative / Cashier" fieldKey="cashier_id" filters={filters} setFilters={setFilters} />}
+        {items.includes("pettyDocumentRange") && <RangeText label="Document No" fromKey="doc_no_from" toKey="doc_no_to" filters={filters} setFilters={setFilters} />}
       </div>
     </div>
   );
@@ -971,17 +1133,45 @@ function SummaryBadge({ label, value, strong }: { label: string; value: string; 
   return <div className={`rounded-md border px-3 py-1.5 ${strong ? "border-primary/20 bg-primary/10 text-primary" : "bg-muted/40 text-foreground"}`}><div className="text-[9px] font-semibold uppercase text-muted-foreground">{label}</div><div className="text-sm font-semibold">{value}</div></div>;
 }
 
-function ReportTile({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+// function ReportTile({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+//   return (
+//     <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+//       <span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={16} /></span>
+//       <div className="min-w-0">
+//         <div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div>
+//         <div className="truncate text-sm font-semibold text-foreground">{value}</div>
+//       </div>
+//     </div>
+//   );
+// }
+
+function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
-      <span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={16} /></span>
-      <div className="min-w-0">
-        <div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div>
-        <div className="truncate text-sm font-semibold text-foreground">{value}</div>
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 leading-tight">
+        <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+        <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>{value}</div>
       </div>
     </div>
   );
 }
+
+// function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+//   return (
+//     <div className="group flex min-w-0 max-w-[240px] flex-1 basis-[190px] items-center gap-2 rounded-md border border-primary/15 bg-white px-2.5 py-1.5 shadow-sm transition-shadow hover:shadow-md hover:border-primary/30">
+//       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+//         <Icon size={13} />
+//       </span>
+//       <div className="min-w-0 leading-tight">
+//         <div className="text-[8.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+//         <div className="truncate text-xs font-semibold text-slate-800" title={value}>{value}</div>
+//       </div>
+//     </div>
+//   );
+// }
 
 function StatusPill({ value }: { value: string }) {
   const code = value.trim().toUpperCase();
@@ -1022,7 +1212,7 @@ function ReportLaunchPanel({
       </div>
       <div className="grid gap-3 p-4 md:grid-cols-[1.1fr_1fr_1fr]">
         <div className="rounded-md border bg-muted/20 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{config.family}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary"></div>
           <div className="mt-2 text-2xl font-bold text-foreground">{config.title}</div>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Run opens a formatted report viewer with print and Excel actions.</p>
         </div>
@@ -1124,7 +1314,8 @@ function ReportHeader({
         <div>
           <h3 className="m-0 text-xl font-bold uppercase tracking-wide text-slate-950">{config.title}</h3>
           <p className="m-0 text-[11px] text-slate-500">
-            {config.family} | Company {companyCode}
+            {/* {config.family} |  */}
+            Company {companyCode}
             {rows.length ? ` | ${rows.length} record${rows.length === 1 ? "" : "s"}` : ""}
             {totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}
           </p>
@@ -1584,7 +1775,8 @@ function reportLoadingHtml(title: string) {
     .spinner{width:32px;height:32px;border:3px solid #dbe3ef;border-top-color:#0b4ca1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
     .title{font-size:20px;font-weight:800}.sub{margin-top:7px;color:#64748b;font-size:13px}.hint{margin-top:18px;border-radius:8px;background:#f8fafc;padding:10px;color:#475569;font-size:12px}
     @keyframes spin{to{transform:rotate(360deg)}}
-  </style></head><body><div class="bar"><strong>Freight Report Viewer</strong><span>${escapeHtml(title)}</span></div><div class="loading"><div class="box"><div class="spinner"></div><div class="title">Generating ${escapeHtml(title)}</div><div class="sub">Fetching report data from Oracle...</div><div class="hint">Please keep this window open. The formatted report will appear here automatically.</div></div></div></body></html>`;
+  </style></head><body><div class="bar">
+  <strong>Freight Report Viewer</strong><span>${escapeHtml(title)}</span></div><div class="loading"><div class="box"><div class="spinner"></div><div class="title">Generating ${escapeHtml(title)}</div><div class="sub">Fetching report data from Oracle...</div><div class="hint">Please keep this window open. The formatted report will appear here automatically.</div></div></div></body></html>`;
 }
 
 function reportErrorHtml(title: string, message: string) {
@@ -1628,7 +1820,7 @@ function reportHtml(
     @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
   </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(generatedAt)}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
     <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Bayanat Technology"><div class="brand">Bayanat Technology</div></div></div>
-    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">${escapeHtml(config.family)} | Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
+    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">| Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
     <div class="meta"><div><b>Date:</b> ${escapeHtml(generatedAt)}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
     <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}

@@ -202,7 +202,11 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
+import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
+
 
  type WorkspaceRouteContext = {
   pathname: string;
@@ -381,6 +385,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
     element: () => <EmployeeMasterPage />
   },
+
+  {
+  name: "Employee Transfer",
+  match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
+  element: () => <EmployeeTransferPage />
+},
+
   {
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -1315,6 +1326,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
   element: () => <HrEmpLanguagePage/>
 },
+{
+    name : "Employee Dependants",
+    match: ({pathname}) => isHrEmpDependantsRoute(pathname),
+    element: () => <HrEmpDependantsPage/>
+  },
   
   {
     name: "HR Master",
@@ -1350,6 +1366,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   
 
+  
   {
     name : "Purchase Sale Setup",
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
@@ -1384,8 +1401,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "PO Order Register Report",
   match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
   element: () => <PoOrderRegisterPage />,
-}
+},
 
+
+{
+  name: "Purchase Request Register(old) Report",
+  match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
+  element: () => <PrRegisterOldPage />,
+}
 
 
 ];
@@ -1403,6 +1426,19 @@ function isHrEmpLanguageSkillRoute(pathname: string) {
     normalized.includes("/hcm/hcm/employee/language%20skills")
   );
 }
+
+
+function isHrEmpDependantsRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/employee/employee_dependants") ||
+    normalized.includes("/hcm/hcm/employee/employee%20dependants")
+  );
+}
+
+
+
+
 
 function isHrHolidayCalendarRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
@@ -1461,6 +1497,13 @@ function isPoOrderRegisterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+  );
+}
+
+function isPurchaseRequestRegisterOldRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/purchase_request_register"
   );
 }
 
@@ -2085,6 +2128,11 @@ function getFreightReportKey(context: WorkspaceRouteContext): FreightReportKey |
   if (compact.includes("freightrevenue") || compact.includes("revenue")) return "freight_revenue";
   if (compact.includes("freightbrokerage") || compact.includes("brokerage")) return "freight_brokerage";
   if (compact.includes("queryreport") || compact.includes("packquery")) return "query_report";
+  if (compact.includes("freighttracking") || compact.includes("trackingreport")) return "freight_tracking";
+  if (compact.includes("dailyactivityreport") || compact.includes("dailyactivity")) return "daily_activity_report";
+  if (compact.includes("etdreport")) return "etd_report";
+  if (compact.includes("etareport")) return "eta_report";
+  if (compact.includes("pettycashreport") || compact.includes("pettycashexpense")) return "petty_cash_report";
   if (compact.includes("freightsummaryreport") || compact.includes("summaryreport") || compact.includes("modewisesummary")) return "freight_summary";
   if (compact.includes("containerdeposit") || compact.includes("contrdeposit")) return "container_deposit";
   if (compact.includes("deposits") || compact.includes("deposit")) return "deposits";
@@ -2665,6 +2713,12 @@ function isHrLeaveResumptionRoute(context: WorkspaceRouteContext) {
 function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
+}
+
+
+function isHrEmployeeTransferRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeetransfer") || compact.includes("employeetransfers") || compact.includes("hremployeetransfer");
 }
 
 // function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
