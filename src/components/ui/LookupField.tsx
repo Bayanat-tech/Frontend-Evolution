@@ -369,7 +369,7 @@ export function LookupField({
                             return (
                               <td
                                 className={`px-2.5 py-1 text-xs truncate whitespace-nowrap max-w-[220px] ${
-                                  columnIndex === 0 ? "font-semibold text-[#00378C] font-mono text-[11px]" : "text-slate-700"
+                                  columnIndex === 0 ? "font-semibold text-[#00378C] text-[11.5px]" : "text-slate-700 text-[11.5px]"
                                 }`}
                                 key={column.field}
                                 title={cellText}

@@ -950,7 +950,7 @@ function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Disp
   return (
     <div className="freight-container-grid overflow-hidden rounded-md border bg-background">
       <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground">PowerBuilder container details</span>
+        <span className="text-xs font-semibold text-foreground"></span>
         {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyContainer(current.length + 1)])}><Plus size={14} />Container</Button>}
       </div>
       <div className="overflow-auto">

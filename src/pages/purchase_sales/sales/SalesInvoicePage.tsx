@@ -16,6 +16,7 @@ import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchase
 import { SIN_CONFIG } from "./SalesOrdertypes";
 import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
 import { downloadSalesInvoiceExcel, SalesInvoiceReport } from "./SalesInvoiceReport";
+import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
 
 export interface SalesOrderRow {
   doc_type: string;
@@ -118,9 +119,9 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
   };
 
   const openPrint = (row: SalesOrderRow) => {
-    setReportDoc({ doc_no: row.doc_no });
-    setReportOpen(true);
-  };
+  setReportDoc(row);
+  setReportOpen(true);
+};
 
   const handleExcel = async (row: SalesOrderRow) => {
     try {
@@ -385,33 +386,20 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
         </div>
       </Dialog>
 
-      {reportOpen && reportDoc && (
-        <ReportDialogPage
-          title={`Sales Invoice - ${reportDoc.doc_no}`}
-          Report={SalesInvoiceReport}
-          required_values={{
-            doc_no: reportDoc.doc_no,
-            company_code: user?.company_code,
-            doc_type: "SINVOICE",
-          }}
-          onClose={() => {
-            setReportOpen(false);
-            setReportDoc(null);
-          }}
-          excel={() =>
-            void downloadSalesInvoiceExcel({
-              doc_no: reportDoc.doc_no,
-              company_code: user?.company_code,
-            }).catch((e: any) =>
-              setNotice({
-                type: "error",
-                message:
-                  e?.response?.data?.message || e?.message || "Excel export failed",
-              }),
-            )
-          }
-        />
-      )}
+     {reportDoc && (
+  <SalesInvoicePrintDialog
+    open={reportOpen}
+    onClose={() => {
+      setReportOpen(false);
+      setReportDoc(null);
+    }}
+    form={reportDoc as any}
+    companyCode={user?.company_code || ""}
+    docType={SIN_CONFIG.docType}
+  />
+)}
+
+
     </section>
   );
 }

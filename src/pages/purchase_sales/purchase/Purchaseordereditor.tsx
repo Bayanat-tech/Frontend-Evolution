@@ -33,7 +33,11 @@ import {
   numberOrZero,
   runWorkflow,
   text,
-
+  DiscAmountPercentage,
+  TotalUnitPrice,
+  Totalunitprice,
+  computeQuantity,
+  DiscPrice,
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
@@ -83,7 +87,7 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
-
+  const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);
@@ -94,18 +98,20 @@ export function PurchaseOrderEditor({
   }, [editor]);
   useEffect(() => {
     if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
+    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
       current.map((row) => ({
         ...row,
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: row.disc_percent || form.disc_hdr_percent,
-        tx_compnt_1_expmt: row.tx_compnt_1_expmt
+        disc_percent: pct > 0 ? pct : row.disc_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: taxPerc,
       }))
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt]);
-
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -146,10 +152,10 @@ export function PurchaseOrderEditor({
           dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
           dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_price: Number(headerRaw.disc_price || 0),
-          disc_pct: Number(headerRaw.disc_pct || 0),
-          tax_category: text(headerRaw.tax_category || current.tax_category),
-          tax_code: text(headerRaw.tax_code || current.tax_code),
+          disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
+          disc_hdr_price: numberOrZero(headerRaw.disc_hdr_price),
+          tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
+          tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
           expense_ac_post: text(headerRaw.expense_ac_post || current.expense_ac_post),
           print_on_letterhead: text(headerRaw.print_on_letterhead || current.print_on_letterhead || "N"),
           project_name: text(headerRaw.project_name || current.project_name),
@@ -158,6 +164,9 @@ export function PurchaseOrderEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          inv_no: text(headerRaw.inv_no),
+          inv_date: text(headerRaw.inv_date)
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -200,16 +209,42 @@ export function PurchaseOrderEditor({
   const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
-
+  console.log("ROWS DEBUG:", rows.map(r => ({
+    p_uom: r.p_uom, l_uom: r.l_uom, qty_puom: r.qty_puom, qty_luom: r.qty_luom, uppp: r.uppp,
+    unit_price: r.unit_price,
+    computedQty: computeQuantity(r),
+    lineTotal: Totalunitprice(r)
+  })));
   const finalTotal = (() => {
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
+    const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      let updated = { ...current, [field]: value };
+
+      if (field === "disc_hdr_price") {
+        updated.disc_hdr_percent = Number(value) > 0 ? DiscAmountPercentage(updated, rows) : 0;
+      }
+
+      return updated;
+    });
+
+    if (field === "disc_hdr_price") {
+      const pct = Number(value) > 0 ? DiscAmountPercentage({ ...form, disc_hdr_price: Number(value) }, rows) : 0;
+      setRows((current) => current.map((row) => ({
+        ...row,
+        disc_price: Number(value) || 0,
+        disc_percent: pct
+      })));
+    }
+
+    if (field === "disc_hdr_percent") {
+      setRows((current) => current.map((row) => ({ ...row, disc_percent: Number(value) || 0 })));
+    }
   };
 
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
@@ -221,11 +256,12 @@ export function PurchaseOrderEditor({
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_name,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -275,23 +311,24 @@ export function PurchaseOrderEditor({
       });
   };
 
+ const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
 
+const handleSaveAsDraft = () => {
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+  return runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Purchase Quotation saved as draft");
+};
 
-
-
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order saved as draft");
-  const handleSubmit = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
-  };
-
+const handleSubmit = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  return runAction("submit", async () => {
+    await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
+};
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -409,7 +446,16 @@ export function PurchaseOrderEditor({
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
                 </div>
               )}
+
+              {form.div_code && (
+                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+                </div>
+              )}
             </div>
+
+
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
@@ -455,6 +501,8 @@ export function PurchaseOrderEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                rows={rows}
+                setdetails={setRows}
               />
 
               <PurchaseOrderLinesTable
