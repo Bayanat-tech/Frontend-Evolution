@@ -2602,9 +2602,15 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .nav-leading-icon {
   flex: 0 0 auto;
-  color: #6f88a7;
+  color: #526b89;
   opacity: 1;
   stroke-width: 2.1;
+}
+
+.nav-leading-icon .nav-bullet {
+  width: 7px;
+  height: 7px;
+  background: #7186a1;
 }
 
 .nav-dot {

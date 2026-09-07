@@ -370,13 +370,13 @@ function MenuItem({
 function MenuIcon({ item, level, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
   if (level >= 2) {
     return (
-      <span className={cn("nav-dot-wrap grid place-items-center w-3.5 h-3.5 shrink-0 mr-1", className)} aria-hidden="true">
+      <span className={cn("nav-dot-wrap grid place-items-center w-4 h-4 shrink-0 mr-1", className)} aria-hidden="true">
         <span className="w-1.5 h-1.5 rounded-full bg-slate-400 nav-bullet transition-all" />
       </span>
     );
   }
   const Icon = getMenuIcon(item);
-  return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
+  return <Icon className={className} size={level === 1 ? 17 : 14} aria-hidden="true" />;
 }
 
 function getMenuIcon(item: MenuNode): LucideIcon {
