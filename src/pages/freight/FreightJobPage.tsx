@@ -387,17 +387,13 @@ export function FreightJobPage({
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
+        <Button type="button" size="sm" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
           <ArrowLeft size={14} /> List
         </Button>
-        <HeaderChip label="Route" value={`${job.port_code || "-"} -> ${job.destination_port || "-"}`} />
-        <HeaderChip label="Principal" value={job.prin_code || "-"} />
-        <HeaderChip label="Currency" value={`${job.curr_code || "-"} / ${job.ex_rate || "1"}`} />
         <span className={statusBadgeClass(job)}>{statusText(job)}</span>
         <Button
           type="button"
           size="sm"
-          variant="outline"
           onClick={cancelJob}
           disabled={saving || !job.job_no || isCanceled || isCancelLocked}
           title={isCancelLocked ? cancelLockMessage : "Cancel job"}
@@ -500,13 +496,9 @@ export function FreightJobPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}>
+            <Button type="button" size="sm" onClick={() => setView("list")}>
               <ArrowLeft size={14} /> List
             </Button>
-            <HeaderChip label="Route" value={`${job.port_code || "-"} -> ${job.destination_port || "-"}`} />
-            <HeaderChip label="Principal" value={job.prin_code || "-"} />
-            <HeaderChip label="Currency" value={`${job.curr_code || "-"} / ${job.ex_rate || "1"}`} />
-            <HeaderChip label="Carrier" value={job.vessel_name || "-"} />
             {notice && (
               <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
                 {notice.text}
@@ -515,7 +507,6 @@ export function FreightJobPage({
             <Button
               type="button"
               size="sm"
-              variant="outline"
               onClick={cancelJob}
               disabled={saving || !job.job_no || isCanceled || isCancelLocked}
               title={isCancelLocked ? cancelLockMessage : "Cancel job"}
@@ -532,7 +523,7 @@ export function FreightJobPage({
       <fieldset disabled={isEditLocked} className="contents">
         <div className="freight-job-editor-shell w-full flex flex-col gap-2.5">
           <JobProgressRail job={job} />
-          <div className="grid gap-2 lg:grid-cols-12">
+          <div className="freight-job-main-content grid gap-2 lg:grid-cols-12">
             {/* Section 1: Job Identity & Core Booking */}
             <SectionPanel
               className="lg:col-span-12"
@@ -691,7 +682,7 @@ export function FreightJobPage({
 
             {/* Section 3: Journey & Routing */}
             <SectionPanel
-              className="lg:col-span-6"
+              className="freight-job-journey-panel lg:col-span-6"
               icon={MapPinned}
               title="Journey & Routing"
               meta={`${job.port_code || "Origin"} → ${job.destination_port || "Destination"}`}
@@ -994,45 +985,26 @@ function JobProgressRail({ job }: { job: JobForm }) {
   const activeStep = steps.find((step) => step.className === "current") || steps[steps.length - 1];
 
   return (
-    <div className="freight-job-progress-rail w-full mb-1 overflow-hidden rounded-xl border border-border bg-card shadow-xs p-2" aria-label="Job status">
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-border/60 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Workflow Progress</span>
-          <span className="text-slate-300">•</span>
-          <span className="text-xs text-muted-foreground">Current Stage: <strong className="text-primary font-semibold">{activeStep?.label || "Completed"}</strong></span>
-        </div>
-        <div className="text-[11px] text-muted-foreground font-medium">
-          {job.job_no ? `Job: ${job.job_no}` : "Draft Job"}
-        </div>
+    <div className="freight-job-progress-rail" aria-label="Job status">
+      <div className="freight-job-progress-rail-title">
+        <span>Workflow status</span>
+        <strong>{activeStep?.label || "Completed"}</strong>
+        <small>{job.job_no ? `Job ${job.job_no}` : "Draft job"}</small>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-2">
+      <div className="freight-job-progress-rail-list">
         {steps.map((step, idx) => (
           <div
             key={step.label}
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all ${
-              step.done
-                ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
-                : step.className === "current"
-                  ? "border-primary/40 bg-primary/5 text-primary ring-1 ring-primary/20 shadow-xs"
-                  : "border-border/60 bg-muted/20 text-muted-foreground"
-            }`}
+            className={`freight-job-progress-rail-step ${step.done ? "done" : step.className === "current" ? "current" : "pending"}`}
           >
-            <span
-              className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${
-                step.done
-                  ? "bg-emerald-600 text-white"
-                  : step.className === "current"
-                    ? "bg-primary text-white"
-                    : "bg-muted text-muted-foreground"
-              }`}
-            >
+            <span className="freight-job-progress-rail-marker">
               {step.done ? <Check size={12} strokeWidth={3} /> : idx + 1}
             </span>
-            <div className="min-w-0 flex flex-col">
-              <strong className="truncate text-xs font-semibold leading-tight">{step.label}</strong>
-              <span className="truncate text-[10px] leading-tight text-muted-foreground">
+            <div className="freight-job-progress-rail-copy">
+              <strong>{step.label}</strong>
+              <small>
                 {step.detail || (step.done ? "Done" : "Pending")}
-              </span>
+              </small>
             </div>
           </div>
         ))}
@@ -1085,15 +1057,6 @@ function SectionPanel({
       </div>
       <div className="freight-panel-body p-2">{children}</div>
     </section>
-  );
-}
-
-function HeaderChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex max-w-52 items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-[11px]">
-      <span className="text-muted-foreground">{label}:</span>
-      <strong className="truncate font-semibold text-foreground">{value || "-"}</strong>
-    </span>
   );
 }
 

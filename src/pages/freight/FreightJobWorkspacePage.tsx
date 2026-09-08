@@ -89,13 +89,6 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     const direction = directionLabel[targetDirection];
     return `${modeText} ${direction} Job Workspace`;
   }, [targetDirection, targetMode]);
-  const selectedPrincipalLabel = selectedJob
-    ? text(selectedJob, "prin_name") || text(selectedJob, "prin_code") || "Pending"
-    : "";
-  const selectedReferenceLabel = selectedJob
-    ? text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Pending"
-    : "";
-
   const loadRows = useCallback(async () => {
     setLoading(true);
     setMessage("");
@@ -263,21 +256,26 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     );
   }
 
+  const WorkspaceModeIcon = modeIcon[targetMode] || Plane;
+
   return (
     <section className="freight-workspace-ui freight-module-surface">
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="freight-workspace-header-shell">
-          <div className="freight-workspace-title-block">
+          <div className="freight-workspace-title-cluster">
+            <div className={`freight-workspace-mode-mark mode-${modeCode[targetMode].toLowerCase()}`} aria-hidden="true">
+              <WorkspaceModeIcon size={30} strokeWidth={1.5} />
+            </div>
+            <div className="freight-workspace-title-block">
             {/* <p className="m-0 text-xs bold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
             <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1> */}
             <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">
               {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
             </h1>
-            <p className="m-0 text-xs font-semibold text-slate-600">
-              {selectedJob
-                ? `Principal: ${selectedPrincipalLabel} | Reference: ${selectedReferenceLabel}`
-                : "Select a principal and save the job to continue with shipment details."}
+            <p className="m-0 text-xs font-semibold text-slate-600 freight-workspace-mode-subtitle">
+              {modeLabel[targetMode]} Freight &bull; {directionLabel[targetDirection]}
             </p>
+            </div>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
