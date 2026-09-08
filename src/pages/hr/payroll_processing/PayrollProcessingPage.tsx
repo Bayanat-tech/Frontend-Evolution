@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Save, Play, Users, Lock } from "lucide-react";
+import { Loader2, Save, Play, Users, Lock } from "lucide-react";
 
 import { DataTable } from "../../../components/ui/DataTable";
 import { Button } from "../../../components/ui/Button";
@@ -217,122 +217,169 @@ export default function PayrollProcessingPage() {
     },
   });
 
-  const handleSave = useCallback(() => {
-    if (!companyCode || !payDate) {
-      alert("Company and Payroll Date are required.");
-      return;
-    }
-    const invalid = rows.filter(
-      (r) => r._isNew && !r.employee_id && !r.employee_code
-    );
-    if (invalid.length) {
-      alert("Please select an employee for every newly added row before saving.");
-      return;
-    }
-    saveMutation.mutate({
-      companyCode,
-      divCode: divCode || "",
-      deptCode: deptCode || "",
-      sectionCode: sectionCode || "",
-      payDate,
-      userId: user?.loginid ?? "",
-      rows,
+  // const handleSave = useCallback(() => {
+  //   if (!companyCode || !payDate) {
+  //     alert("Company and Payroll Date are required.");
+  //     return;
+  //   }
+  //   const invalid = rows.filter(
+  //     (r) => r._isNew && !r.employee_id && !r.employee_code
+  //   );
+  //   if (invalid.length) {
+  //     alert("Please select an employee for every newly added row before saving.");
+  //     return;
+  //   }
+  //   saveMutation.mutate({
+  //     companyCode,
+  //     divCode: divCode || "",
+  //     deptCode: deptCode || "",
+  //     sectionCode: sectionCode || "",
+  //     payDate,
+  //     userId: user?.loginid ?? "",
+  //     rows,
+  //   });
+  // }, [
+  //   companyCode,
+  //   divCode,
+  //   deptCode,
+  //   sectionCode,
+  //   payDate,
+  //   rows,
+  //   user,
+  //   saveMutation,
+  // ]);
+
+
+
+const handleProcessPayroll = useCallback(async () => {
+  if (!divCode) {
+    alert("Division is required.");
+    return;
+  }
+  if (selectedRows.length === 0) return;
+
+  try {
+    const checkRows = await getDynamicLookup({
+      parameter: "PAYROLL_Process",
+      code1: companyCode,
     });
-  }, [
-    companyCode,
-    divCode,
-    deptCode,
-    sectionCode,
-    payDate,
-    rows,
-    user,
-    saveMutation,
-  ]);
+
+    const checkValue = Number(
+      (checkRows?.[0] as any)?.check_value ?? (checkRows?.[0] as any)?.CHECK_VALUE ?? 0
+    );
+
+    if (checkValue !== 0) {
+      alert("Memo mismatch found. Please resolve before processing payroll.");
+      return;
+    }
+
+    setRows((prev) =>
+      prev.map((r) =>
+        selectedRows.some(
+          (s) =>
+            (s._rowKey && s._rowKey === r._rowKey) ||
+            (s.employee_id && s.employee_id === r.employee_id)
+        )
+          ? { ...r, processed: 1, select_emp: 1 }
+          : r
+      )
+    );
+    alert(
+      `${selectedRows.length} employee(s) marked for process. Click Save to persist.`
+    );
+  } catch (err) {
+    alert((err as Error).message || "Failed to check payroll memo status.");
+  }
+}, [divCode, companyCode, selectedRows]);
+
+
+
+
 
   /* ── Add blank row ─────────────────────────────────────────────────────── */
-  const handleAdd = useCallback(() => {
-    const base: PayrollEmployeeRow = {
-      select_emp: 1,
-      employee_code: "",
-      rpt_name: "",
-      grade_name: null,
-      desg_name: null,
-      div_name: divName || null,
-      dept_name: deptName || null,
-      section_name: sectionName || null,
-      employee_id: "",
-      desg_code: null,
-      grade_code: null,
-      gender: null,
-      nationality: null,
-      mobile_no: null,
-      payment_mode: null,
-      category_code: null,
-      category_name: null,
-      airport_code: null,
-      company_code: companyCode,
-      comp_name: null,
-      div_code: divCode || null,
-      dept_code: deptCode || null,
-      section_code: sectionCode || null,
-      user_id: user?.loginid ?? null,
-      user_dt: new Date(),
-      join_date: null,
-      div_payroll_date: null,
-      emp_status: null,
-      include_in_payroll: "Y",
-      processed: 0,
-      sal_processed: 0,
-      adv_paid: "N",
-      _isNew: true,
-      _rowKey: newRowKey(),
-    };
+  // const handleAdd = useCallback(() => {
+  //   const base: PayrollEmployeeRow = {
+  //     select_emp: 1,
+  //     employee_code: "",
+  //     rpt_name: "",
+  //     grade_name: null,
+  //     desg_name: null,
+  //     div_name: divName || null,
+  //     dept_name: deptName || null,
+  //     section_name: sectionName || null,
+  //     employee_id: "",
+  //     desg_code: null,
+  //     grade_code: null,
+  //     gender: null,
+  //     nationality: null,
+  //     mobile_no: null,
+  //     payment_mode: null,
+  //     category_code: null,
+  //     category_name: null,
+  //     airport_code: null,
+  //     company_code: companyCode,
+  //     comp_name: null,
+  //     div_code: divCode || null,
+  //     dept_code: deptCode || null,
+  //     section_code: sectionCode || null,
+  //     user_id: user?.loginid ?? null,
+  //     user_dt: new Date(),
+  //     join_date: null,
+  //     div_payroll_date: null,
+  //     emp_status: null,
+  //     include_in_payroll: "Y",
+  //     processed: 0,
+  //     sal_processed: 0,
+  //     adv_paid: "N",
+  //     _isNew: true,
+  //     _rowKey: newRowKey(),
+  //   };
 
-    // If an employee is already selected at the header (Emp Code filter),
-    // the new row inherits it directly — no second selection needed.
-    const blank: PayrollEmployeeRow = hasHeaderEmployee
-      ? {
-          ...base,
-          employee_id: empRow?.employee_id ?? empRow?.value ?? empId,
-          employee_code: empRow?.employee_code ?? "",
-          rpt_name: empRow?.rpt_name ?? empName,
-          grade_name: empRow?.grade_name ?? null,
-          grade_code: empRow?.grade_code ?? null,
-          desg_name: empRow?.desg_name ?? null,
-          desg_code: empRow?.desg_code ?? null,
-          div_code: empRow?.div_code ?? base.div_code,
-          div_name: empRow?.div_name ?? base.div_name,
-          dept_code: empRow?.dept_code ?? base.dept_code,
-          dept_name: empRow?.dept_name ?? base.dept_name,
-          section_code: empRow?.section_code ?? base.section_code,
-          section_name: empRow?.section_name ?? base.section_name,
-          company_code: empRow?.company_code ?? base.company_code,
-          join_date: empRow?.join_date ?? null,
-          emp_status: empRow?.emp_status ?? null,
-          include_in_payroll: empRow?.include_in_payroll ?? "Y",
-          gender: empRow?.gender ?? null,
-          nationality: empRow?.nationality ?? null,
-          mobile_no: empRow?.mobile_no ?? null,
-          _employeeLocked: true,
-        }
-      : base;
+  //   // If an employee is already selected at the header (Emp Code filter),
+  //   // the new row inherits it directly — no second selection needed.
+  //   const blank: PayrollEmployeeRow = hasHeaderEmployee
+  //     ? {
+  //         ...base,
+  //         employee_id: empRow?.employee_id ?? empRow?.value ?? empId,
+  //         employee_code: empRow?.employee_code ?? "",
+  //         rpt_name: empRow?.rpt_name ?? empName,
+  //         grade_name: empRow?.grade_name ?? null,
+  //         grade_code: empRow?.grade_code ?? null,
+  //         desg_name: empRow?.desg_name ?? null,
+  //         desg_code: empRow?.desg_code ?? null,
+  //         div_code: empRow?.div_code ?? base.div_code,
+  //         div_name: empRow?.div_name ?? base.div_name,
+  //         dept_code: empRow?.dept_code ?? base.dept_code,
+  //         dept_name: empRow?.dept_name ?? base.dept_name,
+  //         section_code: empRow?.section_code ?? base.section_code,
+  //         section_name: empRow?.section_name ?? base.section_name,
+  //         company_code: empRow?.company_code ?? base.company_code,
+  //         join_date: empRow?.join_date ?? null,
+  //         emp_status: empRow?.emp_status ?? null,
+  //         include_in_payroll: empRow?.include_in_payroll ?? "Y",
+  //         gender: empRow?.gender ?? null,
+  //         nationality: empRow?.nationality ?? null,
+  //         mobile_no: empRow?.mobile_no ?? null,
+  //         _employeeLocked: true,
+  //       }
+  //     : base;
 
-    setRows((prev) => [blank, ...prev]);
-    setHasLoaded(true);
-  }, [
-    companyCode,
-    divCode,
-    divName,
-    deptCode,
-    deptName,
-    sectionCode,
-    sectionName,
-    user,
-    hasHeaderEmployee,
-    empRow,
-    empId,
-    empName,
-  ]);
+  //   setRows((prev) => [blank, ...prev]);
+  //   setHasLoaded(true);
+  // }, [
+  //   companyCode,
+  //   divCode,
+  //   divName,
+  //   deptCode,
+  //   deptName,
+  //   sectionCode,
+  //   sectionName,
+  //   user,
+  //   hasHeaderEmployee,
+  //   empRow,
+  //   empId,
+  //   empName,
+  // ]);
 
   /* ── Cascade handlers ──────────────────────────────────────────────────── */
   const onDivChange = (value: string, row: any) => {
@@ -784,7 +831,7 @@ export default function PayrollProcessingPage() {
             </span>
           )}
 
-          <Button
+          {/* <Button
             type="button"
             variant="outline"
             size="sm"
@@ -794,14 +841,14 @@ export default function PayrollProcessingPage() {
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Add
-          </Button>
+          </Button> */}
 
           <Button
             type="button"
             size="sm"
             className="bg-[#4F46E5] text-white hover:bg-[#4338CA]"
             disabled={!hasLoaded || loading}
-            onClick={handleSave}
+            //onClick={handleSave}
           >
             {saveMutation.isPending ? (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -811,7 +858,7 @@ export default function PayrollProcessingPage() {
             Save
           </Button>
 
-          <Button
+          {/* <Button
             type="button"
             size="sm"
             className="bg-[#101828] text-white hover:bg-[#1D2939]"
@@ -835,7 +882,20 @@ export default function PayrollProcessingPage() {
           >
             <Play className="mr-1.5 h-4 w-4" />
             Process Payroll
-          </Button>
+          </Button> */}
+
+            <Button
+  type="button"
+  size="sm"
+  className="bg-[#101828] text-white hover:bg-[#1D2939]"
+  disabled={!hasLoaded || loading || selectedRows.length === 0}
+  onClick={handleProcessPayroll}
+>
+  <Play className="mr-1.5 h-4 w-4" />
+  Process Payroll
+</Button>
+
+
         </div>
       </div>
 
