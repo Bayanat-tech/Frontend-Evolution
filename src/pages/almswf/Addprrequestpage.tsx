@@ -1250,6 +1250,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         .commercial-lines-scroll::-webkit-scrollbar-corner {
           background: #e2e8f0;
         }
+        .finance-lines-table td, .finance-lines-table th {
+          overflow: hidden;
+        }
+        .finance-lines-table td > * {
+          max-width: 100%;
+        }
       `}</style>
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
@@ -1827,51 +1833,82 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     <div
                       ref={tableContainerRef}
-                      className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto"
-                      style={{ 
+                      className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+                      style={{
                         overscrollBehavior: 'contain',
-                        overflowX: 'auto',
-                        overflowY: 'auto',
                         scrollbarWidth: 'auto',
                         scrollbarGutter: 'stable',
                       }}
                     >
-                      <table className="finance-lines-table w-full min-w-[3500px] text-[12px] border-separate border-spacing-0">
-                        <thead className="sticky top-0 z-30 bg-primary text-xs text-primary-foreground">
+                      {/*
+                        table-fixed + <colgroup> => column widths come ONLY from the
+                        colgroup, so the table always fits the container's width
+                        (no horizontal scroll). Adjust the % values below if a
+                        column feels too tight/wide.
+                      */}
+                      <table className="finance-lines-table w-full table-fixed text-[10px] border-separate border-spacing-0">
+                        <colgroup>
+                          <col style={{ width: "34px" }} />
+                          <col style={{ width: "180px" }} />
+                          <col style={{ width: "7%" }} />
+                          <col style={{ width: "3.5%" }} />
+                          {shouldShowApprovedQty() && <col style={{ width: "3.5%" }} />}
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "3.5%" }} />
+                          {shouldShowSupplier() && <col style={{ width: "7%" }} />}
+                          <col style={{ width: "3.5%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "6%" }} />
+                          <col style={{ width: "6%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "3.5%" }} />
+                          <col style={{ width: "3%" }} />
+                        </colgroup>
+                        <thead className="sticky top-0 z-30 bg-primary text-[10px] text-primary-foreground">
                           <tr>
-                            <th className="sticky left-0 z-40 bg-primary px-2 py-2 text-center w-[45px] min-w-[45px] max-w-[45px] border-r border-primary-foreground/10">
+                            <th className="sticky left-0 z-40 bg-primary px-1 py-1.5 text-center border-r border-primary-foreground/10">
                               No
                             </th>
-                            <th className="sticky left-[45px] z-40 bg-primary px-2 py-2 text-left w-[450px] min-w-[450px] max-w-[450px] border-r border-primary-foreground/10">
+                            <th className="sticky left-[34px] z-40 bg-primary px-1 py-1.5 text-left border-r border-primary-foreground/10">
                               Item *
                             </th>
-                            <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Cost Code *</th>
-                            <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Req Qty</th>
+                            <th className="px-1 py-1.5 text-left">Cost Code *</th>
+                            <th className="px-1 py-1.5 text-center">Req Qty</th>
                             {shouldShowApprovedQty() && (
-                              <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Appr Qty *</th>
+                              <th className="px-1 py-1.5 text-center">Appr Qty *</th>
                             )}
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Unit Price *</th>
-                            <th className="px-2 py-2 text-center w-[75px] min-w-[220px] max-w-[75px]">Currency</th>
-                            <th className="px-2 py-2 text-right w-[80px] min-w-[150px] max-w-[80px]">Ex Rate</th>
+                            <th className="px-1 py-1.5 text-right">Unit Price *</th>
+                            <th className="px-1 py-1.5 text-center">Currency</th>
+                            <th className="px-1 py-1.5 text-right">Ex Rate</th>
                             {shouldShowSupplier() && (
-                              <th className="px-2 py-2 text-left w-[250px] min-w-[550px] max-w-[250px]">Supplier *</th>
+                              <th className="px-1 py-1.5 text-left">Supplier *</th>
                             )}
-                            <th className="px-2 py-2 text-right w-[80px] min-w-[150px] max-w-[80px]">Quantity</th>
-                            <th className="px-2 py-2 text-right w-[65px] min-w-[150px] max-w-[65px]">Disc %</th>
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Disc Price</th>
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[150px]">Unit price Net Amt</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Amount</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Lcurr Amount</th>
-                            <th className="px-2 py-2 text-left w-[280px] min-w-[330px] max-w-[280px]">Tax Cat</th>
-                            <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Tax Code</th>
-                            <th className="px-2 py-2 text-right w-[65px] min-w-[150px] max-w-[65px]">Tax %</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Tax Amount</th>
-                            <th className="px-2 py-2 text-center w-[90px] min-w-[200px] max-w-[90px]">Tax Type</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Tax Lcurr amount</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Lcurr after Discount</th>
-                            <th className="px-2 py-2 text-center w-[95px] min-w-[150px] max-w-[95px]">Capex</th>
-                            <th className="px-2 py-2 text-center w-[80px] min-w-[100px] max-w-[80px]">Cash Indicator</th>
-                            <th className="px-2 py-2 text-center w-[55px] min-w-[55px] max-w-[55px]">Action</th>
+                            <th className="px-1 py-1.5 text-right">Quantity</th>
+                            <th className="px-1 py-1.5 text-right">Disc %</th>
+                            <th className="px-1 py-1.5 text-right">Disc Price</th>
+                            <th className="px-1 py-1.5 text-right">Net Amt</th>
+                            <th className="finance-amount-cell px-1 py-1.5 text-right">Amount</th>
+                            <th className="finance-amount-cell px-1 py-1.5 text-right">Lcurr Amt</th>
+                            <th className="px-1 py-1.5 text-left">Tax Cat</th>
+                            <th className="px-1 py-1.5 text-left">Tax Code</th>
+                            <th className="px-1 py-1.5 text-right">Tax %</th>
+                            <th className="finance-amount-cell px-1 py-1.5 text-right">Tax Amt</th>
+                            <th className="px-1 py-1.5 text-center">Tax Type</th>
+                            <th className="finance-amount-cell px-1 py-1.5 text-right">Tax Lcurr</th>
+                            <th className="finance-amount-cell px-1 py-1.5 text-right">Lcurr Aft Disc</th>
+                            <th className="px-1 py-1.5 text-center">Capex</th>
+                            <th className="px-1 py-1.5 text-center">Cash Ind</th>
+                            <th className="px-1 py-1.5 text-center">Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1906,10 +1943,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
                             return (
                               <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
-                                <td className="sticky left-0 z-20 bg-background px-2 py-1 text-xs text-center w-[45px] min-w-[45px] max-w-[45px] border-r border-border">
+                                <td className="sticky left-0 z-20 bg-background px-1 py-1 text-center border-r border-border">
                                   {item.ITEM_SRNO}
                                 </td>
-                                <td className="sticky left-[45px] z-20 bg-background px-2 py-1 w-[350px] min-w-[350px] max-w-[350px] border-r border-border">
+                                <td className="sticky left-[34px] z-20 bg-background px-1 py-1 border-r border-border">
                                   <LookupField
                                     label=""
                                     compact
@@ -1936,7 +1973,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
+                                <td className="px-1 py-1">
                                   <LookupField
                                     label=""
                                     compact
@@ -1963,42 +2000,42 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                <td className="px-1 py-1">
                                   <Input
                                     type="number"
                                     step="0.001"
                                     value={item.REQUEST_QUANTITY || ""}
                                     onChange={(e) => updateItemField(itemId, "REQUEST_QUANTITY", Number(e.target.value) || 0)}
                                     disabled={disabled || userApprovalLevel >= 2}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
                                 </td>
                                 {shouldShowApprovedQty() && (
-                                  <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                  <td className="px-1 py-1">
                                     <Input
                                       type="number"
                                       step="0.001"
                                       value={item.ALLOCATED_APPROVED_QUANTITY || ""}
                                       onChange={(e) => updateItemField(itemId, "ALLOCATED_APPROVED_QUANTITY", Number(e.target.value) || 0)}
                                       disabled={disabled}
-                                      className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                       placeholder="0"
                                     />
                                   </td>
                                 )}
-                                <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
+                                <td className="px-1 py-1">
                                   <Input
                                     type="number"
                                     step="0.001"
                                     value={item.ITEM_RATE || ""}
                                     onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)}
                                     disabled={disabled}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[75px] min-w-[75px] max-w-[75px]">
+                                <td className="px-1 py-1">
                                   <Input
                                     value={currencyDisplay}
                                     onChange={(e) => {
@@ -2011,22 +2048,22 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                       }
                                     }}
                                     disabled={disabled}
-                                    className="h-9 text-center text-sm"
+                                    className="h-7 w-full text-center text-[10px] px-1"
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                <td className="px-1 py-1">
                                   <Input
                                     type="number"
                                     step="0.0001"
                                     value={item.CURRENCY_RATE || ""}
                                     onChange={(e) => updateItemField(itemId, "CURRENCY_RATE", Number(e.target.value) || 1)}
                                     disabled={disabled}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="1"
                                   />
                                 </td>
                                 {shouldShowSupplier() && (
-                                  <td className="px-2 py-1 w-[250px] min-w-[250px] max-w-[250px]">
+                                  <td className="px-1 py-1">
                                     <LookupField
                                       label=""
                                       compact
@@ -2076,33 +2113,33 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     />
                                   </td>
                                 )}
-                                <td className="finance-amount-cell px-2 py-1 text-right w-[80px] min-w-[80px] max-w-[80px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right">
                                   {fmt3(itemQty(item, userApprovalLevel))}
                                 </td>
-                                <td className="px-2 py-1 w-[65px] min-w-[65px] max-w-[65px]">
+                                <td className="px-1 py-1">
                                   <Input
                                     type="number"
                                     step="0.01"
                                     value={item.DISCOUNT_AMOUNT || ""}
                                     onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
                                     disabled={disabled}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right">
                                   {fmt3(itemDiscPrice(item))}
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right">
                                   {fmt3(item.FINAL_RATE)}
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right font-semibold text-green-600 w-[100px] min-w-[100px] max-w-[100px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-green-600">
                                   {fmt3(item.AMOUNT)}
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right text-green-600 w-[100px] min-w-[100px] max-w-[100px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600">
                                   {fmt3((item as any).LCURR_AMT || 0)}
                                 </td>
-                                <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
+                                <td className="px-1 py-1">
                                   <LookupField
                                     label=""
                                     compact
@@ -2131,7 +2168,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
+                                <td className="px-1 py-1">
                                   <LookupField
                                     label=""
                                     compact
@@ -2161,21 +2198,21 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[65px] min-w-[65px] max-w-[65px]">
+                                <td className="px-1 py-1">
                                   <Input
                                     type="number"
                                     step="0.01"
                                     value={item.TX_COMPNT_PERC_1 || ""}
                                     onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)}
                                     disabled={disabled}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right text-green-600 w-[90px] min-w-[90px] max-w-[90px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600">
                                   {fmt3(item.TX_COMPNT_AMT_1)}
                                 </td>
-                                <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
+                                <td className="px-1 py-1">
                                   <LookupField
                                     label=""
                                     compact
@@ -2197,15 +2234,15 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right text-green-600 w-[100px] min-w-[100px] max-w-[100px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600">
                                   {fmt3((item as any).TX_COMPNT_LCURAMT_1 || 0)}
                                 </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right font-semibold text-blue-600 w-[100px] min-w-[100px] max-w-[100px]">
+                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-blue-600">
                                   {fmt3((item as any).LCURR_AFTER_DISCOUNT || 0)}
                                 </td>
-                                <td className="px-2 py-1 w-[95px] min-w-[95px] max-w-[95px]">
+                                <td className="px-1 py-1">
                                   <Select
-                                    className="h-9 text-sm"
+                                    className="h-7 w-full text-[10px] px-1"
                                     value={item.CAPEX_OPEX_NON_OPEX || ""}
                                     onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX" as any, e.target.value)}
                                     disabled={disabled}
@@ -2216,9 +2253,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     ))}
                                   </Select>
                                 </td>
-                                <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                <td className="px-1 py-1">
                                   <Select
-                                    className="h-9 text-sm"
+                                    className="h-7 w-full text-[10px] px-1"
                                     value={item.CASH_IND || "N"}
                                     onChange={(e) => updateItemField(itemId, "CASH_IND", e.target.value)}
                                     disabled={disabled}
@@ -2228,7 +2265,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     ))}
                                   </Select>
                                 </td>
-                                <td className="px-2 py-1 text-center w-[55px] min-w-[55px] max-w-[55px]">
+                                <td className="px-1 py-1 text-center">
                                   {!isViewMode && (
                                     <Button
                                       size="icon"
@@ -2236,9 +2273,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                       type="button"
                                       onClick={() => removeItem(itemId)}
                                       title="Remove"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
                                     >
-                                      <X size={14} />
+                                      <X size={13} />
                                     </Button>
                                   )}
                                 </td>
