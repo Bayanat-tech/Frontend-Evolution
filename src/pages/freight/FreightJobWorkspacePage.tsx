@@ -84,11 +84,6 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const targetDirection = (target?.direction || "import") as keyof typeof directionLabel;
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
-  const title = useMemo(() => {
-    const modeText = modeLabel[targetMode];
-    const direction = directionLabel[targetDirection];
-    return `${modeText} ${direction} Job Workspace`;
-  }, [targetDirection, targetMode]);
   const loadRows = useCallback(async () => {
     setLoading(true);
     setMessage("");
@@ -178,27 +173,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   }
 
   if (mode === "list") {
-    const ModeIcon = modeIcon[targetMode] || Plane;
     return (
       <section className="freight-workspace-ui freight-list-screen freight-job-list-screen grid gap-2">
-        <div className="freight-job-list-hero flex flex-wrap items-center justify-between gap-3 py-1">
-          <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10 text-primary">
-              <ModeIcon size={18} />
-            </span>
-            <div>
-              <h1 className="m-0 text-lg font-bold tracking-tight text-foreground">{title}</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-              <RefreshCw size={14} /> Refresh
-            </Button>
-            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
-              <Plus size={14} /> Add Job
-            </Button>
-          </div>
-        </div>
         <div className="flex flex-wrap items-center gap-1.5 pb-1">
           {listingTabs.map((tab) => {
             const count = rows.filter((row) => filterJobByStatus(row, tab.value)).length;
@@ -227,15 +203,20 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           columns={columns}
           data={filteredRows}
           toolbar={
-            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
-              <Plus size={14} /> Add Job
-            </Button>
+            <button
+              type="button"
+              onClick={() => openSteps(null, "job")}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Job
+            </button>
           }
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Filter visible jobs..."
-          height="calc(100dvh - 200px)"
+          height="calc(100dvh - 180px)"
           minWidth={1320}
           density="grid"
           enablePagination
