@@ -20,7 +20,8 @@ import {
   Sparkles,
   Trash2,
   CreditCard,
-  X
+  X,
+  Printer
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -315,83 +316,97 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
  ];
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    {
-      accessorKey: "quotation_nr",
-      header: "Quotation No",
-      size: 160,
-      cell: ({ row }) => (
-        <button className="font-semibold text-primary hover:underline" type="button" onClick={() => openQuotation(row.original)}>
-          {lookupText(row.original, "quotation_nr")}
-        </button>
-      ),
-    },
-    { accessorKey: "quotation_date", header: "Date", size: 120, cell: ({ row }) => formatDisplayDate(lookupText(row.original, "quotation_date")) },
-    { accessorKey: "prin_code", header: "Principal", size: 120, cell: ({ row }) => lookupText(row.original, "prin_code") },
-    { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => lookupText(row.original, "prin_name") },
-    { accessorKey: "job_type", header: "Job Type", size: 110, cell: ({ row }) => jobTypeLabel(lookupText(row.original, "job_type")) },
-    { accessorKey: "transport_mode", header: "Mode", size: 100, cell: ({ row }) => modeLabel(lookupText(row.original, "transport_mode")) },
-    { accessorKey: "origin_port", header: "Origin", size: 110, cell: ({ row }) => lookupText(row.original, "origin_port") },
-    { accessorKey: "destination_port", header: "Destination", size: 130, cell: ({ row }) => lookupText(row.original, "destination_port") },
-    { accessorKey: "curr_code", header: "Currency", size: 100, cell: ({ row }) => lookupText(row.original, "curr_code") },
-    {
-      accessorKey: "indstatus",
-      header: "Status",
-      size: 130,
-      cell: ({ row }) => {
-        const status = lookupText(row.original, "indstatus");
-        return (
-          <span className={statusBadgeClass(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}>
-            {statusLabel(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}
-          </span>
-        );
-      },
-    },
-  //   {
-  //     id: "actions",
-  //     header: "Actions",
-  //     size: 80,
-  //     enableColumnFilter: false,
-  //     cell: ({ row }) => (
-  //       <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
-  //         <Eye size={14} />
-  //       </Button>
-  //     ),
-  //   },
-  // ], []);
-
       {
-      id: "actions",
-      header: "Actions",
-      size: 110,
-      enableColumnFilter: false,
-      cell: ({ row }) => {
-        const status = lookupText(row.original, "indstatus");
-        const action = lookupText(row.original, "last_action");
-        const finalApproved = lookupText(row.original, "final_approved");
-        const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
-              <Eye size={14} />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              title={cancelDisabled ? `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled` : "Cancel quotation"}
-              className="text-red-600 hover:text-red-700"
-              disabled={cancelDisabled}
-              onClick={(event) => {
-                event.stopPropagation();
-                requestCancelRow(row.original);
-              }}
-            >
-              <X size={14} />
-            </Button>
-          </div>
-        );
+        accessorKey: "quotation_nr",
+        header: "Quotation No",
+        size: 140,
+        cell: ({ row }) => (
+          <button className="freight-table-link font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer" type="button" onClick={() => openQuotation(row.original)}>
+            {lookupText(row.original, "quotation_nr")}
+          </button>
+        ),
       },
-    },
+      { accessorKey: "quotation_date", header: "Date", size: 100, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDisplayDate(lookupText(row.original, "quotation_date"))}</span> },
+      { accessorKey: "prin_code", header: "Principal", size: 100, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "prin_code")}</span> },
+      {
+        accessorKey: "prin_name",
+        header: "Principal Name",
+        minSize: 220,
+        cell: ({ row }) => (
+          <div className="truncate" title={lookupText(row.original, "prin_name")}>
+            <span className="text-[11.5px] text-foreground">{lookupText(row.original, "prin_name")}</span>
+          </div>
+        ),
+      },
+      { accessorKey: "job_type", header: "Job Type", size: 95, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{jobTypeLabel(lookupText(row.original, "job_type"))}</span> },
+      { accessorKey: "transport_mode", header: "Mode", size: 85, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{modeLabel(lookupText(row.original, "transport_mode"))}</span> },
+      { accessorKey: "origin_port", header: "Origin", size: 95, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "origin_port")}</span> },
+      { accessorKey: "destination_port", header: "Destination", size: 105, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "destination_port")}</span> },
+      { accessorKey: "curr_code", header: "Currency", size: 85, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "curr_code")}</span> },
+      {
+        accessorKey: "indstatus",
+        header: "Status",
+        size: 100,
+        cell: ({ row }) => {
+          const status = lookupText(row.original, "indstatus");
+          return (
+            <span className={statusBadgeClass(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}>
+              {statusLabel(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "ACTIONS",
+        size: 100,
+        enableColumnFilter: false,
+        cell: ({ row }) => {
+          const status = lookupText(row.original, "indstatus");
+          const action = lookupText(row.original, "last_action");
+          const finalApproved = lookupText(row.original, "final_approved");
+          const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
+          return (
+            <div className="flex items-center justify-center gap-1">
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Open quotation"
+                onClick={() => openQuotation(row.original)}
+              >
+                <Eye size={15} />
+              </button>
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Print quotation"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void printQuotation(row.original);
+                }}
+              >
+                <Printer size={15} />
+              </button>
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                title={
+                  cancelDisabled
+                    ? `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled`
+                    : "Cancel quotation"
+                }
+                disabled={cancelDisabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  requestCancelRow(row.original);
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          );
+        },
+      },
   ], []);
 
   useEffect(() => {
@@ -598,6 +613,28 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to open quotation" });
     } finally {
       setLoading(false);
+    }
+  };
+
+    const printQuotation = async (row: LookupRow) => {
+    const companyCode = lookupText(row, "company_code") || header.company_code;
+    const prinCode = lookupText(row, "prin_code");
+    const quotationNr = lookupText(row, "quotation_nr");
+    if (!companyCode || !prinCode || !quotationNr) return;
+    try {
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; details?: LookupRow[] }; message?: string }>(
+        "/api/freight/quotation/get",
+        { company_code: companyCode, prin_code: prinCode, quotation_nr: quotationNr },
+      );
+      if (response.data?.success === false) throw new Error(response.data.message || "Unable to load quotation");
+      const loadedRow = normalizeLookupRow(response.data?.data?.header || row);
+      const printHeader = toHeaderFromRow(loadedRow, userInfo, target);
+      const printDetails = (response.data?.data?.details || [])
+        .map((detail) => normalizeLookupRow(detail))
+        .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
+      renderPrintWindow(printHeader, printDetails);
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to print quotation" });
     }
   };
 
@@ -901,42 +938,67 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   if (view === "list") {
     return (
-      <section className="grid gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={17} /></div>
-            <div>
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Freight Quotation</h1>
-              {/* <p className="eyebrow mb-0.5">Freight Quotation</p> */}
-              {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation Listing</h1>
-              <p className="m-0 mt-1 text-xs text-muted-foreground">Build quotations from enquiry/RFQ data and maintain charge lines.</p> */}
-            </div>
+      <section className="freight-list-screen grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+          <div className="flex items-center gap-2.5">
+            <h2
+              className="text-foreground m-0"
+              style={{ fontSize: "20px", letterSpacing: "-0.02em", fontWeight: 600 }}
+            >
+              Freight Quotation
+            </h2>
+            <span
+              className="px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+              style={{ fontSize: "10px", letterSpacing: "0.03em", fontWeight: 700 }}
+            >
+              QUOTATION
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
             {notice && <NoticeChip notice={notice} />}
-            <HeaderChip label="Records" value={String(rows.length)} />
-            <Button type="button" size="sm" variant="outline" onClick={loadRows} disabled={loading}><RefreshCw size={14} />{loading ? "Loading" : "Refresh"}</Button>
-            <Button type="button" size="sm" onClick={startNew}><Plus size={14} />Add Quotation</Button>
+            <span className="px-2.5 py-1 rounded-xl border border-border bg-card text-muted-foreground text-xs font-semibold">
+              Records: {rows.length}
+            </span>
+            <button
+              type="button"
+              onClick={loadRows}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-colors text-xs font-medium cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              {loading ? "Loading" : "Refresh"}
+            </button>
+            <button
+              type="button"
+              onClick={startNew}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Quotation
+            </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
+
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
           {visibleListStatusTabs.map((tab) => {
             const count = rows.filter((row) => matchesListStatusTab(row, tab.key)).length;
             const active = activeListTab === tab.key;
             return (
-              <Button
+              <button
                 key={tab.key}
                 type="button"
-                size="sm"
-                variant={active ? "default" : "outline"}
                 onClick={() => setActiveListTab(tab.key)}
-                className={active ? "" : "bg-background"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
               >
-                {tab.label}
-                <span className={`ml-1 rounded px-1.5 text-[10px] font-bold ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
                   {count}
                 </span>
-              </Button>
+              </button>
             );
           })}
         </div>
@@ -950,7 +1012,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           searchPlaceholder="Search quotation, principal, port..."
           loading={loading}
           height="calc(100vh - 240px)"
-          minWidth={1380}
           density="grid"
           enablePagination
           pageSize={50}
@@ -967,14 +1028,14 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   return (
     <>
       <form ref={formRef} className="freight-dense-form freight-ui-standard freight-quotation-form" onSubmit={saveQuotation}>
-        <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
               <p className="eyebrow mb-0.5">Freight Quotation</p>
                {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
               <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr}</h1>
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr || "New Freight Quotation"}</h1>
                 {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
                 {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
@@ -1040,7 +1101,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             )}
             <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
             <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-            <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+            {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
             <ReadOnlyField label="Approval Level" value={workflowLevelText(header)} />
             <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
             <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
@@ -1711,11 +1772,10 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-// function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
-  function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "" }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
-  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string;
   }) {
   return (
     <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
@@ -1729,6 +1789,7 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
         loadOptions={loadOptions}
         onChange={onChange}
         required={required}
+        disabled={disabled}
         enforceRequired={required}
         compact
       />
@@ -1784,3 +1845,308 @@ function modeLabel(mode: string) { return mode === "S" ? "Sea" : mode === "R" ? 
 function jobTypeLabel(jobType: string) { return jobType === "IMP" ? "Import" : "Export"; }
 function round3(value: number) { return Number.isFinite(value) ? value.toFixed(3) : "0.000"; }
 function formatAmount(value: number) { return value.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
+
+// function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.fc_billrate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   const html = `
+//   <html>
+//     <head>
+//       <title>Quotation ${header.quotation_nr}</title>
+//       <style>
+//         @page { margin: 14mm; }
+//         * { box-sizing: border-box; }
+//         body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 0; }
+//         .frame { padding: 0 4px; }
+
+//         .doc-header {
+//           display: flex; justify-content: space-between; align-items: flex-end;
+//           border-bottom: 2.5px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 18px;
+//         }
+//         .doc-header h1 { margin: 0; font-size: 14px; letter-spacing: 0.5px; color: #1e3a8a; }
+//         .doc-header .doc-meta { text-align: right; font-size: 11px; color: #374151; }
+//         .doc-header .doc-meta .qtn-no { font-size: 13px; font-weight: bold; color: #111827; }
+
+//         .top-row { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 11px; }
+//         .top-row .label { font-weight: bold; color: #6b7280; margin-right: 4px; }
+
+//         .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//         .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; background: #fafbfc; }
+//         .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//         .party-block .value { white-space: pre-line; color: #9ca3af; font-style: italic; }
+
+//         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 18px; }
+//         .info-grid .field { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted #e5e7eb; }
+//         .info-grid .field .label { font-weight: bold; color: #374151; }
+
+//         table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//         thead th { background: #1e3a8a; color: #fff; border: 1px solid #1e3a8a; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+//         td { border: 1px solid #e5e7eb; padding: 8px; }
+//         tr:nth-child(even) td { background: #f8fafc; }
+//         .num { text-align: right; font-variant-numeric: tabular-nums; }
+//         .empty { text-align: center; color: #9ca3af; font-style: italic; }
+
+//         .doc-footer {
+//           margin-top: 36px; display: flex; justify-content: space-between; align-items: flex-end;
+//           font-size: 10px; color: #6b7280;
+//         }
+//         .doc-footer .signature { border-top: 1px solid #9ca3af; padding-top: 4px; width: 200px; text-align: center; }
+
+//         .print-toolbar {
+//           position: sticky; top: 0; z-index: 10;
+//           display: flex; justify-content: flex-end; gap: 8px;
+//           padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+//           margin: 0 0 20px 0;
+//         }
+//         .print-toolbar button {
+//           font-family: Arial, sans-serif; font-size: 12px; font-weight: 600;
+//           padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1;
+//         }
+//         .print-toolbar .btn-print { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+//         .print-toolbar .btn-close { background: #fff; color: #374151; }
+//         @media print { .print-toolbar { display: none; } }
+//       </style>
+//     </head>
+//     <body>
+//       <div class="print-toolbar">
+//         <button class="btn-print" onclick="window.print()">Print</button>
+//         <button class="btn-close" onclick="window.close()">Close</button>
+//       </div>
+//       <div class="frame">
+//         <div class="doc-header">
+//           <h1>REQUEST FOR QUOTATION</h1>
+//           <div class="doc-meta">
+//             <div class="qtn-no">${escapeHtml(header.quotation_nr) || "-"}</div>
+//             <div>Date: ${escapeHtml(formatDisplayDate(header.quotation_date))}</div>
+//           </div>
+//         </div>
+
+//         <div class="top-row">
+//           <div><span class="label">Enquiry No.</span>${escapeHtml(header.enquiry_no) || "-"}</div>
+//           <div><span class="label">Offer Validity</span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</div>
+//         </div>
+
+//         <div class="party-grid">
+//           <div class="party-block">
+//             <span class="label">Shipper</span>
+//             <span class="value">Not specified</span>
+//           </div>
+//           <div class="party-block">
+//             <span class="label">Consignee</span>
+//             <span class="value">Not specified</span>
+//           </div>
+//         </div>
+
+//         <div class="info-grid">
+//           <div>
+//             <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//             <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//             <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//             <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//           </div>
+//           <div>
+//             <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//             <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//             <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//             <div class="field"><span class="label">Mode</span><span>${modeLabel(header.transport_mode)}</span></div>
+//           </div>
+//         </div>
+
+//         <table>
+//           <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//           <tbody>${rows}</tbody>
+//         </table>
+
+//         <div class="doc-footer">
+//           <div>Generated on ${escapeHtml(new Date().toLocaleString())}</div>
+//           <div class="signature">Authorized Signatory</div>
+//         </div>
+//       </div>
+//     </body>
+//   </html>
+// `;
+
+//   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+//   const url = window.URL.createObjectURL(blob);
+
+//   const width = 960;
+//   const height = 760;
+//   const left = Math.max(0, (window.screen.width - width) / 2);
+//   const top = Math.max(0, (window.screen.height - height) / 2);
+//   const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`;
+
+//   const printWindow = window.open(url, "_blank", features);
+//   if (!printWindow) {
+//     window.URL.revokeObjectURL(url);
+//     alert("Please allow popups for this site to view the print preview.");
+//     return;
+//   }
+//   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+// }
+
+function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
+  const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+  const billTotal = activeDetails.reduce((sum, row) => sum + (Number(row.bill) || 0), 0);
+  const rows = activeDetails.length
+    ? activeDetails
+        .map(
+          (row) => `
+      <tr>
+        <td>${escapeHtml(row.activity || row.act_code)}</td>
+        <td>${escapeHtml(row.uom)}</td>
+        <td class="num">${escapeHtml(row.quantity)}</td>
+        <td class="num">${escapeHtml(row.fc_billrate)}</td>
+      </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+  const html = `
+    <html>
+      <head>
+        <title>Quotation ${escapeHtml(header.quotation_nr)}</title>
+        <style>
+          @page { margin: 14mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 11px; color: #1f2937; margin: 0; }
+
+          .doc-header {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            border-bottom: 2.5px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 16px;
+          }
+          .doc-header h1 { margin: 0; font-size: 17px; letter-spacing: 0.5px; color: #1e3a8a; }
+          .doc-header .doc-meta { text-align: right; font-size: 10px; color: #374151; }
+          .doc-header .doc-meta .qtn-no { font-size: 14px; font-weight: bold; color: #111827; }
+
+          .top-row { display: flex; justify-content: space-between; margin-bottom: 14px; font-size: 10.5px; }
+          .top-row .label { font-weight: bold; color: #6b7280; margin-right: 4px; }
+
+          .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+          .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px 10px; background: #fafbfc; }
+          .party-block .label { display: block; font-weight: bold; font-size: 9px; text-transform: uppercase; color: #6b7280; margin-bottom: 3px; }
+          .party-block .value { color: #9ca3af; font-style: italic; font-size: 10.5px; }
+
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 14px; }
+          .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; font-size: 10.5px; }
+          .info-grid .field .label { font-weight: bold; color: #374151; }
+
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 4px; font-size: 10.5px; }
+          thead th { background: #1e3a8a; color: #fff; border: 1px solid #1e3a8a; padding: 5px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; }
+          td { border: 1px solid #e5e7eb; padding: 5px 8px; line-height: 1.3; }
+          tr:nth-child(even) td { background: #f8fafc; }
+          .num { text-align: right; font-variant-numeric: tabular-nums; }
+          .empty { text-align: center; color: #9ca3af; font-style: italic; }
+          tfoot td { border-top: 1.5px solid #1e3a8a; font-weight: bold; background: #fff; }
+
+          .doc-footer {
+            margin-top: 28px; display: flex; justify-content: space-between; align-items: flex-end;
+            font-size: 9px; color: #6b7280;
+          }
+          .doc-footer .signature { border-top: 1px solid #9ca3af; padding-top: 4px; width: 180px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="doc-header">
+          <h1>REQUEST FOR QUOTATION</h1>
+          <div class="doc-meta">
+            <div class="qtn-no">${escapeHtml(header.quotation_nr) || "-"}</div>
+            <div>Date: ${escapeHtml(formatDisplayDate(header.quotation_date))}</div>
+          </div>
+        </div>
+
+        <div class="top-row">
+          <div><span class="label">Enquiry No.</span>${escapeHtml(header.enquiry_no) || "-"}</div>
+          <div><span class="label">Offer Validity</span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</div>
+        </div>
+
+        <div class="party-grid">
+          <div class="party-block">
+            <span class="label">Shipper</span>
+            <span class="value">Not specified</span>
+          </div>
+          <div class="party-block">
+            <span class="label">Consignee</span>
+            <span class="value">Not specified</span>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div>
+            <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+            <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+            <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+            <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+          </div>
+          <div>
+            <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+            <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+            <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+            <div class="field"><span class="label">Mode</span><span>${modeLabel(header.transport_mode)}</span></div>
+          </div>
+        </div>
+
+        <table>
+          <colgroup>
+            <col style="width:46%"><col style="width:18%"><col style="width:18%"><col style="width:18%">
+          </colgroup>
+          <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+          <tbody>${rows}</tbody>
+          ${activeDetails.length ? `<tfoot><tr><td colspan="3" class="num">Total</td><td class="num">${formatAmount(billTotal)}</td></tr></tfoot>` : ""}
+        </table>
+
+        <div class="doc-footer">
+          <div>Generated on ${escapeHtml(new Date().toLocaleString())}</div>
+          <div class="signature">Authorized Signatory</div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const existing = document.getElementById("freight-print-frame");
+  existing?.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "freight-print-frame";
+  iframe.style.position = "fixed";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.visibility = "hidden";
+  document.body.appendChild(iframe);
+
+  const frameWindow = iframe.contentWindow;
+  const doc = frameWindow?.document;
+  if (!doc) { iframe.remove(); return; }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => setTimeout(() => iframe.remove(), 500);
+
+  if (frameWindow) {
+    frameWindow.onafterprint = cleanup;
+  }
+  iframe.onload = () => {
+    frameWindow?.focus();
+    frameWindow?.print();
+    setTimeout(cleanup, 60_000);
+  };
+}
+
+function escapeHtml(value: string) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}

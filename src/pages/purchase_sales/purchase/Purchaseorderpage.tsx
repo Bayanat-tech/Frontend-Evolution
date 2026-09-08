@@ -1,6 +1,6 @@
 import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Division, getDivisions, getPoOrderReportExcel, getPoOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -107,6 +107,10 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
+  const [printLoading, setPrintLoading] = useState(false);
+  const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
+  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
+
   const loadLookups = async () => {
     const divisionData = await getDivisions();
     setDivisions(divisionData);
@@ -138,51 +142,45 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     return response as unknown as PurchaseOrderRow[];
   };
 
-  const handlePrintPurchaseOrder = (row: PurchaseOrderRow) => {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    setNotice({ type: "error", message: "Popup blocked — please allow popups to print." });
-    return;
-  }
-  printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+  const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
+    setPrintLoading(true);
+    setPrintReportHtml(null);
+    try {
+      const html = await getPoOrderReportHtml({
+        company_code: user?.company_code,
+        doc_type: row.doc_type,
+        doc_no: row.doc_no,
+      });
+      setPrintReportHtml(html);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load report",
+      });
+    } finally {
+      setPrintLoading(false);
+    }
+  };
 
-  getPoOrderReportHtml({
-    company_code: user?.company_code,
-    doc_type: row.doc_type,
-    doc_no: row.doc_no,
-  })
-    .then((html) => {
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-    })
-    .catch((error) => {
-      printWindow.document.open();
-      printWindow.document.write(
-        `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }</p>`
-      );
-      printWindow.document.close();
-    });
+
+  const handlePrintFrame = () => {
+  const frame = printFrameRef.current;
+  if (!frame) return;
+  frame.contentWindow?.focus();
+  frame.contentWindow?.print();
 };
 
-const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
-  try {
-    await getPoOrderReportExcel({
-      company_code: user?.company_code,
-      doc_type: row.doc_type,
-      doc_no: row.doc_no,
-    });
-  } catch (error) {
-    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
-  }
-};
-
-
-
-
-
+  const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
+    try {
+      await getPoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: row.doc_type,
+        doc_no: row.doc_no,
+      });
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+    }
+  };
 
   useEffect(() => {
   if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
@@ -255,12 +253,12 @@ const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-         <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => handlePrintPurchaseOrder(row.original)}>
-  <Printer size={15} />
-</Button>
-<Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
-  <Download size={15} />
-</Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => handlePrintPurchaseOrder(row.original)}>
+            <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
+            <Download size={15} />
+          </Button>
         </div>
       ),
     },
@@ -388,6 +386,80 @@ const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
           ))}
         </div>
       </Dialog>
+
+      {printLoading && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 8,
+              padding: 24,
+            }}
+          >
+            <p style={{ fontFamily: "sans-serif", margin: 0 }}>Loading report…</p>
+          </div>
+        </div>
+      )}
+
+      {printReportHtml && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }}
+  >
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 8,
+        width: "90%",
+        maxWidth: 1000,
+        height: "90vh",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      <iframe
+        ref={printFrameRef}
+        srcDoc={printReportHtml}
+        style={{ flex: 1, width: "100%", border: "none" }}
+        title="Purchase Order Report"
+      />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 8,
+          padding: "10px 16px",
+          borderTop: "1px solid #e5e7eb",
+        }}
+      >
+        <Button size="sm" variant="outline" onClick={handlePrintFrame}>
+          <Printer size={14} className="mr-1" /> Print
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setPrintReportHtml(null)}>
+          Close
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
     </section>
   );
 }

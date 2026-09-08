@@ -121,7 +121,7 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
   }, [companyCode, userId]);
 
   return (
-    <section className="grid gap-2">
+    <section className="freight-list-screen freight-control-center grid gap-2">
       <section className="overflow-hidden rounded-md border bg-card shadow-sm">
         <div className="grid gap-3 border-b bg-white px-4 py-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="min-w-0">

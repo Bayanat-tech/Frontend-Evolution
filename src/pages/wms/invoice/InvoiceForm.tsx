@@ -1,32 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, LoaderCircle, Package, Printer, Receipt, Save, Trash2, X } from "lucide-react";
-import { Dialog } from "../../../components/ui/Dialog";
+import { ArrowLeft, Boxes, Briefcase, LoaderCircle, Printer, Receipt, Save, Sheet } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/Table";
 import { useAuth } from "../../../state/AuthContext";
+import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
 import {
   getPrincipalDropdown,
-  getInvoiceDetailLines,
   getInvoiceJobSelection,
+  getStorageSelection,
+  normalizeStorageRow,
   updateBillingApi,
   TInvoice,
   TInvoiceDetail,
   StorageSelectionRow,
 } from "../../../api/billing";
-import JobSelectionModal from "./JobSelectionModal";
-import StorageSelectionModal from "./StorageSelectionModal";
-import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
-// import { set } from "react-datepicker/dist/dist/date_utils.js";
 
-type InvoiceFormProps = {
-  existingData?: Record<string, unknown>;
-  viewMode?: boolean;
-  onClose: (shouldRefetch?: boolean) => void;
-};
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 const getValue = (obj: any, key: string) => obj?.[key.toLowerCase()] ?? obj?.[key.toUpperCase()];
+
 const toDDMMYYYY = (d?: string | Date | null) => {
   if (!d) return undefined;
   const dt = new Date(d);
@@ -35,443 +31,526 @@ const toDDMMYYYY = (d?: string | Date | null) => {
   const mm = String(dt.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}/${dt.getFullYear()}`;
 };
+
+const formatDate = (input: any) => {
+  if (!input) return "";
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return String(input);
+  return date.toLocaleDateString("en-GB");
+};
+
 const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; // already correct
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
   const parsed = new Date(str);
   if (isNaN(parsed.getTime())) return "";
   return parsed.toISOString().slice(0, 10);
 };
 
-// NOTE: `required` is a rendering flag only (shows the asterisk). It does not
-// enforce validation on its own — wire real required-checks in handleSave
-// once business rules for each field are confirmed. Only Principal Code is
-// marked required here because that's the one field actually enforced today
-// (via LookupField's `required` prop). Update the others as rules are confirmed
-// instead of guessing — an asterisk that doesn't match real validation is
-// worse than no asterisk.
-type FieldDef = { label: string; key: string; type?: "text" | "date"; disabled?: boolean; required?: boolean };
+const todayStr = new Date().toISOString().slice(0, 10);
+
+const normalizeJobRow = (row: any) => ({
+  company_code: row.company_code ?? row.COMPANY_CODE ?? "",
+  job_no: row.job_no ?? row.JOB_NO ?? "",
+  invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
+  // Original SRNO of this row on its own source job invoice (TN_INVOICE_DET).
+  // Needed so PROC_UPDATE_INVOICE_DTLS can find and link the right row.
+  srno: row.srno ?? row.SRNO ?? null,
+  prin_code: row.prin_code ?? row.PRIN_CODE ?? "",
+  quantity: Number(row.quantity ?? row.QUANTITY ?? 0),
+  activity: row.activity ?? row.ACTIVITY ?? "",
+  act_code: row.act_code ?? row.ACT_CODE ?? "",
+  act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
+  activity_group_code: row.activity_group_code ?? row.ACTIVITY_GROUP_CODE ?? "",
+  bill: Number(row.bill ?? row.BILL ?? 0),
+  bill_rate: Number(row.bill_rate ?? row.BILL_RATE ?? 0),
+  cost_rate: Number(row.cost_rate ?? row.COST_RATE ?? 0),
+  job_date: row.job_date ?? row.JOB_DATE ?? null,
+  selected: (row.selected ?? row.SELECTED) === "Y",
+});
+
+type NormalizedJobRow = ReturnType<typeof normalizeJobRow>;
+
+const jobRowKey = (row: NormalizedJobRow) =>
+  [row.company_code, row.invoice_no, row.prin_code, row.job_no, row.srno ?? "", row.act_code]
+    .map((v) => String(v ?? "").trim())
+    .join("||");
+
+const storageRowKey = (row: any, index: number) => String(row.SEQ_NUMBER ?? index);
+
+// ---------------------------------------------------------------------------
+// Field definitions
+// ---------------------------------------------------------------------------
+
+type FieldDef = {
+  label: string;
+  key: string;
+  type?: "date" | "select";
+  span?: number;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+};
 
 const HEADER_FIELDS: FieldDef[] = [
-  { label: "Invoice No", key: "invoice_no" },
-  { label: "Invoice Date", key: "invoice_date", type: "date" },
-  { label: "From Date", key: "from_date", type: "date" },
-  { label: "To Date", key: "to_date", type: "date" },
+  { label: "Invoice no", key: "invoice_no", placeholder: "Auto-generated" },
+  { label: "Invoice date", key: "invoice_date", type: "date" },
+  { label: "From date", key: "from_date", type: "date" },
+  { label: "To date", key: "to_date", type: "date" },
 ];
 
-const STATUS_FIELDS: FieldDef[] = [
-  { label: "Invoice Status", key: "inv_status" },
-  { label: "Despatched", key: "despatched" },
-  { label: "Dispatch Date", key: "desp_date", type: "date" },
-  { label: "Invoice Mode", key: "inv_mode" },
+const DETAIL_FIELDS: FieldDef[] = [
+  {
+    label: "Despatched",
+    key: "despatched",
+    type: "select",
+    options: [
+      { value: "Y", label: "Yes" },
+      { value: "N", label: "No" },
+    ],
+  },
+  { label: "Dispatch date", key: "desp_date", type: "date" },
+  { label: "Invoice mode", key: "inv_mode", placeholder: "e.g., Email, Print" },
+  { label: "Account reference", key: "account_ref", placeholder: "Account ref" },
+  { label: "Invoice to", key: "inv_to", placeholder: "Customer name" },
+  { label: "Principal ref 1", key: "prin_ref1", placeholder: "Ref 1" },
+  { label: "Principal ref 2", key: "prin_ref2", placeholder: "Ref 2" },
+  { label: "Credit note no", key: "credit_note_no", placeholder: "Optional" },
+  { label: "Credit note date", key: "credit_note_date", type: "date" },
+  { label: "Invoice description 1", key: "inv_desc1", span: 2, placeholder: "Description line 1" },
+  { label: "Invoice description 2", key: "inv_desc2", span: 2, placeholder: "Description line 2" },
 ];
 
-const REFERENCE_FIELDS: FieldDef[] = [
-  { label: "Account Reference", key: "account_ref" },
-  { label: "Invoice To", key: "inv_to" },
-  { label: "Principal Ref 1", key: "prin_ref1" },
-  { label: "Principal Ref 2", key: "prin_ref2" },
-  { label: "Credit Note No", key: "credit_note_no" },
-  { label: "Credit Note Date", key: "credit_note_date", type: "date" },
-];
+// ---------------------------------------------------------------------------
+// Shared building blocks
+// ---------------------------------------------------------------------------
 
-const DESCRIPTION_FIELDS: FieldDef[] = [
-  { label: "Invoice Description 1", key: "inv_desc1" },
-  { label: "Invoice Description 2", key: "inv_desc2" },
-];
-
-const CURRENCY_FIELDS: FieldDef[] = [
-  { label: "Currency Code", key: "curr_code", disabled: true },
-  { label: "Exchange Rate", key: "ex_rate", disabled: true },
-];
-
-// Section registry for the jump-nav — id must match the `id` set on each
-// <section> below. Kept as one list so the nav and the sections can't drift
-// out of sync with each other.
-const FORM_SECTIONS = [
-  { id: "sec-invoice-info", label: "Invoice info" },
-  { id: "sec-status", label: "Status" },
-  { id: "sec-references", label: "References" },
-  { id: "sec-description", label: "Description" },
-  { id: "sec-currency", label: "Currency" },
-];
-
-// Tiny placeholder pages shown in the new tab while the report loads / if it fails.
-const REPORT_LOADING_HTML = `<!DOCTYPE html>
-<html>
-  <head><meta charset="utf-8" /><title>Loading report...</title></head>
-  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
-    justify-content:center;height:100vh;margin:0;color:#555;">
-    Loading invoice report...
-  </body>
-</html>`;
-
-const reportErrorHtml = (message: string) => `<!DOCTYPE html>
-<html>
-  <head><meta charset="utf-8" /><title>Error</title></head>
-  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
-    justify-content:center;height:100vh;margin:0;color:#c0392b;">
-    ${message}
-  </body>
-</html>`;
-
-function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
+function HeaderChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mb-2 flex items-center gap-2 border-b pb-1">
-      <Icon size={13} className="text-primary" />
-      <div>
-        <p className="m-0 text-[10px] font-semibold uppercase leading-none tracking-wide text-primary">{title}</p>
-        <p className="m-0 text-xs font-medium leading-tight text-foreground">{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
-// Standard card wrapper for a form section — border + bg so each group of
-// fields reads as a distinct block instead of blending into one long list.
-// Use this for every new section added to this form.
-function FormSection({
-  id,
-  icon,
-  title,
-  subtitle,
-  children,
-}: {
-  id: string;
-  icon: any;
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-3 rounded-md border bg-background p-3">
-      <SectionHeader icon={icon} title={title} subtitle={subtitle} />
-      {children}
-    </section>
-  );
-}
-
-// Same card pattern as FormSection, but with an action slot on the right of
-// the header — used on the Billing Details tab where each section has its
-// own "add" action (Select Job / Select Storage) that belongs next to the
-// section it affects, not floating in a separate row below both tables.
-function BillingSection({
-  icon: Icon,
-  title,
-  subtitle,
-  action,
-  children,
-}: {
-  icon: any;
-  title: string;
-  subtitle: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-md border bg-background p-3">
-      <div className="mb-2 flex items-center justify-between gap-2 border-b pb-1">
-        <div className="flex items-center gap-2">
-          <Icon size={13} className="text-primary" />
-          <div>
-            <p className="m-0 text-[10px] font-semibold uppercase leading-none tracking-wide text-primary">{title}</p>
-            <p className="m-0 text-xs font-medium leading-tight text-foreground">{subtitle}</p>
-          </div>
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-// Empty-state content — replaces a bare "No data found" string with an icon
-// + message + optional inline CTA, shown inside a full-width TableCell.
-function EmptyTableState({ icon: Icon, message, actionLabel, onAction }: {
-  icon: any;
-  message: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-      <Icon size={20} className="text-muted-foreground/60" />
-      <p className="m-0 text-xs">{message}</p>
-      {actionLabel && onAction && (
-        <Button size="sm" variant="outline" type="button" onClick={onAction}>
-          {actionLabel}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function FieldLabel({ label, required }: { label: string; required?: boolean }) {
-  return (
-    <span className="text-xs">
-      {label} {required && <span className="text-destructive">*</span>}
+    <span className="inline-flex max-w-52 items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-[11px]">
+      <span className="font-semibold uppercase text-muted-foreground">{label}</span>
+      <span className="truncate font-semibold text-foreground">{value}</span>
     </span>
   );
 }
 
-function FieldGrid({ fields, invoice, onChange, disabled, hint }: {
-  fields: FieldDef[];
-  invoice: any;
-  onChange: (key: string, value: string) => void;
-  disabled?: boolean;
-  // Optional helper text shown once under the grid — for fields that are
-  // disabled because they're auto-filled, not because they're locked.
-  hint?: string;
-}) {
+function FieldLabel({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-2">
-      <div className="grid grid-cols-2 gap-2">
-        {fields.map(({ label, key, type, disabled: fieldDisabled, required }) => (
-          <label key={key} className="field">
-            <FieldLabel label={label} required={required} />
-            <Input
-              className="h-8 text-sm disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground"
-              type={type === "date" ? "date" : "text"}
-              value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
-              onChange={(e) => onChange(key, e.target.value)}
-              disabled={disabled || fieldDisabled}
-            />
-          </label>
-        ))}
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+      {label}
+      {children}
+    </label>
+  );
+}
+
+const fieldClassName =
+  "flex h-8 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+
+function renderField(f: FieldDef, invoice: any, setField: (key: string, value: string) => void, disabled?: boolean) {
+  const value = getValue(invoice, f.key) ?? "";
+  const span = f.span ? `sm:col-span-${f.span}` : "";
+
+  if (f.type === "date") {
+    return (
+      <FieldLabel key={f.key} label={f.label} className={span}>
+        <Input className="h-8 text-sm" type="date" value={toDateInputValue(value)} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled} />
+      </FieldLabel>
+    );
+  }
+  if (f.type === "select" && f.options) {
+    return (
+      <FieldLabel key={f.key} label={f.label} className={span}>
+        <select className={fieldClassName} value={value} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled}>
+          <option value="">Select</option>
+          {f.options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </FieldLabel>
+    );
+  }
+  return (
+    <FieldLabel key={f.key} label={f.label} className={span}>
+      <Input className="h-8 text-sm" value={value} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled} placeholder={f.placeholder} />
+    </FieldLabel>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panel header (themed per-section)
+// ---------------------------------------------------------------------------
+
+function PanelHeader({
+  icon,
+  accent,
+  title,
+  subtitle,
+  selectedCount,
+  totalCount,
+}: {
+  icon: React.ReactNode;
+  accent: "primary" | "amber";
+  title: string;
+  subtitle: string;
+  selectedCount: number;
+  totalCount: number;
+}) {
+  const accentClasses = accent === "primary" ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-600";
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${accentClasses}`}>{icon}</div>
+        <div className="min-w-0">
+          <p className="m-0 text-[13px] font-semibold text-foreground">{title}</p>
+          <p className="m-0 truncate text-[11px] text-muted-foreground">{subtitle}</p>
+        </div>
       </div>
-      {hint && <p className="m-0 text-[11px] text-muted-foreground">{hint}</p>}
+      <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${accentClasses}`}>
+        {selectedCount} / {totalCount} selected
+      </span>
     </div>
   );
 }
 
-export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+interface InvoiceFormProps {
+  existingData?: Record<string, unknown>;
+  viewMode?: boolean;
+  onClose: (shouldRefetch?: boolean) => void;
+}
+
+export default function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
-  const company_code = user?.company_code ?? "";
+  const { company_code: authCompanyCode, loginid } = user ?? {};
 
-  /* ================= STATE ================= */
-  const [tab, setTab] = useState<0 | 1>(0);
-  const [invoice, setInvoice] = useState<any>(existingData ?? {});
-  const [lines, setLines] = useState<any[]>([]);
-  const [jobSelectionRows, setJobSelectionRows] = useState<any[]>([]);
-  const [storageLines, setStorageLines] = useState<StorageSelectionRow[]>([]);
-  const [jobModalOpen, setJobModalOpen] = useState(false);
-  const [storageModalOpen, setStorageModalOpen] = useState(false);
+  const [invoice, setInvoice] = useState<any>(() => {
+    if (existingData && Object.keys(existingData).length > 0) return existingData;
+    return {
+      invoice_date: todayStr,
+      from_date: todayStr,
+      to_date: todayStr,
+      desp_date: todayStr,
+      credit_note_date: todayStr,
+      despatched: "N",
+    };
+  });
+
+  const [jobRows, setJobRows] = useState<NormalizedJobRow[]>([]);
+  const [selectedJobKeys, setSelectedJobKeys] = useState<Set<string>>(new Set());
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
+  const [storageRows, setStorageRows] = useState<StorageSelectionRow[]>([]);
+  const [selectedStorageKeys, setSelectedStorageKeys] = useState<Set<string>>(new Set());
+  const [loadingStorage, setLoadingStorage] = useState(false);
+
   const [saving, setSaving] = useState(false);
-  const [warning, setWarning] = useState("");
-  const [printError, setPrintError] = useState("");
-  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(false);
 
-  /* ================= DERIVED VALUES ================= */
+  // The company's own base/home currency (from MS_COMPANYINFO). Job and
+  // storage bill/cost figures come out of the source tables in this
+  // currency — we only need to convert them when the invoice itself is
+  // being raised in a different currency.
+  const [companyCurrCode, setCompanyCurrCode] = useState<string>("");
+
+  // Tracks whether the user has manually typed an exchange rate for the
+  // currently-selected currency. While true, the auto-fetch effect below
+  // will not overwrite what the user typed. Reset whenever the currency
+  // itself changes, so a genuinely new currency still gets its DB rate.
+  const [exRateTouched, setExRateTouched] = useState(false);
+
+  const setField = (key: string, value: string) => setInvoice((prev: any) => ({ ...prev, [key]: value }));
+
   const prinCode = getValue(invoice, "prin_code") || "";
   const invoiceNo = getValue(invoice, "invoice_no") || "";
   const fromDate = getValue(invoice, "from_date");
   const toDate = getValue(invoice, "to_date");
+  const currCode = getValue(invoice, "curr_code") || "";
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
-  const currCode = getValue(invoice, "curr_code") || "";
+  const isNew = !hasExistingData;
 
-  // Report Print Type
-  const report_type = ['grouped','activitywise']
+  // -------------------------------------------------------------------------
+  // Company base currency — used to decide whether/how to convert
+  // -------------------------------------------------------------------------
 
-  // Jobs already added to the invoice (Job Details grid) — passed to JobSelectionModal
-  // so it can exclude them from the pickable list instead of showing duplicates.
-  const existingJobKeys = useMemo(
-    () => lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
-    [lines],
-  );
-
-  /* ================= EFFECTS ================= */
   useEffect(() => {
-    if (!user?.loginid || !user?.company_code || !prinCode) return;
+    if (!authCompanyCode) {
+      setCompanyCurrCode("");
+      return;
+    }
+    let cancelled = false;
     (async () => {
       try {
-        const response = await getInvoiceDetailLines({
-          loginid: user.loginid ?? "",
-          company_code: user.company_code ?? "",
-          prin_code: prinCode,
-          invoice_no: invoiceNo,
-        });
-        setLines(Array.isArray(response) ? response : []);
+        const rows = await executeWmsInboundSql(`
+          SELECT * FROM MS_COMPANYINFO
+          WHERE COMPANY_CODE = '${authCompanyCode}'
+          ORDER BY COMPANY_CODE
+        `);
+        const row = Array.isArray(rows) ? rows[0] : undefined;
+        // NOTE: adjust this key if MS_COMPANYINFO's currency column isn't CURR_CODE
+        const curr = getValue(row, "curr_code");
+        if (!cancelled) setCompanyCurrCode(String(curr ?? "").trim());
       } catch {
-        setLines([]);
+        if (!cancelled) setCompanyCurrCode("");
       }
     })();
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authCompanyCode]);
 
-  // Re-seed jobSelectionRows from jobs already linked to this invoice (SELECTED = 'Y')
-  // so an edit-and-save (without touching "Select Job") still re-sends them — otherwise
-  // jobSelection stays empty for existing invoices even though Job Details shows rows.
+  // -------------------------------------------------------------------------
+  // Currency dropdown + exchange rate lookup
+  // -------------------------------------------------------------------------
+
   useEffect(() => {
-    if (!user?.loginid || !user?.company_code || !prinCode || !invoiceNo) return;
+    if (!user?.company_code) return;
+    let cancelled = false;
+    setLoadingCurrencies(true);
+    (async () => {
+      try {
+        const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`);
+        if (!cancelled && Array.isArray(rows)) {
+          setCurrencyOptions(rows.map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" })));
+        }
+      } catch {
+        if (!cancelled) setCurrencyOptions([]);
+      } finally {
+        if (!cancelled) setLoadingCurrencies(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.company_code]);
+
+  // Auto-fetch the DB exchange rate whenever the currency changes, unless
+  // the user has manually overridden the rate for this currency selection.
+  useEffect(() => {
+    if (!invoice.curr_code || exRateTouched) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await executeWmsInboundSql(`SELECT EX_RATE FROM MS_CURRENCY WHERE CURR_CODE = '${invoice.curr_code}'`);
+        const rate = rows?.[0]?.ex_rate ?? rows?.[0]?.EX_RATE ?? "";
+        if (!cancelled) setField("ex_rate", String(rate));
+      } catch {
+        if (!cancelled) setField("ex_rate", "");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice.curr_code, exRateTouched]);
+
+  // -------------------------------------------------------------------------
+  // Exchange conversion factor
+  // -------------------------------------------------------------------------
+  // Job/storage bill & cost figures come out of the source tables in the
+  // company's base currency. If the invoice is being raised in a different
+  // currency, convert: base_amount / ex_rate = invoice_currency_amount
+  // (matches EX_RATE meaning "1 unit of invoice currency = EX_RATE units
+  // of base currency" — e.g. USD invoice, EX_RATE 0.385 for an OMR base).
+  // Same currency (or missing data) => factor of 1, i.e. no conversion.
+
+  const exchangeFactor = useMemo(() => {
+    const invCurr = String(currCode || "").trim().toUpperCase();
+    const baseCurr = String(companyCurrCode || "").trim().toUpperCase();
+    if (!invCurr || !baseCurr || invCurr === baseCurr) return 1;
+    const rate = Number(invoice.ex_rate);
+    return rate > 0 ? 1 / rate : 1;
+  }, [currCode, companyCurrCode, invoice.ex_rate]);
+
+  // -------------------------------------------------------------------------
+  // Job rows — auto-loaded straight into the grid once a principal is picked
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!user?.loginid || !user?.company_code || !prinCode) {
+      setJobRows([]);
+      setSelectedJobKeys(new Set());
+      return;
+    }
+    let cancelled = false;
+    setLoadingJobs(true);
     (async () => {
       try {
         const response = await getInvoiceJobSelection({
           loginid: user.loginid ?? "",
           company_code: user.company_code ?? "",
           prin_code: prinCode,
-          invoice_no: invoiceNo,
+          invoice_no: invoiceNo || undefined,
           from_date: toDDMMYYYY(fromDate),
           to_date: toDDMMYYYY(toDate),
         });
-        console.log(
-          "[DEBUG] getInvoiceJobSelection raw response for invoiceNo:",
-          invoiceNo,
-          JSON.stringify(response, null, 2),
-        );
-        const alreadyLinked = (Array.isArray(response) ? response : [])
-          .filter((row: any) => (row.selected ?? row.SELECTED) === "Y")
-          .map((row: any) => ({
-            job_no: row.job_no ?? row.JOB_NO ?? "",
-            act_code: row.act_code ?? row.ACT_CODE ?? "",
-            act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
-            activity: row.activity ?? row.ACTIVITY ?? "",
-            invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
-            prin_code: row.prin_code ?? row.PRIN_CODE ?? prinCode,
-            quantity: Number(row.quantity ?? row.QUANTITY ?? 0),
-            bill: Number(row.bill ?? row.BILL ?? 0),
-            job_date: row.job_date ?? row.JOB_DATE ?? null,
-            // Real SRNO on the job's own source invoice — required by the proc's
-            // WHERE clause to find and re-link the correct TN_INVOICE_DET row.
-            source_srno: row.srno ?? row.SRNO ?? null,
-          }));
-        console.log("[DEBUG] alreadyLinked (selected=Y, filtered) for jobSelectionRows:", alreadyLinked);
-        setJobSelectionRows(alreadyLinked);
+        const normalized = Array.isArray(response)
+          ? response
+              .map(normalizeJobRow)
+              .filter((row, index, arr) => arr.findIndex((r) => jobRowKey(r) === jobRowKey(row)) === index)
+          : [];
+        if (cancelled) return;
+        setJobRows(normalized);
+        // Rows already linked on the invoice (SELECTED='Y' from the backend view) start checked.
+        setSelectedJobKeys(new Set(normalized.filter((r) => r.selected).map(jobRowKey)));
       } catch {
-        setJobSelectionRows([]);
+        if (!cancelled) {
+          setJobRows([]);
+          setSelectedJobKeys(new Set());
+        }
+      } finally {
+        if (!cancelled) setLoadingJobs(false);
       }
     })();
-    // Only re-run on invoice identity change — new picks via the modal are appended
-    // separately in handleJobSelect and shouldn't be wiped out by this effect re-firing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+    return () => {
+      cancelled = true;
+    };
+  }, [prinCode, invoiceNo, fromDate, toDate, user?.loginid, user?.company_code]);
 
-  /* ================= HANDLERS ================= */
-  const setField = (key: string, value: string) => {
-    setInvoice((prev: any) => ({ ...prev, [key]: value }));
-  };
+  // -------------------------------------------------------------------------
+  // Storage rows — same pattern
+  // -------------------------------------------------------------------------
 
-  const groupedLines = useMemo(() => {
-    const map: Record<string, any> = {};
-    lines.forEach((row) => {
-      const key = row.activity || "";
-      if (!map[key]) map[key] = { ...row };
-      else map[key].quantity += Number(row.quantity || 0);
-      map[key].cost_rate = Number(row.cost_rate || 0);
-      map[key].bill_rate = Number(row.bill_rate || 0);
-    });
-    return Object.values(map).map((row: any, idx) => ({
-      ...row,
-      srno: idx + 1,
-      cost_amount: (row.quantity || 0) * (row.cost_rate || 0),
-      bill_amount: (row.quantity || 0) * (row.bill_rate || 0),
-    }));
-  }, [lines]);
-
-  // Storage rows ALWAYS collapse into ONE summary row — total qty, total amount
-  const aggregatedStorage = useMemo(() => {
-    if (storageLines.length === 0) return null;
-    const totalQty = storageLines.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
-    const totalAmount = storageLines.reduce((sum, r) => sum + Number(r.AMOUNT || 0), 0);
-    return { count: storageLines.length, totalQty, totalAmount };
-  }, [storageLines]);
-
-  // Billing tab totals strip — job bill total + storage total + grand total.
-  // Purely derived/display, doesn't touch what actually gets sent on save.
-  const billingTotals = useMemo(() => {
-    const jobTotal = groupedLines.reduce((sum, row) => sum + Number(row.bill_amount || 0), 0);
-    const storageTotal = aggregatedStorage?.totalAmount ?? 0;
-    return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
-  }, [groupedLines, aggregatedStorage]);
-
-  const handleDeleteLine = (activity: string) => {
-    if (!window.confirm("Remove this line item?")) return;
-    setLines((prev) => prev.filter((r) => r.activity !== activity));
-  };
-
-  const handleClearStorageLines = () => {
-    if (!window.confirm("Remove all storage lines?")) return;
-    setStorageLines([]);
-  };
-
-  const handleJobSelect = (selectedJobs: any[]) => {
-    const existingKeys = new Set(
-      lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
-    );
-    const duplicates: string[] = [];
-    const newLines: any[] = [];
-    const newJobSelectionRows: any[] = [];
-
-    selectedJobs.forEach((job) => {
-      const jobNo = String(job.job_no ?? job.JOB_NO ?? "").trim();
-      const actCode = String(job.act_code ?? job.ACT_CODE ?? "").trim();
-      const key = `${jobNo}||${actCode}`;
-      if (existingKeys.has(key)) {
-        duplicates.push(`Job No: ${jobNo}, Act Code: ${actCode}`);
-        return;
-      }
-      existingKeys.add(key);
-
-      const line = {
-        srno: lines.length + newLines.length + 1, // local UI display order for this invoice's grid
-        act_code: actCode,
-        act_group_name: job.act_group_name ?? job.ACT_GROUP_NAME ?? "",
-        activity: job.activity ?? job.ACTIVITY ?? "",
-        invoice_no: job.invoice_no ?? job.INVOICE_NO ?? "",
-        job_no: jobNo,
-        prin_code: job.prin_code ?? job.PRIN_CODE ?? "",
-        bill: Number(job.bill ?? job.BILL ?? 0),
-        bill_rate: Number(job.bill_rate ?? job.BILL_RATE ?? 0),
-        cost_rate: Number(job.cost_rate ?? job.COST_RATE ?? 0),
-        actual_cost: Number(job.actual_cost ?? job.ACTUAL_COST ?? 0),
-        quantity: Number(job.quantity ?? job.QUANTITY ?? 1),
-        other_services: job.other_services ?? "",
-        job_date: job.job_date ?? job.JOB_DATE ?? null,
-        cancelled: false,
-        // Real SRNO on the job's own source invoice (from JobSelectionModal) — this is
-        // what jobSelection must send, NOT the local `srno` counter above.
-        source_srno: job.srno ?? job.SRNO ?? null,
-      };
-      newLines.push(line);
-      newJobSelectionRows.push(line);
-    });
-
-    if (duplicates.length) setWarning(`Already selected — ${duplicates.join(" | ")}`);
-    if (newLines.length) {
-      setLines((prev) => [...prev, ...newLines]);
-      setJobSelectionRows((prev) => [...prev, ...newJobSelectionRows]);
+  useEffect(() => {
+    if (!user?.loginid || !user?.company_code || !prinCode) {
+      setStorageRows([]);
+      setSelectedStorageKeys(new Set());
+      return;
     }
+    let cancelled = false;
+    setLoadingStorage(true);
+    (async () => {
+      try {
+        const response = await getStorageSelection({
+          loginid: user.loginid ?? "",
+          company_code: user.company_code ?? "",
+          prin_code: prinCode,
+          consolidated_invno: consolidatedInvNo,
+          from_date: toDDMMYYYY(fromDate),
+          to_date: toDDMMYYYY(toDate),
+        });
+        const normalized = Array.isArray(response) ? response.map((r) => normalizeStorageRow(r, consolidatedInvNo)) : [];
+        if (cancelled) return;
+        setStorageRows(normalized);
+        setSelectedStorageKeys(
+          new Set(
+            normalized.reduce<string[]>((acc, row: any, i) => {
+              if (row.SELECTED === "Y") acc.push(storageRowKey(row, i));
+              return acc;
+            }, []),
+          ),
+        );
+      } catch {
+        if (!cancelled) {
+          setStorageRows([]);
+          setSelectedStorageKeys(new Set());
+        }
+      } finally {
+        if (!cancelled) setLoadingStorage(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [prinCode, consolidatedInvNo, fromDate, toDate, user?.loginid, user?.company_code]);
+
+  // -------------------------------------------------------------------------
+  // Currency-converted views of the source rows — used for display,
+  // totals, and the save payload, so all three always agree.
+  // -------------------------------------------------------------------------
+
+  const displayJobRows = useMemo<NormalizedJobRow[]>(
+    () =>
+      jobRows.map((row) => ({
+        ...row,
+        bill: row.bill * exchangeFactor,
+        bill_rate: row.bill_rate * exchangeFactor,
+        cost_rate: row.cost_rate * exchangeFactor,
+      })),
+    [jobRows, exchangeFactor],
+  );
+
+  const displayStorageRows = useMemo(
+    () =>
+      storageRows.map((row: any) => ({
+        ...row,
+        AMOUNT: Number(row.AMOUNT ?? 0) * exchangeFactor,
+      })),
+    [storageRows, exchangeFactor],
+  );
+
+  // -------------------------------------------------------------------------
+  // Selection state
+  // -------------------------------------------------------------------------
+
+  const toggleJobRow = (key: string) => {
+    if (viewMode) return;
+    setSelectedJobKeys((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
   };
 
-  const handleStorageSelect = (selectedRows: StorageSelectionRow[]) => {
-    setStorageLines((prev) => [...prev, ...selectedRows]);
+  const toggleAllJobs = () => {
+    if (viewMode) return;
+    setSelectedJobKeys((prev) => {
+      const allSelected = jobRows.length > 0 && jobRows.every((r) => prev.has(jobRowKey(r)));
+      return allSelected ? new Set() : new Set(jobRows.map(jobRowKey));
+    });
   };
+
+  const toggleStorageRow = (key: string) => {
+    if (viewMode) return;
+    setSelectedStorageKeys((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAllStorage = () => {
+    if (viewMode) return;
+    setSelectedStorageKeys((prev) => {
+      const allSelected = storageRows.length > 0 && storageRows.every((r, i) => prev.has(storageRowKey(r, i)));
+      return allSelected ? new Set() : new Set(storageRows.map((r, i) => storageRowKey(r, i)));
+    });
+  };
+
+  const selectedJobRows = useMemo(
+    () => displayJobRows.filter((r) => selectedJobKeys.has(jobRowKey(r))),
+    [displayJobRows, selectedJobKeys],
+  );
+  const selectedStorageRows = useMemo(
+    () => displayStorageRows.filter((r: any, i: number) => selectedStorageKeys.has(storageRowKey(r, i))),
+    [displayStorageRows, selectedStorageKeys],
+  );
+
+  const billingTotals = useMemo(() => {
+    const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.bill || 0), 0);
+    const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
+    return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
+  }, [selectedJobRows, selectedStorageRows]);
+
+  const lineCount = selectedJobRows.length + selectedStorageRows.length;
+
+  // -------------------------------------------------------------------------
+  // Save — checked rows are the payload (already currency-converted)
+  // -------------------------------------------------------------------------
 
   const handleSave = async () => {
     setSaving(true);
-    setWarning("");
+    setNotice(null);
     try {
       const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
 
-      const jobLineRows: TInvoiceDetail[] = lines.map((row, index) => {
-        const quantity = Number(row.quantity || 0);
-        const billRate = Number(row.bill_rate || 0);
-        const costRate = Number(row.cost_rate || 0);
-        return {
-          ...row,
-          srno: index + 1,
-          invoice_no: invoiceNo,
-          prin_code: prinCode,
-          job_no: row.job_no ?? "",
-          quantity,
-          bill_rate: billRate,
-          cost_rate: costRate,
-          bill_amount: quantity * billRate,
-          cost_amount: quantity * costRate,
-        };
-      });
-
-      const jobSelection = jobSelectionRows.map((row) => ({
+      const jobSelection = selectedJobRows.map((row) => ({
         job_no: row.job_no,
         act_code: row.act_code,
         act_group_name: row.act_group_name,
@@ -481,19 +560,31 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         quantity: row.quantity,
         bill: row.bill,
         job_date: row.job_date,
-        // Must be the source job's own SRNO on its own invoice (TN_INVOICE_DET),
-        // not any locally-generated UI sequence number.
-        srno: row.source_srno,
+        srno: row.srno,
         selected: "Y",
       }));
 
-      const storageSelection = storageLines.map((row) => ({
-        ...row,
-        act_code: "9001",
-          SELECTED: "Y",
-      }));
+      const storageSelection = selectedStorageRows.map((row: any) => ({ ...row, act_code: "9001", SELECTED: "Y" }));
 
-      const storageDetailRows: TInvoiceDetail[] = storageLines.map((row: any) => ({
+      const jobDetailRows: TInvoiceDetail[] = selectedJobRows.map((row) => {
+        const quantity = Number(row.quantity || 0);
+        const billRate = Number(row.bill_rate || 0);
+        const costRate = Number(row.cost_rate || 0);
+        return {
+          invoice_no: invoiceNo,
+          prin_code: prinCode,
+          job_no: row.job_no,
+          act_code: row.act_code,
+          activity: row.activity,
+          quantity,
+          bill_rate: billRate,
+          cost_rate: costRate,
+          bill_amount: quantity * billRate,
+          cost_amount: quantity * costRate,
+        } as TInvoiceDetail;
+      });
+
+      const storageDetailRows: TInvoiceDetail[] = selectedStorageRows.map((row: any) => ({
         invoice_no: invoiceNo,
         prin_code: prinCode,
         act_code: "9001",
@@ -506,451 +597,344 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         job_no: "",
       }));
 
-      const invoiceDetails: TInvoiceDetail[] = [
-        ...jobLineRows,
-        ...jobSelection,
-        ...storageDetailRows,
-      ].map((row, index) => ({
+      const invoiceDetails: TInvoiceDetail[] = [...jobDetailRows, ...storageDetailRows].map((row, index) => ({
         ...row,
         srno: index + 1,
         INV_DESC1: getValue(invoice, "inv_desc1") ?? "",
         INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
       }));
 
-      const result = await updateBillingApi({
-        invoiceHeader,
-        invoiceDetails,
-        storageSelection,
-        jobSelection,
-      });
+      const result = await updateBillingApi({ invoiceHeader, invoiceDetails, storageSelection, jobSelection });
       if (result.success) onClose(true);
-      else setWarning(result.message);
+      else setNotice({ type: "error", text: result.message });
     } catch (err) {
-      setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
+      setNotice({ type: "error", text: err instanceof Error ? err.message : "Error while saving invoice." });
     } finally {
       setSaving(false);
     }
   };
 
-  // Backend returns raw HTML for the report — open it directly in a new tab
-  // instead of rendering it inside a dialog/iframe.
-  const handlePrint = async (report_type: string) => {
+  const handlePrint = async (report_type: "grouped" | "activitywise") => {
     if (!prinCode || !invoiceNo) return;
-    setPrintError("");
-
-    // Open the tab synchronously, inside the click handler, before the
-    // await — otherwise most browsers' popup blockers will silently kill it.
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) {
-      setPrintError("Please allow pop-ups for this site to view the report.");
+      setNotice({ type: "error", text: "Please allow pop-ups for this site to view the report." });
       return;
     }
-
-    reportWindow.document.open();
-    reportWindow.document.write(REPORT_LOADING_HTML);
-    reportWindow.document.close();
-
+    reportWindow.document.write("Loading invoice report...");
     try {
-      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code), String(report_type));
-      if (reportWindow.closed) return; // user closed the tab while we waited
+      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(user?.company_code ?? ""), report_type);
+      if (reportWindow.closed) return;
       reportWindow.document.open();
       reportWindow.document.write(html);
       reportWindow.document.close();
-    } catch (err) {
-      setPrintError("Failed to load report. Please try again.");
-      if (!reportWindow.closed) {
-        reportWindow.document.open();
-        reportWindow.document.write(reportErrorHtml("Failed to load report. Please try again."));
-        reportWindow.document.close();
-      }
+    } catch {
+      setNotice({ type: "error", text: "Failed to load report. Please try again." });
+      if (!reportWindow.closed) reportWindow.close();
     }
   };
 
-  useEffect(() => {
-    if (!invoice.curr_code) return;
-    let cancelled = false;
-    const fetchExRate = async () => {
-      try {
-        const ex_rate_sql = `SELECT EX_RATE FROM MS_CURRENCY WHERE CURR_CODE = '${invoice.curr_code}'`;
-        const response = await executeWmsInboundSql(ex_rate_sql);
-        const rate = response?.[0]?.ex_rate ?? response?.[0]?.EX_RATE ?? "";
-        if (!cancelled) {
-          setField("ex_rate", String(rate));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setField("ex_rate", "");
-        }
-      }
-    };
-    fetchExRate();
-    return () => {
-      cancelled = true;
-    };
-  }, [invoice.curr_code]);
-
-  const jumpToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  /* ================= RENDER ================= */
   return (
-    <Dialog
-      open
-      wide
-      title={viewMode ? "View Invoice" : existingData ? "Edit Invoice" : "Create Invoice"}
-      onClose={() => onClose(false)}
-      contentClassName="max-h-[90vh] w-[min(96vw,1200px)]"
-      footer={
-        <div className="flex w-full items-center justify-between">
-          {hasExistingData ? (
-            <Button variant="outline" onClick={()=> setPrintDialogOpen(true)}>
-              <Printer size={14} /> Print
-            </Button>
-          ) : <span />}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => onClose(false)}>
-              <X size={14} /> Cancel
-            </Button>
-            {!viewMode && (
-              <Button
-                onClick={handleSave}
-                disabled={saving || (lines.length === 0 && storageLines.length === 0)}
-              >
-                {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />} Save Invoice
-              </Button>
-            )}
+    <div className="grid gap-2.5">
+      {/* Header bar */}
+      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Button type="button" size="icon" variant="ghost" title="Back" className="h-8 w-8 shrink-0" onClick={() => onClose(false)}>
+            <ArrowLeft size={15} />
+          </Button>
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <Receipt size={15} />
+          </div>
+          <div className="min-w-0 leading-tight">
+            <h1 className="m-0 text-lg  ">
+              {isNew ? "Create Invoice" : invoiceNo || "Invoice"}
+              {viewMode && <span className="ml-2 align-middle text-[11px] font-medium text-muted-foreground">(view only)</span>}
+            </h1>
           </div>
         </div>
-      }
-    >
-      <div className="mb-3 flex gap-1 border-b">
-        {["Invoice Details", "Billing Details"].map((label, index) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => setTab(index as 0 | 1)}
-            className={
-              tab === index
-                ? "border-b-2 border-primary px-3 py-1.5 text-sm font-semibold text-primary"
-                : "border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-            }
-          >
-            {label}
-          </button>
-        ))}
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {hasExistingData && (
+            <>
+              <HeaderChip label="Currency" value={currCode || "-"} />
+              <HeaderChip label="Lines" value={String(lineCount)} />
+              <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("grouped")}>
+                <Printer size={14} /> Grouped
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("activitywise")}>
+                <Sheet size={14} /> Activity-wise
+              </Button>
+            </>
+          )}
+          {notice && (
+            <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+              {notice.text}
+            </span>
+          )}
+          <Button type="button" size="sm" variant="outline" onClick={() => onClose(false)}>
+            Cancel
+          </Button>
+          {!viewMode && (
+            <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
+              {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Saving" : "Save"}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {warning && (
-        <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
-          {warning}
-        </div>
-      )}
-
-      {printError && (
-        <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
-          {printError}
-        </div>
-      )}
-
-      {/* ── TAB 1: Invoice Details ── */}
-      {tab === 0 && (
-        <div className="grid gap-3">
-          {/* Section-jump nav — sticky within the Dialog's own scroll container
-              (no ref into Dialog needed; scrollIntoView finds the nearest
-              scrollable ancestor on its own). Only shown on this tab since
-              Billing Details is short enough not to need it. */}
-          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-1.5 bg-card/95 px-1 py-1 backdrop-blur-sm">
-            {FORM_SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => jumpToSection(section.id)}
-                className="rounded-full border px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
-              >
-                {section.label}
-              </button>
-            ))}
+      <fieldset disabled={viewMode} className="contents">
+        {/* Identity fields */}
+        <section className="rounded-md border bg-card px-3 py-2.5 shadow-sm">
+          <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+            <FieldLabel label="Principal code">
+              <LookupField
+                compact
+                label="Principal code"
+                required
+                value={prinCode}
+                columns={[
+                  { field: "prin_code", header: "Code" },
+                  { field: "prin_name", header: "Name" },
+                ]}
+                valueField="prin_code"
+                displayFields={["prin_code", "prin_name"]}
+                loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
+                onChange={(value, row) => setInvoice((prev: any) => ({ ...prev, prin_code: value, curr_code: row ? getValue(row, "curr_code") ?? "" : "" }))}
+                disabled={viewMode}
+              />
+            </FieldLabel>
+            {HEADER_FIELDS.map((f) => renderField(f, invoice, setField, viewMode))}
           </div>
+        </section>
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="grid gap-3">
-              <FormSection id="sec-invoice-info" icon={Receipt} title="Invoice Information" subtitle="Principal, Invoice No & Period">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="col-span-2">
-                    <LookupField
-                      label="Principal Code"
-                      required
-                      compact
-                      showLabelInCompact
-                      value={prinCode}
-                      columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]}
-                      valueField="prin_code"
-                      displayFields={["prin_code", "prin_name"]}
-                      loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
-                      onChange={(value, row) => {
-                        setInvoice((prev: any) => ({
-                          ...prev,
-                          prin_code: value,
-                          curr_code: row ? (getValue(row, "curr_code") ?? "") : "",
-                        }));
-                      }}
-                      disabled={viewMode}
-                    />
-                  </div>
-                  {HEADER_FIELDS.map(({ label, key, type, required }) => (
-                    <label key={key} className="field">
-                      <FieldLabel label={label} required={required} />
-                      <Input
-                        className="h-8 text-sm"
-                        type={type === "date" ? "date" : "text"}
-                        value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
-                        onChange={(e) => setField(key, e.target.value)}
-                        disabled={viewMode}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </FormSection>
+        {/* Details fields */}
+        <section className="rounded-md border bg-card px-3 py-3 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {DETAIL_FIELDS.map((f) => renderField(f, invoice, setField, viewMode))}
 
-              <FormSection id="sec-status" icon={FileText} title="Status" subtitle="Dispatch & Invoice Status">
-                <FieldGrid fields={STATUS_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-              </FormSection>
-            </div>
-
-            <div className="grid gap-3">
-              <FormSection id="sec-references" icon={FileText} title="References" subtitle="Account, Credit Note & Principal References">
-                <FieldGrid fields={REFERENCE_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-              </FormSection>
-
-              <FormSection id="sec-description" icon={FileText} title="Description" subtitle="Invoice Descriptions">
-                <FieldGrid fields={DESCRIPTION_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-              </FormSection>
-
-              <FormSection id="sec-currency" icon={Receipt} title="Currency" subtitle="Currency Code & Exchange Rate">
-                <FieldGrid
-                  fields={CURRENCY_FIELDS}
-                  invoice={invoice}
-                  onChange={setField}
-                  disabled={viewMode}
-                  hint="Auto-filled from the selected Principal — not editable here."
-                />
-              </FormSection>
-            </div>
+            <FieldLabel label="Currency code">
+              <LookupField
+                compact
+                label="Currency code"
+                value={currCode}
+                columns={[
+                  { field: "code", header: "Code" },
+                  { field: "name", header: "Name" },
+                ]}
+                valueField="code"
+                displayFields={["code", "name"]}
+                loadOptions={async () => {
+                  if (currencyOptions.length) return currencyOptions;
+                  try {
+                    const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`);
+                    const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" }));
+                    if (opts.length) setCurrencyOptions(opts);
+                    return opts;
+                  } catch {
+                    return [];
+                  }
+                }}
+                onChange={(value) => {
+                  // A genuinely new currency selection should re-fetch its own
+                  // DB rate, so clear the "touched" flag here.
+                  setExRateTouched(false);
+                  setInvoice((prev: any) => ({ ...prev, curr_code: value }));
+                }}
+                disabled={viewMode || loadingCurrencies}
+                placeholder={loadingCurrencies ? "Loading…" : "Select currency"}
+              />
+            </FieldLabel>
+            <FieldLabel label="Exchange rate">
+              <Input
+                className="h-8 text-sm"
+                value={getValue(invoice, "ex_rate") ?? ""}
+                onChange={(e) => {
+                  setExRateTouched(true);
+                  setField("ex_rate", e.target.value);
+                }}
+                disabled={viewMode}
+                placeholder="Auto"
+              />
+            </FieldLabel>
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* ── TAB 2: Billing Details (Job + Storage) ── */}
-      {tab === 1 && (
-        <div className="grid gap-3">
-          {/* Job Details */}
-          <BillingSection
-            icon={Receipt}
-            title="Job Details"
-            subtitle="Activities billed on this invoice"
-            action={
-              !viewMode && (
-                <Button size="sm" variant="outline" onClick={() => setJobModalOpen(true)} disabled={!prinCode}>
-                  + Select Job
-                </Button>
-              )
-            }
-          >
-            <div className="max-h-[240px] overflow-auto rounded-md border">
+        {/* Billing grids */}
+        <section className="grid gap-3 lg:grid-cols-2">
+          {/* Job selection grid */}
+          <div className="flex max-h-[460px] min-h-[220px] flex-col rounded-md border bg-background shadow-sm">
+            <PanelHeader
+              icon={<Briefcase size={14} />}
+              accent="primary"
+              title="Job details"
+              subtitle="Check the activities to bill on this invoice"
+              selectedCount={selectedJobRows.length}
+              totalCount={jobRows.length}
+            />
+            <div className="min-h-0 flex-1 overflow-auto">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-secondary/70">
                   <TableRow>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Sr</TableHead>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        checked={jobRows.length > 0 && jobRows.every((r) => selectedJobKeys.has(jobRowKey(r)))}
+                        onChange={toggleAllJobs}
+                        disabled={viewMode || jobRows.length === 0}
+                      />
+                    </TableHead>
+                    <TableHead>Job No</TableHead>
                     <TableHead>Activity</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Cost Rate</TableHead>
-                    <TableHead className="text-right">Cost Amt</TableHead>
                     <TableHead className="text-right">Bill Rate</TableHead>
-                    <TableHead className="text-right">Bill Amt</TableHead>
-                    <TableHead>Other</TableHead>
+                    <TableHead className="text-right">Cost Rate</TableHead>
+                    <TableHead className="text-right">Bill</TableHead>
+                    <TableHead>Job Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupedLines.length === 0 ? (
+                  {loadingJobs ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-0">
-                        <EmptyTableState
-                          icon={Receipt}
-                          message={prinCode ? "No jobs added to this invoice yet." : "Pick a Principal on the Invoice Details tab first."}
-                          actionLabel={prinCode && !viewMode ? "Select Job" : undefined}
-                          onAction={() => setJobModalOpen(true)}
-                        />
+                      <TableCell colSpan={8} className="py-8 text-center text-[12px] text-muted-foreground">
+                        Loading jobs…
+                      </TableCell>
+                    </TableRow>
+                  ) : !prinCode ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-8 text-center text-[12px] text-muted-foreground">
+                        Select a principal to load job details.
+                      </TableCell>
+                    </TableRow>
+                  ) : displayJobRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-8 text-center text-[12px] text-muted-foreground">
+                        No jobs found for this principal.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    groupedLines.map((row) => (
-                      <TableRow key={row.srno}>
-                        <TableCell>
-                          <Button size="icon" variant="ghost" onClick={() => handleDeleteLine(row.activity)} disabled={viewMode}>
-                            <Trash2 size={14} className="text-destructive" />
-                          </Button>
-                        </TableCell>
-                        <TableCell>{row.srno}</TableCell>
-                        <TableCell>{row.activity}</TableCell>
-                        <TableCell className="text-right">{row.quantity}</TableCell>
-                        <TableCell className="text-right">{row.cost_rate}</TableCell>
-                        <TableCell className="text-right">{row.cost_amount}</TableCell>
-                        <TableCell className="text-right">{row.bill_rate}</TableCell>
-                        <TableCell className="text-right">{row.bill_amount}</TableCell>
-                        <TableCell>{row.other_services}</TableCell>
-                      </TableRow>
-                    ))
+                    displayJobRows.map((row) => {
+                      const key = jobRowKey(row);
+                      const isSelected = selectedJobKeys.has(key);
+                      return (
+                        <TableRow
+                          key={key}
+                          className={isSelected ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-accent"}
+                          onClick={() => toggleJobRow(key)}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleJobRow(key)} disabled={viewMode} />
+                          </TableCell>
+                          <TableCell>{row.job_no}</TableCell>
+                          <TableCell>{row.act_code ? `${row.act_code} - ${row.activity}` : row.activity}</TableCell>
+                          <TableCell className="text-right">{row.quantity}</TableCell>
+                          <TableCell className="text-right">{row.bill_rate.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">{row.cost_rate.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">{row.bill.toFixed(2)}</TableCell>
+                          <TableCell>{row.job_date ? formatDate(row.job_date) : ""}</TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
             </div>
-          </BillingSection>
+          </div>
 
-          {/* Storage Details — ALWAYS ONE aggregated row, never multiple */}
-          <BillingSection
-            icon={Package}
-            title="Storage Details"
-            subtitle="Aggregated storage charges for this invoice"
-            action={
-              !viewMode && (
-                <Button size="sm" variant="outline" onClick={() => setStorageModalOpen(true)} disabled={!prinCode}>
-                  + Select Storage
-                </Button>
-              )
-            }
-          >
-            <div className="max-h-[240px] overflow-auto rounded-md border">
+          {/* Storage selection grid */}
+          <div className="flex max-h-[460px] min-h-[220px] flex-col rounded-md border bg-background shadow-sm">
+            <PanelHeader
+              icon={<Boxes size={14} />}
+              accent="amber"
+              title="Storage details"
+              subtitle="Check the storage charges to bill on this invoice"
+              selectedCount={selectedStorageRows.length}
+              totalCount={storageRows.length}
+            />
+            <div className="min-h-0 flex-1 overflow-auto">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-secondary/70">
                   <TableRow>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Records</TableHead>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        checked={storageRows.length > 0 && storageRows.every((r, i) => selectedStorageKeys.has(storageRowKey(r, i)))}
+                        onChange={toggleAllStorage}
+                        disabled={viewMode || storageRows.length === 0}
+                      />
+                    </TableHead>
+                    <TableHead>Serial No</TableHead>
+                    <TableHead>Reporting Date</TableHead>
+                    <TableHead>Txn Date</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!aggregatedStorage ? (
+                  {loadingStorage ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-0">
-                        <EmptyTableState
-                          icon={Package}
-                          message={prinCode ? "No storage charges added to this invoice yet." : "Pick a Principal on the Invoice Details tab first."}
-                          actionLabel={prinCode && !viewMode ? "Select Storage" : undefined}
-                          onAction={() => setStorageModalOpen(true)}
-                        />
+                      <TableCell colSpan={6} className="py-8 text-center text-[12px] text-muted-foreground">
+                        Loading storage…
+                      </TableCell>
+                    </TableRow>
+                  ) : !prinCode ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-[12px] text-muted-foreground">
+                        Select a principal to load storage details.
+                      </TableCell>
+                    </TableRow>
+                  ) : displayStorageRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-[12px] text-muted-foreground">
+                        No storage records found for this principal.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    <TableRow>
-                      <TableCell>
-                        <Button size="icon" variant="ghost" onClick={handleClearStorageLines} disabled={viewMode}>
-                          <Trash2 size={14} className="text-destructive" />
-                        </Button>
-                      </TableCell>
-                      <TableCell>{aggregatedStorage.count} record{aggregatedStorage.count > 1 ? "s" : ""}</TableCell>
-                      <TableCell className="text-right">{aggregatedStorage.totalQty}</TableCell>
-                      <TableCell className="text-right">{aggregatedStorage.totalAmount.toFixed(3)}</TableCell>
-                    </TableRow>
+                    displayStorageRows.map((row: any, index) => {
+                      const key = storageRowKey(row, index);
+                      const isSelected = selectedStorageKeys.has(key);
+                      return (
+                        <TableRow
+                          key={key}
+                          className={isSelected ? "cursor-pointer bg-amber-500/10" : "cursor-pointer hover:bg-accent"}
+                          onClick={() => toggleStorageRow(key)}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleStorageRow(key)} disabled={viewMode} />
+                          </TableCell>
+                          <TableCell>{row.SEQ_NUMBER}</TableCell>
+                          <TableCell>{formatDate(row.RCPT_DATE)}</TableCell>
+                          <TableCell>{formatDate(row.TXN_DATE)}</TableCell>
+                          <TableCell className="text-right">{row.QTY}</TableCell>
+                          <TableCell className="text-right">{Number(row.AMOUNT ?? 0).toFixed(3)}</TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
             </div>
-          </BillingSection>
-
-          {/* Totals strip — fills the dead space that used to sit below the
-              Select Job/Storage buttons with something actually useful: what
-              this invoice adds up to so far. Display-only, doesn't affect save. */}
-          <section className="rounded-md border bg-secondary/30 p-3">
-            <div className="flex flex-wrap items-center justify-end gap-6">
-              <div className="text-right">
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Job total</p>
-                <p className="m-0 text-sm font-semibold text-foreground">{billingTotals.jobTotal.toFixed(3)} {currCode}</p>
-              </div>
-              <div className="text-right">
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Storage total</p>
-                <p className="m-0 text-sm font-semibold text-foreground">{billingTotals.storageTotal.toFixed(3)} {currCode}</p>
-              </div>
-              <div className="text-right">
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary">Grand total</p>
-                <p className="m-0 text-base font-bold text-primary">{billingTotals.grandTotal.toFixed(3)} {currCode}</p>
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {jobModalOpen && (
-        <JobSelectionModal
-          prinCode={prinCode}
-          invoiceNo={invoiceNo}
-          fromDate={fromDate}
-          toDate={toDate}
-          existingKeys={existingJobKeys}
-          onClose={() => setJobModalOpen(false)}
-          onSelect={handleJobSelect}
-        />
-      )}
-
-      {storageModalOpen && (
-        <StorageSelectionModal
-          prinCode={prinCode}
-          consolidatedInvNo={consolidatedInvNo}
-          fromDate={fromDate}
-          toDate={toDate}
-          onClose={() => setStorageModalOpen(false)}
-          onSelect={handleStorageSelect}
-        />
-      )}
-      {printDialogOpen && (
-        <Dialog
-          open
-          title="Print Invoice"
-          onClose={() => setPrintDialogOpen(false)}
-          compact
-        >
-          <div className="grid gap-3 py-1">
-            <p className="m-0 text-sm text-muted-foreground">
-              Choose how you want the invoice report to be generated.
-            </p>
-
-            <div className="grid gap-2">
-              {report_type.map((type) => {
-                const isGrouped = type === "grouped";
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handlePrint(type)}
-                    className="group flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
-                      <Printer size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="m-0 text-sm font-semibold text-foreground">
-                        {isGrouped ? "Grouped" : "Activity-wise"}
-                      </p>
-                      <p className="m-0 text-xs text-muted-foreground">
-                        {isGrouped
-                          ? "Summary by activity groups"
-                          : "Detailed breakdown per activity"}
-                      </p>
-                    </div>
-                    <span className="text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                      Print →
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
-        </Dialog>
-      )}
-    </Dialog>
+        </section>
+      </fieldset>
+
+      {/* Totals */}
+      <footer className="flex flex-wrap items-center justify-end gap-6 rounded-md border bg-card px-4 py-2.5 shadow-sm">
+        <Total label="Job total" value={billingTotals.jobTotal} suffix={currCode} />
+        <Total label="Storage total" value={billingTotals.storageTotal} suffix={currCode} />
+        <div className="h-6 w-px bg-border" />
+        <Total label="Grand total" value={billingTotals.grandTotal} suffix={currCode} emphasize />
+      </footer>
+    </div>
   );
 }
 
-export default InvoiceForm;
+function Total({ label, value, suffix, emphasize }: { label: string; value: number; suffix?: string; emphasize?: boolean }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className={emphasize ? "text-[15px] font-semibold text-primary" : "text-[14px] font-medium text-foreground"}>
+        {value.toFixed(3)} {suffix}
+      </span>
+    </div>
+  );
+}

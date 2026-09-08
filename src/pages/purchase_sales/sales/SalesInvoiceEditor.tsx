@@ -4,7 +4,6 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import ReportDialogPage from "../../../components/ReportDialogPage";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
@@ -12,7 +11,7 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   ActionKey,
   PurchaseOrderEditorState,
-  
+
 
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
@@ -37,11 +36,12 @@ import {
   fetchSalesOrderHeader,
   runWorkflow,
 } from "./SalesOrderutils";
-import { SalesInvoiceReport } from "./SalesInvoiceReport";
+// import { SalesInvoiceReport } from "./SalesInvoiceReport";
 import { downloadSalesInvoiceExcel } from "./SalesInvoiceReport";
 import { SalesInvoiceHeaderForm } from "./salesInvoiceHeader";
 import { SalesInvoiceLinesTable } from "./SalesInvoiceDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
 
 export type { PurchaseOrderEditorState };
 
@@ -79,7 +79,7 @@ export function SalesInvoiceEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // Reject
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -87,7 +87,8 @@ export function SalesInvoiceEditor({
   const [rejectError, setRejectError] = useState("");
 
   // Print
-  const [reportOpen, setReportOpen] = useState(false);
+  // const [reportOpen, setReportOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
     if (!editor) return;
@@ -114,9 +115,10 @@ export function SalesInvoiceEditor({
 
         setForm((current) => ({
           ...current,
-          doc_no: numberOrZero(headerRaw.doc_no || docNo),
+         doc_no: text(headerRaw.si_doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           ref_no: text(headerRaw.quotn_no || current.ref_no),
+          sdn_doc_no: text(headerRaw.doc_no || current.doc_no),
           ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
@@ -150,8 +152,8 @@ export function SalesInvoiceEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
 
-            so_doc_no: text(headerRaw.so_doc_no),
-             si_doc_no: text(headerRaw.si_doc_no),
+          so_doc_no: text(headerRaw.so_doc_no),
+          si_doc_no: text(headerRaw.si_doc_no),
           so_doc_date: toDateInputValue(headerRaw.so_doc_date),
           so_ac_code: text(headerRaw.so_ac_code),
           so_ac_name: text(headerRaw.so_party_name),
@@ -161,8 +163,8 @@ export function SalesInvoiceEditor({
           so_ref_date: text(headerRaw.so_ref_date),
           so_curr_code: text(headerRaw.so_curr_code),
           so_ex_rate: numberOrZero(headerRaw.so_ex_rate),
-          so_disc_hdr_percent: numberOrZero(headerRaw.so_disc_hdr_percent),
-          so_disc_hdr_price: numberOrZero(headerRaw.so_disc_hdr_price),
+          disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
+          disc_hdr_price: numberOrZero(headerRaw.disc_hdr_price),
           so_payment_terms: text(headerRaw.so_payment_terms),
           so_credit_period: numberOrZero(headerRaw.so_credit_period),
           so_party_name: text(headerRaw.so_party_name),
@@ -181,6 +183,9 @@ export function SalesInvoiceEditor({
           so_scope_of_work: text(headerRaw.so_scope_of_work),
           so_buyer: text(headerRaw.so_buyer),
           total_so_amount: numberOrZero(headerRaw.total_so_amount),
+          tx_compnt_1_expmt:text(headerRaw.tx_compnt_1_expmt),
+          inv_no: text(headerRaw.inv_no),
+          inv_date: toDateInputValue(headerRaw.inv_date),
 
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),
@@ -253,7 +258,18 @@ export function SalesInvoiceEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
+   const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+      },
+    ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (
@@ -295,6 +311,8 @@ export function SalesInvoiceEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+        if (!form.inv_no) return setError("Invoice Number  is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
     return runAction(
       "submit",
       async () => {
@@ -429,10 +447,7 @@ export function SalesInvoiceEditor({
     );
   };
 
-  const openPrint = () => {
-    if (!form.doc_no) return;
-    setReportOpen(true);
-  };
+
 
   const handleExcel = async () => {
     if (!form.doc_no) return;
@@ -451,11 +466,10 @@ export function SalesInvoiceEditor({
   return (
     <>
       <form
-        className={`payment-workbench commercial-editor grid h-screen ${
-          isCancelled
+        className={`payment-workbench commercial-editor grid h-screen ${isCancelled
             ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
             : "grid-rows-[auto_minmax(0,1fr)_auto]"
-        }`}
+          }`}
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();
@@ -497,6 +511,15 @@ export function SalesInvoiceEditor({
                     {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                   </strong>
                 </div>
+
+                
+              )}
+              
+                {form.div_code && (
+                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -507,7 +530,7 @@ export function SalesInvoiceEditor({
               )}
               {form.doc_no ? (
                 <>
-                  <Button type="button" variant="secondary" onClick={openPrint}>
+                  <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
                     <Printer size={15} /> Print
                   </Button>
                   <Button
@@ -655,8 +678,8 @@ export function SalesInvoiceEditor({
               type="button"
               variant="outline"
               size="icon"
-              disabled={!form.doc_no || loading}
-              onClick={openPrint}
+              disabled={actionDisabled}
+              onClick={() => setPrintOpen(true)}
             >
               <Printer size={15} />
             </Button>
@@ -710,22 +733,16 @@ export function SalesInvoiceEditor({
         onConfirm={confirmReject}
       />
 
-      {reportOpen && form.doc_no ? (
-        <ReportDialogPage
-          title={`Sales Invoice - ${form.doc_no}`}
-          Report={SalesInvoiceReport}
-          required_values={{
-            doc_no: String(form.doc_no),
-            company_code: user?.company_code,
-            doc_type: "SINVOICE",
-          }}
-          onClose={() => setReportOpen(false)}
-          excel={() => void handleExcel()}
-        />
-      ) : null}
+      <SalesInvoicePrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        form={form}
+        companyCode={user?.company_code || ""}
+        docType={config.docType}
+      />
 
-      
-       <AttachmentDialog
+
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
