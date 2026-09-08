@@ -548,8 +548,15 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     setSaving(true);
     setNotice(null);
     try {
-      const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
-
+const invoiceHeader: TInvoice[] = [
+  {
+    ...invoice,
+    USER_ID: user?.loginid,
+    COMPANY_CODE: user?.company_code,
+    CURR_CODE: getValue(invoice, "curr_code") ?? "",
+    EX_RATE: getValue(invoice, "ex_rate") ? Number(getValue(invoice, "ex_rate")) : null,
+  },
+];
       const jobSelection = selectedJobRows.map((row) => ({
         job_no: row.job_no,
         act_code: row.act_code,

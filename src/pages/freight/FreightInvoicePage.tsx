@@ -105,8 +105,8 @@ export function FreightInvoicePage() {
       enableColumnFilter: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button type="button" size="icon" variant="ghost" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={14} /></Button>
-          <Button type="button" size="icon" variant="ghost" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={14} /></Button>
+          <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
+          <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={13} /></Button>
         </div>
       ),
     },
@@ -334,7 +334,7 @@ export function FreightInvoicePage() {
         minWidth={1100}
         density="grid"
         enablePagination
-        pageSize={50}
+        pageSize={25}
         enableExport
         exportFilename="freight-invoice-list.csv"
         getRowId={(row, index) => text(row.invoice_no) || String(index)}
@@ -384,7 +384,7 @@ export function FreightInvoicePage() {
                 displayValue={principalText(form)}
                 valueField="prin_code"
                 displayFields={["prin_code", "prin_name"]}
-                columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]}
+                columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]}
                 loadOptions={(search) => loadFreightLookup("freight_principal", companyCode, search)}
                 onChange={(value, row) => {
                   setForm((prev) => ({ ...prev, prin_code: value, prin_name: text(row?.prin_name ?? row?.PRIN_NAME), curr_code: text(row?.curr_code ?? row?.CURR_CODE) || prev.curr_code }));
