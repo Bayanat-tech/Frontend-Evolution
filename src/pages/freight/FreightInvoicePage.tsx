@@ -1,6 +1,25 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calculator, Eye, Pencil, Plus, Printer, RefreshCw, Save, Search, Trash2 } from "lucide-react";
+import {
+  Briefcase,
+  Calculator,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  Eye,
+  FileCheck2,
+  FileText,
+  Layers,
+  Pencil,
+  Plus,
+  Printer,
+  Receipt,
+  Save,
+  Search,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect, getFreightInvoiceDetailReport } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
@@ -27,6 +46,28 @@ type InvoiceFormState = {
 
 const today = new Date().toISOString().slice(0, 10);
 
+const statusTabs = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "confirmed", label: "Confirmed" },
+];
+
+function filterInvoiceByStatus(row: LookupRow, status: string) {
+  const s = text(row.inv_status).toUpperCase();
+  if (status === "confirmed") return s === "C" || s === "CONFIRMED";
+  if (status === "draft") return s !== "C" && s !== "CONFIRMED";
+  return true;
+}
+
+function StatusChip({ tone, label }: { tone: "green" | "red" | "slate"; label: string }) {
+  const cls = tone === "green"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : tone === "red"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-slate-200 bg-slate-50 text-slate-700";
+  return <span className={`rounded border px-2 py-0 text-[10.5px] leading-tight font-medium ${cls}`}>{label}</span>;
+}
+
 export function FreightInvoicePage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -35,6 +76,7 @@ export function FreightInvoicePage() {
   const loginId = text(userRecord.loginid || userRecord.LOGINID || userRecord.user_id || userRecord.USER_ID || "Admin");
 
   const [rows, setRows] = useState<LookupRow[]>([]);
+  const [activeStatus, setActiveStatus] = useState("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -46,6 +88,10 @@ export function FreightInvoicePage() {
   const [saving, setSaving] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => filterInvoiceByStatus(row, activeStatus));
+  }, [rows, activeStatus]);
+
   const selectedBase = useMemo(
     () => selectedRows.reduce((sum, row) => sum + number(row, "bill"), 0),
     [selectedRows]
@@ -55,6 +101,41 @@ export function FreightInvoicePage() {
     [selectedRows]
   );
   const selectedTotal = selectedBase + selectedTax;
+
+  const summaryStats = useMemo(() => {
+    let totalCount = rows.length;
+    let confirmedCount = 0;
+    let draftCount = 0;
+    let totalAmount = 0;
+    let confirmedAmount = 0;
+    let draftAmount = 0;
+    const uniquePrincipals = new Set<string>();
+
+    rows.forEach((row) => {
+      const amt = number(row, "inv_amount");
+      totalAmount += amt;
+      const s = text(row.inv_status).toUpperCase();
+      if (s === "C" || s === "CONFIRMED") {
+        confirmedCount++;
+        confirmedAmount += amt;
+      } else {
+        draftCount++;
+        draftAmount += amt;
+      }
+      const prin = text(row.prin_code);
+      if (prin) uniquePrincipals.add(prin);
+    });
+
+    return {
+      totalCount,
+      confirmedCount,
+      draftCount,
+      totalAmount,
+      confirmedAmount,
+      draftAmount,
+      principalCount: uniquePrincipals.size,
+    };
+  }, [rows]);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -81,7 +162,7 @@ export function FreightInvoicePage() {
       header: "Invoice No",
       size: 150,
       cell: ({ row }) => (
-        <button type="button" className="font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original, "view")}>
+        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original, "view")}>
           {text(row.original.invoice_no)}
         </button>
       ),
@@ -97,7 +178,16 @@ export function FreightInvoicePage() {
     { accessorKey: "line_count", header: "Lines", size: 80, cell: ({ row }) => centered(text(row.original.line_count) || "0") },
     { accessorKey: "curr_code", header: "Currency", size: 90 },
     { accessorKey: "inv_amount", header: "Amount", size: 130, cell: ({ row }) => money(number(row.original, "inv_amount")) },
-    { accessorKey: "inv_status", header: "Status", size: 90, cell: ({ row }) => text(row.original.inv_status) || "-" },
+    {
+      accessorKey: "inv_status",
+      header: "Status",
+      size: 100,
+      cell: ({ row }) => {
+        const val = text(row.original.inv_status).toUpperCase();
+        if (val === "C" || val === "CONFIRMED") return <StatusChip tone="green" label="Confirmed" />;
+        return <StatusChip tone="slate" label={val === "N" ? "Draft" : val || "Draft"} />;
+      },
+    },
     {
       id: "actions",
       header: "Actions",
@@ -308,29 +398,49 @@ export function FreightInvoicePage() {
   }
 
   return (
-    <section className="freight-list-screen grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Freight Invoice Listing</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Create and manage invoices for confirmed freight jobs.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={15} /> Refresh</Button>
-          <Button type="button" onClick={openNew}><Plus size={15} /> Create Invoice</Button>
-        </div>
+    <section className="freight-workspace-ui freight-list-screen freight-invoice-list-screen grid gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {statusTabs.map((tab) => {
+          const count = rows.filter((row) => filterInvoiceByStatus(row, tab.value)).length;
+          const active = activeStatus === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setActiveStatus(tab.value)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                active
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={filteredRows}
+        toolbar={
+          <button
+            type="button"
+            onClick={openNew}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Create Invoice
+          </button>
+        }
         loading={loading}
         searchValue={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search invoice, principal, job..."
-        subtitle="Invoices"
-        height="calc(100vh - 260px)"
+        searchPlaceholder="Filter visible invoices..."
+        height="calc(100dvh - 180px)"
         minWidth={1100}
         density="grid"
         enablePagination
