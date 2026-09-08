@@ -408,9 +408,9 @@ export function FreightJobActivitiesPage({
         <Metric label="Lines" value={String(lines.length)} />
       </div>
 
-      <div className="freight-job-table-shell overflow-x-auto min-w-0">
-        <div className="min-w-[1020px]">
-          <div className="freight-job-table-head grid grid-cols-[36px_130px_minmax(180px,1fr)_65px_85px_95px_90px_85px_85px_85px_85px_36px] items-center gap-1.5 px-3 py-2 text-[11px] font-bold">
+      <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
+        <div className="min-w-[1280px]">
+          <div className="freight-job-table-head grid grid-cols-[42px_155px_minmax(230px,1fr)_70px_95px_105px_100px_110px_105px_120px_110px_40px] items-center gap-1.5 px-3 py-2 text-[11px] font-bold">
             <span>No</span>
             <span>Activity</span>
             <span>Description</span>
@@ -427,7 +427,7 @@ export function FreightJobActivitiesPage({
           <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-border/60">
             {lines.map((line, index) => (
               <div key={`${line.srno}-${index}`} className="freight-job-table-row flex flex-col transition-colors hover:bg-slate-50/70">
-                <div className="grid grid-cols-[36px_130px_minmax(180px,1fr)_65px_85px_95px_90px_85px_85px_85px_85px_36px] items-center gap-1.5 px-3 py-1.5">
+                <div className="freight-activity-primary-row grid grid-cols-[42px_155px_minmax(230px,1fr)_70px_95px_105px_100px_110px_105px_120px_110px_40px] items-center gap-1.5 px-3 py-1.5">
                   <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                   <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
                   <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
@@ -444,8 +444,8 @@ export function FreightJobActivitiesPage({
                   </Button>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-dashed border-border/60 bg-muted/20 px-3 py-1 text-[11px]">
-                  <div className="flex items-center gap-1.5">
+                <div className="freight-activity-tax-row grid grid-cols-2 gap-2 border-t border-dashed border-border/60 bg-muted/20 px-3 py-1.5 text-[11px]">
+                  <div className="freight-activity-tax-group sales flex items-center gap-1.5">
                     <span className="font-semibold text-primary uppercase text-[10px] tracking-wider min-w-[55px]">Sales Tax:</span>
                     <div className="w-28">
                       <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
@@ -465,9 +465,7 @@ export function FreightJobActivitiesPage({
                     </div>
                   </div>
 
-                  <div className="hidden lg:block h-4 w-px bg-border/80 mx-1" />
-
-                  <div className="flex items-center gap-1.5">
+                  <div className="freight-activity-tax-group cost flex items-center gap-1.5">
                     <span className="font-semibold text-emerald-700 uppercase text-[10px] tracking-wider min-w-[55px]">Cost Tax:</span>
                     <div className="w-28">
                       <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />

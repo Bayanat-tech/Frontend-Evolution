@@ -188,7 +188,6 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
             </span>
             <div>
               <h1 className="m-0 text-lg font-bold tracking-tight text-foreground">{title}</h1>
-              <p className="m-0 text-xs text-muted-foreground">Manage shipments, pack lists, activities, and operational follow-up.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -143,30 +143,6 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-function statusBadgeClass(job: JobForm) {
-  if (job.canceled === "Y") {
-    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
-  }
-  if (job.completed === "Y" || job.complete_date) {
-    return "inline-flex items-center rounded border border-indigo-200 bg-indigo-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-indigo-700";
-  }
-  if (job.invoiced === "Y" || job.invoice_date) {
-    return "inline-flex items-center rounded border border-sky-200 bg-sky-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-sky-700";
-  }
-  if (job.confirmed === "Y" || job.confirm_date) {
-    return "inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-blue-700";
-  }
-  return "inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700";
-}
-
-function statusText(job: JobForm) {
-  if (job.canceled === "Y") return "Cancelled";
-  if (job.completed === "Y" || job.complete_date) return "Completed";
-  if (job.invoiced === "Y" || job.invoice_date) return "Invoiced";
-  if (job.confirmed === "Y" || job.confirm_date) return "Confirmed";
-  return "Open";
-}
-
 function isTruthyFlag(value: string | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
   return normalized === "Y" || normalized === "YES" || normalized === "1" || normalized === "TRUE";
@@ -390,7 +366,6 @@ export function FreightJobPage({
         <Button type="button" size="sm" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
           <ArrowLeft size={14} /> List
         </Button>
-        <span className={statusBadgeClass(job)}>{statusText(job)}</span>
         <Button
           type="button"
           size="sm"
@@ -491,7 +466,6 @@ export function FreightJobPage({
                 <h1 className="m-0 text-base font-bold leading-tight text-foreground">
                   {job.job_no || "New Freight Job"}
                 </h1>
-                <span className={statusBadgeClass(job)}>{statusText(job)}</span>
               </div>
             </div>
           </div>

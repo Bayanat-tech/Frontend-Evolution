@@ -549,6 +549,16 @@ export function FreightPacklistPage({
       <fieldset disabled={readOnly || !editing} className={`freight-ui-standard freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <PackEditContext.Provider value={editing && !readOnly}>
         <div className="freight-job-section-grid">
+        <Panel className="pack-document-panel lg:col-span-12" icon={FileSignature} title="Document & Booking Reference" meta={`Pack ${pack.packlist_no || "Auto"} / Job ${pack.job_no || "Pending"}`}>
+          <div className="freight-job-field-grid freight-job-field-grid-6">
+            <ReadOnlyField label="Job No" value={pack.job_no || "-"} />
+            <ReadOnlyField label="Pack List No" value={pack.packlist_no || "Auto"} />
+            <ReadOnlyField label="Sequence No" value={pack.seq_number || "Auto"} />
+            <ReadOnlyField label="Job Date" value={formatDate(pack.job_date) || "-"} />
+            <ReadOnlyField label="Principal" value={pack.prin_code || "-"} />
+            <Field label="P.O. No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required />
+          </div>
+        </Panel>
         {/* <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>
           <div className="freight-job-field-grid freight-job-field-grid-8">
             <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => { selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code); setContainers([]); }} />
@@ -564,8 +574,8 @@ export function FreightPacklistPage({
           </div>
         </Panel> */}
 
-        <Panel className="lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
-          <div className="freight-job-field-grid freight-job-field-grid-3">
+        <Panel className="pack-parties-panel lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
+          <div className="freight-job-field-grid pack-parties-grid">
             <Textarea rows={2} label="Shipper Name" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
             <Textarea rows={3} label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} />
             <Textarea rows={2} label="Consignee Name" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
@@ -593,7 +603,7 @@ export function FreightPacklistPage({
           </div>
         </Panel> */}
 
-        <Panel className="lg:col-span-6" icon={PackageCheck} title="Cargo And Measures" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
+        <Panel className="pack-cargo-panel lg:col-span-6" icon={PackageCheck} title="Cargo And Measures" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
   <div className="freight-job-field-grid freight-job-field-grid-3">
     {isAir && (
       <>
@@ -641,7 +651,7 @@ export function FreightPacklistPage({
           </div>
         </Panel> */}
 
-        <Panel className="lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
+        <Panel className="pack-description-panel lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
   <div className="freight-job-field-grid freight-job-field-grid-2 grid gap-2.5 sm:grid-cols-2">
     {isAir ? (
       <>
@@ -660,7 +670,7 @@ export function FreightPacklistPage({
   </div>
 </Panel>
 
-        <Panel className="lg:col-span-12" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
+        <Panel className="pack-transport-panel lg:col-span-12" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
           <div className="freight-job-field-grid freight-job-field-grid-4">
             {/* {isAir ? (
               <>
@@ -741,7 +751,6 @@ export function FreightPacklistPage({
           <div className="freight-job-field-grid freight-job-field-grid-4">
             <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
             <Field label="Ex Rate" type="number" value={pack.ex_rate} onChange={(value) => setPackField(setPack, "ex_rate", value)} />
-            <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required />
             <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
             {/* {!isAir && <Field label="Import BL Date" type="date" value={pack.import_bldate} onChange={(value) => setPackField(setPack, "import_bldate", value)} />} */}
             {/* <Textarea className="sm:col-span-2" label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} /> */}

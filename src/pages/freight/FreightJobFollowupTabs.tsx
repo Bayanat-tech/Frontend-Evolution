@@ -249,11 +249,6 @@ export function FreightJobFollowupTab({
       {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
       {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
 
-      {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} readOnly={readOnly} />}
-      {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
-      {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
-      {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
-
       <FreightAttachmentDialog
         open={Boolean(docAttachmentRow)}
         onClose={() => setDocAttachmentRow(null)}
