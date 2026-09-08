@@ -21,6 +21,7 @@ import {
   DiscPrice,
   amountBeforeDiscPrice,
   finalRate,
+  lineDiscPrecentage,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
@@ -117,7 +118,8 @@ export function PurchaseOrderLinesTable({
   companyCode,
   loginid,
   ex_rate,
-  docType
+  docType,
+  calculateDiscountFromAmount
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: PurchaseOrderLineRow[]) => void;
@@ -131,6 +133,9 @@ export function PurchaseOrderLinesTable({
   loginid?: string;
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
+  calculateDiscountFromAmount: (
+    type: "amount" | "percent"
+  ) => void;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -140,6 +145,7 @@ export function PurchaseOrderLinesTable({
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const discountScope = form.discount_scoope || "ITEM";
 
   // Quantity is always derived, never typed directly:
   // - same UOM: quantity mirrors qty_luom
@@ -156,11 +162,30 @@ export function PurchaseOrderLinesTable({
           <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
             <Plus size={14} /> Add Line
           </Button>
+          {form.discount_scoope !== "ITEM" && (
+            <>
+              {Number(form.disc_hdr_price) > 0 ? (
+                <Button
+                  type="button"
+                  onClick={() => calculateDiscountFromAmount("amount")}
+                >
+                  Calculate From Amount
+                </Button>
+              ) : Number(form.disc_hdr_percent) > 0 ? (
+                <Button
+                  type="button"
+                  onClick={() => calculateDiscountFromAmount("percent")}
+                >
+                  Calculate From %
+                </Button>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
       <div className="commercial-lines-scroll max-h-[45vh] overflow-auto" >
         <table className="finance-lines-table w-full min-w-[2600px] text-sm" style={{ tableLayout: "fixed" }}>
-          <thead className="text-xs text-primary-foreground" style={{ overscrollBehavior: 'contain' ,textAlign:"center"}}>
+          <thead className="text-xs text-primary-foreground" style={{ overscrollBehavior: 'contain', textAlign: "center" }}>
             <tr>
               <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("sno")}>SNo</th>
               <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("div")}>Div</th>
@@ -173,22 +198,22 @@ export function PurchaseOrderLinesTable({
               )}
               <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("product", docType)}>Product Code</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>P Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Qty Puom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Qty Puom</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>L Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(70)}>Qty Luom</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(70)}>Uppp</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(150)}>Unit Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Quantity</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Unit Price</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(70)}>Quantity</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Amount Before Disc</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Disc %</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc Price(Per Unit)</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Unit price Net Amt</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc %</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc Amount</th>
+              {/* <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Unit price Net Amt</th> */}
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Final Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128)}>Lcurr Amount Before Tax</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax Type</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Tax %</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Tax Amount</th>
-              <th className="px-2 py-2 text-center" style={plainHeaderStyle(128)}>Req Date</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Tax Amount</th>
+              <th className="px-2 py-2 text-center" style={plainHeaderStyle(150)}>Req Date</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160)}>Remarks</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Tax Cat</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax code</th>
@@ -321,12 +346,12 @@ export function PurchaseOrderLinesTable({
                   <td className="finance-amount-cell px-2 py-1">
                     <Input
                       className="finance-money-input"
-                      disabled={headerAndLineDisabled }
+                      disabled={headerAndLineDisabled}
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                    
-                           value={row.qty_puom}
+
+                      value={row.qty_puom}
                       onChange={(event) => {
                         const newQtyPuom = Number(event.target.value || 0);
 
@@ -395,7 +420,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                        value={sameUom ? 0 : row.qty_luom}
+                      value={sameUom ? 0 : row.qty_luom}
                       onChange={(event) => {
                         const newQtyLuom = Number(event.target.value || 0);
 
@@ -436,7 +461,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.000001"
-                      value={Number(row.unit_price || 0).toFixed(6)}
+                      value={Number(row.unit_price || 0).toFixed(3)}
                       onChange={(event) =>
                         updateRow(row.id, {
                           unit_price: Number(event.target.value || 0)
@@ -450,14 +475,50 @@ export function PurchaseOrderLinesTable({
                   <td className="finance-amount-cell px-2 py-1 text-right">
                     {formatAmount(amountBeforeDiscPrice(row))}
                   </td>
-
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
+                    <Input
+                      className="finance-money-input px-2 py-1"
+                      disabled={headerAndLineDisabled || discountScope !== "ITEM"}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.disc_percent}
+                      onChange={(event) => {
+                        const discPercent = Number(event.target.value || 0);
+                        const amount = amountBeforeDiscPrice(row);
+
+                        updateRow(row.id, {
+                          disc_percent: discPercent,
+                          disc_price: amount * (discPercent / 100),
+                        });
+                      }}
+                    />
                   </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">
+                  {/* <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td> */}
+                  <td className="finance-amount-cell w-24 px-2 py-1">
+                    <Input
+                      className="finance-money-input px-2 py-1"
+                      disabled={headerAndLineDisabled || discountScope !== "ITEM"}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.disc_price}
+                      onChange={(event) => {
+                        const discPrice = Number(event.target.value || 0);
+                        const amount = amountBeforeDiscPrice(row);
+
+                        updateRow(row.id, {
+                          disc_price: discPrice,
+                          disc_percent: amount > 0
+                            ? (discPrice / amount) * 100
+                            : 0,
+                        });
+                      }}
+                    />
+                  </td>
+                  {/* <td className="finance-amount-cell px-2 py-1 text-right">
                     {finalRate(row).toFixed(3)}
-                  </td>
+                  </td> */}
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(lcurrAmountValue)}

@@ -177,6 +177,7 @@ export function PurchaseInvoiceHeaderForm({
                                         total_po_amount: numberOrZero(getLookupValue(row || {}, "total_po_amount")),
                                          inv_no: text(getLookupValue(row || {}, "inv_no")),
                                          inv_date:toDateInputValue(getLookupValue(row || {}, "inv_date")),
+                                         pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
 
                                     }));
 
@@ -256,8 +257,8 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="PO Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(event) => updateField("po_doc_date", event.target.value)} />
                 </CField>
-                <CField label="PO Amount *">
-                    <Input type="text" disabled={headerAndLineDisabled} required value={form.total_po_amount} onChange={(event) => updateField("total_po_amount", event.target.value)} />
+                <CField label="PO Invoice Amount *">
+                    <Input type="text" disabled={headerAndLineDisabled} required value={form.pinvoice_total_amount} onChange={(event) => updateField("pinvoice_total_amount", event.target.value)} />
                 </CField>
                 <CField label="INV NO *">
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(event) => updateField("inv_no", event.target.value)} />

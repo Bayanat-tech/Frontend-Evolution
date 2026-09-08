@@ -484,7 +484,7 @@ export function ProductionJobOrderEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />
-
+{/* 
               <PurchaseOrderLinesTable
                 rows={rows}
                 form={form}
@@ -498,7 +498,7 @@ export function ProductionJobOrderEditor({
                 discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
-              />
+              /> */}
             </div>
           )}
         </CardContent>

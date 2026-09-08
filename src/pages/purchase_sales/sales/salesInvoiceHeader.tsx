@@ -185,6 +185,7 @@ export function SalesInvoiceHeaderForm({
                                         si_doc_date: toDateInputValue(getLookupValue(row || {}, "si_doc_date")),
                                         inv_no: text(getLookupValue(row || {}, "inv_no")),
                                         inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
+                                        sinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "sinvoice_total_amount")),
 
 
                                     }));
@@ -264,8 +265,8 @@ export function SalesInvoiceHeaderForm({
                 <CField label="SO Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
                 </CField>
-                <CField label="SO Amount *">
-                    <Input type="text" disabled={headerAndLineDisabled} required value={form.total_so_amount} onChange={(event) => updateField("total_so_amount", event.target.value)} />
+                <CField label="SO Invoice Amount *">
+                    <Input type="text" disabled={headerAndLineDisabled} required value={form.sinvoice_total_amount} onChange={(event) => updateField("sinvoice_total_amount", event.target.value)} />
                 </CField>
                 <CField label="INV NO *">
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(event) => updateField("inv_no", event.target.value)} />

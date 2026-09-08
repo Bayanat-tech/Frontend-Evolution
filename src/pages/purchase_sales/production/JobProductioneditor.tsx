@@ -619,7 +619,7 @@ export function JobProductionOrderEditor({
                       loginid={user?.loginid || user?.username}
                     />
 
-                    <PurchaseOrderLinesTable
+                    {/* <PurchaseOrderLinesTable
                       rows={rows}
                       form={form}
                       ex_rate={form.ex_rate}
@@ -630,7 +630,7 @@ export function JobProductionOrderEditor({
                       discAmt={form.disc_price}
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
-                    />
+                    /> */}
 
                     {/* Pass ex_rate as optional; JobconsumLinesTable accepts it but doesn't require it */}
                     <JobconsumLinesTable

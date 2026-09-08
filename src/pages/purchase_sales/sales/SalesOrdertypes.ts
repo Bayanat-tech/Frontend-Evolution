@@ -280,6 +280,7 @@ export interface PurchaseOrderForm {
   inv_no?: string;
   inv_date?: string;
   tx_compnt_1_expmt?: string;
+  sinvoice_total_amount?: number;
 }
 
 export interface SendBackUserOption {
