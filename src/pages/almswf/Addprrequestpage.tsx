@@ -98,6 +98,14 @@ function calculateTotalUnitPrice(items: TPRItem[], userLevel: number): number {
   }, 0);
 }
 
+function calculateAmountBeforeDisc(items: TPRItem[], userLevel: number): number {
+  return items.reduce((total, item) => {
+    const qty = itemQty(item, userLevel);
+    const rate = num(item.ITEM_RATE);
+    return total + (rate * qty);
+  }, 0);
+}
+
 function distributeDiscountToItems(
   items: TPRItem[], 
   discPercent: number, 
@@ -117,6 +125,33 @@ function distributeDiscountToItems(
     const unitPrice = num(item.ITEM_RATE);
     const itemTotal = unitPrice * itemQtyVal;
     const itemDiscPercent = (itemTotal / totalUnitPrice) * discPercent;
+    
+    const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
+    const exRate = num(updated.CURRENCY_RATE) || 1;
+    return recalcItem(updated, exRate, userLevel);
+  });
+}
+
+function distributeDiscountFromAmount(
+  items: TPRItem[], 
+  discAmount: number, 
+  userLevel: number
+): TPRItem[] {
+  const totalUnitPrice = calculateTotalUnitPrice(items, userLevel);
+  if (totalUnitPrice === 0 || discAmount === 0) {
+    return items.map(item => {
+      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+      const exRate = num(updated.CURRENCY_RATE) || 1;
+      return recalcItem(updated, exRate, userLevel);
+    });
+  }
+
+  return items.map(item => {
+    const itemQtyVal = itemQty(item, userLevel);
+    const unitPrice = num(item.ITEM_RATE);
+    const itemTotal = unitPrice * itemQtyVal;
+    const itemDiscAmount = (itemTotal / totalUnitPrice) * discAmount;
+    const itemDiscPercent = (itemDiscAmount / itemTotal) * 100;
     
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
@@ -670,7 +705,56 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
   const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
+  const totalAmountBeforeDisc = calculateAmountBeforeDisc(items, userApprovalLevel);
   const [headerExpanded, setHeaderExpanded] = useState(true);
+  
+  // ─── Discount Scope State ────────────────────────────────────────
+  const [discountScope, setDiscountScope] = useState<"ITEM" | "PO">("ITEM");
+  
+  // ─── Calculate Total Disc Amount ────────────────────────────────
+  const totalDiscAmount = items.reduce((sum, item) => sum + (num(item.ITEM_RATE) * num(item.DISCOUNT_AMOUNT) / 100 * itemQty(item, userApprovalLevel)), 0);
+
+  // ─── Calculate From Amount Functions ────────────────────────────
+  const calculateDiscountFromAmount = (type: "amount" | "percent") => {
+    if (items.length === 0) {
+      toast.warning("Please add items first", 4000);
+      return;
+    }
+
+    if (type === "amount") {
+      const discAmount = num(header.DISC_AMOUNT);
+      if (discAmount <= 0) {
+        toast.warning("Please enter a discount amount first", 4000);
+        return;
+      }
+      
+      const updatedItems = distributeDiscountFromAmount(items, discAmount, userApprovalLevel);
+      setItems(updatedItems);
+      
+      // Calculate and set the equivalent percentage
+      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+      if (totalUnitPrice > 0) {
+        const discPercent = (discAmount / totalUnitPrice) * 100;
+        setHdr("DISCOUNT_AMOUNT", discPercent);
+      }
+    } else {
+      const discPercent = num(header.DISCOUNT_AMOUNT);
+      if (discPercent <= 0) {
+        toast.warning("Please enter a discount percentage first", 4000);
+        return;
+      }
+      
+      const updatedItems = distributeDiscountToItems(items, discPercent, userApprovalLevel);
+      setItems(updatedItems);
+      
+      // Calculate and set the equivalent amount
+      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+      if (totalUnitPrice > 0) {
+        const discAmount = (discPercent / 100) * totalUnitPrice;
+        setHdr("DISC_AMOUNT", discAmount);
+      }
+    }
+  };
 
   const validateAndShowErrors = (): boolean => {
     const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel);
@@ -790,6 +874,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       DEPT_CODE_FLOW: header.DEPT_CODE_FLOW || "",
       DEPT_NAME: header.DEPT_NAME || "",
       DISC_AMOUNT: header.DISC_AMOUNT || 0,
+      DISCOUNT_AMOUNT: discountScope === "PO" ? num(header.DISCOUNT_AMOUNT) || 0 : 0,
+      DISCOUNT_SCOPE: discountScope,
       ...overrides,
     };
 
@@ -1412,104 +1498,185 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                         </div>
                       </div>
 
-                      {/* Discount Section - Appears below Document */}
+                      {/* ─── Discount Section - Updated with Scope and Calculate Buttons ─── */}
                       <div className="rounded-md border">
                         <div className="border-b bg-muted/40 px-3 py-0.5">
                           <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Discount</p>
                         </div>
-                        <div className="grid grid-cols-3 gap-3 p-2">
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>Disc Amt</span>
-                              <Input
-                                disabled={
-                                  disabled ||
-                                  items.length === 0 ||
-                                  Boolean(header.DISCOUNT_AMOUNT && header.DISCOUNT_AMOUNT > 0)
-                                }
-                                type="number"
-                                step="0.01"
-                                value={header.DISC_AMOUNT ?? ""}
-                                onChange={(e) => {
-                                  const discAmount = Number(e.target.value) || 0;
-                                  setHdr("DISC_AMOUNT", discAmount);
-                                  // Clear discount percentage when amount is entered
-                                  if (discAmount > 0) {
-                                    setHdr("DISCOUNT_AMOUNT", 0);
-                                  }
-                                  
-                                  // Distribute discount to all items
-                                  const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
-                                  if (totalUnitPrice > 0 && discAmount > 0 && items.length > 0) {
-                                    setItems(prev => {
-                                      const totalUnitPriceVal = calculateTotalUnitPrice(prev, userApprovalLevel);
-                                      return prev.map(item => {
-                                        const itemQtyVal = itemQty(item, userApprovalLevel);
-                                        const unitPrice = num(item.ITEM_RATE);
-                                        const itemTotal = unitPrice * itemQtyVal;
-                                        const itemDiscAmount = (itemTotal / totalUnitPriceVal) * discAmount;
-                                        const itemDiscPercent = (itemDiscAmount / itemTotal) * 100;
-                                        
-                                        const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
-                                        const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return recalcItem(updated, exRate, userApprovalLevel);
-                                      });
-                                    });
-                                  } else if (discAmount === 0) {
-                                    // Reset all item discounts
-                                    setItems(prev => prev.map(item => {
-                                      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
-                                      const exRate = num(updated.CURRENCY_RATE) || 1;
-                                      return recalcItem(updated, exRate, userApprovalLevel);
-                                    }));
-                                  }
+                        <div className="grid grid-cols-1 gap-2 p-2">
+                          {/* Discount Scope Radio Buttons */}
+                          <div className="flex items-center gap-4 border-b border-gray-100 pb-2">
+                            <span className="text-[9px] font-semibold text-foreground/75">
+                              Discount Applied To:
+                            </span>
+
+                            <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
+                              <input
+                                type="radio"
+                                name="discount_scope"
+                                value="PO"
+                                checked={discountScope === "PO"}
+                                disabled={disabled || items.length === 0}
+                                onChange={() => {
+                                  setDiscountScope("PO");
+                                  // Reset individual item discounts when switching to PO scope
+                                  setItems(prev => prev.map(item => {
+                                    const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                    const exRate = num(updated.CURRENCY_RATE) || 1;
+                                    return recalcItem(updated, exRate, userApprovalLevel);
+                                  }));
+                                  setHdr("DISCOUNT_AMOUNT", 0);
+                                  setHdr("DISC_AMOUNT", 0);
                                 }}
-                                className="w-full"
-                                placeholder={items.length === 0 ? "Add items first" : ""}
                               />
+                              Entire PR
+                            </label>
+
+                            <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
+                              <input
+                                type="radio"
+                                name="discount_scope"
+                                value="ITEM"
+                                checked={discountScope === "ITEM"}
+                                disabled={disabled || items.length === 0}
+                                onChange={() => {
+                                  setDiscountScope("ITEM");
+                                  // Reset header discounts when switching to ITEM scope
+                                  setHdr("DISCOUNT_AMOUNT", 0);
+                                  setHdr("DISC_AMOUNT", 0);
+                                }}
+                              />
+                              Individual Items
                             </label>
                           </div>
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>Disc %</span>
-                              <Input
-                                disabled={
-                                  disabled ||
-                                  items.length === 0 ||
-                                  Boolean(header.DISC_AMOUNT && header.DISC_AMOUNT > 0)
-                                }
-                                type="number"
-                                step="0.01"
-                                value={header.DISCOUNT_AMOUNT ?? ""}
-                                onChange={(e) => {
-                                  const discPercent = Number(e.target.value) || 0;
-                                  setHdr("DISCOUNT_AMOUNT", discPercent);
-                                  // Clear discount amount when percentage is entered
-                                  if (discPercent > 0) {
-                                    setHdr("DISC_AMOUNT", 0);
+
+                          {/* Discount Input Fields */}
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="col-span-1">
+                              <label className="field">
+                                <span>Disc Amt</span>
+                                <Input
+                                  className="text-right"
+                                  type="number"
+                                  step="0.01"
+                                  disabled={
+                                    disabled ||
+                                    items.length === 0 ||
+                                    discountScope === "ITEM"
                                   }
-                                  
-                                  // Distribute discount to all items
-                                  if (items.length > 0) {
-                                    const updatedItems = distributeDiscountToItems(
-                                      items, 
-                                      discPercent, 
-                                      userApprovalLevel
-                                    );
-                                    setItems(updatedItems);
-                                  } else if (discPercent === 0) {
-                                    // Reset all item discounts
-                                    setItems(prev => prev.map(item => {
-                                      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
-                                      const exRate = num(updated.CURRENCY_RATE) || 1;
-                                      return recalcItem(updated, exRate, userApprovalLevel);
-                                    }));
+                                  value={
+                                    discountScope === "ITEM"
+                                      ? totalDiscAmount.toFixed(3)
+                                      : num(header.DISC_AMOUNT).toFixed(3)
                                   }
-                                }}
-                                className="w-full"
-                                placeholder={items.length === 0 ? "Add items first" : ""}
-                              />
-                            </label>
+                                  onChange={(e) => {
+                                    const discAmount = Number(e.target.value) || 0;
+                                    setHdr("DISC_AMOUNT", discAmount);
+                                    if (discAmount > 0 && discountScope === "PO") {
+                                      setHdr("DISCOUNT_AMOUNT", 0);
+                                      const updatedItems = distributeDiscountFromAmount(
+                                        items, 
+                                        discAmount, 
+                                        userApprovalLevel
+                                      );
+                                      setItems(updatedItems);
+                                      // Calculate and set equivalent percentage
+                                      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+                                      if (totalUnitPrice > 0) {
+                                        const discPercent = (discAmount / totalUnitPrice) * 100;
+                                        setHdr("DISCOUNT_AMOUNT", discPercent);
+                                      }
+                                    } else if (discAmount === 0 && discountScope === "PO") {
+                                      setItems(prev => prev.map(item => {
+                                        const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                        const exRate = num(updated.CURRENCY_RATE) || 1;
+                                        return recalcItem(updated, exRate, userApprovalLevel);
+                                      }));
+                                      setHdr("DISCOUNT_AMOUNT", 0);
+                                    }
+                                  }}
+                                  placeholder={items.length === 0 ? "Add items first" : ""}
+                                />
+                              </label>
+                            </div>
+                            <div className="col-span-1">
+                              <label className="field">
+                                <span>Disc %</span>
+                                <Input
+                                  className="text-right"
+                                  type="number"
+                                  step="0.001"
+                                  disabled={
+                                    disabled ||
+                                    items.length === 0 ||
+                                    discountScope === "ITEM"
+                                  }
+                                  value={
+                                    discountScope === "ITEM"
+                                      ? items.reduce((sum, item) => sum + num(item.DISCOUNT_AMOUNT), 0) > 0
+                                        ? (totalDiscAmount / calculateTotalUnitPrice(items, userApprovalLevel) * 100).toFixed(3)
+                                        : "0.000"
+                                      : num(header.DISCOUNT_AMOUNT).toFixed(3)
+                                  }
+                                  onChange={(e) => {
+                                    const discPercent = Number(e.target.value) || 0;
+                                    setHdr("DISCOUNT_AMOUNT", discPercent);
+                                    if (discPercent > 0 && discountScope === "PO") {
+                                      setHdr("DISC_AMOUNT", 0);
+                                      const updatedItems = distributeDiscountToItems(
+                                        items, 
+                                        discPercent, 
+                                        userApprovalLevel
+                                      );
+                                      setItems(updatedItems);
+                                      // Calculate and set equivalent amount
+                                      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+                                      if (totalUnitPrice > 0) {
+                                        const discAmount = (discPercent / 100) * totalUnitPrice;
+                                        setHdr("DISC_AMOUNT", discAmount);
+                                      }
+                                    } else if (discPercent === 0 && discountScope === "PO") {
+                                      setItems(prev => prev.map(item => {
+                                        const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                        const exRate = num(updated.CURRENCY_RATE) || 1;
+                                        return recalcItem(updated, exRate, userApprovalLevel);
+                                      }));
+                                      setHdr("DISC_AMOUNT", 0);
+                                    }
+                                  }}
+                                  placeholder={items.length === 0 ? "Add items first" : ""}
+                                />
+                              </label>
+                            </div>
+                            <div className="col-span-2 flex items-end gap-2">
+                              {discountScope === "PO" && (
+                                <>
+                                  {Number(header.DISC_AMOUNT) > 0 ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => calculateDiscountFromAmount("amount")}
+                                      disabled={disabled || items.length === 0}
+                                      className="h-9"
+                                    >
+                                      Calculate From Amount
+                                    </Button>
+                                  ) : Number(header.DISCOUNT_AMOUNT) > 0 ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => calculateDiscountFromAmount("percent")}
+                                      disabled={disabled || items.length === 0}
+                                      className="h-9"
+                                    >
+                                      Calculate From %
+                                    </Button>
+                                  ) : null}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1840,16 +2007,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                         scrollbarGutter: 'stable',
                       }}
                     >
-                      {/*
-                        table-fixed + <colgroup> => column widths come ONLY from the
-                        colgroup, so the table always fits the container's width
-                        (no horizontal scroll). Adjust the % values below if a
-                        column feels too tight/wide.
-                      */}
                       <table className="finance-lines-table w-full table-fixed text-[10px] border-separate border-spacing-0">
                         <colgroup>
-                          <col style={{ width: "34px" }} />
-                          <col style={{ width: "180px" }} />
+                          <col style={{ width: "30px" }} />
+                          <col style={{ width: "140px" }} />
                           <col style={{ width: "7%" }} />
                           <col style={{ width: "3.5%" }} />
                           {shouldShowApprovedQty() && <col style={{ width: "3.5%" }} />}
@@ -1858,14 +2019,15 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                           <col style={{ width: "3.5%" }} />
                           {shouldShowSupplier() && <col style={{ width: "7%" }} />}
                           <col style={{ width: "3.5%" }} />
+                          {/* Amount Before Disc - Added after Quantity */}
+                          <col style={{ width: "4%" }} />
                           <col style={{ width: "3%" }} />
                           <col style={{ width: "4%" }} />
                           <col style={{ width: "4%" }} />
                           <col style={{ width: "4%" }} />
                           <col style={{ width: "4%" }} />
-                          <col style={{ width: "6%" }} />
-                          <col style={{ width: "6%" }} />
-                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "4%" }} />
                           <col style={{ width: "4%" }} />
                           <col style={{ width: "4%" }} />
                           <col style={{ width: "4%" }} />
@@ -1879,7 +2041,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             <th className="sticky left-0 z-40 bg-primary px-1 py-1.5 text-center border-r border-primary-foreground/10">
                               No
                             </th>
-                            <th className="sticky left-[34px] z-40 bg-primary px-1 py-1.5 text-left border-r border-primary-foreground/10">
+                            <th className="sticky left-[30px] z-40 bg-primary px-1 py-1.5 text-left border-r border-primary-foreground/10">
                               Item *
                             </th>
                             <th className="px-1 py-1.5 text-left">Cost Code *</th>
@@ -1894,6 +2056,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               <th className="px-1 py-1.5 text-left">Supplier *</th>
                             )}
                             <th className="px-1 py-1.5 text-right">Quantity</th>
+                            {/* Amount Before Disc - Added after Quantity */}
+                            <th className="finance-amount-cell px-1 py-1.5 text-right">Amount Before Disc</th>
                             <th className="px-1 py-1.5 text-right">Disc %</th>
                             <th className="px-1 py-1.5 text-right">Disc Price</th>
                             <th className="px-1 py-1.5 text-right">Net Amt</th>
@@ -1941,12 +2105,15 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               ? `${item.CURR_CODE} - ${(item as any).CURR_NAME}`
                               : (item.CURR_CODE || "");
 
+                            // Calculate amount before discount for this item
+                            const itemAmountBeforeDisc = num(item.ITEM_RATE) * itemQty(item, userApprovalLevel);
+
                             return (
                               <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
                                 <td className="sticky left-0 z-20 bg-background px-1 py-1 text-center border-r border-border">
                                   {item.ITEM_SRNO}
                                 </td>
-                                <td className="sticky left-[34px] z-20 bg-background px-1 py-1 border-r border-border">
+                                <td className="sticky left-[30px] z-20 bg-background px-1 py-1 border-r border-border">
                                   <LookupField
                                     label=""
                                     compact
@@ -2116,13 +2283,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                 <td className="finance-amount-cell px-1 py-1 text-right">
                                   {fmt3(itemQty(item, userApprovalLevel))}
                                 </td>
+                                {/* Amount Before Disc Column */}
+                                <td className="finance-amount-cell px-1 py-1 text-right text-blue-600">
+                                  {fmt3(itemAmountBeforeDisc)}
+                                </td>
                                 <td className="px-1 py-1">
                                   <Input
                                     type="number"
                                     step="0.01"
                                     value={item.DISCOUNT_AMOUNT || ""}
                                     onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
-                                    disabled={disabled}
+                                    disabled={disabled || discountScope === "PO"}
                                     className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
@@ -2284,9 +2455,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                           })}
                         </tbody>
                       </table>
-                     </div>
+                    </div>
 
-                    {/* ─── Summary Footer - Made sticky ─── */}
+                    {/* ─── Summary Footer - Original UI ─── */}
                     <div className="sticky bottom-0 flex-none border-t bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-10">
                       <div className="flex items-center justify-end px-2 py-1">
                         <div className="flex items-center gap-6">
@@ -2307,7 +2478,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       </div>
                     </div>
                   </div>
-                 
                 )}
 
                 {/* ─── Terms Tab Content ─── */}
