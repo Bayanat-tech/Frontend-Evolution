@@ -320,7 +320,6 @@ export function FreightJobActivitiesPage({
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}>
           <Save size={14} />Save
         </Button>
-        <span className="freight-job-mode-badge viewing">View</span>
       </div>
     );
     return () => onEmbeddedActionsChange(null);
@@ -356,8 +355,39 @@ export function FreightJobActivitiesPage({
   }
 
   return (
-    // <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
     <section className="freight-ui-standard grid gap-2 freight-job-ops-screen min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-muted-foreground">Active Job:</span>
+          <strong className="text-primary font-bold">{lookupText(header, "job_no") || "No Job Selected"}</strong>
+          <span className="text-slate-300">•</span>
+          <span className="font-semibold text-muted-foreground">Principal:</span>
+          <strong className="text-foreground font-semibold">{lookupText(header, "prin_name") || lookupText(header, "prin_code") || "-"}</strong>
+          {lookupText(header, "quotation_ref") && (
+            <>
+              <span className="text-slate-300">•</span>
+              <span className="font-semibold text-muted-foreground">From Quotation:</span>
+              <strong className="text-primary font-semibold">{lookupText(header, "quotation_ref")}</strong>
+            </>
+          )}
+          {dirty && (
+            <span className="ml-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              Unsaved changes
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Status:</span>
+          {isClosed ? (
+            <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">Locked</span>
+          ) : isConfirmed ? (
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">Confirmed</span>
+          ) : (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">Active</span>
+          )}
+        </div>
+      </div>
+
       {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
@@ -371,96 +401,102 @@ export function FreightJobActivitiesPage({
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}><Save size={14} />Save</Button>
       </Header>}
 
-      {/* <div className="flex min-h-9 flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-border/80 bg-card px-3 py-1.5 text-xs">
-        <span className="text-muted-foreground">Job <strong className="ml-1 text-foreground">{lookupText(header, "job_no") || "-"}</strong></span>
-        <span className="text-muted-foreground">Principal <strong className="ml-1 text-foreground">{lookupText(header, "prin_name") || lookupText(header, "prin_code") || "-"}</strong></span>
-        <span className="text-muted-foreground">From Quotation <strong className="ml-1 text-primary">{lookupText(header, "quotation_ref") || "Not linked"}</strong></span>
-        {dirty && <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">Unsaved changes</span>}
-      </div> */}
-
-      <div className="grid gap-2 lg:grid-cols-4">
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <Metric label="Revenue" value={money(totals.revenue)} />
         <Metric label="Expense" value={money(totals.expense)} />
         <Metric label="Profit" value={money(totals.profit)} tone={totals.profit < 0 ? "bad" : "good"} />
         <Metric label="Lines" value={String(lines.length)} />
       </div>
 
-      {/* <div className="freight-job-table-shell">
-        <div className="freight-job-table-head grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
-          <span>No</span><span>Activity</span><span>Description</span><span>Qty</span><span>Rate</span><span>Revenue</span><span>Other Cost</span><span>Agent</span><span>Agent Cost</span><span>Transp.</span><span>Transp. Cost</span><span />
-        </div>
-        <div className="max-h-[calc(100vh-330px)] overflow-auto"> */}
+      <div className="freight-job-table-shell overflow-x-auto min-w-0">
+        <div className="min-w-[1020px]">
+          <div className="freight-job-table-head grid grid-cols-[36px_130px_minmax(180px,1fr)_65px_85px_95px_90px_85px_85px_85px_85px_36px] items-center gap-1.5 px-3 py-2 text-[11px] font-bold">
+            <span>No</span>
+            <span>Activity</span>
+            <span>Description</span>
+            <span>Qty</span>
+            <span>Rate</span>
+            <span>Revenue</span>
+            <span>Cost</span>
+            <span>Agent</span>
+            <span>Agent Price</span>
+            <span>Transp.</span>
+            <span>Transp. Price</span>
+            <span />
+          </div>
+          <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-border/60">
+            {lines.map((line, index) => (
+              <div key={`${line.srno}-${index}`} className="freight-job-table-row flex flex-col transition-colors hover:bg-slate-50/70">
+                <div className="grid grid-cols-[36px_130px_minmax(180px,1fr)_65px_85px_95px_90px_85px_85px_85px_85px_36px] items-center gap-1.5 px-3 py-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
+                  <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
+                  <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+                  <MoneyInput value={line.quantity} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
+                  <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
+                  <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
+                  <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
+                  <Input className="h-7 text-xs" placeholder="Agent" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+                  <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
+                  <Input className="h-7 text-xs" placeholder="Transporter" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+                  <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
+                  <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-red-600" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
 
-  <div className="freight-job-table-shell overflow-x-auto min-w-0">
-  <div className="min-w-max">
-  <div className="freight-job-table-head grid grid-cols-[40px_120px_210px_70px_100px_100px_100px_90px_100px_90px_100px_120px_130px_60px_80px_90px_90px_90px_90px_80px_80px_100px_90px_50px] items-center gap-1 px-2 py-1">
-    <span>No</span><span>Activity</span><span>Description</span><span>Qty</span><span>Rate</span><span>Revenue</span><span>Other Cost</span><span>Agent</span><span>Agent Cost</span><span>Transp.</span><span>Transp. Cost</span><span>Tax Cat</span><span>Tax Code</span><span>Tax %</span><span>Treat</span><span>Tax Amt</span><span>Tax LC Amt</span><span>Cost Tax Cat</span><span>Cost Tax Code</span><span>Cost Tax %</span><span>Cost Treat</span><span>Cost Tax Amt</span><span>Cost Tax LC Amt</span><span />
-  </div>
-  <div className="max-h-[calc(100vh-330px)] overflow-y-auto">
-          {lines.map((line, index) => (
-            // <div key={`${line.srno}-${index}`} className="freight-job-table-row">
-            //   <div className="grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
-            //     <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-            //     <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
-            //     <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
-            //     <MoneyInput value={line.quantity} disabled={isLineLocked}onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
-            //     <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-            //     <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
-            //     <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
-            //     <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
-            //     <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
-            //     <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
-            //     <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
-            //     <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
-            //   </div>
-            //   <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(12,minmax(82px,1fr))] gap-1 px-2 pb-1">
-            //     <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
-            //     <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
-            //     <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
-            //     <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
-            //     <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
-            //     <MoneyInput value={line.tx_compnt_amt_1} disabled onChange={() => undefined} />
-            //     <MoneyInput value={line.tx_compnt_lcuramt_1} disabled onChange={() => undefined} />
-            //     <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
-            //     <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
-            //     <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
-            //     <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
-            //     <MoneyInput value={line.tx_compnt_amt_1_cost} disabled onChange={() => undefined} />
-            //     <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled onChange={() => undefined} />
-            //   </div>
-            // </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-dashed border-border/60 bg-muted/20 px-3 py-1 text-[11px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-primary uppercase text-[10px] tracking-wider min-w-[55px]">Sales Tax:</span>
+                    <div className="w-28">
+                      <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
+                    </div>
+                    <div className="w-32">
+                      <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
+                    </div>
+                    <div className="w-16">
+                      <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
+                    </div>
+                    <div className="w-20">
+                      <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
+                    </div>
+                    <div className="flex items-center gap-1 text-muted-foreground pl-1">
+                      <span>Amt:</span>
+                      <span className="font-semibold text-foreground">{money(line.tx_compnt_amt_1)}</span>
+                    </div>
+                  </div>
 
-            // after
-<div key={`${line.srno}-${index}`} className="freight-job-table-row grid grid-cols-[40px_120px_210px_70px_100px_100px_100px_90px_100px_90px_100px_120px_130px_60px_80px_90px_90px_90px_90px_80px_80px_100px_90px_50px] items-center gap-1 px-2 py-1">
-  <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-  <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
-  <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
-  <MoneyInput value={line.quantity} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
-  <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-  <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
-  <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
-  <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
-  <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
-  <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
-  <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
-  <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
-  <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
-  <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
-  <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
-  <MoneyInput value={line.tx_compnt_amt_1} disabled onChange={() => undefined} />
-  <MoneyInput value={line.tx_compnt_lcuramt_1} disabled onChange={() => undefined} />
-  <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
-  <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
-  <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
-  <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
-  <MoneyInput value={line.tx_compnt_amt_1_cost} disabled onChange={() => undefined} />
-  <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled onChange={() => undefined} />
-  <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
-</div>
-          ))}
-          {!lines.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No activity lines yet.</div>}
+                  <div className="hidden lg:block h-4 w-px bg-border/80 mx-1" />
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-emerald-700 uppercase text-[10px] tracking-wider min-w-[55px]">Cost Tax:</span>
+                    <div className="w-28">
+                      <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
+                    </div>
+                    <div className="w-32">
+                      <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
+                    </div>
+                    <div className="w-16">
+                      <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
+                    </div>
+                    <div className="w-20">
+                      <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
+                    </div>
+                    <div className="flex items-center gap-1 text-muted-foreground pl-1">
+                      <span>Amt:</span>
+                      <span className="font-semibold text-foreground">{money(line.tx_compnt_amt_1_cost)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {!lines.length && (
+              <div className="px-3 py-12 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+                <p className="font-medium text-foreground">No service & activity lines yet.</p>
+                <p className="text-xs text-muted-foreground">Click "+ Line" to add services or "Populate from Quotation" to import approved activities.</p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       </div>
       
     </section>

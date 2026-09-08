@@ -922,7 +922,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     setNotice({ type: "error", text: `${failedCheck.label} is required` });
     return;
   }
-    
+
     setSaving(true);
     setNotice(null);
     try {
@@ -1101,7 +1101,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="freight-tabs-panel min-h-0 border-t">
             {activeTab === "cargo" && (
                <section className="grid gap-1.5 xl:grid-cols-12">
-          
+
                 <SectionPanel className="xl:col-span-6" icon={PackageCheck} title="Cargo">
                   <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
@@ -1177,7 +1177,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                                                 <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
                                               </div>
                                             </SectionPanel>
-                            
+
                                             <SectionPanel className="lg:col-span-3" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
                                               <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
                                             </SectionPanel>

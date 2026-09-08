@@ -206,12 +206,14 @@ export function FreightJobPage({
   startMode = "list",
   onEmbeddedActionsChange,
   onEmbeddedList,
+  onJobSaved,
 }: {
   target?: FreightWorkspaceTarget;
   initialJob?: LookupRow | null;
   startMode?: ViewMode;
   onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
   onEmbeddedList?: () => void;
+  onJobSaved?: (job: LookupRow) => void;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -343,8 +345,11 @@ export function FreightJobPage({
     setNotice(null);
     try {
       const response = await api.post<{ success?: boolean; data?: { job_no?: string }; message?: string }>("/api/freight/job/save", { job });
+      if (response.data.success === false) throw new Error(response.data.message || "Unable to save job.");
+      const savedJob = { ...job, job_no: response.data.data?.job_no || job.job_no };
+      setJob(savedJob);
+      onJobSaved?.(savedJob as unknown as LookupRow);
       notify({ type: "success", text: response.data.message || "Freight job saved." });
-      setJob((current) => ({ ...current, job_no: response.data.data?.job_no || current.job_no }));
       await loadRows();
     } catch (error: any) {
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save freight job." });
@@ -525,18 +530,8 @@ export function FreightJobPage({
       )}
 
       <fieldset disabled={isEditLocked} className="contents">
-        <div className="freight-form-card rounded-md border bg-card p-2 shadow-sm">
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <ReadOnlyField label="Shipment Date" value={toDisplayDate(job.job_date)} />
-            <ReadOnlyField label="Shipment Type" value={direction.label} />
-            <ReadOnlyField label="Transport Mode" value={`${mode.label} Freight`} />
-            <ReadOnlyField label="From Quote" value={job.quotation_ref || "-"} />
-            <ReadOnlyField label="Sales Rep" value={job.salesman_code || "-"} />
-            <ReadOnlyField label="Principal" value={job.prin_code || "-"} />
-          </div>
-        </div>
-
-        <div className="freight-job-editor-shell">
+        <div className="freight-job-editor-shell w-full flex flex-col gap-2.5">
+          <JobProgressRail job={job} />
           <div className="grid gap-2 lg:grid-cols-12">
             {/* Section 1: Job Identity & Core Booking */}
             <SectionPanel
@@ -546,7 +541,6 @@ export function FreightJobPage({
               meta={`${job.job_no || "New"} • ${mode.label} • ${direction.label}`}
             >
               <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                <DateField label="Job Date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} required />
                 <Lookup
                   className="xl:col-span-2"
                   label="Principal"
@@ -567,6 +561,7 @@ export function FreightJobPage({
                   }
                   required
                 />
+                <DateField label="Job Date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} required />
                 <Lookup
                   label="Department"
                   value={job.dept_code}
@@ -969,8 +964,6 @@ export function FreightJobPage({
               </div>
             </SectionPanel>
           </div>
-
-          <JobProgressRail job={job} />
         </div>
       </fieldset>
     </form>
@@ -1001,25 +994,50 @@ function JobProgressRail({ job }: { job: JobForm }) {
   const activeStep = steps.find((step) => step.className === "current") || steps[steps.length - 1];
 
   return (
-    <aside className="freight-job-progress-rail" aria-label="Job status">
-      <div className="freight-job-progress-rail-title">
-        <span>Workflow Progress</span>
-        <strong>Current Status: {activeStep?.label || "Completed"}</strong>
+    <div className="freight-job-progress-rail w-full mb-1 overflow-hidden rounded-xl border border-border bg-card shadow-xs p-2" aria-label="Job status">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-border/60 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Workflow Progress</span>
+          <span className="text-slate-300">•</span>
+          <span className="text-xs text-muted-foreground">Current Stage: <strong className="text-primary font-semibold">{activeStep?.label || "Completed"}</strong></span>
+        </div>
+        <div className="text-[11px] text-muted-foreground font-medium">
+          {job.job_no ? `Job: ${job.job_no}` : "Draft Job"}
+        </div>
       </div>
-      <div className="freight-job-progress-rail-list">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-2">
         {steps.map((step, idx) => (
-          <div key={step.label} className={`freight-job-progress-rail-step ${step.className || "pending"}`}>
-            <span className="freight-job-progress-rail-marker">
-              {step.done ? <Check size={14} /> : idx + 1}
+          <div
+            key={step.label}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all ${
+              step.done
+                ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                : step.className === "current"
+                  ? "border-primary/40 bg-primary/5 text-primary ring-1 ring-primary/20 shadow-xs"
+                  : "border-border/60 bg-muted/20 text-muted-foreground"
+            }`}
+          >
+            <span
+              className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                step.done
+                  ? "bg-emerald-600 text-white"
+                  : step.className === "current"
+                    ? "bg-primary text-white"
+                    : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {step.done ? <Check size={12} strokeWidth={3} /> : idx + 1}
             </span>
-            <span className="freight-job-progress-rail-copy">
-              <strong>{step.label}</strong>
-              <small>{step.detail || (step.done ? "Done" : "Pending")}</small>
-            </span>
+            <div className="min-w-0 flex flex-col">
+              <strong className="truncate text-xs font-semibold leading-tight">{step.label}</strong>
+              <span className="truncate text-[10px] leading-tight text-muted-foreground">
+                {step.detail || (step.done ? "Done" : "Pending")}
+              </span>
+            </div>
           </div>
         ))}
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -1061,7 +1079,7 @@ function SectionPanel({
           </span>
           <div className="min-w-0">
             <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-foreground">{title}</h3>
-            
+
           </div>
         </div>
       </div>

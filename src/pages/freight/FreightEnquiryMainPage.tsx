@@ -1500,7 +1500,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                    </div>
                 </SectionPanel>
               </div>
-            
+
             </section>
           )}
 
@@ -1808,7 +1808,7 @@ function SectionPanel({
           </span>
           <div className="min-w-0">
             <h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3>
-            
+
           </div>
         </div>
       </div>

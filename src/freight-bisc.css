@@ -1181,3 +1181,34 @@ input[tabindex="-1"].opacity-0,
 .freight-workspace-ui .freight-job-progress-rail-step.current { background: #eaf2ff; border-color: #8eadd8; }
 .freight-workspace-ui .freight-job-progress-rail-step.done { background: #edf4ff; }
 .app.dark .freight-workspace-ui :is(.freight-workspace-tab.active, .freight-job-progress-rail-step.current, .freight-job-progress-rail-step.done) { background: #173356 !important; color: #bfdbfe !important; }
+
+/* One job context across the entire shipment workspace. */
+.freight-workspace-ui .freight-workspace-header-shell { display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important; gap: 10px 16px !important; padding: 12px 12px 0 !important; }
+.freight-workspace-ui .freight-workspace-title-block { grid-column: 1 !important; grid-row: 1 !important; min-width: 0; }
+.freight-workspace-ui .freight-workspace-command-slot { grid-column: 2 !important; grid-row: 1 !important; min-width: 0; flex-wrap: wrap; }
+.freight-workspace-ui .freight-workspace-header-shell > .freight-workspace-tabs { grid-column: 1 / -1 !important; grid-row: 2 !important; width: 100% !important; min-width: 0; border-top: 1px solid var(--border); }
+.freight-workspace-ui .freight-workspace-tab:disabled { opacity: .45; cursor: not-allowed !important; }
+.freight-workspace-ui .freight-section-icon { border-radius: 6px !important; width: 28px; height: 28px; }
+.freight-workspace-ui .freight-section-icon svg { display: block !important; visibility: visible !important; opacity: 1 !important; stroke: white !important; fill: none !important; width: 16px !important; height: 16px !important; stroke-width: 2 !important; }
+.freight-workspace-ui .freight-info-section { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); overflow: visible; }
+.freight-workspace-ui .freight-info-title { border-radius: 10px 10px 0 0; }
+.freight-workspace-ui .freight-info-body { padding: 12px !important; }
+.freight-workspace-ui .freight-job-progress-rail { min-width: 0; overflow: visible; }
+.freight-workspace-ui .freight-job-progress-rail-copy { min-width: 0; }
+.freight-workspace-ui .freight-job-progress-rail-copy strong { white-space: normal; overflow-wrap: anywhere; }
+.freight-workspace-ui .freight-enquiry-editor .ui-button:not(.ui-button-icon) { background: #00378c !important; border-color: #00378c !important; color: white !important; }
+@media (max-width: 1200px) {
+  .freight-workspace-ui .freight-workspace-header-shell { grid-template-columns: minmax(0, 1fr) !important; }
+  .freight-workspace-ui .freight-workspace-command-slot { grid-column: 1 !important; grid-row: 2 !important; justify-content: flex-start; }
+  .freight-workspace-ui .freight-workspace-header-shell > .freight-workspace-tabs { grid-row: 3 !important; }
+}
+
+/* Workflow states fit above the form instead of clipping in a narrow side rail. */
+.freight-workspace-ui .freight-job-editor-shell { grid-template-columns: minmax(0, 1fr) !important; gap: 10px; }
+.freight-workspace-ui .freight-job-editor-shell > .freight-job-progress-rail { grid-row: 1; position: static; max-height: none; width: 100%; background: var(--panel); box-shadow: none; }
+.freight-workspace-ui .freight-job-progress-rail-list { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.freight-workspace-ui .freight-job-progress-rail-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.freight-workspace-ui .freight-job-progress-rail-marker::after { display: none; }
+.freight-workspace-ui .freight-job-progress-rail-copy small { white-space: normal; }
+@media (max-width: 900px) { .freight-workspace-ui .freight-job-progress-rail-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .freight-workspace-ui .freight-job-progress-rail-list { grid-template-columns: minmax(0, 1fr); } }

@@ -70,8 +70,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const location = useLocation();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
-  const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
-  const [mode, setMode] = useState<WorkspaceMode>(initialTab === "job" ? "list" : "steps");
+  const [activeTab, setActiveTab] = useState<JobTab>("job");
+  const [mode, setMode] = useState<WorkspaceMode>("list");
   const returnToList = useCallback(() => setMode("list"), []);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
@@ -120,8 +120,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   }, [loadRows, mode]);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-    setMode(initialTab === "job" ? "list" : "steps");
+    setActiveTab("job");
+    setMode("list");
     setSelectedJob(null);
   }, [initialTab, targetDirection, targetMode]);
 
@@ -185,47 +185,65 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   }
 
   if (mode === "list") {
+    const ModeIcon = modeIcon[targetMode] || Plane;
     return (
-      <section className="freight-list-screen grid gap-2">
-        <div className="freight-job-list-hero">
-          <div>
-            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
-            {/* <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p> */}
+      <section className="freight-workspace-ui freight-list-screen freight-job-list-screen grid gap-2">
+        <div className="freight-job-list-hero flex flex-wrap items-center justify-between gap-3 py-1">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10 text-primary">
+              <ModeIcon size={18} />
+            </span>
+            <div>
+              <h1 className="m-0 text-lg font-bold tracking-tight text-foreground">{title}</h1>
+              <p className="m-0 text-xs text-muted-foreground">Manage shipments, pack lists, activities, and operational follow-up.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
+              <RefreshCw size={14} /> Refresh
+            </Button>
+            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
+              <Plus size={14} /> Add Job
+            </Button>
           </div>
         </div>
-
-        <div className="freight-job-list-filterbar">
-          <div className="flex flex-wrap gap-2">
-            {listingTabs.map((tab) => (
-              <Button key={tab.value} size="sm" variant={activeStatus === tab.value ? "default" : "outline"} onClick={() => setActiveStatus(tab.value)}>
-                {tab.label}
-              </Button>
-            ))}
-          </div>
-          {/* <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
-            {/* <div className="freight-job-smart-note">
-              <BrainCircuit size={14} className="text-primary" />
-              <span>{message || smartAdvice(health)}</span>
-            </div> */}
-           
-            {/* <div className="relative w-80 max-w-full">
-              <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
-            </div>
-          </div>  */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          {listingTabs.map((tab) => {
+            const count = rows.filter((row) => filterJobByStatus(row, tab.value)).length;
+            const active = activeStatus === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActiveStatus(tab.value)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <DataTable
           columns={columns}
           data={filteredRows}
-          toolbar={<Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
-              <Plus size={15} /> Add Job
-            </Button>}
+          toolbar={
+            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
+              <Plus size={14} /> Add Job
+            </Button>
+          }
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Filter visible jobs..."
-          height="calc(100dvh - 180px)"
+          height="calc(100dvh - 200px)"
           minWidth={1320}
           density="grid"
           enablePagination
@@ -234,9 +252,11 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           exportFilename={`freight-${targetMode}-${targetDirection}-jobs.csv`}
           onRowClick={(row) => openSteps(row, "job")}
           rowClassName={(row) =>
-            text(row, "canceled") === "Y" ? "bg-red-50/70"
-            : text(row, "invoice_date") ? "bg-emerald-50/70"
-            : "bg-blue-50/50"
+            text(row, "canceled") === "Y"
+              ? "bg-red-50/70"
+              : text(row, "invoice_date")
+                ? "bg-emerald-50/70"
+                : "bg-blue-50/50"
           }
         />
       </section>
@@ -244,19 +264,19 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   }
 
   return (
-    <section className="freight-module-surface">
+    <section className="freight-workspace-ui freight-module-surface">
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="freight-workspace-header-shell">
           <div className="freight-workspace-title-block">
             {/* <p className="m-0 text-xs bold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
             <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1> */}
             <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">
-              Job No: {selectedJob ? text(selectedJob, "job_no") : "New"}
+              {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
             </h1>
             <p className="m-0 text-xs font-semibold text-slate-600">
               {selectedJob
                 ? `Principal: ${selectedPrincipalLabel} | Reference: ${selectedReferenceLabel}`
-                : "New shipment operation"}
+                : "Select a principal and save the job to continue with shipment details."}
             </p>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
@@ -269,6 +289,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                   key={tab.key}
                   type="button"
                   className={`freight-workspace-tab ${active ? "active" : ""}`}
+                  disabled={tab.key !== "job" && !text(selectedJob || {}, "job_no")}
+                  title={tab.key !== "job" && !text(selectedJob || {}, "job_no") ? "Save the job first to continue" : tab.label}
                   aria-pressed={active}
                   onClick={() => setActiveTab(tab.key)}
                 >
@@ -289,13 +311,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           startMode="editor"
           onEmbeddedActionsChange={setWorkspaceActions}
           onEmbeddedList={returnToList}
+          onJobSaved={(job) => setSelectedJob(normalizeLookupRow(job))}
         />
       )}
       {activeTab === "packlist" && (
         <FreightPacklistPage
           target={target}
           initialJob={selectedJob}
-          startMode={selectedJob ? "editor" : "list"}
+          startMode="editor"
           screen="packlist"
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}

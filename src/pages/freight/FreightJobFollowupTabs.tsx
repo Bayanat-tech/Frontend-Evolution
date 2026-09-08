@@ -157,23 +157,22 @@ export function FreightJobFollowupTab({
   useEffect(() => {
     if (!onEmbeddedActionsChange) return;
     onEmbeddedActionsChange(
-      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>}
         <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList}>
-          <ArrowLeft size={14} />List
+          <ArrowLeft size={14} /> List
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={!job || loading}>
-          <RefreshCw size={14} />Refresh
+          <RefreshCw size={14} /> Refresh
         </Button>
         {kind !== "deposits" && (
           <Button type="button" size="sm" variant="outline" onClick={() => void initRows()} disabled={!job || saving || readOnly}>
-            <Search size={14} />Init
+            <Search size={14} /> Init from Master
           </Button>
         )}
         <Button type="button" size="sm" onClick={() => void saveRows()} disabled={!job || saving || readOnly}>
-          <Save size={14} />Save
+          <Save size={14} /> Save
         </Button>
-        <span className="freight-job-mode-badge viewing">View</span>
       </div>
     );
     return () => onEmbeddedActionsChange(null);
@@ -181,6 +180,27 @@ export function FreightJobFollowupTab({
 
   return (
     <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-muted-foreground">Active Job:</span>
+          <strong className="text-primary font-bold">{text(job || undefined, "job_no") || "No Job Selected"}</strong>
+          <span className="text-slate-300">•</span>
+          <span className="font-semibold text-muted-foreground">Principal:</span>
+          <strong className="text-foreground font-semibold">{text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}</strong>
+          {text(job || undefined, "doc_ref") && (
+            <>
+              <span className="text-slate-300">•</span>
+              <span className="font-semibold text-muted-foreground">Ref:</span>
+              <strong className="text-foreground">{text(job || undefined, "doc_ref")}</strong>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">{cfg.summary}:</span>
+          <strong className="font-bold text-primary">{stats}</strong>
+        </div>
+      </div>
+
       {!embeddedInWorkspace && <div className="freight-form-header">
         <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <div className="flex items-center gap-2">
@@ -196,7 +216,7 @@ export function FreightJobFollowupTab({
         </div>
       </div>}
 
-      <div className="grid gap-2 lg:grid-cols-[minmax(360px,520px)_1fr_1fr]">
+      {!embeddedInWorkspace && <div className="grid gap-2 lg:grid-cols-[minmax(360px,520px)_1fr_1fr]">
         <div className="freight-job-metric-card freight-job-selector-card">
           {initialJob ? (
             <>
@@ -223,7 +243,11 @@ export function FreightJobFollowupTab({
         </div>
         <Metric label="Job" value={text(job || undefined, "job_no") || "-"} />
         <Metric label={cfg.summary} value={stats} />
-      </div>
+      </div>}
+      {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} onInit={initRows} saving={saving} readOnly={readOnly} userId={userId} />}
+      {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
+      {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
+      {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onInit={initRows} saving={saving} readOnly={readOnly} />}
 
       {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} readOnly={readOnly} />}
       {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
@@ -246,46 +270,126 @@ export function FreightJobFollowupTab({
   );
 }
 
-function DocumentsGrid({ rows, setRows, deleteRow, onAttach, readOnly }: GridProps & { onAttach: (row: LookupRow) => void }) {
-  return <EditableGrid columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={onAttach} readOnly={readOnly} />;
+function DocumentsGrid({ rows, setRows, deleteRow, onAttach, onInit, saving, readOnly, userId }: GridProps & { onAttach: (row: LookupRow) => void; onInit?: () => void; saving?: boolean; userId?: string }) {
+  return (
+    <EditableGrid
+      columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]}
+      rows={rows}
+      setRows={setRows}
+      deleteRow={deleteRow}
+      onAttach={onAttach}
+      onInit={onInit}
+      saving={saving}
+      readOnly={readOnly}
+      addFactory={() => ({
+        DOC_NR: String(rows.length + 1),
+        DOC_DESC: "",
+        MANDATORY: "N",
+        COLLECTED: "N",
+        DOC_RECEIVED_DT: "",
+        DOC_RECEIVED_BY: userId || "",
+        DOCUMENT_TYPE: "",
+        REMARKS: "",
+      })}
+    />
+  );
 }
 
-function InstructionGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
-  return <EditableGrid columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })} readOnly={readOnly}  labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: " Instruction Assigned To", op_date: "Instruction Date", op_remarks: "Remarks" }} />;
+function InstructionGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridProps & { onInit?: () => void; saving?: boolean }) {
+  return (
+    <EditableGrid
+      columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]}
+      rows={rows}
+      setRows={setRows}
+      deleteRow={deleteRow}
+      onInit={onInit}
+      saving={saving}
+      addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })}
+      readOnly={readOnly}
+      labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: "Instruction Assigned To", op_date: "Instruction Date", op_remarks: "Remarks" }}
+    />
+  );
 }
 
-function AlertGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
-  // return <EditableGrid columns={["op_desc", "op_date", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }} />;
-  return <EditableGrid columns={["op_desc", "op_date", "op_yesno", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks"  }}/>;
+function AlertGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridProps & { onInit?: () => void; saving?: boolean }) {
+  return (
+    <EditableGrid
+      columns={["op_desc", "op_date", "op_yesno", "remarks"]}
+      rows={rows}
+      setRows={setRows}
+      deleteRow={deleteRow}
+      onInit={onInit}
+      saving={saving}
+      readOnly={readOnly}
+      addFactory={() => ({ OP_DESC: "", OP_DATE: new Date().toISOString().slice(0, 10), OP_YESNO: "Yes", REMARKS: "" })}
+      labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }}
+    />
+  );
 }
 
-function DepositGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
-  return <EditableGrid columns={["sr_no", "deposit_type", "amount", "currency", "deposit_date", "deposit_expiry_date", "status", "be_no", "claim_ref_no", "deposit_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ SR_NO: String(rows.length + 1), TXN_TYPE: "JOB", DEPOSIT_TYPE: "CNTRLNR", AMOUNT: "0", CURRENCY: "OMR", STATUS: "D" })} readOnly={readOnly} />;
+function DepositGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridProps & { onInit?: () => void; saving?: boolean }) {
+  return (
+    <EditableGrid
+      columns={["sr_no", "deposit_type", "amount", "currency", "deposit_date", "deposit_expiry_date", "status", "be_no", "claim_ref_no", "deposit_remarks"]}
+      rows={rows}
+      setRows={setRows}
+      deleteRow={deleteRow}
+      onInit={onInit}
+      saving={saving}
+      addFactory={() => ({ SR_NO: String(rows.length + 1), TXN_TYPE: "JOB", DEPOSIT_TYPE: "CNTRLNR", AMOUNT: "0", CURRENCY: "OMR", STATUS: "D" })}
+      readOnly={readOnly}
+    />
+  );
 }
 
-// type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean };
 type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean; labels?: Record<string, string> };
 
-function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach, readOnly = false, labels }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
+function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach, onInit, saving, readOnly = false, labels }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void; onInit?: () => void; saving?: boolean }) {
   return (
-    <div className="freight-job-table-shell">
-      <div className="flex items-center justify-between border-b bg-[#f8fbff] px-2 py-1.5">
+    <div className="freight-job-table-shell overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+      <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
         <div className="text-xs font-semibold text-foreground">{rows.length} lines</div>
-        {addFactory && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}><Plus size={14} />Line</Button>}
+        <div className="flex items-center gap-1.5">
+          {onInit && !readOnly && (
+            <Button type="button" size="sm" variant="outline" onClick={onInit} disabled={saving}>
+              <Search size={13} /> Init from Master
+            </Button>
+          )}
+          {addFactory && !readOnly && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}>
+              <Plus size={13} /> Add Line
+            </Button>
+          )}
+        </div>
       </div>
       <div className="max-h-[calc(100vh-330px)] overflow-auto">
-        <div className="freight-job-table-head grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+        <div className="freight-job-table-head grid min-w-[1100px] gap-1 bg-muted/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-b" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(110px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
           {columns.map((column) => <span key={column}>{labels?.[column] ?? label(column)}</span>)}{onAttach && <span>Files</span>}<span />
-          {/* {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span /> */}
         </div>
         {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="freight-job-table-row grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+          <div key={rowIndex} className="freight-job-table-row grid min-w-[1100px] gap-1 border-b border-border/50 px-3 py-1 hover:bg-muted/15 transition-colors" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(110px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
             {columns.map((column) => <Cell key={column} row={row} column={column} readOnly={readOnly} onChange={(value) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item))} />)}
             {onAttach && <Button type="button" size="icon" variant="ghost" title="Document attachments" onClick={() => onAttach(row)}><Paperclip size={14} /></Button>}
             <Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={() => deleteRow(row)}><Trash2 size={14} /></Button>
           </div>
         ))}
-        {!rows.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No rows yet. Select job and initialize or add a line.</div>}
+        {!rows.length && (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-center">
+            <p className="text-xs text-muted-foreground m-0">No records saved for this job yet.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {onInit && !readOnly && (
+                <Button type="button" size="sm" variant="default" onClick={onInit} disabled={saving}>
+                  <Search size={13} /> Initialize from Masters
+                </Button>
+              )}
+              {addFactory && !readOnly && (
+                <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}>
+                  <Plus size={13} /> Add Line Manually
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

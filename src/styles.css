@@ -3653,11 +3653,16 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-job-editor-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 178px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   gap: 8px;
   align-items: start;
+  align-items: stretch;
 }
 
 .freight-job-editor-shell .freight-document-paper {
+  width: 100%;
   min-width: 0;
 }
 
@@ -4017,22 +4022,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   text-transform: uppercase;
 }
 
-/* .freight-job-table-row {
-  border-bottom: 1px solid #eef2f7;
-  background: #ffffff;
-} */
-
-.freight-job-table-row:hover {
-  background: #f8fbff;
-}
-
-/* .freight-job-table-subrow {
-  border-top: 1px solid #eef2f7;
-  background: #f8fafc;
-} */
-
-/* .freight-job-table-row {
-  border-bottom: 2px solid #dbe3ee;
+.freight-job-table-row {
+  border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
 }
 
@@ -4046,9 +4037,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .freight-job-table-subrow {
   border-top: 1px dashed #d8e0eb;
-  border-left: 3px solid #c9ddf3;
   background: #f8fafc;
-} */
+}
 
 .freight-quotation-header-grid > * {
   min-width: 0;

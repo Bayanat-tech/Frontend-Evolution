@@ -390,6 +390,7 @@ export function FreightPacklistPage({
       if (mode.code === "A") await loadDimensions(row);
       else setDimensions([]);
       setEditing(false);
+      setEditing(!readOnly);
       setView("editor");
     } catch (error: any) {
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open pack list." });
@@ -450,6 +451,7 @@ export function FreightPacklistPage({
         container_no: mode.code === "S" ? containerSummary : current.container_no,
         is_new_packlist: false,
       }));
+      setEditing(!readOnly);
       await loadRows();
       setEditing(false);
       setView("editor");
@@ -467,7 +469,7 @@ export function FreightPacklistPage({
     }
 
     onEmbeddedActionsChange(
-      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
           <ArrowLeft size={14} /> List
@@ -477,22 +479,16 @@ export function FreightPacklistPage({
             <Plus size={14} /> New {screenTitle}
           </Button>
         )}
-        {!editing && !readOnly && (
-          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
-            <Edit2 size={14} /> Edit
-          </Button>
-        )}
-        {editing && !readOnly && (
+        {!readOnly && (
           <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly} form={embeddedFormId}>
-            <Save size={14} /> Save
+            <Save size={14} /> {saving ? "Saving..." : "Save"}
           </Button>
         )}
-        <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
       </div>
     );
 
     return () => onEmbeddedActionsChange(null);
-  }, [embeddedFormId, embeddedInWorkspace, editing, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, view]);
+  }, [embeddedFormId, embeddedInWorkspace, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, view]);
 
   if (view === "list") {
     return (
@@ -847,58 +843,94 @@ function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack Lis
   );
 }
 
-function Panel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta: string; icon: typeof Plane; children: ReactNode; className?: string }) {
+function Panel({ title, icon: Icon, children, className = "" }: { title: string; meta?: string; icon: any; children: ReactNode; className?: string }) {
   return (
-    <section className={`freight-info-section ${className}`}>
-      <div className="freight-info-title">
+    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-xs ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon"><Icon size={15} /></span>
-          <h2>{title}</h2>
+          <span className="freight-section-icon">
+            <Icon size={12} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-foreground">{title}</h3>
+          </div>
         </div>
-        
       </div>
-      <div className="freight-info-body">{children}</div>
+      <div className="freight-panel-body p-2">{children}</div>
     </section>
   );
 }
 
-function Field({ label, value, onChange, type = "text", readOnly = false ,required}: { label: string; value: string; onChange: (value: string) => void; type?: string; readOnly?: boolean, required?: boolean }) {
+function Field({ label, value, onChange, type = "text", readOnly = false, required, className = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string }) {
   const editable = useContext(PackEditContext);
-  if (!editable) return <DisplayField label={label} value={type === "date" ? formatDate(value) : value} />;
+  if (!editable) return <DisplayField label={label} value={type === "date" ? formatDate(value) : value} className={className} />;
   const safeValue = type === "date" ? normalizeDateInput(value) : value;
-  return <label className="freight-compact-label"> <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
-      <Input className={`h-7 text-xs font-semibold ${type === "number" ? "text-right tabular-nums" : ""}`} type={type} value={safeValue} readOnly={readOnly} required={required} onChange={(event) => onChange(event.target.value)} onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+  return (
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <Input
+        className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
+        type={type}
+        value={safeValue}
+        readOnly={readOnly}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-       /></label>;
+      />
+    </label>
+  );
 }
 
-function SelectField({ label, value, options, onChange, required }: { label: string; value: string; options: string[]; onChange: (value: string) => void; required?: boolean }) {
+function SelectField({ label, value, options, onChange, required, className = "" }: { label: string; value: string; options: string[]; onChange: (value: string) => void; required?: boolean; className?: string }) {
   const editable = useContext(PackEditContext);
-  if (!editable) return <DisplayField label={label} value={value} />;
-  return <label className="freight-compact-label"><span>{label} {required && <span className="text-destructive font-bold">*</span>}</span> <select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}> required={required} <option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>) }</select></label>;
+  if (!editable) return <DisplayField label={label} value={value} className={className} />;
+  return (
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <select
+        className="h-7 rounded-md border border-input bg-background px-2 text-xs font-normal text-foreground"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Blank</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function Textarea({ label, value, onChange, className = "", rows = 2, required }: { label: string; value: string; onChange: (value: string) => void; className?: string; rows?: number; required?: boolean }) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
-  return <label className={`freight-compact-label ${className}`}><span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
-       <textarea rows={rows} className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} required={required} onChange={(event) => onChange(event.target.value)}  onInvalid={(event) => (event.target as HTMLTextAreaElement).setCustomValidity(`${label} is required`)}
+  return (
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <textarea
+        rows={rows}
+        className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-normal text-foreground shadow-none"
+        value={value}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLTextAreaElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLTextAreaElement).setCustomValidity("")}
-      /></label>;
+      />
+    </label>
+  );
 }
 
-// function ReadOnlyField({ label, value }: { label: string; value: string }) {
-//   const editable = useContext(PackEditContext);
-//   if (!editable) return <DisplayField label={label} value={value} strong />;
-//   return <div className="freight-compact-label">{label}<div className="flex h-[34px] items-center overflow-hidden rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
-// }
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyField({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   const editable = useContext(PackEditContext);
-  if (!editable) return <DisplayField label={label} value={value} strong />;
+  if (!editable) return <DisplayField label={label} value={value} className={className} />;
   return (
-    <div className="freight-compact-label">
-      {label} <div title={value} className="flex h-[34px] items-center overflow-hidden whitespace-nowrap text-ellipsis rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground"> {value}
+    <div className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <div title={value} className="flex h-7 items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-border bg-muted/40 px-2 text-xs font-semibold text-foreground">
+        {value || "-"}
       </div>
     </div>
   );
@@ -907,14 +939,21 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void }) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField label={label} value={value} />;
-  return <label className="freight-compact-label">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
+  return (
+    <label className="freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground">
+      <span>{label}</span>
+      <LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} />
+    </label>
+  );
 }
 
-function DisplayField({ label, value, strong, multiline, className = "" }: { label: string; value: string; strong?: boolean; multiline?: boolean; className?: string }) {
+function DisplayField({ label, value, multiline, className = "" }: { label: string; value: string; strong?: boolean; multiline?: boolean; className?: string }) {
   return (
-    <div className={`freight-read-field ${multiline ? "multiline" : ""} ${className}`}>
-      <span>{label}</span>
-      <strong className={strong ? "is-strong" : ""}>{value || "-"}</strong>
+    <div className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <div className={`flex ${multiline ? "min-h-12 py-1 items-start" : "h-7 items-center"} rounded-md border border-border bg-muted/30 px-2 text-xs font-medium text-foreground`}>
+        {value || "-"}
+      </div>
     </div>
   );
 }
