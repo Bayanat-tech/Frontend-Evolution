@@ -144,6 +144,7 @@ type QuotationHeaderNames = {
   vehicle_type_name: string;
   carrier_name: string;
   dept_name: string;
+  salesman_name: string;
 };
 
 const emptyHeaderNames: QuotationHeaderNames = {
@@ -156,6 +157,7 @@ const emptyHeaderNames: QuotationHeaderNames = {
   vehicle_type_name: "",
   carrier_name: "",
   dept_name: "", 
+  salesman_name: "",
 };
 
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -225,6 +227,25 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
+  const [uocOptions, setUocOptions] = useState<{ value: string; label: string }[]>([]);
+  
+    useEffect(() => {
+    let alive = true;
+    loadUocLookup(initialHeader.company_code)
+      .then((rows) => {
+        if (!alive) return;
+        setUocOptions(
+          rows.map((row) => ({
+            value: lookupText(row, "charge_code"),
+            label: lookupText(row, "description"),
+          })),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [initialHeader.company_code]);
 
   useEffect(() => {
     if (!notice) return;
@@ -604,6 +625,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         vehicle_type_name: lookupText(loadedRow, "vtype_name"),
         carrier_name: lookupText(loadedRow, "carrier_name"),
         dept_name: lookupText(loadedRow, "dept_name"),
+        salesman_name: lookupText(loadedRow, "salesman_name"),
       });
       setDetails(data?.details?.length ? data.details.map((item, index) => toDetailFromRow(normalizeLookupRow(item), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setTerms(data?.terms?.length ? data.terms.map((item, index) => toTermFromRow(normalizeLookupRow(item), index + 1)) : []);
@@ -1025,8 +1047,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
-            <HeaderChip label="Route" value={`${header.origin_port || "-"} -> ${header.destination_port || "-"}`} />
-            <HeaderChip label="Profit" value={formatAmount(totals.profit)} />
             {notice && <NoticeChip notice={notice} />}
             <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)}><Sparkles size={14} />Check{checkCount > 0 && <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{checkCount}</span>}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)}><Paperclip size={14} />Files</Button>
@@ -1034,7 +1054,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               <Button type="button" size="sm" variant="outline" onClick={copyAsNew} disabled={isReadOnly || (!header.prin_code && !header.quotation_nr)}><Copy size={14} />Copy</Button>
             )}
             {!isApprovalInProgress && (
-              <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}><RotateCcw size={14} />Reset</Button>
+              <Button type="submit" size="sm" disabled={saving || isReadOnly}><Save size={14} />{saving ? "Saving" : "Save Draft"}</Button>
             )}
             {canSubmit && (
               <Button type="button" size="sm" variant="outline" onClick={submitQuotation} disabled={approving || saving}>
@@ -1060,7 +1080,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               </>
             )}
             {!isApprovalInProgress && (
-              <Button type="submit" size="sm" disabled={saving || isReadOnly}><Save size={14} />{saving ? "Saving" : "Save Draft"}</Button>
+              <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}><RotateCcw size={14} />Reset</Button>
             )}
           </div>
         </div>
@@ -1070,23 +1090,28 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         <fieldset disabled={isReadOnly} className="contents">
         <section className="freight-form-card freight-quotation-header-card rounded-md border bg-card shadow-sm">
           <div className="freight-quotation-header-grid grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
-            <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" disabled />
-            <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
             <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
             <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
             <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-2" />
+            {/* {!header.quotation_nr ? (
+              <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
+            ) : (
+              <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
+            )} */}
+            <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
+            <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
+            <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
+            {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
+            <FormInput label="Quotation Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
+            <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
             {!header.quotation_nr ? (
               <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
             ) : (
               <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
             )}
-            <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
-            <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-            {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
-            <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
-            <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
+            <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "" }))} />
             <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
-            <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
+            {/* <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} /> */}
             <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} className="sm:col-span-2 xl:col-span-2" />
             <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} className="sm:col-span-2 xl:col-span-2" />
           </div>
@@ -1111,13 +1136,15 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                     <FormInput label="Volume(c.b.m)" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
                     <FormInput label="Volume Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                     <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                    <FormInput label="Chargeable Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                 
                   </div>
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-6" icon={MapPinned} title="Journey" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} displayValue={headerNames.origin_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
-                    <FormLookup label="Port of Destination" value={header.destination_port} displayValue={headerNames.destination_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
+                    <FormLookup label="Port of Destination" value={header.destination_port} displayValue={headerNames.destination_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Destn" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} className="sm:col-span-2" />
                   </div>
@@ -1126,6 +1153,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   <div className="grid gap-1 sm:grid-cols-3">
                     <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} displayValue={headerNames.carrier_name} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
                     <FormLookup label="Forwarder" value={header.forwarder_code} displayValue={headerNames.forwarder_name} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
+                    <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                     <FormInput label="Transit" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     {header.transport_mode === "S" && (
@@ -1189,7 +1217,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               <section>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="grid gap-1">
-                    <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Quotation Rates</h2>
+                    {/* <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Quotation Rates</h2> */}
                     <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
                       <HeaderChip label="Cost" value={formatAmount(totals.cost)} />
                       <HeaderChip label="Bill" value={formatAmount(totals.bill)} />
@@ -1206,6 +1234,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                       <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
                         <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Act</th>
                         <th className="px-1.5 py-1.5" style={{ width: "180px" }}>Activity</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>UOC</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>MOC</th>
                         <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Mode</th>
                         <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Origin</th>
                         <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Dest</th>
@@ -1214,14 +1244,14 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Cost Curr</th>
                         <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Cost Ex</th>
                         <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost Rate</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost Amt</th>
                         <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Bill Curr</th>
                         <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Bill Ex</th>
                         <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill Rate</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill Amt</th>
                         <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent FC</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Remarks</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent Amt</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "300px" }}>Remarks</th>
                         <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
                       </tr>
                     </thead>
@@ -1239,9 +1269,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                               columns={[
                                { field: "activity_code", header: "Code" },
                                { field: "activity", header: "Activity" },
-                               { field: "uom", header: "UOM" },
-                               { field: "bill", header: "Bill" },
-                               { field: "cost", header: "Cost" },
                               ]}
                              loadOptions={() => loadActivityLookup(header.company_code)}
                              onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
@@ -1249,6 +1276,36 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                              />
                             </td>
                           <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-[150px]" />
+                          <td className="px-1.5 py-1.5 align-middle">
+                            <select
+                              className={fieldClassName}
+                              value={row.uoc}
+                              onChange={(e) => setDetailField(index, "uoc", e.target.value)}
+                            >
+                              <option value="">Select</option>
+                              {uocOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-1.5 py-1.5 align-middle">
+                            <LookupField
+                              compact
+                              label="MOC 1"
+                              value={row.moc1}
+                              displayValue={row.moc1 || ""}
+                              valueField="moc_code"
+                              displayFields={["moc_name"]}
+                              columns={[
+                                { field: "moc_code", header: "Code" },
+                                { field: "moc_name", header: "MOC" },
+                              ]}
+                              loadOptions={() => loadMocLookup(header.company_code)}
+                              onChange={(value) => setDetailField(index, "moc1", value)}
+                            />
+                          </td>
                           <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
                           <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-[90px]" />
                           <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-[90px]" />
@@ -1300,7 +1357,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             {activeTab === "terms" && (
               <section>
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Terms And Conditions</h2>
+                  {/* <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground"></h2> */}
                   <Button type="button" size="sm" variant="outline" onClick={addTerm}><Plus size={14} />Add Term</Button>
                 </div>
                 {terms.length === 0 ? (
@@ -1799,6 +1856,9 @@ async function loadActivityLookup(companyCode: string) { return loadFreightLooku
 function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup("freight_vessel", companyCode) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup("freight_vehicle", companyCode) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup("freight_airline", companyCode) }; }
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") { return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow); }
 async function loadDepartmentLookup(companyCode: string) { return loadFreightLookup("freight_department", companyCode); }
+async function loadSalesmanLookup(companyCode: string) { return loadFreightLookup("freight_salesman", companyCode);  }
+async function loadUocLookup(companyCode: string) { return loadFreightLookup("freight_uoc", companyCode); }
+async function loadMocLookup(companyCode: string) { return loadFreightLookup("freight_moc", companyCode); }
 
 function normalizeLookupRow(row: LookupRow): LookupRow {
   return Object.entries(row || {}).reduce<LookupRow>((acc, [key, value]) => {

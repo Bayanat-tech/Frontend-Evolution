@@ -9732,7 +9732,7 @@ freight-dense-form .freight-form-card {
   }
 
   .freight-quotation-header-card .freight-quotation-header-grid {
-    grid-template-columns: minmax(112px, .75fr) minmax(112px, .75fr) minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(0, 1.35fr) minmax(92px, .7fr) minmax(92px, .7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+    grid-template-columns: repeat(11, minmax(100px, 1fr)) !important;
   }
 }
 
