@@ -228,7 +228,7 @@ async function saveHeader() {
 
   if (!selectedJob) {
     return (
-      <section className="grid gap-2">
+    <section className="freight-list-screen grid gap-2">
         <div className="freight-form-header">
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={18} /></span>
@@ -239,10 +239,6 @@ async function saveHeader() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative w-72 max-w-full">
-              <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job..." />
-            </div>
             <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={listLoading}><RefreshCw size={14} /> Refresh</Button>
           </div>
         </div>

@@ -86,7 +86,7 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [printLoading, setPrintLoading] = useState(false);
-const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
+  const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -123,39 +123,39 @@ const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
 
 
   const handlePrintSalesOrder = async (row: SalesOrderRow) => {
-  setPrintLoading(true);
-  setPrintReportHtml(null);
-  try {
-    const html = await getSOrderReportHtml({
-      company_code: user?.company_code,
-      doc_type: row.doc_type,
-      doc_no: row.doc_no,
-    });
-    setPrintReportHtml(html);
-  } catch (error) {
-    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load report" });
-  } finally {
-    setPrintLoading(false);
-  }
-};
+    setPrintLoading(true);
+    setPrintReportHtml(null);
+    try {
+      const html = await getSOrderReportHtml({
+        company_code: user?.company_code,
+        doc_type: row.doc_type,
+        doc_no: row.doc_no,
+      });
+      setPrintReportHtml(html);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load report" });
+    } finally {
+      setPrintLoading(false);
+    }
+  };
 
-const handleExportSalesOrder = async (row: SalesOrderRow) => {
-  try {
-    await getSoOrderReportExcel({
-      company_code: user?.company_code,
-      doc_type: row.doc_type,
-      doc_no: row.doc_no,
-    });
-  } catch (error) {
-    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
-  }
-};
+  const handleExportSalesOrder = async (row: SalesOrderRow) => {
+    try {
+      await getSoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: row.doc_type,
+        doc_no: row.doc_no,
+      });
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+    }
+  };
 
   useEffect(() => {
-  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
-    setTab("PENDING");
-  }
-}, [approvalLevel, tab]);
+    if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+      setTab("PENDING");
+    }
+  }, [approvalLevel, tab]);
 
   useEffect(() => {
     void loadLookups().catch((error) => {
@@ -206,13 +206,13 @@ const handleExportSalesOrder = async (row: SalesOrderRow) => {
       header: "Status",
       cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
     },
-     {
-  id: "reason",
-  header: "Reason",
-  accessorFn: (row) =>
-    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
-},
-        { accessorKey: "last_action", header: "Last Action" },
+    {
+      id: "reason",
+      header: "Reason",
+      accessorFn: (row) =>
+        row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+    },
+    { accessorKey: "last_action", header: "Last Action" },
     {
       id: "actions",
       header: "Actions",
@@ -222,12 +222,12 @@ const handleExportSalesOrder = async (row: SalesOrderRow) => {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
           </Button>
-         <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintSalesOrder(row.original)}>
-  <Printer size={15} />
-</Button>
-<Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportSalesOrder(row.original)}>
-  <Download size={15} />
-</Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintSalesOrder(row.original)}>
+            <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportSalesOrder(row.original)}>
+            <Download size={15} />
+          </Button>
         </div>
       ),
     },
@@ -249,34 +249,34 @@ const handleExportSalesOrder = async (row: SalesOrderRow) => {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-           { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-     <TabStrip
-  value={tab}
-  onChange={(value) => setTab(value as RequestTab)}
-  tabs={
-    approvalLevel === 0
-      ? [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-        ]
-      : [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-        ]
-  }
-/>
+      <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={
+          approvalLevel === 0
+            ? [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+            ]
+            : [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+              { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+            ]
+        }
+      />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -358,37 +358,37 @@ const handleExportSalesOrder = async (row: SalesOrderRow) => {
 
 
 
-          <Dialog
-  open={printLoading || !!printReportHtml}
-  title="Sales Order Print"
-  description="Preview and print the sales order document."
-  onClose={() => setPrintReportHtml(null)}
-  footer={
-    <>
-      <Button
-        variant="outline"
-        onClick={() => {
-          const iframe = document.getElementById("so-print-frame") as HTMLIFrameElement | null;
-          iframe?.contentWindow?.print();
-        }}
-        disabled={!printReportHtml}
+      <Dialog
+        open={printLoading || !!printReportHtml}
+        title="Sales Order Print"
+        description="Preview and print the sales order document."
+        onClose={() => setPrintReportHtml(null)}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const iframe = document.getElementById("so-print-frame") as HTMLIFrameElement | null;
+                iframe?.contentWindow?.print();
+              }}
+              disabled={!printReportHtml}
+            >
+              Print
+            </Button>
+            <Button variant="outline" onClick={() => setPrintReportHtml(null)}>Close</Button>
+          </>
+        }
       >
-        Print
-      </Button>
-      <Button variant="outline" onClick={() => setPrintReportHtml(null)}>Close</Button>
-    </>
-  }
->
-  {printLoading && <p className="p-4 text-sm text-muted-foreground">Loading report…</p>}
-  {printReportHtml && (
-    <iframe
-      id="so-print-frame"
-      title="Sales Order Report"
-      srcDoc={printReportHtml}
-      className="h-[70vh] w-full rounded-md border"
-    />
-  )}
-</Dialog>
+        {printLoading && <p className="p-4 text-sm text-muted-foreground">Loading report…</p>}
+        {printReportHtml && (
+          <iframe
+            id="so-print-frame"
+            title="Sales Order Report"
+            srcDoc={printReportHtml}
+            className="h-[70vh] w-full rounded-md border"
+          />
+        )}
+      </Dialog>
 
 
     </section>

@@ -161,8 +161,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   };
 
   return (
-    <div className="workspace">
-      <aside className={cn("sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
+    <div className="workspace" style={{ fontFamily: "Inter, sans-serif" }}>
+      <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
         <div className="sidebar-top">
           <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title={companyName}>
             <span className="sidebar-logo-wrap">
@@ -220,7 +220,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       </aside>
       {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
 
-      <section className="workspace-main">
+      <section className={cn("workspace-main", isFreightModule && "bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
         <div className="mobile-appbar">
           <Link to="/apps" className="mobile-brand" aria-label="Bayanat Technology">
             <span className="sidebar-logo-wrap">
@@ -242,7 +242,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </div>
         </header>
 
-        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui")}>
+        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
           <nav className="breadcrumb">
             <Link to="/apps">
               <Home size={14} /> Home
@@ -379,8 +379,14 @@ function MenuItem({
   );
 }
 
-function MenuIcon({ item, level, siblingIndex, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
-  if (level >= 2) return <span className={cn("nav-index", className)} aria-hidden="true">{siblingIndex}</span>;
+function MenuIcon({ item, level, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
+  if (level >= 2) {
+    return (
+      <span className={cn("nav-dot-wrap grid place-items-center w-3.5 h-3.5 shrink-0 mr-1", className)} aria-hidden="true">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 nav-bullet transition-all" />
+      </span>
+    );
+  }
   const Icon = getMenuIcon(item);
   return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
 }

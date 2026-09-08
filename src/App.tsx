@@ -44,7 +44,7 @@ if (isBooting) {
 }
 
   return (
-    <div className={activeDark ? "app dark" : "app"}>
+    <div className={activeDark ? "app dark" : "app"} style={{ fontFamily: "Inter, sans-serif" }}>
       <ToastProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />

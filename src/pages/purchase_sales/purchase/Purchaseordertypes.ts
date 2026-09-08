@@ -43,7 +43,7 @@ export interface PurchaseOrderLineRow {
   tx_compnt_amt_1: number,
   tx_compnt_1_expmt: string,
   tx_cat_name?: string
-  tx_compntcat_name_1?: string
+  tx_compntcat_name?: string
 
   po_p_uom?: string;
   po_qty_puom?: number;
@@ -154,7 +154,7 @@ export interface PurchaseOrderForm {
   grn_no?: number | string;
   ref_doc_no?: number | string;
   ref_doc_dt?: string;
-  tx_compntcat_name_1?: string;
+  tx_compntcat_name?: string;
   po_company_code?: string;
   po_doc_no?: number | string;
   po_payment_terms?: string;
@@ -270,7 +270,8 @@ export interface PurchaseOrderForm {
   pi_tx_compntcat_name_1?: string;
   inv_no?: string;
   inv_date?: string;
-  tx_compnt_1_expmt?: string
+  tx_compnt_1_expmt?: string;
+  tx_compnt_perc_1?: number;
 
 }
 
