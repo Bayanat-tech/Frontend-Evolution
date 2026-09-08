@@ -8,24 +8,47 @@ export interface MultiSelectOption {
 }
 
 export interface MultiSelectFieldProps {
-  label:       string;
-  options:     MultiSelectOption[];
-  value:       string[];
-  onChange:    (v: string[]) => void;
-  loading?:    boolean;
+  label: string;
+  options: MultiSelectOption[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  loading?: boolean;
   /** Value used for the "All" sentinel option. Defaults to "All". */
-  allValue?:   string;
+  allValue?: string;
   /** Hide the built-in "All" option (use when the caller manages "select all" differently). */
   hideAllOption?: boolean;
   placeholder?: string;
 }
 
 const fieldLabelStyle: React.CSSProperties = {
-  display:      "block",
-  fontSize:     11,
-  fontWeight:   600,
-  color:        "#374151",
+  display: "block",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#374151",
   marginBottom: 4,
+};
+
+const optionRowBase: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 8px",
+  fontSize: 12,
+  borderRadius: 5,
+  cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const checkboxStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  minWidth: 14,
+  minHeight: 14,
+  margin: 0,
+  cursor: "pointer",
+  flexShrink: 0,
 };
 
 /**
@@ -35,6 +58,10 @@ const fieldLabelStyle: React.CSSProperties = {
  * or Escape. Used anywhere a multi-value filter is needed (Principal, Job
  * Number, Product, Site, etc.) so every report panel shares identical
  * select/clear behavior instead of re-implementing it per field.
+ *
+ * Option rows use <div role="option"> (not bare <label>) so global form CSS
+ * that forces label { flex-direction: column } cannot stack the checkbox
+ * under the text (e.g. Freight .freight-ui-standard screens).
  */
 export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   label,
@@ -110,7 +137,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
 
   return (
     <div style={{ marginBottom: 14 }} ref={rootRef}>
-      <label style={fieldLabelStyle}>{label}</label>
+      {label ? <label style={fieldLabelStyle}>{label}</label> : null}
 
       <div style={{ position: "relative" }}>
         {/* Closed field */}
@@ -119,28 +146,30 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
           onClick={() => !loading && setOpen((o) => !o)}
           disabled={loading}
           style={{
-            width:          "100%",
-            display:        "flex",
-            alignItems:     "center",
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
             justifyContent: "space-between",
-            gap:            8,
-            padding:        "7px 10px",
-            fontSize:       12,
-            color:          loading ? "#9ca3af" : "#111827",
-            background:     "#fff",
-            border:         `1px solid ${open ? THEME : "#d1d5db"}`,
-            borderRadius:   6,
-            cursor:         loading ? "not-allowed" : "pointer",
-            textAlign:      "left",
-            boxShadow:      open ? "0 0 0 2px rgba(29,78,216,0.12)" : "none",
+            gap: 8,
+            padding: "7px 10px",
+            fontSize: 12,
+            color: loading ? "#9ca3af" : "#111827",
+            background: "#fff",
+            border: `1px solid ${open ? THEME : "#d1d5db"}`,
+            borderRadius: 6,
+            cursor: loading ? "not-allowed" : "pointer",
+            textAlign: "left",
+            boxShadow: open ? "0 0 0 2px rgba(29,78,216,0.12)" : "none",
           }}
         >
-          <span style={{
-            overflow:     "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace:   "nowrap",
-            flex:         1,
-          }}>
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              flex: 1,
+            }}
+          >
             {summaryText()}
           </span>
 
@@ -150,73 +179,87 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
                 onClick={clearAll}
                 title="Clear selection"
                 style={{
-                  display:      "flex",
-                  alignItems:   "center",
+                  display: "flex",
+                  alignItems: "center",
                   justifyContent: "center",
-                  width:        16,
-                  height:       16,
+                  width: 16,
+                  height: 16,
                   borderRadius: "50%",
-                  color:        "#9ca3af",
-                  cursor:       "pointer",
+                  color: "#9ca3af",
+                  cursor: "pointer",
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "#6b7280")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </span>
             )}
             <svg
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"
-              style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#6b7280"
+              strokeWidth="2"
+              style={{
+                transform: open ? "rotate(180deg)" : "none",
+                transition: "transform 0.15s",
+                flexShrink: 0,
+              }}
             >
-              <polyline points="6 9 12 15 18 9"/>
+              <polyline points="6 9 12 15 18 9" />
             </svg>
           </span>
         </button>
 
         {/* Dropdown panel */}
         {open && !loading && (
-          <div style={{
-            position:     "absolute",
-            top:          "calc(100% + 4px)",
-            left:         0,
-            right:        0,
-            zIndex:       60,
-            background:   "#fff",
-            border:       "1px solid #d1d5db",
-            borderRadius: 8,
-            boxShadow:    "0 8px 24px rgba(0,0,0,0.12)",
-            maxHeight:    220,
-            overflowY:    "auto",
-            padding:      4,
-          }}>
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              left: 0,
+              right: 0,
+              zIndex: 60,
+              background: "#fff",
+              border: "1px solid #d1d5db",
+              borderRadius: 8,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+              maxHeight: 220,
+              overflowY: "auto",
+              padding: 4,
+            }}
+          >
             {!hideAllOption && (
-              <label
+              <div
+                role="option"
+                aria-selected={isAllSelected}
+                onClick={toggleAll}
                 style={{
-                  display:      "flex",
-                  alignItems:   "center",
-                  gap:          8,
-                  padding:      "6px 8px",
-                  fontSize:     12,
-                  fontWeight:   600,
-                  color:        "#111827",
-                  borderRadius: 5,
-                  cursor:       "pointer",
-                  background:   isAllSelected ? "#eff6ff" : "transparent",
+                  ...optionRowBase,
+                  fontWeight: 600,
+                  color: "#111827",
+                  background: isAllSelected ? "#eff6ff" : "transparent",
                 }}
-                onMouseEnter={(e) => { if (!isAllSelected) e.currentTarget.style.background = "#f9fafb"; }}
-                onMouseLeave={(e) => { if (!isAllSelected) e.currentTarget.style.background = "transparent"; }}
+                onMouseEnter={(e) => {
+                  if (!isAllSelected) e.currentTarget.style.background = "#f9fafb";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isAllSelected) e.currentTarget.style.background = "transparent";
+                }}
               >
                 <input
                   type="checkbox"
                   checked={isAllSelected}
                   onChange={toggleAll}
-                  style={{ accentColor: THEME, width: 14, height: 14, cursor: "pointer" }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ ...checkboxStyle, accentColor: THEME }}
                 />
-                All
-              </label>
+                <span>All</span>
+              </div>
             )}
 
             {!hideAllOption && options.length > 0 && (
@@ -224,38 +267,50 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
             )}
 
             {options.length === 0 && (
-              <div style={{ padding: "8px 10px", fontSize: 12, color: "#9ca3af" }}>No options available</div>
+              <div style={{ padding: "8px 10px", fontSize: 12, color: "#9ca3af" }}>
+                No options available
+              </div>
             )}
 
             {options.map((opt) => {
               const checked = !isAllSelected && value.includes(opt.value);
               return (
-                <label
+                <div
                   key={opt.value}
+                  role="option"
+                  aria-selected={checked}
+                  onClick={() => toggleOption(opt.value)}
                   style={{
-                    display:      "flex",
-                    alignItems:   "center",
-                    gap:          8,
-                    padding:      "6px 8px",
-                    fontSize:     12,
-                    color:        "#374151",
-                    borderRadius: 5,
-                    cursor:       "pointer",
-                    background:   checked ? "#eff6ff" : "transparent",
+                    ...optionRowBase,
+                    color: "#374151",
+                    background: checked ? "#eff6ff" : "transparent",
                   }}
-                  onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = "#f9fafb"; }}
-                  onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = "transparent"; }}
+                  onMouseEnter={(e) => {
+                    if (!checked) e.currentTarget.style.background = "#f9fafb";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!checked) e.currentTarget.style.background = "transparent";
+                  }}
                 >
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleOption(opt.value)}
-                    style={{ accentColor: THEME, width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ ...checkboxStyle, accentColor: THEME }}
                   />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                  >
                     {opt.label}
                   </span>
-                </label>
+                </div>
               );
             })}
           </div>
