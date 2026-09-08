@@ -3,12 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Briefcase,
   Calculator,
-  CheckCircle2,
-  Clock,
-  DollarSign,
   Eye,
-  FileCheck2,
-  FileText,
   Layers,
   Pencil,
   Plus,
@@ -102,40 +97,6 @@ export function FreightInvoicePage() {
   );
   const selectedTotal = selectedBase + selectedTax;
 
-  const summaryStats = useMemo(() => {
-    let totalCount = rows.length;
-    let confirmedCount = 0;
-    let draftCount = 0;
-    let totalAmount = 0;
-    let confirmedAmount = 0;
-    let draftAmount = 0;
-    const uniquePrincipals = new Set<string>();
-
-    rows.forEach((row) => {
-      const amt = number(row, "inv_amount");
-      totalAmount += amt;
-      const s = text(row.inv_status).toUpperCase();
-      if (s === "C" || s === "CONFIRMED") {
-        confirmedCount++;
-        confirmedAmount += amt;
-      } else {
-        draftCount++;
-        draftAmount += amt;
-      }
-      const prin = text(row.prin_code);
-      if (prin) uniquePrincipals.add(prin);
-    });
-
-    return {
-      totalCount,
-      confirmedCount,
-      draftCount,
-      totalAmount,
-      confirmedAmount,
-      draftAmount,
-      principalCount: uniquePrincipals.size,
-    };
-  }, [rows]);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -399,6 +360,7 @@ export function FreightInvoicePage() {
 
   return (
     <section className="freight-workspace-ui freight-list-screen freight-invoice-list-screen grid gap-2">
+      {/* Filter Tabs Bar */}
       <div className="flex flex-wrap items-center gap-1.5 pb-1">
         {statusTabs.map((tab) => {
           const count = rows.filter((row) => filterInvoiceByStatus(row, tab.value)).length;
@@ -410,7 +372,7 @@ export function FreightInvoicePage() {
               onClick={() => setActiveStatus(tab.value)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                 active
-                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  ? "bg-[#00378C] text-white shadow-xs font-semibold ring-2 ring-[#00378C]/20"
                   : "border border-border bg-card text-foreground hover:bg-secondary"
               }`}
             >
@@ -430,7 +392,7 @@ export function FreightInvoicePage() {
           <button
             type="button"
             onClick={openNew}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-xs cursor-pointer"
           >
             <Plus size={14} />
             Create Invoice
@@ -468,18 +430,20 @@ export function FreightInvoicePage() {
       >
         <div className="grid gap-3">
           <div className="grid gap-2 md:grid-cols-6">
-            <MetricCard label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
-            <MetricCard label="Activity Lines" value={String(selectedRows.length)} />
+            <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
+            <MetricCard icon={Layers} label="Activity Lines" value={String(selectedRows.length)} />
             <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />
             <MetricCard label="Tax" value={`${selectedTax.toFixed(3)} ${form.curr_code || "OMR"}`} />
-            <MetricCard label="Invoice Total" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
-            <MetricCard label="Status" value={readOnly ? "View" : "Draft"} />
+            <MetricCard icon={TrendingUp} label="Invoice Total" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
+            <MetricCard label="Status" value={readOnly ? "View" : "Draft"} tone={readOnly ? "emerald" : "amber"} />
           </div>
 
-          <div className="rounded-md border bg-card">
-            <div className="flex items-center gap-2 border-b bg-muted/25 px-3 py-2">
-              <Calculator size={15} className="text-primary" />
-              <h2 className="m-0 text-sm font-semibold text-foreground">Invoice Header</h2>
+          <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 px-3 py-2">
+              <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
+                <Calculator size={13} />
+              </div>
+              <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Invoice Header</h2>
             </div>
           <div className="grid gap-2 p-3 md:grid-cols-6">
             <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
@@ -509,13 +473,18 @@ export function FreightInvoicePage() {
           </div>
 
           {!readOnly && (
-            <div className="rounded-md border">
-              <div className="flex flex-wrap items-end justify-between gap-2 border-b bg-muted/25 p-3">
-                <div>
-                  <h2 className="m-0 text-sm font-semibold text-foreground">Billable Freight Lines</h2>
-                  <p className="m-0 text-xs text-muted-foreground">Confirmed job activity lines not yet consolidated into another invoice.</p>
+            <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
+              <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 p-3">
+                <div className="flex items-center gap-2">
+                  <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
+                    <Search size={13} />
+                  </div>
+                  <div>
+                    <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Billable Freight Lines</h2>
+                    <p className="m-0 text-xs text-muted-foreground">Confirmed job activity lines not yet consolidated into another invoice.</p>
+                  </div>
                 </div>
-                <div className="flex min-w-[360px] items-center gap-2">
+                <div className="flex min-w-[340px] items-center gap-2">
                   <Input value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="Search job, activity..." />
                   <Button type="button" variant="outline" onClick={() => void loadCandidateJobs()}><Search size={14} />Find</Button>
                 </div>
@@ -558,11 +527,16 @@ export function FreightInvoicePage() {
             </div>
           )}
 
-          <div className="rounded-md border">
-            <div className="flex items-center justify-between border-b bg-muted/25 p-3">
-              <div>
-                <h2 className="m-0 text-sm font-semibold text-foreground">Selected Invoice Lines</h2>
-                <p className="m-0 text-xs text-muted-foreground">{selectedRows.length} lines / {unique(selectedRows.map((row) => text(row.job_no))).length} jobs</p>
+          <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 p-3">
+              <div className="flex items-center gap-2">
+                <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
+                  <Receipt size={13} />
+                </div>
+                <div>
+                  <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Selected Invoice Lines</h2>
+                  <p className="m-0 text-xs text-muted-foreground">{selectedRows.length} lines / {unique(selectedRows.map((row) => text(row.job_no))).length} jobs</p>
+                </div>
               </div>
               <div className="text-right">
                 <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {selectedBase.toFixed(3)} / Tax {selectedTax.toFixed(3)}</p>
@@ -640,11 +614,36 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">{label}{children}</label>;
 }
 
-function MetricCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  highlight,
+  tone = "default",
+}: {
+  icon?: LucideIcon;
+  label: string;
+  value: string;
+  highlight?: boolean;
+  tone?: "default" | "emerald" | "amber";
+}) {
+  const highlightClass = highlight
+    ? "border-blue-300 bg-gradient-to-br from-blue-50/80 to-white text-[#00378C] ring-1 ring-blue-200"
+    : tone === "emerald"
+      ? "border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-white text-emerald-800"
+      : tone === "amber"
+        ? "border-amber-200 bg-gradient-to-br from-amber-50/80 to-white text-amber-800"
+        : "border-slate-200 bg-gradient-to-b from-slate-50/80 to-white text-slate-800";
+
   return (
-    <div className={`rounded-md border px-3 py-2 ${highlight ? "border-primary/25 bg-primary/5" : "bg-muted/20"}`}>
-      <p className="m-0 text-[10px] font-semibold uppercase text-muted-foreground">{label}</p>
-      <p className={`m-0 mt-1 text-base font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</p>
+    <div className={`relative overflow-hidden rounded-xl border p-2.5 shadow-2xs ${highlightClass}`}>
+      <div className={`absolute top-0 left-0 right-0 h-[2px] ${highlight ? "bg-[#00378C]" : tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-slate-300"}`} />
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+        {Icon && <Icon size={13} className={highlight ? "text-[#00378C]" : "text-slate-400"} />}
+      </div>
+      <div className={`mt-1 truncate text-base font-extrabold ${highlight ? "text-[#00378C]" : "text-slate-900"}`}>{value}</div>
     </div>
   );
 }
