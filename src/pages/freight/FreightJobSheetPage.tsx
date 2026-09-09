@@ -255,7 +255,7 @@ async function saveHeader() {
           minWidth={1160}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           onRowClick={(row) => setSelectedJob(normalizeRow(row))}
         />
       </section>
@@ -410,7 +410,7 @@ function SheetSection({ title, meta, children, className = "" }: { title: string
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
         <h2>{title}</h2>
-        {meta && <span>{meta}</span>}
+
       </div>
       <div className="freight-info-body">{children}</div>
     </section>

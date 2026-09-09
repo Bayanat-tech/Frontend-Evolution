@@ -216,6 +216,25 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [pendingValidateTab, setPendingValidateTab] = useState<EnquiryTab | null>(null);
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
+  const [uocOptions, setUocOptions] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+  let alive = true;
+  loadUocLookup(initialHeader.company_code)
+    .then((rows) => {
+      if (!alive) return;
+      setUocOptions(
+        rows.map((row) => ({
+          value: lookupText(row, "charge_code"),
+          label: lookupText(row, "description"),
+        })),
+      );
+    })
+    .catch(() => {});
+  return () => {
+    alive = false;
+  };
+}, [initialHeader.company_code]);
 
   useEffect(() => {
     if (!notice) return;
@@ -360,26 +379,26 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <div className="flex items-center justify-center gap-1">
               <button
                 type="button"
-                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title={`Open ${enquiryLabel}`}
                 onClick={() => openEnquiry(row.original)}
               >
-                <Eye size={15} />
+                <Eye size={13} />
               </button>
               <button
                 type="button"
-                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title={`Print ${enquiryLabel}`}
                 onClick={(event) => {
                   event.stopPropagation();
                   void printEnquiry(row.original);
                 }}
               >
-                <Printer size={15} />
+                <Printer size={13} />
               </button>
               <button
                 type="button"
-                className="h-7 w-7 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
                 title={
                   cancelDisabled
                     ? `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled`
@@ -391,7 +410,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                   requestCancelRow(row.original);
                 }}
               >
-                <X size={15} />
+                <X size={13} />
               </button>
             </div>
           );
@@ -1178,12 +1197,6 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             >
               {isRfq ? "Freight RFQ" : "Freight Enquiry"}
             </h2>
-            <span
-              className="px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-              style={{ fontSize: "10px", letterSpacing: "0.03em", fontWeight: 700 }}
-            >
-              {isRfq ? "RFQ" : "ENQUIRY"}
-            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {notice && (
@@ -1191,26 +1204,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 {notice.text}
               </span>
             )}
-            <span className="px-2.5 py-1 rounded-xl border border-border bg-card text-muted-foreground text-xs font-semibold">
-              Records: {listRows.length}
-            </span>
-            <button
-              type="button"
-              onClick={loadEnquiries}
-              disabled={loadingList}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-colors text-xs font-medium cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={loadingList ? "animate-spin" : ""} />
-              {loadingList ? "Loading" : "Refresh"}
-            </button>
-            <button
-              type="button"
-              onClick={startNew}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add {enquiryLabel}
-            </button>
+
           </div>
         </div>
 
@@ -1241,16 +1235,22 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
         <DataTable
           columns={listColumns}
           data={filteredListRows}
-          title={loadingList ? "Loading" : `${filteredListRows.length} ${enquiryLabel} Records`}
-          subtitle={`Freight ${enquiryLabel}`}
+          toolbar={<button
+              type="button"
+              onClick={startNew}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add {enquiryLabel}
+            </button>}
           searchValue={listQuery}
           onSearchChange={setListQuery}
           searchPlaceholder={`Search ${enquiryLabel.toLowerCase()}, principal, port, job...`}
           loading={loadingList}
-          height="calc(100vh - 240px)"
+          height="calc(100dvh - 180px)"
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           enableExport
           exportFilename={`freight-${enquiryLabel.toLowerCase()}-list.csv`}
           getRowId={(row, index) => `${lookupText(row, "company_code")}-${lookupText(row, "enquiry_type")}-${lookupText(row, "enquiry_nr") || index}`}
@@ -1270,11 +1270,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <ShipWheel size={15} />
           </div>
           <div className="min-w-0">
-            <p className="eyebrow mb-0.5"> {isRfq ? "Request For Quote" : "Freight Enquiry"}
-              {/* {isRfq ? "Freight RFQ" : "Freight Enquiry"} */}
-              </p>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr || (isRfq ? "New Request For Quote" : "New Freight Enquiry")}
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr ? `${isRfq ? "RFQ" : "Enquiry"} ${header.enquiry_nr}` : (isRfq ? "New Request For Quote" : "New Freight Enquiry")}
                 {/* {isRfq ? "Request For Quote" : "Freight Enquiry"} */}
                 </h1>
               {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
@@ -1284,9 +1281,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 {statusLabel(header.indstatus, header.last_action, header.final_approved)}
               </span>
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-            </div>
+
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -1294,9 +1289,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <ArrowLeft size={14} />
             List
           </Button>
-          <HeaderChip label="Route" value={`${header.origin_port || "-"} -> ${header.destination_port || "-"}`} />
+          {/* <HeaderChip label="Route" value={`${header.origin_port || "-"} -> ${header.destination_port || "-"}`} />
           <HeaderChip label="Currency" value={`${header.curr_code || "-"} / ${header.ex_rate || "1"}`} />
-          <HeaderChip label="Lines" value={String(details.length)} />
+          <HeaderChip label="Lines" value={String(details.length)} /> */}
           {loadingRecord && <HeaderChip label="Opening" value="Loading" />}
           {notice && (
             <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
@@ -1314,6 +1309,12 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <Paperclip size={14} />
             Files
           </Button>
+          {!isApprovalInProgress && (
+            <Button type="submit" size="sm" disabled={saving || isReadOnly}>
+              <Save size={14} />
+              {saving ? "Saving" : "Save Draft"}
+            </Button>
+          )}
           {canSubmit && (
             <Button type="button" size="sm" variant="outline" onClick={submitForApproval} disabled={approving || saving}>
               <ShieldCheck size={14} />
@@ -1354,39 +1355,25 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               Reset
             </Button>
           )}
-          {!isApprovalInProgress && (
-            <Button type="submit" size="sm" disabled={saving || isReadOnly}>
-              <Save size={14} />
-              {saving ? "Saving" : "Save Draft"}
-            </Button>
-          )}
         </div>
       </div>
 
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
       <fieldset disabled={isReadOnly} className="contents">
-      <section className="freight-form-card rounded-md border bg-card shadow-sm">
-        <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-8">
-          {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
-          <FormInput label={`${enquiryLabel} No`} value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" disabled required inputClassName={header.enquiry_nr
-            ? "bg-muted text-foreground"
-            : "bg-amber-50 border-dashed border-amber-300 text-amber-700 italic"
-           } />
-          <FormInput label="Date" type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
-          {/* <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
-          <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} required/>
-          <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes}  required />
-          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
-          {/* <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
-          {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
-          <TypeField label="Approval Level" value={workflowLevelText(header)} /> */}
-          <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
-          <TypeField label="Type" value={header.enquiry_type} />
-          {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
-          <TypeField label="Approval Level" value={workflowLevelText(header)} />
+      <section className="freight-form-card enquiry-details-card rounded-md border bg-card shadow-sm">
+        <div className="enquiry-header-fields">
+          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required disabled={isReadOnly} />
+           {/* <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} disabled={isReadOnly} /> */}
+          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required disabled={isReadOnly} />
+           {/* <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} disabled={isReadOnly} /> */}
+           <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} required/>
+           <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes}  required />
+          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} disabled={isReadOnly} />
+          <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} /> 
+          <FormInput label={`${enquiryLabel} Date`} type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
+        </div>
+        {isRfq && <div className="enquiry-document-fields">
           {isRfq && !header.enquiry_nr && (
             <FormLookup
               label="Source Enquiry"
@@ -1405,7 +1392,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             />
           )}
           {isRfq && header.enquiry_nr && <TypeField label="Source Enquiry" value={header.ref_enquiry_nr || "-"} />}
-        </div>
+
+        </div>}
       </section>
       </fieldset>
 
@@ -1422,28 +1410,100 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <section>
               {/* <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" /> */}
               <div className="grid gap-1.5 xl:grid-cols-12">
-                <SectionPanel className="xl:col-span-12" icon={PackageCheck} title="Cargo Profile" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
-                  <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-7">
-                    <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
-                    <FormInput label="Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
-                    <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
-                    <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
-                    <FormInput label="Breadth(cm)" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
-                    <FormInput label="Height(cm)" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
-                    <FormInput label="Volume (c.b.m)" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} disabled />
-                    <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} disabled />
+                <SectionPanel className="xl:col-span-5" icon={PackageCheck} title="Cargo Profile">
+                  {/* <div className="enquiry-cargo-groups">
+                    <div className="enquiry-cargo-group">
+                      <h4>Cargo details</h4>
+                    <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} />
+                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
                     {header.transport_mode === "S" && (
                     <>
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
-                    <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
+                    <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) =>setHeaderField("no_of_contaners", value)} />
                     <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
                     </>)}
                     {header.transport_mode === "R" && (
                     <>
-                    <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} className="xl:col-span-2" />
+                    <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     </>)}
-                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact className="xl:col-span-2" />
-                  </div>
+
+                    </div>
+                    <div className="enquiry-cargo-group">
+                      {/* <h4>Weight</h4> */}
+                    {/* <FormInput label="Gross Weight (kg)" type="number" step="any" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                    <FormInput label="Volumetric Weight (kg)" type="number" step="any" value={header.weight} onChange={(value) => setHeaderField("weight", value)} /> */}
+                      {/* <p className="enquiry-field-hint">Volumetric weight updates when dimensions change. Review the value before saving.</p> */}
+                    {/* <FormInput label="Length (cm)" type="number" step="any" value={header.l} onChange={(value) => setHeaderField("l", value)} />
+                    <FormInput label="Width / Breadth (cm)" type="number" step="any" value={header.b} onChange={(value) => setHeaderField("b", value)} />
+                    <FormInput label="Height (cm)" type="number" step="any" value={header.h} onChange={(value) => setHeaderField("h", value)} />
+                     <div className="enquiry-calculated" aria-live="polite">
+                        <span>Calculated volume <strong>{header.volume || "0"} m&sup3;</strong></span>
+                        <span className="enquiry-field-hint">{header.dimension || "Enter length, width and height in cm"}</span> 
+                    </div> */}
+                    {/* <div className="enquiry-cargo-group">
+                      {/* <h4>Dimensions</h4> */}
+                    {/* <FormInput label="Length (cm)" type="number" step="any" value={header.l} onChange={(value) => setHeaderField("l", value)} />
+                    <FormInput label="Width / Breadth (cm)" type="number" step="any" value={header.b} onChange={(value) => setHeaderField("b", value)} />
+                    <FormInput label="Height (cm)" type="number" step="any" value={header.h} onChange={(value) => setHeaderField("h", value)} />
+                      <div className="enquiry-calculated" aria-live="polite">
+                        <span>Calculated volume <strong>{header.volume || "0"} m&sup3;</strong></span>
+                        <span className="enquiry-field-hint">{header.dimension || "Enter length, width and height in cm"}</span>
+                      </div> */} 
+                    {/* </div>
+                  </div> */}
+
+  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  <FormLookup
+    label="Commodity"
+    value={header.commodity}
+    valueField="prodtype_desc"
+    displayFields={["prodtype_desc", "prodtype_code"]}
+    columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]}
+    loadOptions={() => loadCommodityLookup(header.company_code)}
+    onChange={(value, row) => applyHeaderLookup("commodity", value, row)}
+    className="sm:col-span-2 lg:col-span-1"
+  />
+  <FormTextarea
+    label="Cargo Detail"
+    value={header.cargo_detail}
+    onChange={(value) => setHeaderField("cargo_detail", value)}
+    compact
+    className="sm:col-span-2"
+  />
+
+  {header.transport_mode === "S" && (
+    <>
+      <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
+      <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
+      <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
+    </>
+  )}
+  {header.transport_mode === "R" && (
+    <FormLookup
+      label="Vehicle Type"
+      value={header.vehicle_type}
+      valueField="vtype_code"
+      displayFields={["vtype_code", "vtype_name"]}
+      columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]}
+      loadOptions={() => loadVehicleTypeLookup(header.company_code)}
+      onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)}
+    />
+  )}
+
+  <FormInput label="Gross Weight (kg)" type="number" step="any" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+  <FormInput label="Volumetric Weight (kg)" type="number" step="any" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
+  <FormInput label="Length (cm)" type="number" step="any" value={header.l} onChange={(value) => setHeaderField("l", value)} />
+  <FormInput label="Width / Breadth (cm)" type="number" step="any" value={header.b} onChange={(value) => setHeaderField("b", value)} />
+  <FormInput label="Height (cm)" type="number" step="any" value={header.h} onChange={(value) => setHeaderField("h", value)} />
+
+  <div className="sm:col-span-2 lg:col-span-3 flex items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+    <div className="grid gap-0.5">
+      <span className="text-[10px] font-semibold uppercase text-black-foreground">Volume</span>
+      <span className="text-[11px] text-muted-foreground">{header.dimension || "Enter length, width and height in cm"}</span>
+    </div>
+    <span className="text-sm font-bold text-primary whitespace-nowrap">{header.volume || "0"} m&sup3;</span>
+  </div>
+</div>
                 </SectionPanel>
 
                 {/* <SectionPanel className="xl:col-span-5" icon={ShipWheel} title="Equipment" meta={`${header.no_of_contaners || "0"} containers`}>
@@ -1455,19 +1515,18 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                   </div>
                 </SectionPanel> */}
 
-                <SectionPanel className="xl:col-span-12" icon={MapPinned} title="Parties" 
+                <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties" 
                 // meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}
-          >
-                  <div className="grid gap-1 sm:grid-cols-4">
-                    <FormTextarea label="Shipper" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
+                  >     
+                  <div className="grid gap-1 sm:grid-cols-1 sm:grid-cols-1">
+                    <FormTextarea label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
                     <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact />
-                    <FormTextarea label="Consignee" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact />
+                    <FormTextarea label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact />
                     <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-12" icon={CreditCard} title="Cargo Notes" 
-                // meta={header.remarks ? "Remarks added" : "No remarks"}
                 >
                   <div className="grid grid-cols-1">
                     <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact />
@@ -1484,8 +1543,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
-                    <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
+                    <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
                   </div>
                 </SectionPanel>
@@ -1493,7 +1552,6 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 <SectionPanel className="lg:col-span-5" icon={ShipWheel} title="Shipment Reference" meta={header.job_number || "Job pending"}>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-3">
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
-                    <FormInput label="Job No" value={header.job_number} onChange={(value) => setHeaderField("job_number", value)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
                     <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
                     {header.transport_mode === "S" && (
@@ -1520,7 +1578,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                    </div>
                 </SectionPanel>
               </div>
-            
+
             </section>
           )}
 
@@ -1555,7 +1613,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
           {activeTab === "payment" && (
             <section>
-              <SectionHeading title="Payment Terms" description="" />
+              {/* <SectionHeading title="Payment Terms" description="" /> */}
               <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-6" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
                   <div className="grid gap-1.5 sm:grid-cols-4">
@@ -1568,8 +1626,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 <SectionPanel className="lg:col-span-6" icon={PackageCheck} title="Classification" meta={`${header.sale_type || "Sale"} / ${header.job_category || "Category"}`}>
                   <div className="grid gap-2 sm:grid-cols-3">
-                    <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
-                    <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
+                    <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "" }))} />
+                    <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value ||"" }))} />
                     <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
                   </div>
                 </SectionPanel>
@@ -1585,7 +1643,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <section>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="grid gap-1">
-                  <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Activities</h2>
+                  {/* <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Activities</h2> */}
                   {/* <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p> */}
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isReadOnly}>
@@ -1600,16 +1658,20 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Activity Code</th>
                       <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Activity Name</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>UOC</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>MOC</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
                       <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Origin</th>
                       <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Dest</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th>
+                      {/* <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Rate</th> */}
+                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
+                      {/* <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th> */}
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Bill Rate</th>
                       <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
                       {/* <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th> */}
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost Rate</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th>
+                      {/* <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th> */}
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost</th>
                       <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Remarks</th>
                       <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
@@ -1629,9 +1691,6 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                             columns={[
                               { field: "activity_code", header: "Code" },
                               { field: "activity", header: "Activity" },
-                              { field: "uom", header: "UOM" },
-                              { field: "bill", header: "Bill" },
-                              { field: "cost", header: "Cost" },
                             ]}
                             loadOptions={() => loadActivityLookup(header.company_code)}
                             onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
@@ -1643,6 +1702,52 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                             {row.activity || "-"}
                           </div>
                         </td>
+ {/* <td className="px-1.5 py-1.5 align-middle">
+  <LookupField
+    compact
+    label="UOC"
+    value={row.uoc}
+    displayValue={row.uoc || ""}
+    valueField="uoc_code"
+    displayFields={["description"]}
+    columns={[
+      { field: "description", header: "" },
+    ]}
+    loadOptions={() => loadUocLookup(header.company_code)}
+    onChange={(value) => setDetailField(index, "uoc", value)}
+  />
+</td> */}
+
+<td className="px-1.5 py-1.5 align-middle">
+  <select
+    className={fieldClassName}
+    value={row.uoc}
+    onChange={(e) => setDetailField(index, "uoc", e.target.value)}
+  >
+    <option value="">Select</option>
+    {uocOptions.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+</td>
+<td className="px-1.5 py-1.5 align-middle">
+  <LookupField
+    compact
+    label="MOC 1"
+    value={row.moc1}
+    displayValue={row.moc1 || ""}
+    valueField="moc_code"
+    displayFields={["moc_name"]}
+    columns={[
+      { field: "moc_code", header: "Code" },
+      { field: "moc_name", header: "MOC" },
+    ]}
+    loadOptions={() => loadMocLookup(header.company_code)}
+    onChange={(value) => setDetailField(index, "moc1", value)}
+  />
+</td>
                         <td className="px-1.5 py-1.5 align-middle">
                           <div className="flex h-8 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1 text-[10px] font-bold text-primary">
                             {modeLabel(header.transport_mode || row.transport_mode)}
@@ -1654,12 +1759,15 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                         <td className="px-1 py-1.5 align-middle">
                           <input type="text" value={row.destination_port} onChange={(e) => setDetailField(index, "destination_port", e.target.value)} className={fieldClassName} />
                         </td>
-                         <td className="px-1 py-1.5 align-middle">
-                          <input value={row.uom} onChange={(e) => setDetailField(index, "uom", e.target.value)} className={fieldClassName} />
-                        </td>
                         <td className="px-1 py-1.5 align-middle">
                           <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
                         </td>
+                         <td className="px-1 py-1.5 align-middle">
+                          <input value={row.uom} onChange={(e) => setDetailField(index, "uom", e.target.value)} className={fieldClassName} />
+                        </td>
+                        {/* <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
+                        </td> */}
                         <td className="px-1 py-1.5 align-middle">
                           <input type="number" value={row.bill_rate} onChange={(e) => setDetailField(index, "bill_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
                         </td>
@@ -1672,9 +1780,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                         {/* <td className="px-1 py-1.5 align-middle">
                           <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
                         </td> */}
-                        <td className="px-1 py-1.5 align-middle">
+                        {/* <td className="px-1 py-1.5 align-middle">
                           <input type="text" value={row.curr_code} onChange={(e) => setDetailField(index, "curr_code", e.target.value)} className={fieldClassName} />
-                        </td>
+                        </td> */}
                         {/* <td className="px-1 py-1.5 align-middle">
                           <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
                         </td> */}
@@ -1759,11 +1867,8 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`ui-button ui-button-sm whitespace-nowrap ${
-        active
-          ? "ui-button-default"
-          : "ui-button-outline"
-      }`}
+      aria-pressed={active}
+      className={`freight-workspace-tab ${active ? "active" : ""}`}
     >
       <Icon size={14} />
       {tab.label}
@@ -1826,12 +1931,12 @@ function SectionPanel({
     <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
       <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+          <span className="freight-section-icon">
             <Icon size={12} />
           </span>
           <div className="min-w-0">
             <h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3>
-            {meta && <p className="m-0 truncate text-[11px] text-muted-foreground">{meta}</p>}
+
           </div>
         </div>
       </div>
@@ -1851,21 +1956,21 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 
 function statusBadgeClass(status: string, action = "", finalApproved = "") {
   if (status === "A" || finalApproved === "Y") {
-    return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
+    return "inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700";
   }
   if (status === "C") {
-    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
   }
   if (status === "R" || action === "REJECTED") {
-    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
   }
   if (action === "SENTBACK") {
-    return "inline-flex items-center rounded-md border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700";
+    return "inline-flex items-center rounded border border-orange-200 bg-orange-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-orange-700";
   }
   if (action === "SUBMITTED" || action === "APPROVED") {
-    return "inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700";
+    return "inline-flex items-center rounded border border-sky-200 bg-sky-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-sky-700";
   }
-  return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+  return "inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700";
 }
 
 function statusLabel(status: string, action = "", finalApproved = "") {
@@ -1893,11 +1998,12 @@ function matchesListStatusTab(row: EnquiryListRow, tab: ListStatusTab) {
 function statusRowClassName(row: EnquiryListRow) {
   const status = lookupText(row, "indstatus");
   const action = lookupText(row, "last_action");
-  if (status === "A") return "bg-emerald-50/60";
-  if (status === "C" || status === "R") return "bg-red-50/50";
-  if (action === "SENTBACK") return "bg-orange-50/50";
-  if (action === "SUBMITTED" || action === "APPROVED") return "bg-sky-50/50";
-  return "bg-amber-50/50";
+  const finalApproved = lookupText(row, "final_approved");
+  if (status === "A" || finalApproved === "Y") return "freight-status-row freight-status-approved";
+  if (status === "C" || status === "R") return "freight-status-row freight-status-danger";
+  if (action === "SENTBACK") return "freight-status-row freight-status-sentback";
+  if (action === "SUBMITTED" || action === "APPROVED") return "freight-status-row freight-status-progress";
+  return "freight-status-row freight-status-draft";
 }
 
 function workflowLevelText(header: EnquiryHeader) {
@@ -2165,6 +2271,7 @@ function FormInput({
   value,
   onChange,
   type = "text",
+  step,
   required,
   placeholder,
   className = "",
@@ -2175,6 +2282,7 @@ function FormInput({
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  step?: string;
   required?: boolean;
   placeholder?: string;
   className?: string;
@@ -2186,9 +2294,10 @@ function FormInput({
       <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
         {label}
       <Input
-        className={`h-7 text-[11px] ${inputClassName}`}
+        className={`h-7 text-[11px] ${type === "number" ? "text-right tabular-nums" : ""} ${inputClassName}`}
         value={value}
         type={type}
+        step={step}
         required={required}
         placeholder={placeholder}
         disabled={disabled}
@@ -2457,6 +2566,14 @@ async function loadCarrierLookup(companyCode: string, mode: string) {
 
 async function loadActivityLookup(companyCode: string) {
   return loadFreightLookup("freight_activity", companyCode);
+}
+
+async function loadUocLookup(companyCode: string) {
+  return loadFreightLookup("freight_uoc", companyCode);
+}
+
+async function loadMocLookup(companyCode: string) {
+  return loadFreightLookup("freight_moc", companyCode);
 }
 
 async function loadReferenceEnquiryLookup(companyCode: string) {

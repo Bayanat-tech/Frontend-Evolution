@@ -1,6 +1,6 @@
-import { LeaveFlowTable } from "./LeaveFlowTable";
-import { leaveFlowConfigs } from "./leaveFlowConfig";
+import { LeaveWorkspacePage } from "./LeaveWorkspacePage";
 
 export function LeaveInProgressPage() {
-  return <LeaveFlowTable config={leaveFlowConfigs.inProgress} />;
+  return <LeaveWorkspacePage initialTab="inProgress" />;
 }
+
