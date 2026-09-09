@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Save, Play, Users, Lock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, Play, Users, Lock } from "lucide-react";
 
 import { DataTable } from "../../../components/ui/DataTable";
 import { Button } from "../../../components/ui/Button";
@@ -9,6 +9,7 @@ import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../state/AuthContext";
 import { DynamicDropDown } from "../api/DynamicDropDown";
 import { DynamicQueryParams, getDynamicLookup } from "../../../api/lookups";
+import { api } from "../../../api/client";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -23,10 +24,6 @@ function formatDateForInput(d: Date | string | null | undefined): string {
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function newRowKey(): string {
-  return `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -68,19 +65,7 @@ export interface PayrollEmployeeRow {
   adv_paid: string | number | null;
   _isNew?: boolean;
   _rowKey?: string;
-  /** True when this row's employee came from the header Emp Code filter and
-   *  therefore doesn't need to be (re)selected at the row level. */
   _employeeLocked?: boolean;
-}
-
-export interface PayrollProcessingSavePayload {
-  companyCode: string;
-  divCode: string;
-  deptCode: string;
-  sectionCode: string;
-  payDate: string;
-  userId: string;
-  rows: PayrollEmployeeRow[];
 }
 
 export interface ApiResponse<T = unknown> {
@@ -105,25 +90,88 @@ async function fetchPayrollProcessingData(params: {
     parameter: "MST_HR_PAYROLL_PROCESSING_MAIN_PAGE_DATA",
     loginid: params.loginId || "",
     code1: params.companyCode || "",
-    code2: `${params.divCode || ""}|${params.deptCode || ""}`, // div|dept combined
+    code2: `${params.divCode || ""}|${params.deptCode || ""}`,
     code3: params.sectionCode || "",
-    code4: params.payDate, // date as 'YYYY-MM-DD' text, no P_DATE1 involved
+    code4: params.payDate,
   };
 
   const rows = await getDynamicLookup(queryParams);
-  return (rows ?? []) as [];
+return (rows ?? []) as unknown as PayrollEmployeeRow[];
 }
 
-async function savePayrollProcessing(
-  payload: PayrollProcessingSavePayload
+async function deleteAccrualTempData(
+  companyCode: string,
+  divCode: string,
+  loginId?: string
 ): Promise<ApiResponse> {
-  // keep your existing save endpoint or adapt as needed
-  const { data } = await (await import("axios")).default.post<ApiResponse>(
-    "/api/hr/payroll-processing/save",
-    payload
-  );
-  if (!data.success) throw new Error(data.message || "Failed to save");
-  return data;
+  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+    parameter: "PROC_PROLLPROC_HR_ACCRUAL_TEMP_DATA_DEL",
+    loginid: loginId ?? "",
+    val1s1: companyCode,
+    val1s2: divCode,
+  });
+  if (!res.data.success)
+    throw new Error(res.data.message || "Failed to clear accrual temp data");
+  return res.data;
+}
+
+
+async function processEmployeePayroll(
+  companyCode: string,
+  divCode: string,
+  employeeId: string | number,
+  loginId: string,
+  sourceFlag: string
+): Promise<ApiResponse> {
+  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+    parameter: "SP_HR_EMP_PAYROLL_PROCESS",
+    loginid: loginId,
+    val1s1: companyCode,
+    val1s2: divCode,
+    val1s3: String(employeeId),
+    val1s4: loginId,
+    val1s5: sourceFlag,
+  });
+  if (!res.data.success)
+    throw new Error(res.data.message || "Failed to process employee payroll");
+  return res.data;
+}
+
+async function calcEmployeeSalary(
+  companyCode: string,
+  divCode: string,
+  employeeId: string | number,
+  loginId: string,
+  sourceFlag: string
+): Promise<ApiResponse> {
+  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+    parameter: "SP_HR_PAY_CALC_EMP_SAL",
+    loginid: loginId,
+    val1s1: companyCode,
+    val1s2: divCode,
+    val1s3: String(employeeId),
+    val1s4: loginId,
+    val1s5: sourceFlag,
+  });
+  if (!res.data.success)
+    throw new Error(res.data.message || "Failed to calculate employee salary");
+  return res.data;
+}
+
+
+
+async function adjustPayColaForCompany(
+  companyCode: string,
+  loginId: string
+): Promise<ApiResponse> {
+  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+    parameter: "SP_HR_PAY_COLA_ADJUST",
+    loginid: loginId,
+    val1s1: companyCode,
+  });
+  if (!res.data.success)
+    throw new Error(res.data.message || "Failed to adjust pay COLA");
+  return res.data;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -132,9 +180,9 @@ async function savePayrollProcessing(
 
 export default function PayrollProcessingPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
   const companyCode = user?.company_code ?? "";
+  const loginid = user?.loginid ?? "";
 
   // Filters
   const [divCode, setDivCode] = useState("");
@@ -145,8 +193,6 @@ export default function PayrollProcessingPage() {
   const [sectionName, setSectionName] = useState("");
   const [empId, setEmpId] = useState("");
   const [empName, setEmpName] = useState("");
-  // Full employee record from the header dropdown — lets new rows inherit
-  // every field (grade, designation, etc.) without a second lookup.
   const [empRow, setEmpRow] = useState<any | null>(null);
   const [payDate, setPayDate] = useState(todayISO());
 
@@ -170,7 +216,7 @@ export default function PayrollProcessingPage() {
     ],
     queryFn: () =>
       fetchPayrollProcessingData({
-        loginId: user?.loginid ?? "",
+        loginId: loginid,
         companyCode,
         divCode: divCode || "",
         deptCode: deptCode || "",
@@ -205,53 +251,8 @@ export default function PayrollProcessingPage() {
     setHasLoaded(true);
   }, [loadQuery.data, empId]);
 
-  /* ── Save ──────────────────────────────────────────────────────────────── */
-  const saveMutation = useMutation({
-    mutationFn: savePayrollProcessing,
-    onSuccess: (res) => {
-      alert(res.message || "Saved successfully.");
-      queryClient.invalidateQueries({ queryKey: ["payrollProcessing"] });
-    },
-    onError: (err: Error) => {
-      alert(err.message || "Save failed.");
-    },
-  });
-
-  // const handleSave = useCallback(() => {
-  //   if (!companyCode || !payDate) {
-  //     alert("Company and Payroll Date are required.");
-  //     return;
-  //   }
-  //   const invalid = rows.filter(
-  //     (r) => r._isNew && !r.employee_id && !r.employee_code
-  //   );
-  //   if (invalid.length) {
-  //     alert("Please select an employee for every newly added row before saving.");
-  //     return;
-  //   }
-  //   saveMutation.mutate({
-  //     companyCode,
-  //     divCode: divCode || "",
-  //     deptCode: deptCode || "",
-  //     sectionCode: sectionCode || "",
-  //     payDate,
-  //     userId: user?.loginid ?? "",
-  //     rows,
-  //   });
-  // }, [
-  //   companyCode,
-  //   divCode,
-  //   deptCode,
-  //   sectionCode,
-  //   payDate,
-  //   rows,
-  //   user,
-  //   saveMutation,
-  // ]);
-
-
-
-const handleProcessPayroll = useCallback(async () => {
+  /* ── Process Payroll ───────────────────────────────────────────────────── */
+  const handleProcessPayroll = useCallback(async () => {
   if (!divCode) {
     alert("Division is required.");
     return;
@@ -259,19 +260,44 @@ const handleProcessPayroll = useCallback(async () => {
   if (selectedRows.length === 0) return;
 
   try {
+    await deleteAccrualTempData(companyCode, divCode, loginid);
+
     const checkRows = await getDynamicLookup({
       parameter: "PAYROLL_Process",
       code1: companyCode,
     });
 
     const checkValue = Number(
-      (checkRows?.[0] as any)?.check_value ?? (checkRows?.[0] as any)?.CHECK_VALUE ?? 0
+      (checkRows?.[0] as any)?.check_value ??
+        (checkRows?.[0] as any)?.CHECK_VALUE ??
+        0
     );
 
     if (checkValue !== 0) {
       alert("Memo mismatch found. Please resolve before processing payroll.");
       return;
     }
+
+
+    for (const row of selectedRows) {
+      await processEmployeePayroll(
+        companyCode,
+        divCode,
+        row.employee_id,
+        loginid,
+        "P" 
+      );
+
+      await calcEmployeeSalary(
+    companyCode,
+    divCode,
+    row.employee_id,
+    loginid,
+    "P"
+  );
+    }
+
+     await adjustPayColaForCompany(companyCode, loginid);
 
     setRows((prev) =>
       prev.map((r) =>
@@ -284,103 +310,12 @@ const handleProcessPayroll = useCallback(async () => {
           : r
       )
     );
-    alert(
-      `${selectedRows.length} employee(s) marked for process. Click Save to persist.`
-    );
+
+    alert(`${selectedRows.length} employee(s) marked for process.`);
   } catch (err) {
-    alert((err as Error).message || "Failed to check payroll memo status.");
+    alert((err as Error).message || "Failed to process payroll.");
   }
-}, [divCode, companyCode, selectedRows]);
-
-
-
-
-
-  /* ── Add blank row ─────────────────────────────────────────────────────── */
-  // const handleAdd = useCallback(() => {
-  //   const base: PayrollEmployeeRow = {
-  //     select_emp: 1,
-  //     employee_code: "",
-  //     rpt_name: "",
-  //     grade_name: null,
-  //     desg_name: null,
-  //     div_name: divName || null,
-  //     dept_name: deptName || null,
-  //     section_name: sectionName || null,
-  //     employee_id: "",
-  //     desg_code: null,
-  //     grade_code: null,
-  //     gender: null,
-  //     nationality: null,
-  //     mobile_no: null,
-  //     payment_mode: null,
-  //     category_code: null,
-  //     category_name: null,
-  //     airport_code: null,
-  //     company_code: companyCode,
-  //     comp_name: null,
-  //     div_code: divCode || null,
-  //     dept_code: deptCode || null,
-  //     section_code: sectionCode || null,
-  //     user_id: user?.loginid ?? null,
-  //     user_dt: new Date(),
-  //     join_date: null,
-  //     div_payroll_date: null,
-  //     emp_status: null,
-  //     include_in_payroll: "Y",
-  //     processed: 0,
-  //     sal_processed: 0,
-  //     adv_paid: "N",
-  //     _isNew: true,
-  //     _rowKey: newRowKey(),
-  //   };
-
-  //   // If an employee is already selected at the header (Emp Code filter),
-  //   // the new row inherits it directly — no second selection needed.
-  //   const blank: PayrollEmployeeRow = hasHeaderEmployee
-  //     ? {
-  //         ...base,
-  //         employee_id: empRow?.employee_id ?? empRow?.value ?? empId,
-  //         employee_code: empRow?.employee_code ?? "",
-  //         rpt_name: empRow?.rpt_name ?? empName,
-  //         grade_name: empRow?.grade_name ?? null,
-  //         grade_code: empRow?.grade_code ?? null,
-  //         desg_name: empRow?.desg_name ?? null,
-  //         desg_code: empRow?.desg_code ?? null,
-  //         div_code: empRow?.div_code ?? base.div_code,
-  //         div_name: empRow?.div_name ?? base.div_name,
-  //         dept_code: empRow?.dept_code ?? base.dept_code,
-  //         dept_name: empRow?.dept_name ?? base.dept_name,
-  //         section_code: empRow?.section_code ?? base.section_code,
-  //         section_name: empRow?.section_name ?? base.section_name,
-  //         company_code: empRow?.company_code ?? base.company_code,
-  //         join_date: empRow?.join_date ?? null,
-  //         emp_status: empRow?.emp_status ?? null,
-  //         include_in_payroll: empRow?.include_in_payroll ?? "Y",
-  //         gender: empRow?.gender ?? null,
-  //         nationality: empRow?.nationality ?? null,
-  //         mobile_no: empRow?.mobile_no ?? null,
-  //         _employeeLocked: true,
-  //       }
-  //     : base;
-
-  //   setRows((prev) => [blank, ...prev]);
-  //   setHasLoaded(true);
-  // }, [
-  //   companyCode,
-  //   divCode,
-  //   divName,
-  //   deptCode,
-  //   deptName,
-  //   sectionCode,
-  //   sectionName,
-  //   user,
-  //   hasHeaderEmployee,
-  //   empRow,
-  //   empId,
-  //   empName,
-  // ]);
-
+}, [divCode, companyCode, loginid, selectedRows]);
   /* ── Cascade handlers ──────────────────────────────────────────────────── */
   const onDivChange = (value: string, row: any) => {
     setDivCode(value);
@@ -408,11 +343,6 @@ const handleProcessPayroll = useCallback(async () => {
     setSectionCode(value);
     setSectionName(row?.section_name ?? row?.name ?? "");
 
-    // The section lookup only returns div_code/dept_code, not their names.
-    // Auto-select Division/Department from those codes so a user can pick
-    // Section first without choosing Division/Department beforehand.
-    // Fall back to showing the code itself until DynamicDropDown resolves
-    // the real name for that value (or until row-level data supplies it).
     if (row?.div_code) {
       setDivCode(row.div_code);
       setDivName(row.div_name ?? row.div_code);
@@ -427,14 +357,6 @@ const handleProcessPayroll = useCallback(async () => {
     setEmpRow(null);
   };
 
-  // Header-level employee selector — this is the single source of truth.
-  // Selecting here "locks" the employee for any row subsequently added,
-  // so the same person never has to be picked again at the row level.
-  //
-  // It also back-fills Division / Department / Section from the employee's
-  // own record. This lets a user pick the employee FIRST — without having
-  // selected Division/Department beforehand — and have those fields
-  // auto-select themselves from the employee's assigned org unit.
   const onEmpChange = (value: string, row: any) => {
     setEmpId(value);
     setEmpName(row?.rpt_name ?? row?.name ?? "");
@@ -536,8 +458,6 @@ const handleProcessPayroll = useCallback(async () => {
         cell: ({ row }) => {
           const r = row.original;
 
-          // Employee already fixed by the header Emp Code filter —
-          // display only, nothing to select here.
           if (r._isNew && r._employeeLocked) {
             return (
               <div className="flex min-w-[180px] items-center gap-1.5 text-[13px] text-[#101828]">
@@ -697,7 +617,7 @@ const handleProcessPayroll = useCallback(async () => {
     [companyCode, divCode, deptCode, sectionCode, updateNewRowEmployee, updateRow]
   );
 
-  const loading = loadQuery.isFetching || saveMutation.isPending;
+  const loading = loadQuery.isFetching;
   const employeeCount = rows.length;
 
   return (
@@ -717,7 +637,6 @@ const handleProcessPayroll = useCallback(async () => {
       {/* Filters */}
       <div className="rounded-lg border border-[#E3E6EB] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {/* Division */}
           <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
             <span>
               Division <span className="text-[#DC2626]">*</span>
@@ -732,7 +651,6 @@ const handleProcessPayroll = useCallback(async () => {
             />
           </label>
 
-          {/* Department */}
           <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
             <span>
               Department <span className="text-[#DC2626]">*</span>
@@ -748,7 +666,6 @@ const handleProcessPayroll = useCallback(async () => {
             />
           </label>
 
-          {/* Section */}
           <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
             <span>
               Section <span className="text-[#DC2626]">*</span>
@@ -765,10 +682,6 @@ const handleProcessPayroll = useCallback(async () => {
             />
           </label>
 
-          {/* Emp Code — header-level employee. Once set, new rows inherit
-              it automatically and skip employee selection entirely.
-              Selecting an employee also auto-fills Division/Department/
-              Section from that employee's own record. */}
           <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
             <span className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5 text-[#98A2B3]" />
@@ -800,7 +713,6 @@ const handleProcessPayroll = useCallback(async () => {
             </div>
           </label>
 
-          {/* Payroll Date */}
           <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
             <span>
               Payroll Date <span className="text-[#DC2626]">*</span>
@@ -831,71 +743,16 @@ const handleProcessPayroll = useCallback(async () => {
             </span>
           )}
 
-          {/* <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="border-[#E3E6EB] text-[#344054] hover:bg-[#F2F4F7]"
-            disabled={loading}
-            onClick={handleAdd}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add
-          </Button> */}
-
           <Button
-            type="button"
-            size="sm"
-            className="bg-[#4F46E5] text-white hover:bg-[#4338CA]"
-            disabled={!hasLoaded || loading}
-            //onClick={handleSave}
-          >
-            {saveMutation.isPending ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-1.5 h-4 w-4" />
-            )}
-            Save
-          </Button>
-
-          {/* <Button
             type="button"
             size="sm"
             className="bg-[#101828] text-white hover:bg-[#1D2939]"
             disabled={!hasLoaded || loading || selectedRows.length === 0}
-            onClick={() => {
-              setRows((prev) =>
-                prev.map((r) =>
-                  selectedRows.some(
-                    (s) =>
-                      (s._rowKey && s._rowKey === r._rowKey) ||
-                      (s.employee_id && s.employee_id === r.employee_id)
-                  )
-                    ? { ...r, processed: 1, select_emp: 1 }
-                    : r
-                )
-              );
-              alert(
-                `${selectedRows.length} employee(s) marked for process. Click Save to persist.`
-              );
-            }}
+            onClick={handleProcessPayroll}
           >
             <Play className="mr-1.5 h-4 w-4" />
             Process Payroll
-          </Button> */}
-
-            <Button
-  type="button"
-  size="sm"
-  className="bg-[#101828] text-white hover:bg-[#1D2939]"
-  disabled={!hasLoaded || loading || selectedRows.length === 0}
-  onClick={handleProcessPayroll}
->
-  <Play className="mr-1.5 h-4 w-4" />
-  Process Payroll
-</Button>
-
-
+          </Button>
         </div>
       </div>
 
