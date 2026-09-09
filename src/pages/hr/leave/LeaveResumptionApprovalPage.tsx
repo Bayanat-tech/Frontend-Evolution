@@ -1,4 +1,4 @@
-import { Pencil, RefreshCw } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuth } from "../../../state/AuthContext";
@@ -151,11 +151,6 @@ export function LeaveResumptionApprovalPage() {
         <div>
           <p className="eyebrow">HR</p>
           <h1 className="m-0 text-2xl font-semibold text-foreground">Leave Resumption Approval</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
         </div>
       </div>
 

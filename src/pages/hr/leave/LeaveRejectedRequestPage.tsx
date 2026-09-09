@@ -1,6 +1,6 @@
-import { LeaveFlowTable } from "./LeaveFlowTable";
-import { leaveFlowConfigs } from "./leaveFlowConfig";
+import { LeaveWorkspacePage } from "./LeaveWorkspacePage";
 
 export function LeaveRejectedRequestPage() {
-  return <LeaveFlowTable config={leaveFlowConfigs.rejected} />;
+  return <LeaveWorkspacePage initialTab="rejected" />;
 }
+

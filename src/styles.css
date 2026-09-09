@@ -8552,19 +8552,36 @@ freight-dense-form .freight-form-card {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  min-height: 44px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 8px;
-  padding: 6px;
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  min-height: 38px;
+  border-bottom: 1px solid #dbe3ee;
+  padding: 0 2px;
+  background: transparent;
 }
 
 .leave-workspace-tabs .ui-button {
-  min-height: 30px;
-  border-radius: 7px;
-  padding-inline: 10px;
+  min-height: 34px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding-inline: 11px;
+  color: #64748b;
   font-size: 12px;
+  font-weight: 650;
+  background: transparent;
+  box-shadow: none;
+}
+
+.leave-workspace-tabs .ui-button:hover {
+  color: #0b4fb3;
+  background: #f1f6fd;
+}
+
+.leave-workspace-tabs .ui-button.bg-primary,
+.leave-workspace-tabs .ui-button[data-state="active"] {
+  border-bottom-color: #0b4fb3;
+  color: #0b4fb3;
+  background: transparent;
+  box-shadow: none;
 }
 
 .leave-flow-header {
@@ -8572,14 +8589,12 @@ freight-dense-form .freight-form-card {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-height: 58px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  min-height: 48px;
+  border: 1px solid #dbe3ee;
   border-radius: 8px;
-  padding: 10px 14px;
-  background:
-    linear-gradient(135deg, rgba(11, 79, 179, 0.08), rgba(255, 255, 255, 0.96) 48%, rgba(20, 184, 166, 0.06)),
-    #ffffff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  padding: 8px 12px;
+  background: linear-gradient(110deg, #f4f8fd, #ffffff 58%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
 .leave-flow-eyebrow {
@@ -8629,6 +8644,10 @@ freight-dense-form .freight-form-card {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+}
+
+.leave-flow-page .data-table-header {
+  min-height: 44px;
 }
 
 .leave-flow-page .data-table-header,
