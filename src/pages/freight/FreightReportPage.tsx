@@ -111,7 +111,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Customer freight requirements captured before RFQ or quotation.",
     icon: FileSpreadsheet,
     amountFields: [],
-    filters: ["date", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status"],
     advancedFilters: ["principalRange", "documentRange", "portRange", "scheduleDate", "variant"],
     primaryMetric: "Enquiries",
     columns: [
@@ -133,7 +133,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Request-for-quote register sourced from approved enquiries.",
     icon: FileSpreadsheet,
     amountFields: [],
-    filters: ["date", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status"],
     advancedFilters: ["principalRange", "documentRange", "portRange", "scheduleDate", "variant"],
     primaryMetric: "RFQs",
     columns: [
@@ -153,7 +153,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Customer quotation register with cost, sell, and margin.",
     icon: BarChart3,
     amountFields: ["TOTAL_SELL", "TOTAL_COST", "PROFIT"],
-    filters: ["date", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status"],
     advancedFilters: ["principalRange", "documentRange", "portRange", "scheduleDate", "variant"],
     primaryMetric: "Quotations",
     columns: [
@@ -175,7 +175,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Operational jobs created from approved freight quotations.",
     icon: Ship,
     amountFields: [],
-    filters: ["date", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status"],
     advancedFilters: ["jobRange", "principalRange", "confirmDate", "departmentRange", "variant"],
     primaryMetric: "Jobs",
     columns: [
@@ -197,7 +197,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Job profitability with revenue, expense, and margin control.",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PARTNERS_SHARE", "TRANSPORT_PRICE", "PROFIT"],
-    filters: ["date", "search"],
+    filters: ["date"],
     advancedFilters: ["principalRange", "division", "periodMode", "variant"],
     primaryMetric: "Profit",
     columns: [
@@ -218,7 +218,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Cost lines posted against freight job activities.",
     icon: BarChart3,
     amountFields: ["EXPENSE"],
-    filters: ["date", "search"],
+    filters: ["date"],
     advancedFilters: ["principalRange", "division", "periodMode"],
     primaryMetric: "Expense",
     columns: [
@@ -239,7 +239,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Billing and revenue lines posted against freight jobs.",
     icon: BarChart3,
     amountFields: ["REVENUE"],
-    filters: ["date", "search"],
+    filters: ["date"],
     advancedFilters: ["principalRange", "division", "periodMode", "variant"],
     primaryMetric: "Revenue",
     columns: [
@@ -260,7 +260,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Broker-linked jobs and brokerage base values.",
     icon: WalletCards,
     amountFields: ["BROKERAGE_BASE"],
-    filters: ["date", "search"],
+    filters: ["date"],
     advancedFilters: ["brokerRange", "division", "periodMode", "variant"],
     primaryMetric: "Brokerage",
     columns: [
@@ -280,7 +280,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Shipment query with invoice, vessel, BL, container, and date filters.",
     icon: FileSpreadsheet,
     amountFields: [],
-    filters: ["date", "mode", "type", "search"],
+    filters: ["date", "mode", "type"],
     advancedFilters: ["principalRange", "jobRange", "invoice", "vessel", "voyage", "container", "bl", "be", "etaDate", "ataDate", "scheduleDate", "portRange", "docRef", "po"],
     primaryMetric: "Rows",
     columns: [
@@ -344,7 +344,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Mode-wise summary/detail report with PB commercial filters.",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
-    filters: ["date", "mode", "type", "search"],
+    filters: ["date", "mode", "type"],
     advancedFilters: ["principalRange", "division", "summaryParties", "classification", "periodMode", "variant"],
     primaryMetric: "Rows",
     columns: [
@@ -368,7 +368,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "PowerBuilder shipment tracking details by principal and freight job.",
     icon: Ship,
     amountFields: [],
-    filters: ["search"],
+    filters: [],
     advancedFilters: ["principalRange", "jobRange"],
     primaryMetric: "Shipments",
     columns: [
@@ -386,7 +386,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Confirmed freight jobs and daily container/document activity.",
     icon: CalendarDays,
     amountFields: [],
-    filters: ["date", "search"],
+    filters: ["date"],
     advancedFilters: ["principalRange", "jobRange"],
     primaryMetric: "Jobs",
     columns: [
@@ -402,7 +402,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "PowerBuilder expected-time-of-departure report for export shipments.",
     icon: Ship,
     amountFields: [],
-    filters: ["date", "status", "search"],
+    filters: ["date", "status"],
     advancedFilters: ["principalRange", "jobRange", "portRange"],
     primaryMetric: "Shipments",
     columns: [
@@ -419,7 +419,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "PowerBuilder expected-time-of-arrival report for sea-import shipments.",
     icon: Ship,
     amountFields: [],
-    filters: ["date", "status", "search"],
+    filters: ["date", "status"],
     advancedFilters: ["principalRange", "jobRange", "portRange"],
     primaryMetric: "Shipments",
     columns: [
@@ -436,7 +436,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "PowerBuilder representative-wise petty cash statement and running balance.",
     icon: WalletCards,
     amountFields: ["CREDIT", "DEBIT", "BALANCE"],
-    filters: ["date", "search"],
+    filters: ["date"],
     advancedFilters: ["principalRange", "jobRange", "pettyDocumentRange", "cashier"],
     primaryMetric: "Balance",
     columns: [
@@ -757,6 +757,18 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           <SummaryStripItem icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
         </div>
 
+        {!!config.advancedFilters?.length && (
+          <AdvancedReportFilters
+            phase="before"
+            config={config}
+            companyCode={companyCode}
+            filters={filters}
+            setFilters={setFilters}
+            principalOptions={principalOptions}
+            principalOptionsLoading={principalOptionsLoading}
+          />
+        )}
+
         <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
           {visibleFilters.includes("date") && (
             <>
@@ -818,6 +830,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
 
         {!!config.advancedFilters?.length && (
           <AdvancedReportFilters
+            phase="after"
             config={config}
             companyCode={companyCode}
             filters={filters}
@@ -889,6 +902,7 @@ function Select({
 }
 
 function AdvancedReportFilters({
+  phase,
   config,
   companyCode,
   filters,
@@ -896,6 +910,7 @@ function AdvancedReportFilters({
   principalOptions,
   principalOptionsLoading,
 }: {
+  phase: "before" | "after";
   config: ReportConfig;
   companyCode: string;
   filters: ReportFilters;
@@ -903,12 +918,20 @@ function AdvancedReportFilters({
   principalOptions: MultiSelectOption[];
   principalOptionsLoading: boolean;
 }) {
-  const items = config.advancedFilters || [];
+  const leadingItems = new Set<AdvancedFilterKey>([
+    "principalRange",
+    "brokerRange",
+    "jobRange",
+    "documentRange",
+    "departmentRange",
+    "portRange",
+  ]);
+  const items = (config.advancedFilters || []).filter((item) =>
+    phase === "before" ? leadingItems.has(item) : !leadingItems.has(item),
+  );
+  if (!items.length) return null;
   return (
-    <div className="freight-report-advanced border-t bg-background p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Advanced Filters</div>
-      </div>
+    <div className="freight-report-criteria bg-background px-3 pb-3">
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {items.includes("principalRange") && (
           <MultiSelectField

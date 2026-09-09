@@ -2159,10 +2159,12 @@ footer,
 }
 
 .workspace {
-  height: 100vh;        /* was: min-height: 100vh */
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   background: var(--bg);
-  overflow: hidden;      /* new */
+  overflow: hidden;
 }
 
 body.mobile-menu-lock {
@@ -2178,12 +2180,14 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   width: var(--app-sidebar-width);
   min-width: var(--app-sidebar-width);
   max-width: var(--app-sidebar-width);
-  height: 100vh;         /* was: min-height: 100vh */
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--panel);
   border-right: 1px solid var(--border);
-  overflow-x: hidden;
+  overflow: hidden;
   transition: width 0.18s ease;
   padding-top: var(--app-sidebar-top-height);
 }
@@ -2426,7 +2430,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   gap: 9px;
   padding: 10px 12px 12px;
   border-top: 0;
-  background: linear-gradient(180deg, rgba(248, 251, 255, 0), var(--panel));
+  background: var(--panel);
 }
 
 .sidebar-company-card {
@@ -4886,10 +4890,12 @@ freight-dense-form .freight-form-card {
 .workspace-main {
   flex: 1;
   min-width: 0;
-  height: 100vh;          /* new */
-  display: flex;           /* new */
-  flex-direction: column;  /* new */
-  overflow: hidden;        /* new */
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .mobile-appbar,
@@ -8546,19 +8552,36 @@ freight-dense-form .freight-form-card {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  min-height: 44px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 8px;
-  padding: 6px;
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  min-height: 38px;
+  border-bottom: 1px solid #dbe3ee;
+  padding: 0 2px;
+  background: transparent;
 }
 
 .leave-workspace-tabs .ui-button {
-  min-height: 30px;
-  border-radius: 7px;
-  padding-inline: 10px;
+  min-height: 34px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding-inline: 11px;
+  color: #64748b;
   font-size: 12px;
+  font-weight: 650;
+  background: transparent;
+  box-shadow: none;
+}
+
+.leave-workspace-tabs .ui-button:hover {
+  color: #0b4fb3;
+  background: #f1f6fd;
+}
+
+.leave-workspace-tabs .ui-button.bg-primary,
+.leave-workspace-tabs .ui-button[data-state="active"] {
+  border-bottom-color: #0b4fb3;
+  color: #0b4fb3;
+  background: transparent;
+  box-shadow: none;
 }
 
 .leave-flow-header {
@@ -8566,14 +8589,12 @@ freight-dense-form .freight-form-card {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-height: 58px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  min-height: 48px;
+  border: 1px solid #dbe3ee;
   border-radius: 8px;
-  padding: 10px 14px;
-  background:
-    linear-gradient(135deg, rgba(11, 79, 179, 0.08), rgba(255, 255, 255, 0.96) 48%, rgba(20, 184, 166, 0.06)),
-    #ffffff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  padding: 8px 12px;
+  background: linear-gradient(110deg, #f4f8fd, #ffffff 58%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
 .leave-flow-eyebrow {
@@ -8623,6 +8644,10 @@ freight-dense-form .freight-form-card {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+}
+
+.leave-flow-page .data-table-header {
+  min-height: 44px;
 }
 
 .leave-flow-page .data-table-header,
@@ -9662,10 +9687,28 @@ freight-dense-form .freight-form-card {
 
 
 /* Compact workspace navigation and account area. */
-.workspace > .sidebar { padding-top: 0; }
-.workspace .sidebar-section-heading { min-height: 52px; padding: 10px 14px 9px; }
+.workspace > .sidebar {
+  padding-top: 0;
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.workspace .sidebar-section-heading {
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: 10px 14px 9px;
+}
 .workspace .sidebar-label { letter-spacing: .08em; line-height: 1.5; }
-.workspace .sidebar-nav { min-height: 0; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.workspace .sidebar-nav {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 10px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 .workspace .sidebar-nav > .nav-group { margin-bottom: 3px; }
 .workspace .nav-item.nav-level-1 { min-height: 38px; border-radius: 8px; padding: 8px 10px; }
 .workspace .nav-item.nav-level-2 { min-height: 32px; border-radius: 6px; }
@@ -9676,10 +9719,26 @@ freight-dense-form .freight-form-card {
 .app.dark .workspace .sidebar .nav-item.active:hover { background: #123d30; color: #6ee7b7; }
 .app.dark .workspace .sidebar .nav-item.active .nav-bullet { background: #6ee7b7; }
 .workspace .nav-item.branch-active { color: var(--text); background: var(--panel-soft); }
-.workspace .sidebar-footer { flex-shrink: 0; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--panel); }
+.workspace .sidebar-footer {
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
 .workspace .sidebar-switch-module { min-height: 36px; justify-content: flex-start; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: none; font-size: 12px; font-weight: 500; }
 .workspace .sidebar-switch-module:hover { background: var(--panel-soft); }
-.sidebar-footer .sidebar-account { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.sidebar-footer .sidebar-account,
+.sidebar-footer .header-user-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .sidebar-account .header-user { grid-column: 1 / -1; grid-row: 1; display: flex; width: 100%; min-width: 0; padding: 8px; gap: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-soft); text-align: left; }
 .sidebar-account .avatar { width: 32px; height: 32px; flex: 0 0 32px; background: var(--primary); color: white; font-size: 11px; border-radius: 9px; }
 .sidebar-account .header-user-copy { display: grid; gap: 2px; min-width: 0; }

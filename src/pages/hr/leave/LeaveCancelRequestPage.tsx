@@ -1,6 +1,6 @@
-import { LeaveFlowTable } from "./LeaveFlowTable";
-import { leaveFlowConfigs } from "./leaveFlowConfig";
+import { LeaveWorkspacePage } from "./LeaveWorkspacePage";
 
 export function LeaveCancelRequestPage() {
-  return <LeaveFlowTable config={leaveFlowConfigs.cancelled} />;
+  return <LeaveWorkspacePage initialTab="cancelled" />;
 }
+
