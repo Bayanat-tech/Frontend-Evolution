@@ -293,4 +293,4 @@ function formatDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("en-GB");
 }
 
-export default LeaveResumptionApprovalPage;
+export default LeaveResumptionApprovalPage;
