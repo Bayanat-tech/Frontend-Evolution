@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle2, Eye, FileDown, Pencil, RefreshCw, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FileDown, Pencil, Search, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getHrLeaveFlow } from "../../../api/hr";
@@ -149,16 +149,6 @@ export function LeaveFlowTable({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {headerActions}
-          <button
-            type="button"
-            onClick={() => void loadRows(true)}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary text-xs font-medium cursor-pointer transition-all shadow-sm"
-            title="Refresh"
-          >
-            <RefreshCw size={13} className={loading ? "animate-spin text-primary" : ""} />
-            Refresh
-          </button>
         </div>
       </div>
 

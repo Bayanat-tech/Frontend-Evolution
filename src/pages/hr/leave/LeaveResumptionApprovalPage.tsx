@@ -25,39 +25,54 @@ export function LeaveResumptionApprovalPage() {
   const [editData, setEditData] = useState<TLeaveApproval | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
-  const buildSql = (login: string) => `
+  const compCode = String(user?.COMPANY_CODE || user?.company_code || "00001");
+
+  const buildSql = (login: string, comp: string) => `
     SELECT *
     FROM VW_LEAVE_REQUEST_FLOW_CLOSE
-    WHERE COMPANY_CODE = '${user?.company_code}'
-    AND ( ACTUAL_RESUME_DATE IS NULL
-      AND RESUME_DATE_APPROVED IS NULL
-      AND FINAL_APPROVED = 'YES'
-      AND CREATED_BY = '${login}')
-    OR (ACTUAL_RESUME_DATE IS NOT NULL
-      AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO'
-      AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+    WHERE (COMPANY_CODE = '${comp}' OR '${comp}' = '')
+    AND (
+      (ACTUAL_RESUME_DATE IS NULL
+        AND RESUME_DATE_APPROVED IS NULL
+        AND FINAL_APPROVED = 'YES'
+        AND CREATED_BY = '${login}')
+      OR (ACTUAL_RESUME_DATE IS NOT NULL
+        AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO'
+        AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+    )
   `;
 
-    const loadRows = async () => {
-        if (!loginId) {
-        setRows([]);
-        toast.error("Login id is missing for leave resumption lookup");
-        return;
-        }
-        setLoading(true);
-        try {
-        const response = await executeHrRawSql(buildSql(loginId));
-        setRows((response ?? []) as TLeaveApproval[]);
-        } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Unable to load leave resumption approvals");
-        } finally {
-        setLoading(false);
-        }
-    };
+  const loadRows = async () => {
+    if (!loginId) {
+      setRows([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await executeHrRawSql(buildSql(loginId, compCode));
+      setRows((response ?? []) as TLeaveApproval[]);
+    } catch (error) {
+      console.warn("Unable to load leave resumption approvals with company code filter:", error);
+      try {
+        const fallbackSql = `
+          SELECT *
+          FROM VW_LEAVE_REQUEST_FLOW_CLOSE
+          WHERE (ACTUAL_RESUME_DATE IS NULL AND RESUME_DATE_APPROVED IS NULL AND FINAL_APPROVED = 'YES' AND CREATED_BY = '${loginId}')
+             OR (ACTUAL_RESUME_DATE IS NOT NULL AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO' AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+        `;
+        const fallbackRes = await executeHrRawSql(fallbackSql);
+        setRows((fallbackRes ?? []) as TLeaveApproval[]);
+      } catch (fallbackError) {
+        console.warn("Fallback query also failed:", fallbackError);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     void loadRows();
-  }, [loginId]);
+  }, [loginId, compCode]);
 
   const openEdit = async (requestNumber: string) => {
     setSelectedRequestNumber(requestNumber);
@@ -146,14 +161,7 @@ export function LeaveResumptionApprovalPage() {
   );
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="eyebrow">HR</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Leave Resumption Approval</h1>
-        </div>
-      </div>
-
+    <section className="grid gap-2">
       <DataTable
         columns={columns}
         data={rows}

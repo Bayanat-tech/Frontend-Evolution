@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Eye, Pencil, Plus, Printer, RefreshCw } from "lucide-react";
+import { Eye, Pencil, Plus, Printer } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { getHrLeaveFlow } from "../../../api/hr";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -344,7 +344,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         enableColumnFilter: false,
         cell: ({ row }) => {
           const tabKey = (row.original._inferredTab as LeaveFlowKey) || activeTab;
-          const isPending = tabKey === "request" || tabKey === "all";
+          const isPending = tabKey === "request" || activeTab === "all";
           return (
             <div className="flex items-center justify-center gap-1">
               <button
@@ -408,16 +408,6 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
               {notice.message}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => void loadAllData(true)}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary text-xs font-medium cursor-pointer transition-all shadow-sm"
-            title="Refresh leave requests"
-          >
-            <RefreshCw size={13} className={loading ? "animate-spin text-primary" : ""} />
-            Refresh
-          </button>
         </div>
       </div>
 
@@ -455,26 +445,14 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         columns={columns}
         data={currentRows}
         toolbar={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void loadAllData(true)}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary text-xs font-medium cursor-pointer transition-all shadow-sm"
-              title="Refresh"
-            >
-              <RefreshCw size={13} className={loading ? "animate-spin text-primary" : ""} />
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={handleStartNew}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add Leave Request
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleStartNew}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Add Leave Request
+          </button>
         }
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}

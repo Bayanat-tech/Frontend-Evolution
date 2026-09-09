@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarDays, RefreshCw, Search, UserRound, X } from "lucide-react";
+import { CalendarDays, Search, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { executeHrRawSql, getHrEmployees, getHrLeaveHistory, type HrEmployee } from "../../../api/hr";
 import { Badge } from "../../../components/ui/Badge";
@@ -221,16 +221,6 @@ export function LeaveRegisterPage() {
               {notice.message}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => void loadRegister(true)}
-            disabled={loading || !employeeId}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary text-xs font-medium cursor-pointer transition-all shadow-sm"
-            title="Refresh leave register"
-          >
-            <RefreshCw size={13} className={loading ? "animate-spin text-primary" : ""} />
-            Refresh
-          </button>
         </div>
       </div>
 
