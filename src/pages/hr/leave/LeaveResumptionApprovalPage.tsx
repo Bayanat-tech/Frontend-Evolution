@@ -105,63 +105,146 @@ export function LeaveResumptionApprovalPage() {
   const columns = useMemo<ColumnDef<TLeaveApproval>[]>(
     () => [
       {
-        id: "actions",
-        header: "Actions",
-        size: 84,
+        accessorKey: "REQUEST_NUMBER",
+        header: "REQUEST NO",
+        size: 130,
         cell: ({ row }) => (
-          <Button
+          <button
+            className="font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
             type="button"
-            variant="outline"
-            size="icon"
-            title="Edit leave request"
-            aria-label="Edit leave request"
             onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
+            title="Edit leave request"
           >
-            <Pencil size={14} />
-          </Button>
+            {row.original.REQUEST_NUMBER || "-"}
+          </button>
         ),
       },
-      { accessorKey: "REQUEST_NUMBER", header: "No.", size: 250 },
       {
         accessorKey: "REQUEST_DATE",
-        header: "Request Date",
-        size: 130,
-        // cell: ({ row }) => formatDate(row.original.REQUEST_DATE),
+        header: "DATE",
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.REQUEST_DATE)}
+          </span>
+        ),
       },
-      { accessorKey: "EMPLOYEE_NAME_DISPLAY", header: "Employee Name", size: 220 },
-      { accessorKey: "LEAVE_TYPE_DESC", header: "Leave Type", size: 150 },
+      {
+        accessorKey: "EMPLOYEE_NAME_DISPLAY",
+        header: "EMPLOYEE NAME",
+        minSize: 180,
+        cell: ({ row }) => (
+          <div className="truncate" title={String(row.original.EMPLOYEE_NAME_DISPLAY || "")}>
+            <span className="text-[11.5px] text-foreground">{row.original.EMPLOYEE_NAME_DISPLAY || "-"}</span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "LEAVE_TYPE_DESC",
+        header: "LEAVE TYPE",
+        size: 140,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground font-medium">
+            {row.original.LEAVE_TYPE_DESC || "-"}
+          </span>
+        ),
+      },
       {
         accessorKey: "LEAVE_START_DATE",
-        header: "Leave Start Date",
-        size: 140,
-        // cell: ({ row }) => formatDate(row.original.LEAVE_START_DATE),
+        header: "START DATE",
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.LEAVE_START_DATE)}
+          </span>
+        ),
       },
       {
         accessorKey: "LEAVE_END_DATE",
-        header: "Leave End Date",
-        size: 140,
-        // cell: ({ row }) => formatDate(row.original.LEAVE_END_DATE),
+        header: "END DATE",
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.LEAVE_END_DATE)}
+          </span>
+        ),
       },
       {
         accessorKey: "ACTUAL_RESUME_DATE",
-        header: "Actual Resume Date",
-        size: 160,
-        // cell: ({ row }) => formatDate(row.original.ACTUAL_RESUME_DATE),
+        header: "ACTUAL RESUME",
+        size: 110,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.ACTUAL_RESUME_DATE)}
+          </span>
+        ),
       },
       {
         accessorKey: "DUTY_RESUME_DATE",
-        header: "Duty Resume Date",
-        size: 160,
-        // cell: ({ row }) => formatDate(row.original.DUTY_RESUME_DATE),
+        header: "DUTY RESUME",
+        size: 110,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.DUTY_RESUME_DATE)}
+          </span>
+        ),
       },
-      { accessorKey: "REMARKS", header: "Remarks", size: 150 },
-      { accessorKey: "NEXT_ACTION_BY_NAME", header: "Next Action By", size: 200 },
+      {
+        accessorKey: "REMARKS",
+        header: "REMARKS",
+        size: 150,
+        cell: ({ row }) => (
+          <div className="truncate" title={String(row.original.REMARKS || "")}>
+            <span className="text-[11.5px] text-muted-foreground">{row.original.REMARKS || "-"}</span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "NEXT_ACTION_BY_NAME",
+        header: "NEXT ACTION BY",
+        size: 160,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {row.original.NEXT_ACTION_BY_NAME || "-"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "ACTIONS",
+        size: 80,
+        enableColumnFilter: false,
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              title="Edit leave request"
+              aria-label="Edit leave request"
+              onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
+            >
+              <Pencil size={13} />
+            </button>
+          </div>
+        ),
+      },
     ],
-    [],
+    []
   );
 
   return (
-    <section className="grid gap-2">
+    <section className="leave-resumption-freight-view grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Leave Resumption
+          </h2>
+        </div>
+      </div>
+
       <DataTable
         columns={columns}
         data={rows}
@@ -171,12 +254,12 @@ export function LeaveResumptionApprovalPage() {
         loading={loading}
         emptyText="No leave resumption approvals found"
         density="grid"
-        height="calc(100vh - 220px)"
-        minWidth={1400}
+        height="calc(100dvh - 180px)"
+        minWidth={1200}
         enablePagination
         enableExport
         exportFilename="Leave_Resumption_Approvals.csv"
-        pageSize={10}
+        pageSize={25}
         getRowId={(row, index) => `${row.REQUEST_NUMBER ?? index}`}
       />
 
@@ -204,10 +287,10 @@ export function LeaveResumptionApprovalPage() {
   );
 }
 
-// function formatDate(value: unknown) {
-//   if (!value) return "NA";
-//   const date = new Date(value as string);
-//   return Number.isNaN(date.getTime()) ? "NA" : date.toLocaleDateString("en-GB");
-// }
+function formatDate(value: unknown) {
+  if (!value) return "-";
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("en-GB");
+}
 
 export default LeaveResumptionApprovalPage;

@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { Input } from "../../components/ui/Input";
 import { MultiSelectField, type MultiSelectOption } from "../../components/ui/MultiSelectField";
 import { useAuth } from "../../state/AuthContext";
@@ -739,16 +740,13 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         </div>
 
         <div className="freight-report-filter-heading">
-          <div className="freight-report-filter-title">
-            <span>
-              <Filter size={16} />
-            </span>
-            Report Filters
-          </div>
-          <button type="button" onClick={resetFilters}>
-            <RefreshCw size={14} /> Clear All
-          </button>
-        </div>
+  <div className="freight-report-filter-title">
+    {/* Report Filters text removed */}
+  </div>
+  <button type="button" onClick={resetFilters}>
+    <RefreshCw size={14} /> Clear All
+  </button>
+</div>
 
         <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
@@ -1361,51 +1359,7 @@ function splitCsv(value: string) {
 }
 
 function DateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const pickerRef = useRef<HTMLInputElement | null>(null);
-  const [displayValue, setDisplayValue] = useState(() => toDisplayDate(value));
-  useEffect(() => setDisplayValue(toDisplayDate(value)), [value]);
-  function commit(next = displayValue) {
-    const parsed = parseDisplayDate(next);
-    if (parsed || !next.trim()) onChange(parsed);
-    setDisplayValue(parsed ? toDisplayDate(parsed) : next);
-  }
-  function openPicker() {
-    const picker = pickerRef.current;
-    if (!picker) return;
-    if (typeof picker.showPicker === "function") picker.showPicker();
-    else picker.click();
-  }
-  return (
-    <div className="relative">
-      <Input
-        className="h-8 pr-9"
-        placeholder="dd/mm/yyyy"
-        value={displayValue}
-        onChange={(event) => setDisplayValue(event.target.value)}
-        onBlur={() => commit()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commit();
-        }}
-      />
-      <button
-        type="button"
-        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded border bg-background text-muted-foreground hover:bg-muted hover:text-primary"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={openPicker}
-        title="Select date"
-      >
-        <CalendarDays size={14} />
-      </button>
-      <input
-        ref={pickerRef}
-        type="date"
-        className="pointer-events-none absolute right-1 top-1 h-6 w-6 opacity-0"
-        tabIndex={-1}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
+  return <BiscDatePicker value={toInputDate(value)} onChange={onChange} />;
 }
 
 function SummaryBadge({ label, value, strong }: { label: string; value: string; strong?: boolean }) {

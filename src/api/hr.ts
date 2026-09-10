@@ -204,8 +204,9 @@ export async function renameHrEmployeeFile(requestNumber: string, awsFileLocn: s
   return response.data;
 }
 
-export async function deleteHrEmployeeFile(requestNumber: string, srNo: number) {
-  const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteEmployeeFiles/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}`);
+export async function deleteHrEmployeeFile(requestNumber: string, srNo: number, awsFileLocn?: string) {
+  const query = awsFileLocn ? `?aws_file_locn=${encodeURIComponent(awsFileLocn)}` : "";
+  const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteEmployeeFiles/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}${query}`);
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete leave attachment");
   return response.data;
 }
