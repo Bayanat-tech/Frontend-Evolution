@@ -1,4 +1,4 @@
-import { Pencil, RefreshCw } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuth } from "../../../state/AuthContext";
@@ -25,39 +25,54 @@ export function LeaveResumptionApprovalPage() {
   const [editData, setEditData] = useState<TLeaveApproval | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
-  const buildSql = (login: string) => `
+  const compCode = String(user?.COMPANY_CODE || user?.company_code || "00001");
+
+  const buildSql = (login: string, comp: string) => `
     SELECT *
     FROM VW_LEAVE_REQUEST_FLOW_CLOSE
-    WHERE COMPANY_CODE = '${user?.company_code}'
-    AND ( ACTUAL_RESUME_DATE IS NULL
-      AND RESUME_DATE_APPROVED IS NULL
-      AND FINAL_APPROVED = 'YES'
-      AND CREATED_BY = '${login}')
-    OR (ACTUAL_RESUME_DATE IS NOT NULL
-      AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO'
-      AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+    WHERE (COMPANY_CODE = '${comp}' OR '${comp}' = '')
+    AND (
+      (ACTUAL_RESUME_DATE IS NULL
+        AND RESUME_DATE_APPROVED IS NULL
+        AND FINAL_APPROVED = 'YES'
+        AND CREATED_BY = '${login}')
+      OR (ACTUAL_RESUME_DATE IS NOT NULL
+        AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO'
+        AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+    )
   `;
 
-    const loadRows = async () => {
-        if (!loginId) {
-        setRows([]);
-        toast.error("Login id is missing for leave resumption lookup");
-        return;
-        }
-        setLoading(true);
-        try {
-        const response = await executeHrRawSql(buildSql(loginId));
-        setRows((response ?? []) as TLeaveApproval[]);
-        } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Unable to load leave resumption approvals");
-        } finally {
-        setLoading(false);
-        }
-    };
+  const loadRows = async () => {
+    if (!loginId) {
+      setRows([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await executeHrRawSql(buildSql(loginId, compCode));
+      setRows((response ?? []) as TLeaveApproval[]);
+    } catch (error) {
+      console.warn("Unable to load leave resumption approvals with company code filter:", error);
+      try {
+        const fallbackSql = `
+          SELECT *
+          FROM VW_LEAVE_REQUEST_FLOW_CLOSE
+          WHERE (ACTUAL_RESUME_DATE IS NULL AND RESUME_DATE_APPROVED IS NULL AND FINAL_APPROVED = 'YES' AND CREATED_BY = '${loginId}')
+             OR (ACTUAL_RESUME_DATE IS NOT NULL AND NVL(RESUME_DATE_APPROVED, 'NO') = 'NO' AND FINAL_APPROVED = 'YES' AND NEXT_ACTION_BY = 'APPROVED')
+        `;
+        const fallbackRes = await executeHrRawSql(fallbackSql);
+        setRows((fallbackRes ?? []) as TLeaveApproval[]);
+      } catch (fallbackError) {
+        console.warn("Fallback query also failed:", fallbackError);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     void loadRows();
-  }, [loginId]);
+  }, [loginId, compCode]);
 
   const openEdit = async (requestNumber: string) => {
     setSelectedRequestNumber(requestNumber);
@@ -90,72 +105,143 @@ export function LeaveResumptionApprovalPage() {
   const columns = useMemo<ColumnDef<TLeaveApproval>[]>(
     () => [
       {
-        id: "actions",
-        header: "Actions",
-        size: 84,
+        accessorKey: "REQUEST_NUMBER",
+        header: "REQUEST NO",
+        size: 130,
         cell: ({ row }) => (
-          <Button
+          <button
+            className="font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
             type="button"
-            variant="outline"
-            size="icon"
-            title="Edit leave request"
-            aria-label="Edit leave request"
             onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
+            title="Edit leave request"
           >
-            <Pencil size={14} />
-          </Button>
+            {row.original.REQUEST_NUMBER || "-"}
+          </button>
         ),
       },
-      { accessorKey: "REQUEST_NUMBER", header: "No.", size: 250 },
       {
         accessorKey: "REQUEST_DATE",
-        header: "Request Date",
-        size: 130,
-        // cell: ({ row }) => formatDate(row.original.REQUEST_DATE),
+        header: "DATE",
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.REQUEST_DATE)}
+          </span>
+        ),
       },
-      { accessorKey: "EMPLOYEE_NAME_DISPLAY", header: "Employee Name", size: 220 },
-      { accessorKey: "LEAVE_TYPE_DESC", header: "Leave Type", size: 150 },
+      {
+        accessorKey: "EMPLOYEE_NAME_DISPLAY",
+        header: "EMPLOYEE NAME",
+        minSize: 180,
+        cell: ({ row }) => (
+          <div className="truncate" title={String(row.original.EMPLOYEE_NAME_DISPLAY || "")}>
+            <span className="text-[11.5px] text-foreground">{row.original.EMPLOYEE_NAME_DISPLAY || "-"}</span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "LEAVE_TYPE_DESC",
+        header: "LEAVE TYPE",
+        size: 140,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground font-medium">
+            {row.original.LEAVE_TYPE_DESC || "-"}
+          </span>
+        ),
+      },
       {
         accessorKey: "LEAVE_START_DATE",
-        header: "Leave Start Date",
-        size: 140,
-        // cell: ({ row }) => formatDate(row.original.LEAVE_START_DATE),
+        header: "START DATE",
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.LEAVE_START_DATE)}
+          </span>
+        ),
       },
       {
         accessorKey: "LEAVE_END_DATE",
-        header: "Leave End Date",
-        size: 140,
-        // cell: ({ row }) => formatDate(row.original.LEAVE_END_DATE),
+        header: "END DATE",
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.LEAVE_END_DATE)}
+          </span>
+        ),
       },
       {
         accessorKey: "ACTUAL_RESUME_DATE",
-        header: "Actual Resume Date",
-        size: 160,
-        // cell: ({ row }) => formatDate(row.original.ACTUAL_RESUME_DATE),
+        header: "ACTUAL RESUME",
+        size: 110,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.ACTUAL_RESUME_DATE)}
+          </span>
+        ),
       },
       {
         accessorKey: "DUTY_RESUME_DATE",
-        header: "Duty Resume Date",
-        size: 160,
-        // cell: ({ row }) => formatDate(row.original.DUTY_RESUME_DATE),
+        header: "DUTY RESUME",
+        size: 110,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {formatDate(row.original.DUTY_RESUME_DATE)}
+          </span>
+        ),
       },
-      { accessorKey: "REMARKS", header: "Remarks", size: 150 },
-      { accessorKey: "NEXT_ACTION_BY_NAME", header: "Next Action By", size: 200 },
+      {
+        accessorKey: "REMARKS",
+        header: "REMARKS",
+        size: 150,
+        cell: ({ row }) => (
+          <div className="truncate" title={String(row.original.REMARKS || "")}>
+            <span className="text-[11.5px] text-muted-foreground">{row.original.REMARKS || "-"}</span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "NEXT_ACTION_BY_NAME",
+        header: "NEXT ACTION BY",
+        size: 160,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground">
+            {row.original.NEXT_ACTION_BY_NAME || "-"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "ACTIONS",
+        size: 80,
+        enableColumnFilter: false,
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              title="Edit leave request"
+              aria-label="Edit leave request"
+              onClick={() => void openEdit(row.original.REQUEST_NUMBER)}
+            >
+              <Pencil size={13} />
+            </button>
+          </div>
+        ),
+      },
     ],
-    [],
+    []
   );
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="eyebrow">HR</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Leave Resumption Approval</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
+    <section className="leave-resumption-freight-view grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Leave Resumption
+          </h2>
         </div>
       </div>
 
@@ -168,12 +254,12 @@ export function LeaveResumptionApprovalPage() {
         loading={loading}
         emptyText="No leave resumption approvals found"
         density="grid"
-        height="calc(100vh - 220px)"
-        minWidth={1400}
+        height="calc(100dvh - 180px)"
+        minWidth={1200}
         enablePagination
         enableExport
         exportFilename="Leave_Resumption_Approvals.csv"
-        pageSize={10}
+        pageSize={25}
         getRowId={(row, index) => `${row.REQUEST_NUMBER ?? index}`}
       />
 
@@ -201,10 +287,10 @@ export function LeaveResumptionApprovalPage() {
   );
 }
 
-// function formatDate(value: unknown) {
-//   if (!value) return "NA";
-//   const date = new Date(value as string);
-//   return Number.isNaN(date.getTime()) ? "NA" : date.toLocaleDateString("en-GB");
-// }
+function formatDate(value: unknown) {
+  if (!value) return "-";
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("en-GB");
+}
 
 export default LeaveResumptionApprovalPage;
