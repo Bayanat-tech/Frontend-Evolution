@@ -1,3 +1,4 @@
+import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -643,6 +644,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     const prinCode = lookupText(row, "prin_code");
     const quotationNr = lookupText(row, "quotation_nr");
     if (!companyCode || !prinCode || !quotationNr) return;
+    const preview = openFreightReport(`Quotation ${quotationNr}`);
     try {
       const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; details?: LookupRow[] }; message?: string }>(
         "/api/freight/quotation/get",
@@ -654,8 +656,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       const printDetails = (response.data?.data?.details || [])
         .map((detail) => normalizeLookupRow(detail))
         .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
-      renderPrintWindow(printHeader, printDetails);
+      preview.ready({ html: buildFreightPrintHtml(printHeader, printDetails), filename: `Quotation-${quotationNr}`, orientation: "portrait" });
     } catch (error) {
+    preview.fail(error);
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to print quotation" });
     }
   };
@@ -2026,7 +2029,7 @@ function formatAmount(value: number) { return value.toLocaleString(undefined, { 
 //   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 // }
 
-function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
+function buildFreightPrintHtml(header: QuotationHeader, details: QuotationDetail[]) {
   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
   const billTotal = activeDetails.reduce((sum, row) => sum + (Number(row.bill) || 0), 0);
   const rows = activeDetails.length
@@ -2144,36 +2147,7 @@ function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) 
     </html>
   `;
 
-  const existing = document.getElementById("freight-print-frame");
-  existing?.remove();
-
-  const iframe = document.createElement("iframe");
-  iframe.id = "freight-print-frame";
-  iframe.style.position = "fixed";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  iframe.style.visibility = "hidden";
-  document.body.appendChild(iframe);
-
-  const frameWindow = iframe.contentWindow;
-  const doc = frameWindow?.document;
-  if (!doc) { iframe.remove(); return; }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const cleanup = () => setTimeout(() => iframe.remove(), 500);
-
-  if (frameWindow) {
-    frameWindow.onafterprint = cleanup;
-  }
-  iframe.onload = () => {
-    frameWindow?.focus();
-    frameWindow?.print();
-    setTimeout(cleanup, 60_000);
-  };
+  return html;
 }
 
 function escapeHtml(value: string) {
