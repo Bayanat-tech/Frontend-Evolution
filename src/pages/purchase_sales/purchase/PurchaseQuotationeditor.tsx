@@ -38,6 +38,7 @@ import {
   TotalUnitPrice,
   Totalunitprice,
   amountBeforeDiscPrice,
+  DiscPrice,
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
@@ -364,6 +365,7 @@ export function PurchaseQuotationEditor({
     }, "Purchase Quotation saved as draft");
   };
   const handleSubmitClick = () => {
+    
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
@@ -373,6 +375,9 @@ export function PurchaseQuotationEditor({
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
+       if (lineAmount(rows[0]) < DiscPrice(rows[0])) {
+          return setError("Line item discount cannot exceed line item amount");
+        }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
@@ -528,7 +533,7 @@ export function PurchaseQuotationEditor({
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
               <PurchaseOrderHeaderForm
-                // calculateDiscount={applyDiscountCalculation}
+                calculateDiscount={applyDiscountCalculation}
                 form={form}
                 docType={PO_DOC_TYPE.PQA}
                 setForm={setForm}

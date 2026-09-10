@@ -30,6 +30,7 @@ import {
   TotalUnitPrice,
   Totalunitprice,
   amountBeforeDiscPrice,
+  DiscPrice,
 } from "../../purchase_sales/purchase/Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
@@ -384,6 +385,9 @@ export function SalesOrderEditor({
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
+       if (lineAmount(rows[0]) < DiscPrice(rows[0])) {
+          return setError("Line item discount cannot exceed line item amount");
+        }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
@@ -552,7 +556,7 @@ export function SalesOrderEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 rows={rows}
-              //  calculateDiscount={applyDiscountCalculation}
+               calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable

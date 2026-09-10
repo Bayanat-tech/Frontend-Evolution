@@ -56,7 +56,7 @@ export function PurchaseOrderHeaderForm({
   docType,
   setdetails,
   rows,
-  // calculateDiscount
+  calculateDiscount
 }: {
   form: PurchaseOrderForm;
   setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -69,10 +69,10 @@ export function PurchaseOrderHeaderForm({
   docType: PODocType | SODocType
   setdetails?: (details: any[]) => void;
   rows?: PurchaseOrderLineRow[];
-  // calculateDiscount: (type: "amount" | "percent", value: number) => void;
+  calculateDiscount: (type: "amount" | "percent", value: number) => void;
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
- 
+
   const discountScope = form.discount_scoope || "ITEM";
 
   // const applyDiscountCalculation = (type: "amount" | "percent") => {
@@ -371,12 +371,16 @@ export function PurchaseOrderHeaderForm({
                   value="PO"
                   checked={discountScope === "PO"}
                   disabled={headerAndLineDisabled}
-                  onChange={() =>
+                  onChange={() => {
+                    const seededPrice = TotalDiscAmount(rows || []);
+                    const seededPercent = DiscAmountPercentage(form, rows || []);
                     setForm((current) => ({
                       ...current,
                       discount_scoope: "PO",
-                    }))
-                  }
+                      disc_hdr_price: seededPrice,
+                      disc_hdr_percent: seededPercent,
+                    }));
+                  }}
                 />
                 Entire PO
               </label>
@@ -417,7 +421,7 @@ export function PurchaseOrderHeaderForm({
                 onChange={(e) => {
                   const value = Number(e.target.value || 0);
                   updateField("disc_hdr_price", value);
-                  // calculateDiscount("amount", value);
+                  calculateDiscount("amount", value);
                 }}
               />
             </CField>
@@ -438,7 +442,7 @@ export function PurchaseOrderHeaderForm({
                 onChange={(e) => {
                   const value = Number(e.target.value || 0);
                   updateField("disc_hdr_percent", value);
-                  // calculateDiscount("percent", value);
+                  calculateDiscount("percent", value);
                 }}
               />
             </CField>

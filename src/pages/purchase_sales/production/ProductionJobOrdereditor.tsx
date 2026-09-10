@@ -473,7 +473,7 @@ export function ProductionJobOrderEditor({
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-              <PurchaseOrderHeaderForm
+              {/* <PurchaseOrderHeaderForm
                 form={form}
                 docType={PO_DOC_TYPE.JO}
                 setForm={setForm}
@@ -483,7 +483,7 @@ export function ProductionJobOrderEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
-              />
+              /> */}
 {/* 
               <PurchaseOrderLinesTable
                 rows={rows}

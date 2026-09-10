@@ -17,6 +17,7 @@ import {
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   amountBeforeDiscPrice,
+  DiscPrice,
   formatAmount,
   lineAmount,
   lineDiscPrice,
@@ -441,6 +442,9 @@ export function SalesInvoiceEditor({
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
+       if (lineAmount(rows[0]) < DiscPrice(rows[0])) {
+          return setError("Line item discount cannot exceed line item amount");
+        }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
