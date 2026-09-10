@@ -1,3 +1,5 @@
+import { openFreightReport } from "../../components/freight/reportPreviewStore";
+import { ReportFilterHeader } from "../../components/reports/ReportFilterHeader";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { BarChart3, Boxes, CalendarDays, Download, FileSpreadsheet, Filter, Loader2, Printer, RefreshCw, Search, Ship, UserRound, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -5,6 +7,7 @@ import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { Input } from "../../components/ui/Input";
 import { MultiSelectField, type MultiSelectOption } from "../../components/ui/MultiSelectField";
 import { useAuth } from "../../state/AuthContext";
@@ -658,7 +661,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   async function runReport() {
     setLoading(true);
     setMessage("");
-    const reportWindow = openReportShell(config.title);
+    const preview = openFreightReport(config.title);
     try {
       const payload = {
         company_code: companyCode,
@@ -672,18 +675,16 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         dept_code_to: "",
       };
       const response = await api.post<{ success?: boolean; data?: LookupRow[]; totalCount?: number }>("/api/freight/reports/run", payload);
+      if (response.data.success === false) throw new Error("Unable to generate report.");
       const nextRows = (response.data.data || []).map(normalizeRow);
       setRows(nextRows);
-      setMessage(nextRows.length ? `${nextRows.length} records loaded from Oracle.` : "No records found for selected filters.");
-      writeReportWindow(
-        reportWindow,
-        reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), true, companyLogoUrl),
-      );
+      setMessage(nextRows.length ? `${nextRows.length} records in the report.` : "No records found for selected filters.");
+      preview.ready({ html: reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), false, companyLogoUrl), filename: config.title, orientation: "landscape" });
     } catch (error: any) {
       setRows([]);
       const errorMessage = error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.";
       setMessage(errorMessage);
-      writeReportWindow(reportWindow, reportErrorHtml(config.title, errorMessage));
+      preview.fail(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -695,17 +696,6 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
     setMessage("Select filters and run the report.");
   }
 
-  function printReport() {
-    if (!rows.length) {
-      setMessage("Run the report and load records before printing.");
-      return;
-    }
-    const reportWindow = openReportShell(config.title);
-    writeReportWindow(
-      reportWindow,
-      reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, true, companyLogoUrl),
-    );
-  }
 
   return (
     <section className="freight-ui-standard freight-report-screen">
@@ -718,37 +708,10 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             {totals.map((item) => (
               <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />
             ))}
-            <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
-              <Printer size={14} /> Print
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!rows.length}
-              onClick={() =>
-                exportReportExcel(
-                  config.title,
-                  reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false, companyLogoUrl),
-                )
-              }
-            >
-              <Download size={14} /> Excel
-            </Button>
           </div>
         </div>
 
-        <div className="freight-report-filter-heading">
-          <div className="freight-report-filter-title">
-            <span>
-              <Filter size={16} />
-            </span>
-            Report Filters
-          </div>
-          <button type="button" onClick={resetFilters}>
-            <RefreshCw size={14} /> Clear All
-          </button>
-        </div>
+        <ReportFilterHeader onClear={resetFilters} />
 
         <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
@@ -782,6 +745,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           )}
           {visibleFilters.includes("principal") && (
             <MultiSelectField
+              className="freight-report-multi-select"
               label="Principal"
               options={principalOptions}
               loading={principalOptionsLoading}
@@ -843,23 +807,6 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         <div className="freight-report-actions">
           <Button type="button" size="sm" onClick={runReport} disabled={loading}>
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
-            <Printer size={15} /> Print
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!rows.length}
-            onClick={() =>
-              exportReportExcel(
-                config.title,
-                reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false, companyLogoUrl),
-              )
-            }
-          >
-            <Download size={15} /> Excel Format
           </Button>
         </div>
         {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
@@ -935,6 +882,7 @@ function AdvancedReportFilters({
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {items.includes("principalRange") && (
           <MultiSelectField
+            className="freight-report-multi-select"
             label="Principal"
             options={principalOptions}
             loading={principalOptionsLoading}
@@ -1251,6 +1199,7 @@ function LookupMultiFilter({
   const { options, loading } = useLookupOptions(parameter, companyCode, valueField, displayFields);
   return (
     <MultiSelectField
+      className="freight-report-multi-select"
       label={label}
       options={options}
       loading={loading}
@@ -1304,6 +1253,7 @@ function QuotationMultiField({
 
   return (
     <MultiSelectField
+      className="freight-report-multi-select"
       label={label}
       options={options}
       loading={loading}
@@ -1361,51 +1311,7 @@ function splitCsv(value: string) {
 }
 
 function DateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const pickerRef = useRef<HTMLInputElement | null>(null);
-  const [displayValue, setDisplayValue] = useState(() => toDisplayDate(value));
-  useEffect(() => setDisplayValue(toDisplayDate(value)), [value]);
-  function commit(next = displayValue) {
-    const parsed = parseDisplayDate(next);
-    if (parsed || !next.trim()) onChange(parsed);
-    setDisplayValue(parsed ? toDisplayDate(parsed) : next);
-  }
-  function openPicker() {
-    const picker = pickerRef.current;
-    if (!picker) return;
-    if (typeof picker.showPicker === "function") picker.showPicker();
-    else picker.click();
-  }
-  return (
-    <div className="relative">
-      <Input
-        className="h-8 pr-9"
-        placeholder="dd/mm/yyyy"
-        value={displayValue}
-        onChange={(event) => setDisplayValue(event.target.value)}
-        onBlur={() => commit()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commit();
-        }}
-      />
-      <button
-        type="button"
-        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded border bg-background text-muted-foreground hover:bg-muted hover:text-primary"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={openPicker}
-        title="Select date"
-      >
-        <CalendarDays size={14} />
-      </button>
-      <input
-        ref={pickerRef}
-        type="date"
-        className="pointer-events-none absolute right-1 top-1 h-6 w-6 opacity-0"
-        tabIndex={-1}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
+  return <BiscDatePicker value={toInputDate(value)} onChange={onChange} />;
 }
 
 function SummaryBadge({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
@@ -1575,65 +1481,6 @@ function buildTotals(rows: LookupRow[], amountFields: string[]) {
     .slice(0, 3);
 }
 
-function exportReportExcel(title: string, html: string) {
-  const excelHtml = html
-    .replace(/<body(.*?)>/i, '<body$1 class="excel-export">')
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<div class="viewerbar"[\s\S]*?<\/div><div class="sheet">/i, '<div class="sheet">');
-  const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `${title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xls`;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-function exportRowsAsCsvString(rows: LookupRow[]) {
-  if (!rows.length) return "";
-  const headers = Object.keys(rows[0]);
-  const lines = [headers.join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))];
-  return lines.join("\n");
-}
-
-function csvCell(value: unknown) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
-function openReportShell(title: string) {
-  const win = window.open("", `freight_report_${Date.now()}`, "popup=yes,width=1320,height=860,left=80,top=40,resizable=yes,scrollbars=yes");
-  if (!win) return null;
-  writeReportWindow(win, reportLoadingHtml(title));
-  win.focus();
-  return win;
-}
-
-function writeReportWindow(win: Window | null, html: string) {
-  if (!win) return;
-  try {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-  } catch {
-    window.alert("Report popup opened, but browser blocked report rendering. Please allow popups for this site and run again.");
-  }
-}
-
-function reportLoadingHtml(title: string) {
-  return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
-    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef3f9;color:#0f172a}
-    .bar{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:white;border-bottom:1px solid #dbe3ef}
-    .loading{height:calc(100vh - 58px);display:grid;place-items:center}
-    .spinner{width:32px;height:32px;border:3px solid #dbe3ef;border-top-color:#0b4ca1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-  </style></head><body><div class="bar"><strong>Freight Report Viewer</strong><span>${escapeHtml(title)}</span></div><div class="loading"><div><div class="spinner"></div><div>Generating ${escapeHtml(title)}</div></div></div></body></html>`;
-}
-
-function reportErrorHtml(title: string, message: string) {
-  return `<!doctype html><html><head><title>${escapeHtml(title)}</title></head><body style="font-family:sans-serif;padding:24px"><h1>Report failed</h1><pre>${escapeHtml(message)}</pre><button onclick="window.close()">Close</button></body></html>`;
-}
-
 function reportHtml(
   config: ReportConfig,
   companyCode: string,
@@ -1682,16 +1529,7 @@ function reportHtml(
     <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
     <div class="footer">End of report</div>
-  </div></div><script>
-    function downloadExcel(){
-      const clone = document.documentElement.cloneNode(true);
-      clone.querySelectorAll('script,.viewerbar').forEach((n)=>n.remove());
-      const blob = new Blob(['<!doctype html>'+clone.outerHTML],{type:'application/vnd.ms-excel;charset=utf-8'});
-      const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-      a.download=${JSON.stringify(`${config.title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xls`)};
-      a.click();URL.revokeObjectURL(a.href);
-    }
-  </script></body></html>`;
+  </div></div></body></html>`;
 }
 
 function reportBodyHtml(config: ReportConfig, rows: LookupRow[]) {

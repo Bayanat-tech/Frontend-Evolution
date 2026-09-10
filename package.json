@@ -19,7 +19,9 @@
     "clsx": "^2.1.1",
     "dayjs": "^1.11.23",
     "formik": "^2.4.9",
+    "html-to-pdfmake": "^2.5.32",
     "lucide-react": "^0.503.0",
+    "pdfmake": "^0.2.20",
     "react": "^18.3.1",
     "react-datepicker": "^9.1.0",
     "react-dom": "^18.3.1",
@@ -33,9 +35,12 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/html-to-pdfmake": "^2.4.5",
+    "@types/pdfmake": "^0.3.3",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.5.0",
+    "jsdom": "^26.1.0",
     "postcss": "^8.5.14",
     "tailwindcss": "3.4.17",
     "tailwindcss-animate": "^1.0.7"

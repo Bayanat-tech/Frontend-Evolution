@@ -524,7 +524,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-                <DateField label="Job Date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} required />
+
                 <Lookup
                   label="Department"
                   value={job.dept_code}
@@ -631,8 +631,8 @@ export function FreightJobPage({
                   value={job.job_flag}
                   options={[["M", "Master"], ["H", "House"]]}
                   onChange={(value) => setJobField(setJob, "job_flag", value)}
-                />
-              </div>
+                /><DateField label="Job Date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} required />
+</div>
             </SectionPanel>
 
             {/* Section 2: Re-export Linkage (if re-export) */}
