@@ -571,7 +571,15 @@ export async function openGrnPrintReport(params: ReportParams) {
   );
 }
 
-
+export async function getGrnPrintReportPreviewUrl(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getGrnPrintReport/html`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+  return window.URL.createObjectURL(blob);
+}
 
 
 export async function exportGrnPrintReportExcel(params: ReportParams): Promise<void> {

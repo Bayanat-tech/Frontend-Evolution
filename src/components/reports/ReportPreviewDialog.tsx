@@ -6,6 +6,7 @@ export type ReportPreviewDialogProps = {
   title: string;
   pdfUrl: string;
   error?: string;
+  onBack?: () => void;  
   exporting: boolean;
   onExcel: () => void;
   onClose: () => void;

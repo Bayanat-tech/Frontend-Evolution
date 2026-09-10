@@ -10,7 +10,7 @@ const yesNo = [
 
 const activeInactive = [
   { label: "Active", value: "A" },
-  { label: "Inactive", value: "N" },
+  { label: "Inactive", value: "I" },
 ];
 
 const dynamicList = (parameter: string, useCompany = false) => (context: { loginid: string; companyCode: string }) => ({
