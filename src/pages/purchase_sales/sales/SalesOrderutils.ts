@@ -440,7 +440,7 @@ export function lineNetPOAmount(row: SalesOrderLineRow) {
 }
 
 export function lineTaxAmount(row: SalesOrderLineRow) {
-  return lineNetAmount(row) * (row.tx_compnt_perc_1 / 100);
+  return lineNetAmount(row) * ((row.sorder_tx_compnt_perc_1 ?? 0) / 100);
 }
 export function lineTaxpoAmount(row: SalesOrderLineRow) {
   return lineNetPOAmount(row) * ((row.sorder_tx_compnt_perc_1 ?? 0) / 100);
