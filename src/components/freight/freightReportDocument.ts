@@ -46,9 +46,7 @@ export async function buildFreightPdfDefinition(report: FreightReportDocument, i
   const { default: htmlToPdfmake } = await import("html-to-pdfmake");
   const prepared = prepareReportHtml(report.html, browserWindow);
   const content = htmlToPdfmake(prepared.html, {
-    // html-to-pdfmake types its browser option as jsdom's Window, while this
-    // function intentionally accepts the real browser Window used by the app.
-    window: browserWindow as unknown as import("jsdom").DOMWindow,
+    window: browserWindow,
     defaultStyles: {
       h1: { fontSize: 14, bold: true, color: "#00378c", marginBottom: 6 },
       h2: { fontSize: 11, bold: true, marginBottom: 4 },
@@ -113,11 +111,7 @@ export async function createFreightPdf(report: FreightReportDocument, identity: 
   ]);
   const fonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
   return new Promise<Blob>((resolve, reject) => {
-    try {
-      pdfMake.addFonts(fonts);
-      pdfMake.addVirtualFileSystem(vfs);
-      pdfMake.createPdf(definition).getBlob().then(resolve, reject);
-    }
+    try { pdfMake.createPdf(definition, undefined, fonts, vfs).getBlob(resolve); }
     catch (error) { reject(error); }
   });
 }
