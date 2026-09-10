@@ -252,6 +252,7 @@ export function SalesInvoiceEditor({
 
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),
+          sinvoice_total_amount: numberOrZero(headerRaw.sinvoice_total_amount),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
