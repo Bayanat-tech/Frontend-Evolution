@@ -740,16 +740,13 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         </div>
 
         <div className="freight-report-filter-heading">
-          <div className="freight-report-filter-title">
-            <span>
-              <Filter size={16} />
-            </span>
-            Report Filters
-          </div>
-          <button type="button" onClick={resetFilters}>
-            <RefreshCw size={14} /> Clear All
-          </button>
-        </div>
+  <div className="freight-report-filter-title">
+    {/* Report Filters text removed */}
+  </div>
+  <button type="button" onClick={resetFilters}>
+    <RefreshCw size={14} /> Clear All
+  </button>
+</div>
 
         <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
