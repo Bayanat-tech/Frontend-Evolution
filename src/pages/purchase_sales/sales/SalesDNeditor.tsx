@@ -77,7 +77,8 @@ export function SalesDNEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -89,10 +90,10 @@ export function SalesDNEditor({
 
   const reportValues = form.doc_no
     ? {
-        company_code: user?.company_code,
-        doc_type: SO_DOC_TYPE.SDN,
-        doc_no: form.doc_no,
-      }
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.SDN,
+      doc_no: form.doc_no,
+    }
     : null;
 
   const openReport = () => {
@@ -243,8 +244,8 @@ export function SalesDNEditor({
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
         const val = first
           ? Number(
-              first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0],
-            )
+            first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0],
+          )
           : 0;
         setFlowLevelRunning(Number.isFinite(val) ? val : 0);
       } catch {
@@ -320,25 +321,40 @@ export function SalesDNEditor({
       "Sales Delivery Note saved as draft",
     );
 
-  const handleSubmit = () => {
+  // const handleSubmit = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   return runAction(
+  //     "submit",
+  //     async () => {
+  //       await runWorkflow(
+  //         "SUBMITTED",
+  //         SO_DOC_TYPE.SDN,
+  //         form,
+  //         rows,
+  //         user?.company_code,
+  //         user?.loginid || user?.username,
+  //       );
+  //     },
+  //     editMode
+  //       ? "Sales Delivery Note updated successfully"
+  //       : "Sales Delivery Note created successfully",
+  //   );
+  // };
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
-    return runAction(
-      "submit",
-      async () => {
-        await runWorkflow(
-          "SUBMITTED",
-          SO_DOC_TYPE.SDN,
-          form,
-          rows,
-          user?.company_code,
-          user?.loginid || user?.username,
-        );
-      },
-      editMode
-        ? "Sales Delivery Note updated successfully"
-        : "Sales Delivery Note created successfully",
-    );
+
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Sales Delivery Note updated successfully" : "Sales Delivery Note created successfully");
   };
 
   const handleCancel = () =>
@@ -470,14 +486,13 @@ export function SalesDNEditor({
   return (
     <>
       <form
-        className={`payment-workbench commercial-editor grid h-screen ${
-          isCancelled
+        className={`payment-workbench commercial-editor grid h-screen ${isCancelled
             ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
             : "grid-rows-[auto_minmax(0,1fr)_auto]"
-        }`}
+          }`}
         onSubmit={(event) => {
           event.preventDefault();
-          void handleSubmit();
+          void handleSubmitClick();
         }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
@@ -517,8 +532,8 @@ export function SalesDNEditor({
                   </strong>
                 </div>
               )}
-              
-                {form.div_code && (
+
+              {form.div_code && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                   <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
@@ -550,7 +565,7 @@ export function SalesDNEditor({
                   </Button>
                 </>
               )}
-               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button
@@ -598,7 +613,7 @@ export function SalesDNEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
-                 setdetails={setRows}
+                setdetails={setRows}
               />
 
               <SalesDnDetailsTable
@@ -637,19 +652,21 @@ export function SalesDNEditor({
               </Button>
             )}
             {isPendingTab && (
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "submit" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Sales Dn?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
                 )}
-                {actionLoading === "submit" ? "Submitting..." : "Submit"}
-              </Button>
+              </div>
             )}
 
             {isPendingTab && canSendBackOrReject && (
@@ -764,17 +781,17 @@ export function SalesDNEditor({
         />
 
       )}
-             <AttachmentDialog
-              open={attachmentOpen}
-              onClose={() => setAttachmentOpen(false)}
-              requestNumber={form.doc_no ? String(form.doc_no) : ""}
-              title="Sales DN Attachments"
-              module="SDN"
-              type="Sales DN"
-              companyCode={user?.company_code || ""}
-              loginId={user?.loginid || ""}
-              flowLevel={effectiveFlowLevel}
-            />
+      <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Sales DN Attachments"
+        module="SDN"
+        type="Sales DN"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
+      />
     </>
   );
 }

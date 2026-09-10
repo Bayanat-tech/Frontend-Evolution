@@ -81,6 +81,7 @@ export function SalesInvoiceEditor({
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // Reject
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -91,7 +92,33 @@ export function SalesInvoiceEditor({
   // Print
   // const [reportOpen, setReportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  useEffect(() => {
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
+    setRows((current) =>
+      current.map((row) => {
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxPerc,
+        };
+
+        return updatedRow;
+      })
+    );
+
+
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
+
+  ]);
 
   useEffect(() => {
     if (!editor) return;
@@ -331,7 +358,9 @@ export function SalesInvoiceEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+       tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -355,44 +384,67 @@ export function SalesInvoiceEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction(
-      "draft",
-      async () => {
-        await runWorkflow(
-          "SAVEASDRAFT",
-          SO_DOC_TYPE.SIN,
-          form,
-          rows,
-          user?.company_code,
-          user?.loginid || user?.username,
-        );
-      },
-      "Sales Invoice saved as draft",
-    );
-
-  const handleSubmit = () => {
+  const handleSaveAsDraft = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (!form.inv_no) return setError("Invoice Number  is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
     if (!form.inv_date) return setError("Invoice Date is required");
-    return runAction(
-      "submit",
-      async () => {
-        await runWorkflow(
-          "SUBMITTED",
-          SO_DOC_TYPE.SIN,
-          form,
-          rows,
-          user?.company_code,
-          user?.loginid || user?.username,
-        );
-      },
-      editMode ? "Sales Invoice updated successfully" : "Sales Invoice created successfully",
-    );
+  }
+
+  runAction(
+    "draft",
+    async () => {
+      await runWorkflow(
+        "SAVEASDRAFT",
+        SO_DOC_TYPE.SIN,
+        form,
+        rows,
+        user?.company_code,
+        user?.loginid || user?.username,
+      );
+    },
+    "Sales Invoice saved as draft",
+  );
+
+  // const handleSubmit = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (!form.inv_no) return setError("Invoice Number  is required");
+  //   if (!form.inv_date) return setError("Invoice Date is required");
+  //   return runAction(
+  //     "submit",
+  //     async () => {
+  //       await runWorkflow(
+  //         "SUBMITTED",
+  //         SO_DOC_TYPE.SIN,
+  //         form,
+  //         rows,
+  //         user?.company_code,
+  //         user?.loginid || user?.username,
+  //       );
+  //     },
+  //     editMode ? "Sales Invoice updated successfully" : "Sales Invoice created successfully",
+  //   );
+  // };
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const handleSubmitClick = () => {
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    setShowSubmitConfirm(true);
   };
 
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
+  };
   const handleCancel = () =>
     runAction(
       "cancel",
@@ -536,7 +588,7 @@ export function SalesInvoiceEditor({
           }`}
         onSubmit={(event) => {
           event.preventDefault();
-          void handleSubmit();
+          void handleSubmitClick();
         }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
@@ -691,19 +743,21 @@ export function SalesInvoiceEditor({
               </Button>
             )}
             {isPendingTab && (
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "submit" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Sales Invoice?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
                 )}
-                {actionLoading === "submit" ? "Submitting..." : "Submit"}
-              </Button>
+              </div>
             )}
 
             {isPendingTab && canSendBackOrReject && (
