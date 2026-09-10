@@ -419,7 +419,7 @@ export function PurchaseOrderEditor({
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < DiscPrice(rows[0])) {
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
