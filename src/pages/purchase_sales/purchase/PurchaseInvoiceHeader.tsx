@@ -3,8 +3,8 @@ import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
-import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm } from "./Purchaseordertypes";
-import { numberOrZero, text } from "./Purchaseorderutils";
+import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm, PurchaseOrderLineRow } from "./Purchaseordertypes";
+import { DiscAmountPercentage, numberOrZero, text, TotalDiscAmount } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -41,7 +41,10 @@ export function PurchaseInvoiceHeaderForm({
     companyCode,
     loginid,
     docType,
-    setdetails
+    setdetails,
+    calculateDiscount,
+    rows,
+
 }: {
     form: PurchaseOrderForm;
     setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -53,9 +56,12 @@ export function PurchaseInvoiceHeaderForm({
     loginid?: string;
     docType: PODocType | SODocType
     setdetails?: (details: any[]) => void;
+    calculateDiscount: (type: "amount" | "percent", value: number) => void;
+    rows?: PurchaseOrderLineRow[];
 }) {
     const loginIdOrAdmin = loginid || "ADMIN";
 
+    const discountScope = form.discount_scoope || "ITEM";
     return (
         <div className="rounded-md border bg-card">
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
@@ -86,7 +92,7 @@ export function PurchaseInvoiceHeaderForm({
                         }))}
                     />
                 </div>
-                   {/* <div className="col-span-2">
+                {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -175,8 +181,15 @@ export function PurchaseInvoiceHeaderForm({
                                         po_pr_no: text(getLookupValue(row || {}, "po_pr_no")),
                                         po_scope_of_work: text(getLookupValue(row || {}, "po_scope_of_work")),
                                         total_po_amount: numberOrZero(getLookupValue(row || {}, "total_po_amount")),
-                                         inv_no: text(getLookupValue(row || {}, "inv_no")),
-                                         inv_date:toDateInputValue(getLookupValue(row || {}, "inv_date")),
+                                        inv_no: text(getLookupValue(row || {}, "inv_no")),
+                                        inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
+                                        pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
+                                        discount_scoope:
+                                            text(getLookupValue(row || {}, "discount_scoope")) === "PO"
+                                                ? "PO"
+                                                : text(getLookupValue(row || {}, "discount_scoope")) === "ITEM"
+                                                    ? "ITEM"
+                                                    : current.discount_scoope || "ITEM",
 
                                     }));
 
@@ -187,7 +200,7 @@ export function PurchaseInvoiceHeaderForm({
                                         const details = await getDynamicLookup({
                                             parameter: "PS_INVOICE_ENTRY_GRN_NO_DETAIL_DET",
                                             code1: companyCode,
-                                            code2:value,
+                                            code2: value,
                                         });
 
                                         const mappedDetails = (details || []).map((item: any, index: number) => ({
@@ -200,11 +213,11 @@ export function PurchaseInvoiceHeaderForm({
                                             porder_qty_puom: numberOrZero(getLookupValue(item, "porder_qty_puom")),
                                             l_uom: text(getLookupValue(item, "l_uom")),
                                             qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
-                                              porder_qty_luom: numberOrZero(getLookupValue(item, "porder_qty_luom")),
+                                            porder_qty_luom: numberOrZero(getLookupValue(item, "porder_qty_luom")),
                                             unit_price: numberOrZero(getLookupValue(item, "unit_price")),
                                             porder_unit_price: numberOrZero(getLookupValue(item, "porder_unit_price")),
                                             disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
-                                              disc_hdr_price: numberOrZero(getLookupValue(item, "disc_hdr_price")),
+                                            disc_hdr_price: numberOrZero(getLookupValue(item, "disc_hdr_price")),
                                             disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
                                             porder_disc_percent: numberOrZero(getLookupValue(item, "porder_disc_percent")),
                                             disc_price: numberOrZero(getLookupValue(item, "disc_price")),
@@ -228,14 +241,14 @@ export function PurchaseInvoiceHeaderForm({
                                             quantity: numberOrZero(getLookupValue(item, "quantity")),
                                             ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
                                             porder_tx_compnt_amt_1: text(getLookupValue(item, "porder_tx_compnt_amt_1")),
-                                           tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_perc_1")),
+                                            tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_perc_1")),
                                             porder_tx_cat_code: text(getLookupValue(item, "porder_tx_cat_code")),
                                             porder_tx_compntcat_code_1: text(getLookupValue(item, "porder_tx_compntcat_code_1")),
-                                             porder_required_dt: text(getLookupValue(item, "porder_required_dt")),
-                                            tx_compnt_1_expmt:text(getLookupValue(item, "tx_compnt_1_expmt")),
-                                             porder_remarks:text(getLookupValue(item, "porder_remarks")),
-                                             serial_no: numberOrZero(getLookupValue(item, "serial_no")),
-                                            
+                                            porder_required_dt: text(getLookupValue(item, "porder_required_dt")),
+                                            tx_compnt_1_expmt: text(getLookupValue(item, "tx_compnt_1_expmt")),
+                                            porder_remarks: text(getLookupValue(item, "porder_remarks")),
+                                            serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+
                                         }));
                                         console.log("Mapped length:", mappedDetails?.length);
                                         setdetails?.(mappedDetails);
@@ -256,8 +269,8 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="PO Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(event) => updateField("po_doc_date", event.target.value)} />
                 </CField>
-                <CField label="PO Amount *">
-                    <Input type="text" disabled={headerAndLineDisabled} required value={form.total_po_amount} onChange={(event) => updateField("total_po_amount", event.target.value)} />
+                <CField label="PO Invoice Amount *">
+                    <Input type="text" disabled={headerAndLineDisabled} required value={form.pinvoice_total_amount} onChange={(event) => updateField("pinvoice_total_amount", event.target.value)} />
                 </CField>
                 <CField label="INV NO *">
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(event) => updateField("inv_no", event.target.value)} />
@@ -422,37 +435,90 @@ export function PurchaseInvoiceHeaderForm({
                     />
                 </CField>
 
+                <div className="col-span-8 flex items-center gap-6 border-b border-gray-100 pb-2 mb-1">
+                    <span className="text-[9px] font-semibold text-foreground/75">
+                        Discount Applied To:
+                    </span>
+
+                    <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                        <input
+                            type="radio"
+                            name="discount_scoope"
+                            value="PO"
+                            checked={discountScope === "PO"}
+                            disabled={headerAndLineDisabled}
+                            onChange={() =>
+                                setForm((current) => ({
+                                    ...current,
+                                    discount_scoope: "PO",
+                                }))
+                            }
+                        />
+                        Entire PO
+                    </label>
+
+                    <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                        <input
+                            type="radio"
+                            name="discount_scoope"
+                            value="ITEM"
+                            checked={discountScope === "ITEM"}
+                            disabled={headerAndLineDisabled}
+                            onChange={() =>
+                                setForm((current) => ({
+                                    ...current,
+                                    discount_scoope: "ITEM",
+                                }))
+                            }
+                        />
+                        Individual Items
+                    </label>
+                </div>
+
+                {/* Discount Amount */}
                 <CField label="Disc Amt">
                     <Input
                         className="text-right"
                         type="number"
                         step="0.01"
-                        disabled={headerAndLineDisabled}
-                        value={form.disc_hdr_price}
-                        onChange={(event) =>
-                            updateField(
-                                "disc_hdr_price",
-                                Number(event.target.value || 0)
-                            )
+                        disabled={
+                            headerAndLineDisabled ||
+                            discountScope === "ITEM"
                         }
+                        value={
+                            discountScope === "ITEM"
+                                ? TotalDiscAmount(rows || []).toFixed(3)
+                                : numberOrZero(form.disc_hdr_price).toFixed(3)
+                        }
+                        onChange={(e) => {
+                            const value = Number(e.target.value || 0);
+                            updateField("disc_hdr_price", value);
+                            calculateDiscount("amount", value);
+                        }}
                     />
                 </CField>
-
                 <CField label="Disc %">
                     <Input
                         className="text-right"
                         type="number"
-                        step="0.01"
-                        disabled={headerAndLineDisabled}
-                        value={form.disc_hdr_percent}
-                        onChange={(event) =>
-                            updateField(
-                                "disc_hdr_percent",
-                                Number(event.target.value || 0)
-                            )
+                        step="0.001"
+                        disabled={
+                            headerAndLineDisabled ||
+                            discountScope === "ITEM"
                         }
+                        value={
+                            discountScope === "ITEM"
+                                ? DiscAmountPercentage(form, rows || []).toFixed(3)
+                                : numberOrZero(form.disc_hdr_percent).toFixed(3)
+                        }
+                        onChange={(e) => {
+                            const value = Number(e.target.value || 0);
+                            updateField("disc_hdr_percent", value);
+                            calculateDiscount("percent", value);
+                        }}
                     />
                 </CField>
+
 
                 <div>
                     <label>Tax Category</label>

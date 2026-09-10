@@ -16,6 +16,7 @@ import {
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
+  amountBeforeDiscPrice,
   formatAmount,
   lineAmount,
   lineDiscPrice,
@@ -85,10 +86,12 @@ export function SalesInvoiceEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
   // Print
   // const [reportOpen, setReportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+
 
   useEffect(() => {
     if (!editor) return;
@@ -98,6 +101,66 @@ export function SalesInvoiceEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
+
 
   useEffect(() => {
     let mounted = true;
@@ -115,7 +178,7 @@ export function SalesInvoiceEditor({
 
         setForm((current) => ({
           ...current,
-         doc_no: text(headerRaw.si_doc_no || docNo),
+          doc_no: text(headerRaw.si_doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           ref_no: text(headerRaw.quotn_no || current.ref_no),
           sdn_doc_no: text(headerRaw.doc_no || current.doc_no),
@@ -183,7 +246,7 @@ export function SalesInvoiceEditor({
           so_scope_of_work: text(headerRaw.so_scope_of_work),
           so_buyer: text(headerRaw.so_buyer),
           total_so_amount: numberOrZero(headerRaw.total_so_amount),
-          tx_compnt_1_expmt:text(headerRaw.tx_compnt_1_expmt),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
           inv_no: text(headerRaw.inv_no),
           inv_date: toDateInputValue(headerRaw.inv_date),
 
@@ -258,7 +321,7 @@ export function SalesInvoiceEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-   const addRow = () =>
+  const addRow = () =>
     setRows((current) => [
       ...current,
       {
@@ -311,7 +374,7 @@ export function SalesInvoiceEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-        if (!form.inv_no) return setError("Invoice Number  is required");
+    if (!form.inv_no) return setError("Invoice Number  is required");
     if (!form.inv_date) return setError("Invoice Date is required");
     return runAction(
       "submit",
@@ -467,8 +530,8 @@ export function SalesInvoiceEditor({
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled
-            ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
-            : "grid-rows-[auto_minmax(0,1fr)_auto]"
+          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
+          : "grid-rows-[auto_minmax(0,1fr)_auto]"
           }`}
         onSubmit={(event) => {
           event.preventDefault();
@@ -512,10 +575,10 @@ export function SalesInvoiceEditor({
                   </strong>
                 </div>
 
-                
+
               )}
-              
-                {form.div_code && (
+
+              {form.div_code && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                   <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
@@ -578,6 +641,7 @@ export function SalesInvoiceEditor({
 
               <SalesInvoiceHeaderForm
                 form={form}
+                rows={rows}
                 docType={config.docType}
                 setForm={setForm}
                 updateField={updateField}
@@ -587,6 +651,7 @@ export function SalesInvoiceEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 setdetails={setRows}
+                calculateDiscount={applyDiscountCalculation}
               />
 
               <SalesInvoiceLinesTable

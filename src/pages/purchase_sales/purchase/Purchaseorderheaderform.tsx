@@ -4,7 +4,7 @@ import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm, PurchaseOrderLineRow } from "./Purchaseordertypes";
-import { DiscAmountPercentage, numberOrZero, text, TotalDiscAmount } from "./Purchaseorderutils";
+import { amountBeforeDiscPrice, DiscAmountPercentage, numberOrZero, text, TotalDiscAmount } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -55,7 +55,8 @@ export function PurchaseOrderHeaderForm({
   loginid,
   docType,
   setdetails,
-  rows
+  rows,
+  calculateDiscount
 }: {
   form: PurchaseOrderForm;
   setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -68,8 +69,49 @@ export function PurchaseOrderHeaderForm({
   docType: PODocType | SODocType
   setdetails?: (details: any[]) => void;
   rows?: PurchaseOrderLineRow[];
+  calculateDiscount: (type: "amount" | "percent", value: number) => void;
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
+ 
+  const discountScope = form.discount_scoope || "ITEM";
+
+  // const applyDiscountCalculation = (type: "amount" | "percent") => {
+  //   const totalAmount = (rows || []).reduce(
+  //     (sum, row) => sum + amountBeforeDiscPrice(row),
+  //     0
+  //   );
+
+  //   if (totalAmount <= 0) return;
+
+  //   let discountAmount = 0;
+  //   let discountPercent = 0;
+
+  //   if (type === "amount") {
+  //     discountAmount = Number(form.disc_hdr_price) || 0;
+  //     discountPercent = (discountAmount / totalAmount) * 100;
+  //   } else {
+  //     discountPercent = Number(form.disc_hdr_percent) || 0;
+  //     discountAmount = totalAmount * (discountPercent / 100);
+  //   }
+
+  //   setForm((current) => ({
+  //     ...current,
+  //     disc_hdr_price: discountAmount,
+  //     disc_hdr_percent: discountPercent,
+  //   }));
+
+  //   setdetails?.(
+  //     (rows || []).map((row) => {
+  //       const amount = amountBeforeDiscPrice(row);
+
+  //       return {
+  //         ...row,
+  //         disc_percent: discountPercent,
+  //         disc_price: amount * (discountPercent / 100),
+  //       };
+  //     })
+  //   );
+  // };
 
   return (
     <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
@@ -104,8 +146,8 @@ export function PurchaseOrderHeaderForm({
                   label="Quotation No"
                   compact
                   placeholder="Quotation No"
-                  value={String(form.doc_no ?? "")}
-                  displayValue={String(form.doc_no ?? "")}
+                  value={String(form.ref_no ?? "")}
+                  displayValue={String(form.ref_no ?? "")}
                   columns={[
                     { field: "doc_no", header: "Quotation No" },
                     { field: "ac_code", header: "A/c Code" },
@@ -166,7 +208,12 @@ export function PurchaseOrderHeaderForm({
                       scope_of_work: text(getLookupValue(row || {}, "scope_of_work")),
 
                       tx_compnt_1_expmt: text(getLookupValue(row || {}, "tx_compnt_1_expmt")),
-
+                      discount_scoope:
+                        text(getLookupValue(row || {}, "discount_scoope")) === "PO"
+                          ? "PO"
+                          : text(getLookupValue(row || {}, "discount_scoope")) === "ITEM"
+                            ? "ITEM"
+                            : current.discount_scoope || "ITEM",
 
                     }));
 
@@ -240,24 +287,6 @@ export function PurchaseOrderHeaderForm({
               <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
             </CField>
 
-            {/* <div className="col-span-2">
-              <LookupField
-                label="Division *"
-                value={form.div_code}
-                displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                valueField="div_code"
-                displayFields={["div_code", "div_name"]}
-                loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: companyCode, loginid: loginIdOrAdmin })}
-                disabled={headerAndLineDisabled}
-                onChange={(value, row) => setForm((current) => ({
-                  ...current,
-                  div_code: value,
-                  div_name: text(getLookupValue(row || {}, "div_name")),
-                }))}
-              />
-            </div> */}
-
             <div className="col-span-2">
               <LookupField
                 label="A/c code *"
@@ -329,29 +358,156 @@ export function PurchaseOrderHeaderForm({
 
           {/* Order, Currency & Tax (Core Fields) */}
           <CompactSection label="Order & Currency" gridCols="grid-cols-6">
+            {/* Discount Scope */}
+            <div className="col-span-6 flex items-center gap-6 border-b border-gray-100 pb-2 mb-1">
+              <span className="text-[9px] font-semibold text-foreground/75">
+                Discount Applied To:
+              </span>
 
+              <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                <input
+                  type="radio"
+                  name="discount_scoope"
+                  value="PO"
+                  checked={discountScope === "PO"}
+                  disabled={headerAndLineDisabled}
+                  onChange={() =>
+                    setForm((current) => ({
+                      ...current,
+                      discount_scoope: "PO",
+                    }))
+                  }
+                />
+                Entire PO
+              </label>
 
-            <CField label="Disc Amt"><Input className="text-right" type="number" step="0.01" disabled={headerAndLineDisabled} value={numberOrZero(form.disc_hdr_percent.toFixed(3)) > 0 ? TotalDiscAmount(rows || []) : form.disc_hdr_price.toFixed(3)}
-              onChange={(e) => updateField("disc_hdr_price", Number(e.target.value || 0))} /></CField>
-            <CField label="Disc %">
+              <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                <input
+                  type="radio"
+                  name="discount_scoope"
+                  value="ITEM"
+                  checked={discountScope === "ITEM"}
+                  disabled={headerAndLineDisabled}
+                  onChange={() =>
+                    setForm((current) => ({
+                      ...current,
+                      discount_scoope: "ITEM",
+                    }))
+                  }
+                />
+                Individual Items
+              </label>
+            </div>
+
+            {/* Discount Amount */}
+            <CField label="Disc Amt">
               <Input
                 className="text-right"
                 type="number"
                 step="0.01"
-                disabled={headerAndLineDisabled}
-                value={numberOrZero(form.disc_hdr_price.toFixed(3)) > 0 ? DiscAmountPercentage(form, rows || []) : form.disc_hdr_percent.toFixed(6)}
-                onChange={(e) => updateField("disc_hdr_percent", Number(e.target.value || 0))}
+                disabled={
+                  headerAndLineDisabled ||
+                  discountScope === "ITEM"
+                }
+                value={
+                  discountScope === "ITEM"
+                    ? TotalDiscAmount(rows || []).toFixed(3)
+                    : numberOrZero(form.disc_hdr_price).toFixed(3)
+                }
+                onChange={(e) => {
+                  const value = Number(e.target.value || 0);
+                  updateField("disc_hdr_price", value);
+                  calculateDiscount("amount", value);
+                }}
               />
             </CField>
-            <CField label="Pay Terms" className="col-span-2"><Input disabled={headerAndLineDisabled} value={form.payment_terms} onChange={(e) => updateField("payment_terms", e.target.value)} /></CField>
-            <CField label="Remarks" className="col-span-2"><Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} /></CField>
-            {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
-              <><CField label="Delivery Contact Person"><Input disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
-                <CField label=" Delivery Telephone"><Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
-                <CField label="Delivery Email Address" className="col-span-1"><Input type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
-                <CField label="Delivery Term"><Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
+            <CField label="Disc %">
+              <Input
+                className="text-right"
+                type="number"
+                step="0.001"
+                disabled={
+                  headerAndLineDisabled ||
+                  discountScope === "ITEM"
+                }
+                value={
+                  discountScope === "ITEM"
+                    ? DiscAmountPercentage(form, rows || []).toFixed(3)
+                    : numberOrZero(form.disc_hdr_percent).toFixed(3)
+                }
+                onChange={(e) => {
+                  const value = Number(e.target.value || 0);
+                  updateField("disc_hdr_percent", value);
+                  calculateDiscount("percent", value);
+                }}
+              />
+            </CField>
+
+            <CField label="Pay Terms" className="col-span-2">
+              <Input
+                disabled={headerAndLineDisabled}
+                value={form.payment_terms}
+                onChange={(e) =>
+                  updateField("payment_terms", e.target.value)
+                }
+              />
+            </CField>
+
+            <CField label="Remarks" className="col-span-2">
+              <Input
+                disabled={headerAndLineDisabled}
+                value={form.remarks}
+                onChange={(e) =>
+                  updateField("remarks", e.target.value)
+                }
+              />
+            </CField>
+
+            {/* LPO fields */}
+            {String(docType ?? "").trim().toUpperCase() === "LPO" && (
+              <>
+                <CField label="Delivery Contact Person">
+                  <Input
+                    disabled={headerAndLineDisabled}
+                    value={form.dlvr_contact}
+                    onChange={(e) =>
+                      updateField("dlvr_contact", e.target.value)
+                    }
+                  />
+                </CField>
+
+                <CField label="Delivery Telephone">
+                  <Input
+                    disabled={headerAndLineDisabled}
+                    value={form.dlvr_mobile}
+                    onChange={(e) =>
+                      updateField("dlvr_mobile", e.target.value)
+                    }
+                  />
+                </CField>
+
+                <CField label="Delivery Email Address">
+                  <Input
+                    type="email"
+                    disabled={headerAndLineDisabled}
+                    value={form.dlvr_email}
+                    onChange={(e) =>
+                      updateField("dlvr_email", e.target.value)
+                    }
+                  />
+                </CField>
+
+                <CField label="Delivery Term">
+                  <Input
+                    disabled={headerAndLineDisabled}
+                    value={form.dlvr_term}
+                    onChange={(e) =>
+                      updateField("dlvr_term", e.target.value)
+                    }
+                  />
+                </CField>
               </>
-            ))}
+            )}
 
           </CompactSection>
 
@@ -373,11 +529,6 @@ export function PurchaseOrderHeaderForm({
 
             <LookupField
               label="Tax Category"
-              // value={
-              //   form.tx_cat_name
-              //     ? `${form.tx_cat_code} - ${form.tx_cat_name}`
-              //     : form.tx_cat_code
-              // }
               value={form.tx_cat_code || ""}
               displayValue={
                 form.tx_cat_name
@@ -402,7 +553,7 @@ export function PurchaseOrderHeaderForm({
                 setForm((current) => ({
                   ...current,
                   tx_cat_code: text(value).split(" - ")[0].trim(),
-                  
+
                 }))
               }
             />

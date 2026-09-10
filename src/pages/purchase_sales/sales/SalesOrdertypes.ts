@@ -98,7 +98,7 @@ export interface SalesOrderLineRow {
 }
 
 export interface PurchaseOrderForm {
-  doc_no: number | string;
+  doc_no: string;
     // doc_no: string;
   doc_type?: string;
   doc_date: string;
@@ -280,6 +280,8 @@ export interface PurchaseOrderForm {
   inv_no?: string;
   inv_date?: string;
   tx_compnt_1_expmt?: string;
+  sinvoice_total_amount?: number;
+  discount_scoope: "PO" | "ITEM";
 }
 
 export interface SendBackUserOption {

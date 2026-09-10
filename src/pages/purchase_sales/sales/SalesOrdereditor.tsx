@@ -29,6 +29,7 @@ import {
   DiscAmountPercentage,
   TotalUnitPrice,
   Totalunitprice,
+  amountBeforeDiscPrice,
 } from "../../purchase_sales/purchase/Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
@@ -82,6 +83,10 @@ export function SalesOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+
+
+  
   useEffect(() => {
     if (!editor) return;
     // const initialForm = emptyForm(editor);
@@ -92,23 +97,34 @@ export function SalesOrderEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
- useEffect(() => {
+  useEffect(() => {
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price && !form.tx_compnt_1_expmt) return;
-    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
-    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
-      current.map((row) => ({
-        ...row,
-        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-        tx_cat_code: `${form.tx_cat_code || ""}`,
-        disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: pct > 0 ? pct : row.disc_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: taxPerc,
-      }))
+      current.map((row) => {
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxPerc,
+        };
+
+        // Only calculate discount when button is clicked
+      
+        return updatedRow;
+      })
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
+
+
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+ 
+  ]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -160,7 +176,12 @@ export function SalesOrderEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
-          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt)
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
+            discount_scoope:
+            headerRaw.discount_scoope === "PO" ||
+              headerRaw.discount_scoope === "ITEM"
+              ? headerRaw.discount_scoope
+              : current.discount_scoope || "ITEM",
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -210,31 +231,73 @@ export function SalesOrderEditor({
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
-  const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => {
-      let updated = { ...current, [field]: value };
-
-      if (field === "disc_hdr_price") {
-        updated.disc_hdr_percent = Number(value) > 0 ? DiscAmountPercentage(updated, rows) : 0;
-      }
-
-      return updated;
-    });
-
-    if (field === "disc_hdr_price") {
-      const pct = Number(value) > 0 ? DiscAmountPercentage({ ...form, disc_hdr_price: Number(value) }, rows) : 0;
-      setRows((current) => current.map((row) => ({
-        ...row,
-        disc_price: Number(value) || 0,
-        disc_percent: pct
-      })));
-    }
-
-    if (field === "disc_hdr_percent") {
-      setRows((current) => current.map((row) => ({ ...row, disc_percent: Number(value) || 0 })));
-    }
+  const updateField = (
+    field: keyof PurchaseOrderForm,
+    value: string | number
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   };
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+  const totalAmount = rows.reduce(
+    (sum, row) => sum + amountBeforeDiscPrice(row),
+    0
+  );
 
+  if (totalAmount <= 0) return;
+
+  const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+  let discountAmount = 0;
+  let discountPercent = 0;
+
+  if (type === "amount") {
+    discountAmount = Number(inputValue) || 0;
+    discountPercent = (discountAmount / totalAmount) * 100;
+  } else {
+    discountPercent = Number(inputValue) || 0;
+    discountAmount = totalAmount * (discountPercent / 100);
+  }
+
+  setDiscountEditType(type);
+
+  setForm((current) => ({
+    ...current,
+    disc_hdr_price: discountAmount,
+    disc_hdr_percent: discountPercent,
+  }));
+
+  setRows((current) =>
+    current.map((row) => {
+      const amount = amountBeforeDiscPrice(row);
+      return {
+        ...row,
+        disc_percent: discountPercent,
+        disc_price: amount * (discountPercent / 100),
+      };
+    })
+  );
+};
+
+const rowsAmountSignature = rows
+  .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+  .join(",");
+
+const effectiveDiscountType: "amount" | "percent" | null =
+  discountEditType ??
+  (numberOrZero(form.disc_hdr_percent) !== 0
+    ? "percent"
+    : numberOrZero(form.disc_hdr_price) !== 0
+      ? "amount"
+      : null);
+
+useEffect(() => {
+  if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+  applyDiscountCalculation(effectiveDiscountType);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [rowsAmountSignature, form.discount_scoope]);
 
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -247,9 +310,8 @@ export function SalesOrderEditor({
         ...emptyLineRow(form.div_code),
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
-        disc_price: form.disc_hdr_price,
-        disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -483,6 +545,7 @@ export function SalesOrderEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 rows={rows}
+                   calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable
@@ -498,6 +561,7 @@ export function SalesOrderEditor({
                 discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+           
               />
             </div>
           )}
