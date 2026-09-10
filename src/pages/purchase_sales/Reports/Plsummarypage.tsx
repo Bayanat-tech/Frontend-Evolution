@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
-    Printer,
     RotateCcw,
     FileText,
-    Download,
     Eye,
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
@@ -14,7 +12,7 @@ import {
     getPLSummaryReportHtml,
     getPLSummaryReportExcel
 } from "../../../api/transactions";
-import { useEffect } from "react";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 
 interface PLSummaryReportParams {
     parameter: string;
@@ -478,7 +476,11 @@ export default function PLSummaryPage() {
     const [error, setError] = useState("");
     const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
     const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
-    const reportWindowRef = useRef<Window | null>(null);
+
+    // ── Report preview dialog state (replaces the old window.open tab) ──────
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState("");
+    const [previewError, setPreviewError] = useState("");
 
     const [fromDateIso, setFromDateIso] = useState("");
     const [toDateIso, setToDateIso] = useState("");
@@ -490,6 +492,13 @@ export default function PLSummaryPage() {
     const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
+
+    // Revoke the blob URL whenever it changes or the component unmounts.
+    useEffect(() => {
+        return () => {
+            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
 
     const buildRequestParams = (): PLSummaryReportParams => ({
         parameter: "PL_SUMMARY_REPORT",
@@ -513,30 +522,28 @@ export default function PLSummaryPage() {
         setError("");
         lastRequestRef.current = params;
 
-        const newTab = window.open("", "_blank");
-        if (!newTab) {
-            setLoading(false);
-            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-            return;
-        }
-        newTab.document.write("<title>P&amp;L Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
+        // Open the dialog immediately with the loading state, instead of
+        // opening a new browser tab.
+        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+        setPreviewUrl("");
+        setPreviewError("");
+        setPreviewOpen(true);
 
         try {
             const html = await getPLSummaryReportHtml(params);
-            newTab.document.open();
-            newTab.document.write(html);
-            newTab.document.close();
-            reportWindowRef.current = newTab;
+            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+            const url = window.URL.createObjectURL(blob);
+            setPreviewUrl(url);
             setHasGeneratedReport(true);
             setLastGeneratedAt(new Date());
         } catch (err: any) {
-            newTab.document.open();
-            newTab.document.write("<title>P&amp;L Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
-            newTab.document.close();
-            setError(err?.message ?? "Failed to load report. Please try again.");
+            const message = err?.message ?? "Failed to load report. Please try again.";
+            setPreviewError(message);
+            setError(message);
         } finally {
             setLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleGenerateReport = () => {
@@ -550,13 +557,11 @@ export default function PLSummaryPage() {
         setError(""); setHasGeneratedReport(false); setLastGeneratedAt(null);
     };
 
-    const handlePrint = () => {
-        if (reportWindowRef.current && !reportWindowRef.current.closed) {
-            reportWindowRef.current.focus();
-            reportWindowRef.current.print();
-        } else {
-            setError("No open report tab to print. Generate the report again.");
-        }
+    const closePreview = () => {
+        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+        setPreviewOpen(false);
+        setPreviewUrl("");
+        setPreviewError("");
     };
 
     const handleExcel = async () => {
@@ -569,7 +574,7 @@ export default function PLSummaryPage() {
             await getPLSummaryReportExcel(lastRequestRef.current);
         } catch (err) {
             console.error("Excel export error:", err);
-            alert("Excel export failed. Please try again.");
+            setPreviewError("Excel export failed. Please try again.");
         } finally {
             setExporting(false);
         }
@@ -713,8 +718,8 @@ export default function PLSummaryPage() {
                             </div>
                             <button
                                 onClick={() => {
-                                    if (reportWindowRef.current && !reportWindowRef.current.closed) reportWindowRef.current.focus();
-                                    else setError("Report tab is closed. Please generate again.");
+                                    if (previewUrl) setPreviewOpen(true);
+                                    else setError("Report is no longer available. Please generate again.");
                                 }}
                                 style={{ padding: "4px 12px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                             >
@@ -723,19 +728,11 @@ export default function PLSummaryPage() {
                         </div>
                     )}
 
-                    {/* Action bar */}
+                    {/* Action bar — Print / Excel / Open-in-new-window now live inside ReportPreviewDialog */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
                         <button className="action-btn-excel" onClick={handleReset} disabled={loading}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: loading ? 0.6 : 1 }}>
                             <RotateCcw size={13} /> Reset
-                        </button>
-                        <button className="action-btn-excel" onClick={handlePrint} disabled={!hasGeneratedReport || loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading) ? 0.5 : 1 }}>
-                            <Printer size={13} /> Print
-                        </button>
-                        <button className="action-btn-excel" onClick={handleExcel} disabled={!hasGeneratedReport || loading || exporting}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1 }}>
-                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
                         </button>
                         <button className="action-btn-primary" onClick={handleGenerateReport} disabled={loading || !dateRangeValid}
                             style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5", cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
@@ -751,6 +748,19 @@ export default function PLSummaryPage() {
                     </div>
                 </div>
             </div>
+
+            {previewOpen && (
+                <ReportPreviewDialog
+                    title="P&L Summary Report"
+                    pdfUrl={previewUrl}
+                    error={previewError}
+                    exporting={exporting}
+                    onExcel={handleExcel}
+                    onClose={closePreview}
+                    onDownload={() => {}}
+                    downloadName="PL_Summary_Report.html"
+                />
+            )}
         </div>
     );
 }
