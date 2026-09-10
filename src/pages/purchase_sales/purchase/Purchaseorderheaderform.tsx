@@ -56,7 +56,7 @@ export function PurchaseOrderHeaderForm({
   docType,
   setdetails,
   rows,
-  calculateDiscount
+  // calculateDiscount
 }: {
   form: PurchaseOrderForm;
   setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -69,7 +69,7 @@ export function PurchaseOrderHeaderForm({
   docType: PODocType | SODocType
   setdetails?: (details: any[]) => void;
   rows?: PurchaseOrderLineRow[];
-  calculateDiscount: (type: "amount" | "percent", value: number) => void;
+  // calculateDiscount: (type: "amount" | "percent", value: number) => void;
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
  
@@ -119,7 +119,7 @@ export function PurchaseOrderHeaderForm({
       <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
         <div>
           <p className="eyebrow m-0 text-[9px] leading-tight uppercase opacity-70 font-semibold">Header</p>
-          <h3 className="m-0 text-sm font-bold leading-tight">Purchase Order Information</h3>
+          <h3 className="m-0 text-sm font-bold leading-tight"></h3>
         </div>
       </div>
 
@@ -417,7 +417,7 @@ export function PurchaseOrderHeaderForm({
                 onChange={(e) => {
                   const value = Number(e.target.value || 0);
                   updateField("disc_hdr_price", value);
-                  calculateDiscount("amount", value);
+                  // calculateDiscount("amount", value);
                 }}
               />
             </CField>
@@ -438,7 +438,7 @@ export function PurchaseOrderHeaderForm({
                 onChange={(e) => {
                   const value = Number(e.target.value || 0);
                   updateField("disc_hdr_percent", value);
-                  calculateDiscount("percent", value);
+                  // calculateDiscount("percent", value);
                 }}
               />
             </CField>

@@ -522,7 +522,7 @@ useEffect(() => {
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
               <PurchaseOrderHeaderForm
-              calculateDiscount={applyDiscountCalculation}
+              // calculateDiscount={applyDiscountCalculation}
                 form={form}
                 docType={PO_DOC_TYPE.PQA}
                 setForm={setForm}

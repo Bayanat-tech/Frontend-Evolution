@@ -56,14 +56,12 @@ export function PurchaseOrderEditor({
   isPendingTab,
   onClose,
   onSaved,
-  calculateDiscount
 }: {
   config: PurchaseConfig;
   editor: PurchaseOrderEditorState;
   isPendingTab: boolean;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
-  calculateDiscount: (type: "amount" | "percent") => void;
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
@@ -591,7 +589,7 @@ useEffect(() => {
                 loginid={user?.loginid || user?.username}
                 rows={rows}
                 setdetails={setRows}
-                calculateDiscount={applyDiscountCalculation}
+                // calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable

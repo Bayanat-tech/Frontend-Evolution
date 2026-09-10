@@ -545,7 +545,7 @@ useEffect(() => {
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 rows={rows}
-                   calculateDiscount={applyDiscountCalculation}
+                  //  calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable
