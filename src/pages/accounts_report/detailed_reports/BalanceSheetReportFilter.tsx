@@ -130,6 +130,24 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
   );
 }
 
+// ─── Transition overlay ────────────────────────────────────────────────────────
+// Shown for the moment between the old report being removed and the next one
+// being ready to display, so a fetch delay never looks like a frozen/broken dialog.
+
+function ViewTransitionOverlay({ label }: { label: string }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+      <div className="flex items-center gap-2 rounded-md bg-white px-4 py-3 text-[12px] text-muted-foreground shadow-lg">
+        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        {label}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function BalanceSheetPage() {
@@ -153,6 +171,18 @@ export default function BalanceSheetPage() {
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError]     = useState<string | null>(null);
   const drillIdCounter                  = useRef(0);
+
+  // ── View transition lifecycle ──────────────────────────────────────────────
+  // A view is only ever shown once fully ready. Generating a new report,
+  // drilling into a row, or navigating the breadcrumb always removes
+  // whatever's currently displayed FIRST (dialogVisible → false), and only
+  // shows the next report once it's ready (dialogVisible → true). The dialog
+  // never silently swaps its content while staying mounted.
+  const [dialogVisible, setDialogVisible] = useState(false);
+
+  // Guards against a stale async response — a generate/drill call the user
+  // has since navigated away from — reopening a view it no longer owns.
+  const viewSeq = useRef(0);
 
   // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
   useEffect(() => {
@@ -185,14 +215,18 @@ export default function BalanceSheetPage() {
         [codeField]: [code],
       };
 
+      const id = ++viewSeq.current;
       setDrillLoading(true);
       setDrillError(null);
+      setDialogVisible(false); // remove the currently shown report before loading the next one
 
       try {
         const { data } = await api.post<string>(endpoint, payload, {
           headers:      { Accept: "text/html" },
           responseType: "text",
         });
+
+        if (id !== viewSeq.current) return; // superseded while this was in flight
 
         const entry: DrillEntry = {
           id:      ++drillIdCounter.current,
@@ -203,15 +237,18 @@ export default function BalanceSheetPage() {
         };
 
         setDrillStack(prev => [...prev, entry]);
+        setDialogVisible(true); // show the drilled-down report
       } catch (err: any) {
+        if (id !== viewSeq.current) return; // superseded — don't resurrect a stale error
         const msg =
           err?.response?.data?.message ||
           err?.response?.data ||
           err?.message ||
           "Failed to load drill-down";
         setDrillError(String(msg));
+        setDialogVisible(true); // restore whatever was showing before the failed drill
       } finally {
-        setDrillLoading(false);
+        if (id === viewSeq.current) setDrillLoading(false);
       }
     };
 
@@ -242,8 +279,10 @@ export default function BalanceSheetPage() {
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleReset = () => {
+    ++viewSeq.current; // invalidate anything still in flight
     setAsOnDate(getToday());
     setDivisionCode("");
+    setDialogVisible(false);
     setReportHtml(null);
     setReportError(null);
     setDrillStack([]);
@@ -258,22 +297,27 @@ export default function BalanceSheetPage() {
     loginid:      user?.loginid ?? "ADMIN",
   }), [user, divisionCode, asOnDate]);
 
-  const handleGenerate = async () => {
+  const handleGenerateReport = async () => {
     if (!asOnDate) {
       setReportError("Please select an As On Date before generating.");
       return;
     }
 
+    const id = ++viewSeq.current;
     setReportLoading(true);
     setReportError(null);
+    setDialogVisible(false); // remove whatever report is currently shown
     setReportHtml(null);
     setDrillStack([]);
     setDrillError(null);
 
     try {
       const data = await getBalanceSheetReportHtml(buildPayload());
+      if (id !== viewSeq.current) return; // superseded — don't reopen a stale view
       setReportHtml(data);
+      setDialogVisible(true); // show the newly generated report
     } catch (err: any) {
+      if (id !== viewSeq.current) return;
       const msg =
         err?.response?.data?.message ||
         err?.response?.data ||
@@ -281,7 +325,7 @@ export default function BalanceSheetPage() {
         "Failed to generate report";
       setReportError(String(msg));
     } finally {
-      setReportLoading(false);
+      if (id === viewSeq.current) setReportLoading(false);
     }
   };
 
@@ -329,6 +373,8 @@ export default function BalanceSheetPage() {
   };
 
   const handleCloseReport = () => {
+    ++viewSeq.current; // invalidate anything still in flight
+    setDialogVisible(false);
     setReportHtml(null);
     setDrillStack([]);
     setDrillError(null);
@@ -338,14 +384,23 @@ export default function BalanceSheetPage() {
    * Navigate the drill breadcrumb:
    *   index === -1  → back to main report (clear drill stack)
    *   index ===  n  → truncate stack to [0..n]
+   *
+   * The target content is already cached, but navigation still removes the
+   * currently shown report before showing the target one, for the same
+   * "one report visible at a time" behavior as generate/drill-down.
    */
   const handleDrillNavigate = (index: number) => {
+    const id = ++viewSeq.current; // invalidate any in-flight drill fetch
+    setDialogVisible(false); // remove the currently shown report
     if (index === -1) {
       setDrillStack([]);
     } else {
       setDrillStack(prev => prev.slice(0, index + 1));
     }
     setDrillError(null);
+    requestAnimationFrame(() => {
+      if (id === viewSeq.current) setDialogVisible(true); // show the target report
+    });
   };
 
   const canGenerate = Boolean(asOnDate);
@@ -373,7 +428,7 @@ export default function BalanceSheetPage() {
               <RefreshCw size={15} />
             </Button>
 
-            <Button disabled={!canGenerate || reportLoading} onClick={handleGenerate}>
+            <Button disabled={!canGenerate || reportLoading} onClick={handleGenerateReport}>
               {reportLoading ? (
                 <>
                   <svg
@@ -495,9 +550,19 @@ export default function BalanceSheetPage() {
 
       </section>
 
-      {/* ── Report Dialog ── */}
-      {reportHtml !== null && (
+      {/* Transition overlay: shown for the moment between the old report
+          being removed and the next one being ready (drill-down / breadcrumb) */}
+      {reportHtml !== null && !dialogVisible && drillLoading && (
+        <ViewTransitionOverlay label="Loading drill-down…" />
+      )}
+
+      {/* ── Report Dialog ──
+          key forces a full unmount/remount on every view change, so the
+          previous report's iframe (and any listeners it set up) is fully
+          torn down before the next one is created — never reused in place. */}
+      {reportHtml !== null && dialogVisible && (
         <ReportDialogPage
+          key={topDrill ? `drill-${topDrill.id}` : "main"}
           title={topDrill ? topDrill.label : pageTitle}
           Report={IframeReportRenderer}
           required_values={{ html: topDrill ? topDrill.html : reportHtml }}
@@ -505,17 +570,6 @@ export default function BalanceSheetPage() {
           onClose={handleCloseReport}
           headerSlot={
             <div className="flex flex-col gap-0">
-              {/* Drill loading indicator */}
-              {drillLoading && (
-                <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-border text-[10px] text-primary">
-                  <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Loading drill-down…
-                </div>
-              )}
-
               {/* Drill error */}
               {drillError && (
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive">

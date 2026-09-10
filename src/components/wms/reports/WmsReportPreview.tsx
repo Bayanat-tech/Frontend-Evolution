@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../../state/AuthContext";
 import { ReportPreviewDialog } from "../../reports/ReportPreviewDialog";
-import { closeFinanceReportPreview, getFinanceReportPreview, subscribeFinanceReportPreview } from "./financeReportPreviewStore";
-import { createFinancePdf, downloadFinanceExcel, reportFilename, type ReportIdentity } from "./financeReportDocument";
+import { closeWmsReportPreview, getWmsReportPreview, subscribeWmsReportPreview } from "./wmsReportPreviewStore";
+import { createWmsPdf, downloadWmsExcel, reportFilename, type ReportIdentity } from "./wmsReportDocument";
 
-export function FinanceReportPreview() {
-  const request = useSyncExternalStore(subscribeFinanceReportPreview, getFinanceReportPreview);
+export function WmsReportPreview() {
+  const request = useSyncExternalStore(subscribeWmsReportPreview, getWmsReportPreview);
   const { user } = useAuth();
   const location = useLocation();
   const [pdfUrl, setPdfUrl] = useState("");
@@ -14,7 +14,7 @@ export function FinanceReportPreview() {
   const [exporting, setExporting] = useState(false);
   const identity = useRef<ReportIdentity>({ title: "", company: "", user: "", generatedAt: "" });
 
-  useEffect(() => { closeFinanceReportPreview(); }, [location.pathname]);
+  useEffect(() => { closeWmsReportPreview(); }, [location.pathname]);
   useEffect(() => {
     let cancelled = false;
     let url = "";
@@ -26,7 +26,7 @@ export function FinanceReportPreview() {
         user: user?.username || user?.USERNAME || user?.loginid || "User",
         generatedAt: new Date().toLocaleString(),
       };
-      createFinancePdf(request.document, identity.current).then((blob) => {
+      createWmsPdf(request.document, identity.current).then((blob) => {
         if (cancelled) return;
         url = URL.createObjectURL(blob); setPdfUrl(url);
       }).catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to prepare PDF."); });
@@ -39,17 +39,17 @@ export function FinanceReportPreview() {
   return (
     <ReportPreviewDialog
       title={request.title}
-      className="finance-report-preview"
+      className="wms-report-preview"
       pdfUrl={pdfUrl}
       error={failure}
       exporting={exporting}
-      onClose={closeFinanceReportPreview}
+      onClose={closeWmsReportPreview}
       onDownload={() => undefined}
       downloadName={`${reportFilename(request.document?.filename || request.title)}.pdf`}
       onExcel={async () => {
         if (!request.document) return;
         setExporting(true);
-        try { await downloadFinanceExcel(request.document, identity.current); }
+        try { await downloadWmsExcel(request.document, identity.current); }
         catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to export Excel."); }
         finally { setExporting(false); }
       }}

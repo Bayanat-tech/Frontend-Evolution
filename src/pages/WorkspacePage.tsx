@@ -1,4 +1,6 @@
 import { FreightReportPreview } from "../components/freight/FreightReportPreview";
+import { FinanceReportPreview } from "../components/finance/reports/FinanceReportPreview";
+import { WmsReportPreview } from "../components/wms/reports/WmsReportPreview";
 import {
   Activity,
   Anchor,
@@ -259,7 +261,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </nav>
 
           {workspaceRoute}
+          <FinanceReportPreview />
           <FreightReportPreview />
+          <WmsReportPreview />
         </main>
       </section>
     </div>
