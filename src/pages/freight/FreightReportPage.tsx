@@ -1,4 +1,5 @@
 import { openFreightReport } from "../../components/freight/reportPreviewStore";
+import { ReportFilterHeader } from "../../components/reports/ReportFilterHeader";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { BarChart3, Boxes, CalendarDays, Download, FileSpreadsheet, Filter, Loader2, Printer, RefreshCw, Search, Ship, UserRound, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -710,14 +711,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           </div>
         </div>
 
-        <div className="freight-report-filter-heading">
-  <div className="freight-report-filter-title">
-    {/* Report Filters text removed */}
-  </div>
-  <button type="button" onClick={resetFilters}>
-    <RefreshCw size={14} /> Clear All
-  </button>
-</div>
+        <ReportFilterHeader onClear={resetFilters} />
 
         <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
@@ -751,6 +745,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           )}
           {visibleFilters.includes("principal") && (
             <MultiSelectField
+              className="freight-report-multi-select"
               label="Principal"
               options={principalOptions}
               loading={principalOptionsLoading}
@@ -887,6 +882,7 @@ function AdvancedReportFilters({
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {items.includes("principalRange") && (
           <MultiSelectField
+            className="freight-report-multi-select"
             label="Principal"
             options={principalOptions}
             loading={principalOptionsLoading}
@@ -1203,6 +1199,7 @@ function LookupMultiFilter({
   const { options, loading } = useLookupOptions(parameter, companyCode, valueField, displayFields);
   return (
     <MultiSelectField
+      className="freight-report-multi-select"
       label={label}
       options={options}
       loading={loading}
@@ -1256,6 +1253,7 @@ function QuotationMultiField({
 
   return (
     <MultiSelectField
+      className="freight-report-multi-select"
       label={label}
       options={options}
       loading={loading}
