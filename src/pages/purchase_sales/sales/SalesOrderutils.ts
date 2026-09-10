@@ -8,6 +8,7 @@ import {
 
   TteJmiConsumType,
 } from "../purchase/Purchaseordertypes";
+import { DiscAmountPercentage } from "../purchase/Purchaseorderutils";
 import { PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SODocType } from "./SalesOrdertypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -63,70 +64,70 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
   // Ensure EXPENSE_AC_OPTIONS is defined; fallback to empty string
   const defaultExpenseAc = EXPENSE_AC_OPTIONS?.[0]?.value ?? "";
   return {
-    doc_no: editor?.mode === "edit" ? (editor.row.doc_no ?? 0) : 0,
-    doc_date: editor?.mode === "edit" ? editor.row.doc_date || "" : new Date().toISOString().slice(0, 10),
-    quotn_no: editor?.mode === "edit" ? editor.row.quotn_no || "" : "",
-    quotn_date: editor?.mode === "edit" ? editor.row.quotn_date || "" : "",
-    ref_no: editor?.mode === "edit" ? editor.row.ref_no || "" : "",
-    ref_date: editor?.mode === "edit" ? editor.row.ref_date || "" : "",
-    div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
-    div_name: editor?.mode === "create" ? editor.divName || "" : editor?.mode === "edit" ? editor.row.div_name || "" : "",
-    ac_code: editor?.mode === "edit" ? editor.row.ac_code || "" : "",
-    dept_name: editor?.mode === "edit" ? editor.row.dept_name || "" : "",
-    ac_name: editor?.mode === "edit" ? editor.row.ac_name || "" : "",
-    party_name: editor?.mode === "edit" ? editor.row.ac_name || "" : "",
-    address: editor?.mode === "edit" ? editor.row.address || "" : "",
-    party_address: editor?.mode === "edit" ? editor.row.party_address || "" : "",
-    credit_period: editor?.mode === "edit" ? Number(editor.row.credit_period || 0) : 0,
-    dept_code: editor?.mode === "edit" ? editor.row.dept_code || "" : "",
-    tel: editor?.mode === "edit" ? editor.row.tel || "" : "",
-    party_phone: editor?.mode === "edit" ? editor.row.party_phone || "" : "",
-    fax: editor?.mode === "edit" ? editor.row.fax || "" : "",
-    party_fax: editor?.mode === "edit" ? editor.row.party_fax || "" : "",
-    buyer: editor?.mode === "edit" ? editor.row.buyer || "" : "",
-    wo_no: editor?.mode === "edit" ? editor.row.wo_no || "NC" : "NC",
-    wo_number: editor?.mode === "edit" ? editor.row.wo_number || "NC" : "NC",
-    curr_code: editor?.mode === "edit" ? editor.row.curr_code || "" : "",
-    curr_name: editor?.mode === "edit" ? editor.row.curr_name || "" : "",
-    ex_rate: editor?.mode === "edit" ? Number(editor.row.ex_rate || 1) : 1,
-    pay_terms: editor?.mode === "edit" ? editor.row.pay_terms || "" : "",
-    payment_terms: editor?.mode === "edit" ? editor.row.payment_terms || "" : "",
-    delivery_term: editor?.mode === "edit" ? editor.row.delivery_term || "" : "",
-    dlvr_term: editor?.mode === "edit" ? editor.row.dlvr_term || "" : "",
-    delivery_contact: editor?.mode === "edit" ? editor.row.delivery_contact || "" : "",
-    dlvr_contact: editor?.mode === "edit" ? editor.row.dlvr_contact || "" : "",
-    delivery_tel: editor?.mode === "edit" ? editor.row.delivery_tel || "" : "",
-    dlvr_mobile: editor?.mode === "edit" ? editor.row.dlvr_mobile || "" : "",
-    delivery_email: editor?.mode === "edit" ? editor.row.delivery_email || "" : "",
-    dlvr_email: editor?.mode === "edit" ? editor.row.dlvr_email || "" : "",
-    remarks: editor?.mode === "edit" ? editor.row.remarks || "" : "",
-    disc_price: editor?.mode === "edit" ? Number(editor.row.disc_price || 0) : 0,
-    disc_hdr_price: editor?.mode === "edit" ? Number(editor.row.disc_hdr_price || 0) : 0,
-    disc_percent: editor?.mode === "edit" ? Number(editor.row.disc_percent || 0) : 0,
-    disc_hdr_percent: editor?.mode === "edit" ? Number(editor.row.disc_hdr_percent || 0) : 0,
-    tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
-    tx_cat_code: editor?.mode === "edit" ? editor.row.tx_cat_code || "" : "",
-    tx_cat_name: editor?.mode === "edit" ? editor.row.tx_cat_name || "" : "",
-    tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
-    tax_code_name: editor?.mode === "edit" ? editor.row.tax_code_name || "" : "",
-    tx_compntcat_code_1: editor?.mode === "edit" ? editor.row.tx_compntcat_code_1 || "" : "",
-    expense_ac_post:
-      editor?.mode === "edit"
-        ? typeof editor.row.expense_ac_post === "string"
-          ? editor.row.expense_ac_post
-          : (editor.row.expense_ac_post as unknown as { value?: string })?.value || defaultExpenseAc
-        : defaultExpenseAc,
-    print_on_letterhead: editor?.mode === "edit" ? editor.row.print_on_letterhead || "N" : "N",
-    project_name: editor?.mode === "edit" ? editor.row.project_name || "" : "",
-    pr_no: editor?.mode === "edit" ? editor.row.pr_no || "" : "",
-    scope_of_work: editor?.mode === "edit" ? editor.row.scope_of_work || "" : "",
-    canceled: editor?.mode === "edit" ? editor.row.canceled || "N" : "N",
-    flow_level_running:
-      editor?.mode === "edit" ? Number(editor.row.flow_level_running ?? editor.row.flow_level ?? 0) : 0,
-    next_action_by: "",
-    sentback_reason: "",
-    reject_reason: "",
-  };
+  doc_no: editor?.mode === "edit" ? (editor.row.doc_no ?? "") : "",
+  doc_date: editor?.mode === "edit" ? editor.row.doc_date || "" : new Date().toISOString().slice(0, 10),
+  quotn_no: editor?.mode === "edit" ? editor.row.quotn_no || "" : "",
+  quotn_date: editor?.mode === "edit" ? editor.row.quotn_date || "" : "",
+  ref_no: editor?.mode === "edit" ? editor.row.ref_no || "" : "",
+  ref_date: editor?.mode === "edit" ? editor.row.ref_date || "" : "",
+  div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
+  div_name: editor?.mode === "create" ? editor.divName || "" : editor?.mode === "edit" ? editor.row.div_name || "" : "",
+  ac_code: editor?.mode === "edit" ? editor.row.ac_code || "" : "",
+  dept_name: editor?.mode === "edit" ? editor.row.dept_name || "" : "",
+  ac_name: editor?.mode === "edit" ? editor.row.ac_name || "" : "",
+  party_name: editor?.mode === "edit" ? editor.row.ac_name || "" : "",
+  address: editor?.mode === "edit" ? editor.row.address || "" : "",
+  party_address: editor?.mode === "edit" ? editor.row.party_address || "" : "",
+  credit_period: editor?.mode === "edit" ? Number(editor.row.credit_period || 0) : 0,
+  dept_code: editor?.mode === "edit" ? editor.row.dept_code || "" : "",
+  tel: editor?.mode === "edit" ? editor.row.tel || "" : "",
+  party_phone: editor?.mode === "edit" ? editor.row.party_phone || "" : "",
+  fax: editor?.mode === "edit" ? editor.row.fax || "" : "",
+  party_fax: editor?.mode === "edit" ? editor.row.party_fax || "" : "",
+  buyer: editor?.mode === "edit" ? editor.row.buyer || "" : "",
+  wo_no: editor?.mode === "edit" ? editor.row.wo_no || "NC" : "NC",
+  wo_number: editor?.mode === "edit" ? editor.row.wo_number || "NC" : "NC",
+  curr_code: editor?.mode === "edit" ? editor.row.curr_code || "" : "",
+  curr_name: editor?.mode === "edit" ? editor.row.curr_name || "" : "",
+  ex_rate: editor?.mode === "edit" ? Number(editor.row.ex_rate || 1) : 1,
+  pay_terms: editor?.mode === "edit" ? editor.row.pay_terms || "" : "",
+  payment_terms: editor?.mode === "edit" ? editor.row.payment_terms || "" : "",
+  delivery_term: editor?.mode === "edit" ? editor.row.delivery_term || "" : "",
+  dlvr_term: editor?.mode === "edit" ? editor.row.dlvr_term || "" : "",
+  delivery_contact: editor?.mode === "edit" ? editor.row.delivery_contact || "" : "",
+  dlvr_contact: editor?.mode === "edit" ? editor.row.dlvr_contact || "" : "",
+  delivery_tel: editor?.mode === "edit" ? editor.row.delivery_tel || "" : "",
+  dlvr_mobile: editor?.mode === "edit" ? editor.row.dlvr_mobile || "" : "",
+  delivery_email: editor?.mode === "edit" ? editor.row.delivery_email || "" : "",
+  dlvr_email: editor?.mode === "edit" ? editor.row.dlvr_email || "" : "",
+  remarks: editor?.mode === "edit" ? editor.row.remarks || "" : "",
+  disc_price: editor?.mode === "edit" ? Number(editor.row.disc_price || 0) : 0,
+  disc_hdr_price: editor?.mode === "edit" ? Number(editor.row.disc_hdr_price || 0) : 0,
+  disc_percent: editor?.mode === "edit" ? Number(editor.row.disc_percent || 0) : 0,
+  disc_hdr_percent: editor?.mode === "edit" ? Number(editor.row.disc_hdr_percent || 0) : 0,
+  tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
+  tx_cat_code: editor?.mode === "edit" ? editor.row.tx_cat_code || "" : "",
+  tx_cat_name: editor?.mode === "edit" ? editor.row.tx_cat_name || "" : "",
+  tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
+  tax_code_name: editor?.mode === "edit" ? editor.row.tax_code_name || "" : "",
+  tx_compntcat_code_1: editor?.mode === "edit" ? editor.row.tx_compntcat_code_1 || "" : "",
+  expense_ac_post: editor?.mode === "edit"
+    ? typeof editor.row.expense_ac_post === "string"
+      ? editor.row.expense_ac_post
+      : (editor.row.expense_ac_post as unknown as { value?: string; })?.value || defaultExpenseAc
+    : defaultExpenseAc,
+  print_on_letterhead: editor?.mode === "edit" ? editor.row.print_on_letterhead || "N" : "N",
+  project_name: editor?.mode === "edit" ? editor.row.project_name || "" : "",
+  pr_no: editor?.mode === "edit" ? editor.row.pr_no || "" : "",
+  scope_of_work: editor?.mode === "edit" ? editor.row.scope_of_work || "" : "",
+  canceled: editor?.mode === "edit" ? editor.row.canceled || "N" : "N",
+  flow_level_running: editor?.mode === "edit" ? Number(editor.row.flow_level_running ?? editor.row.flow_level ?? 0) : 0,
+  next_action_by: "",
+  sentback_reason: "",
+  reject_reason: "",
+
+
+}as PurchaseOrderForm ;
 }
 
 export async function fetchSalesOrderHeader(
@@ -233,7 +234,7 @@ export async function fetchSalesOrderDetail(
   });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: SODocType) {
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: SODocType, rows?: SalesOrderLineRow[]) {
   const refDocNo =
     docType === "SDN"
       ? form.so_doc_no
@@ -274,8 +275,10 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
 
     remarks: form.remarks,
 
-    disc_hdr_price: form.disc_hdr_price,
-    disc_hdr_percent: form.disc_hdr_percent,
+    disc_hdr_price: numberOrZero(form.disc_hdr_price),
+    disc_hdr_percent: numberOrZero(form.disc_hdr_price) > 0
+        ? DiscAmountPercentage(form, rows || [])
+        : Number(form.disc_hdr_percent || 0),
 
     tx_cat_code: form.tx_cat_code,
     tx_compntcat_code_1: form.tx_compntcat_code_1,
@@ -343,6 +346,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
 
     // SDN reference
     si_ref_doc_no: form.sdn_doc_no,
+        discount_scoope:form.discount_scoope||"ITEM"
+
   };
 }
 
@@ -389,9 +394,12 @@ export function computePQuantity(row: SalesOrderLineRow): number {
 
 
 // Total discount for the whole line (was missing * quantity before)
+export function amountBeforeDiscPrice(row: SalesOrderLineRow) {
+  return row.unit_price * computeQuantity(row);
+}
+
 export function lineDiscPrice(row: SalesOrderLineRow) {
-  // return row.unit_price * (row.disc_hdr_percent / 100) ;
-  return row.unit_price * (row.disc_percent / 100);
+  return amountBeforeDiscPrice(row) * (row.disc_percent / 100);
 }
 
 export function lineDiscPoPrice(row: SalesOrderLineRow) {
@@ -399,8 +407,11 @@ export function lineDiscPoPrice(row: SalesOrderLineRow) {
 }
 
 export function finalRate(row: SalesOrderLineRow) {
-  return Math.abs(lineDiscPrice(row) - row.unit_price);
+  return Number(
+    (row.unit_price * (1 - row.disc_percent / 100)).toFixed(6)
+  );
 }
+
 
 export function finalPORate(row: SalesOrderLineRow) {
   return Math.abs(lineDiscPoPrice(row) - (row.unit_price ?? 0));
@@ -480,8 +491,8 @@ export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number)
     disc_hdr_percent: row.disc_hdr_percent,
     disc_hdr_price: lineDiscPrice(row),
 
-    disc_percent: row.disc_percent,
-    disc_price: lineDiscPrice(row),
+     disc_percent: numberOrZero(row.disc_percent),
+       disc_price: numberOrZero(row.disc_price),
 
     net_amount: lineNetAmount(row),
 
@@ -534,7 +545,7 @@ export async function runWorkflow(
 ) {
   return upsertBulkSaleseEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode, loginid, docType),
+      header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
       details: buildDetailsPayload(rows, form.ex_rate),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",

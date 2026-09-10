@@ -19,6 +19,7 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  amountBeforeDiscPrice,
   DiscAmountPercentage,
   emptyForm,
   emptyLineRow,
@@ -87,6 +88,7 @@ export function PurchaseInvoiceEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -102,27 +104,31 @@ export function PurchaseInvoiceEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
-  // FIX: previously this effect stamped every row's tx_compnt_1_expmt / tx_compnt_perc_1
-  // from the header form, clobbering the per-line values already loaded from the
-  // GRN detail lookup (e.g. porder_tx_compnt_1_expmt / tx_compnt_perc_1 from the API).
-  // Now a row keeps its own tax values if it already has an tx_compnt_1_expmt set,
-  // and only falls back to the header-derived value when the row has none.
+
   useEffect(() => {
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
-    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
-    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
     setRows((current) =>
-      current.map((row) => ({
-        ...row,
-        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-        tx_cat_code: `${form.tx_cat_code || ""}`,
-        disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: pct > 0 ? pct : row.disc_percent,
-        tx_compnt_1_expmt: row.tx_compnt_1_expmt || form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: row.tx_compnt_1_expmt ? row.tx_compnt_perc_1 : taxPerc,
-      }))
+      current.map((row) => {
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxPerc,
+        };
+
+        return updatedRow;
+      })
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -183,7 +189,15 @@ export function PurchaseInvoiceEditor({
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
+           discount_scoope:
+            headerRaw.discount_scoope === "PO" ||
+              headerRaw.discount_scoope === "ITEM"
+              ? headerRaw.discount_scoope
+              : current.discount_scoope || "ITEM",
+      pinvoice_total_amount: numberOrZero(headerRaw.pinvoice_total_amount),
+
         }));
+ 
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
@@ -233,10 +247,74 @@ export function PurchaseInvoiceEditor({
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
-  const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => ({ ...current, [field]: value }));
+  const updateField = (
+    field: keyof PurchaseOrderForm,
+    value: string | number
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   };
 
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
@@ -275,6 +353,11 @@ export function PurchaseInvoiceEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
@@ -284,6 +367,8 @@ export function PurchaseInvoiceEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -460,6 +545,9 @@ export function PurchaseInvoiceEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                calculateDiscount={applyDiscountCalculation}
+                rows={rows}
+
               />
 
               <PurchaseInvoiceLinesTable

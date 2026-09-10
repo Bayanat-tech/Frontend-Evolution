@@ -8,7 +8,7 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { PurchaseOrderForm, SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { computeQuantity, formatAmount, isSameUom, LcurrDisAmount, lineAmount, lineDiscPoPrice, lineDiscPrice, lineLcurrAmount, lineLcurrPOAmount, linePOAmount, lineTaxAmount, lineTaxpoAmount, numberOrZero, taxLcurrAmount, taxLcurrpoAmount, text } from "./SalesOrderutils";
-import { PODocType } from "../purchase/Purchaseordertypes";
+import { PODocType, PurchaseOrderLineRow } from "../purchase/Purchaseordertypes";
 import { amountBeforeDiscPrice } from "../purchase/Purchaseorderutils";
 
 const STICKY_COLS = {
@@ -126,6 +126,7 @@ export function SalesInvoiceLinesTable({
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
+  const discountScope = form.discount_scoope || "ITEM";
 
   // Quantity is always derived, never typed directly:
   // - same UOM: quantity mirrors qty_luom
@@ -183,7 +184,7 @@ export function SalesInvoiceLinesTable({
           <tbody>
             {rows.length === 0 ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-            ) : rows.map((row, index) => {
+            ) : rows.map((row: SalesOrderLineRow , index: number) => {
               const qtyPuomNum = numberOrZero(row.qty_puom);
               const qtyLuomNum = numberOrZero(row.qty_luom);
               const upppNum = numberOrZero(row.uppp);
@@ -260,12 +261,12 @@ export function SalesInvoiceLinesTable({
                   <td className="finance-amount-cell px-2 py-1">
                     <Input
                       className="finance-money-input"
-                      disabled={headerAndLineDisabled }
+                      disabled={headerAndLineDisabled}
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                       value={row.qty_puom}
-           
+                      value={row.qty_puom}
+
                       onChange={(event) => {
                         const newQtyPuom = Number(event.target.value || 0);
 
@@ -297,7 +298,7 @@ export function SalesInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                                 value={sameUom ? 0 : row.qty_luom}
+                      value={sameUom ? 0 : row.qty_luom}
                       onChange={(event) => {
                         const newQtyLuom = Number(event.target.value || 0);
 
@@ -343,9 +344,46 @@ export function SalesInvoiceLinesTable({
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
+                    <Input
+                      className="finance-money-input px-2 py-1"
+                      disabled={headerAndLineDisabled || discountScope !== "ITEM"}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.disc_percent}
+                      onChange={(event) => {
+                        const discPercent = Number(event.target.value || 0);
+                        const amount = amountBeforeDiscPrice(row);
+
+                        updateRow(row.id, {
+                          disc_percent: discPercent,
+                          disc_price: amount * (discPercent / 100),
+                        });
+                      }}
+                    />
                   </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
+                  {/* <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td> */}
+                  <td className="finance-amount-cell w-24 px-2 py-1">
+                    <Input
+                      className="finance-money-input px-2 py-1"
+                      disabled={headerAndLineDisabled || discountScope !== "ITEM"}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.disc_price}
+                      onChange={(event) => {
+                        const discPrice = Number(event.target.value || 0);
+                        const amount = amountBeforeDiscPrice(row);
+
+                        updateRow(row.id, {
+                          disc_price: discPrice,
+                          disc_percent: amount > 0
+                            ? (discPrice / amount) * 100
+                            : 0,
+                        });
+                      }}
+                    />
+                  </td>
                   <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">

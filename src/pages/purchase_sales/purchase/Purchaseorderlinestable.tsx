@@ -119,7 +119,6 @@ export function PurchaseOrderLinesTable({
   loginid,
   ex_rate,
   docType,
-  calculateDiscountFromAmount
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: PurchaseOrderLineRow[]) => void;
@@ -133,9 +132,7 @@ export function PurchaseOrderLinesTable({
   loginid?: string;
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
-  calculateDiscountFromAmount: (
-    type: "amount" | "percent"
-  ) => void;
+
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -162,7 +159,7 @@ export function PurchaseOrderLinesTable({
           <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
             <Plus size={14} /> Add Line
           </Button>
-          {form.discount_scoope !== "ITEM" && (
+          {/* {form.discount_scoope !== "ITEM" && (
             <>
               {Number(form.disc_hdr_price) > 0 ? (
                 <Button
@@ -180,7 +177,7 @@ export function PurchaseOrderLinesTable({
                 </Button>
               ) : null}
             </>
-          )}
+          )} */}
         </div>
       </div>
       <div className="commercial-lines-scroll max-h-[45vh] overflow-auto" >
