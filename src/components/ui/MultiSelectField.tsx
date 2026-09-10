@@ -25,6 +25,7 @@ export interface MultiSelectFieldProps {
   codeColumnLabel?: string;
   /** Header label for the label column, when options carry a `code`. Defaults to the field `label`. */
   labelColumnLabel?: string;
+  className?: string;
 }
 
 const fieldLabelStyle: React.CSSProperties = {
@@ -113,6 +114,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   placeholder = "Select…",
   codeColumnLabel = "Code",
   labelColumnLabel,
+  className,
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -447,6 +449,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
         {/* Closed field */}
         <button
           ref={triggerRef}
+          className={className}
           type="button"
           onClick={() => !loading && setOpen((o) => !o)}
           disabled={loading}

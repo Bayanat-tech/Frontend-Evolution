@@ -1,3 +1,4 @@
+import { FreightReportPreview } from "../components/freight/FreightReportPreview";
 import {
   Activity,
   Anchor,
@@ -258,6 +259,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </nav>
 
           {workspaceRoute}
+          <FreightReportPreview />
         </main>
       </section>
     </div>

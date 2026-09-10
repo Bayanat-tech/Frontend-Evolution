@@ -549,16 +549,16 @@ export function FreightPacklistPage({
       <fieldset disabled={readOnly || !editing} className={`freight-ui-standard freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <PackEditContext.Provider value={editing && !readOnly}>
         <div className="freight-job-section-grid">
-        <Panel className="pack-document-panel lg:col-span-12" icon={FileSignature} title="Document & Booking Reference" meta={`Pack ${pack.packlist_no || "Auto"} / Job ${pack.job_no || "Pending"}`}>
+        {/* <Panel className="pack-document-panel lg:col-span-12" icon={FileSignature} title="Document & Booking Reference" meta={`Pack ${pack.packlist_no || "Auto"} / Job ${pack.job_no || "Pending"}`}>
           <div className="freight-job-field-grid freight-job-field-grid-6">
             <ReadOnlyField label="Job No" value={pack.job_no || "-"} />
             <ReadOnlyField label="Pack List No" value={pack.packlist_no || "Auto"} />
             <ReadOnlyField label="Sequence No" value={pack.seq_number || "Auto"} />
             <ReadOnlyField label="Job Date" value={formatDate(pack.job_date) || "-"} />
-            <ReadOnlyField label="Principal" value={pack.prin_code || "-"} />
-            <Field label="P.O. No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required />
-          </div>
-        </Panel>
+            <ReadOnlyField label="Principal" value={pack.prin_code || "-"} /> */}
+            <Field label="P.O. No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required className="lg:col-span-4 max-w-xs" />
+          {/* </div>
+        </Panel> */}
         {/* <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>
           <div className="freight-job-field-grid freight-job-field-grid-8">
             <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => { selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code); setContainers([]); }} />
@@ -652,12 +652,12 @@ export function FreightPacklistPage({
         </Panel> */}
 
         <Panel className="pack-description-panel lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
-  <div className="freight-job-field-grid freight-job-field-grid-2 grid gap-2.5 sm:grid-cols-2">
+  {/* <div className="freight-job-field-grid freight-job-field-grid-1 grid gap-1.5 sm:grid-cols-2">
     {isAir ? (
       <>
         <Textarea label="Nature And Quantity Of Goods" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} required/>
         <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
-        <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
+        <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)}className="sm:col-span-2" />
       </>
     ) : (
       <>
@@ -667,7 +667,22 @@ export function FreightPacklistPage({
         <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
       </>
     )}
+  </div> */}
+
+  {isAir ? (
+  <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+    <Textarea label="Nature And Quantity Of Goods" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} required />
+    <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} className="col-span-2" />
   </div>
+) : (
+  <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+    <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
+    <Textarea label="Cargo Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
+    <Textarea label="Cargo Desc" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
+  </div>
+)}
 </Panel>
 
         <Panel className="pack-transport-panel lg:col-span-12" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
@@ -728,14 +743,14 @@ export function FreightPacklistPage({
   <>
    <Field label="HBWL No" value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
     <Field label="WB Date" type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
-    <Textarea rows={2} label="Truck No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} required/>
+    <Textarea label="Truck No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} required/>
     <Field label="Vehicle Type" value={pack.container_type} onChange={(value) => setPackField(setPack, "container_type", value)} />
     <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} />
     <Field label="Agent Amt" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
     <Field label="Carrier Amt" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
     <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
     <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
-    <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
+    <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} className="col-span-3"/>
   </>
 )}
           </div>

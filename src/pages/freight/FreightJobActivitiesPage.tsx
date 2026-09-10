@@ -444,7 +444,7 @@ export function FreightJobActivitiesPage({
                   </Button>
                 </div>
 
-                <div className="freight-activity-tax-row grid grid-cols-2 gap-2 border-t border-dashed border-border/60 bg-muted/20 px-3 py-1.5 text-[11px]">
+                {/* <div className="freight-activity-tax-row grid grid-cols-2 gap-2 border-t border-dashed border-border/60 bg-muted/20 px-3 py-1.5 text-[11px]">
                   <div className="freight-activity-tax-group sales flex items-center gap-1.5">
                     <span className="font-semibold text-primary uppercase text-[10px] tracking-wider min-w-[55px]">Sales Tax:</span>
                     <div className="w-28">
@@ -484,7 +484,51 @@ export function FreightJobActivitiesPage({
                       <span className="font-semibold text-foreground">{money(line.tx_compnt_amt_1_cost)}</span>
                     </div>
                   </div>
-                </div>
+                </div> */}
+              
+              <div className="freight-activity-tax-row grid grid-cols-[42px_max-content_max-content] gap-2 items-center border-t border-dashed border-border/60 bg-muted/20 px-3 py-1.5 text-[11px]">
+  <span />
+  <div className="freight-activity-tax-group sales flex items-center gap-1.5 shrink-0">
+    <span className="font-semibold text-primary uppercase text-[10px] tracking-wider min-w-[55px]">Sales Tax:</span>
+    <div className="w-24">
+      <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
+    </div>
+    <div className="w-28">
+      <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
+    </div>
+    <div className="w-14">
+      <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
+    </div>
+    <div className="w-16">
+      <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
+    </div>
+    <div className="flex items-center gap-0.1 text-muted-foreground pl-9 shrink-0 whitespace-nowrap">
+      <span>Amt:</span>
+      <span className="font-semibold text-foreground tabular-nums min-w-[60px] text-right">{money(line.tx_compnt_amt_1)}</span>
+    </div>
+  </div>
+
+  <div className="freight-activity-tax-group cost flex items-center gap-1.5 shrink-0 border-l border-border/60 pl-8">
+    <span className="font-semibold text-emerald-700 uppercase text-[10px] tracking-wider min-w-[55px]">Cost Tax:</span>
+    <div className="w-24">
+      <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
+    </div>
+    <div className="w-28">
+      <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
+    </div>
+    <div className="w-14">
+      <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
+    </div>
+    <div className="w-16">
+      <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
+    </div>
+    <div className="flex items-center text-muted-foreground pl-9 shrink-0 whitespace-nowrap">
+      <span>Amt:</span>
+      <span className="font-semibold text-foreground tabular-nums min-w-[60px] text-right">{money(line.tx_compnt_amt_1_cost)}</span>
+    </div>
+  </div>
+</div>
+              
               </div>
             ))}
             {!lines.length && (
