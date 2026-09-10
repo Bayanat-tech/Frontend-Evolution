@@ -48,40 +48,40 @@ export async function buildFreightPdfDefinition(report: FreightReportDocument, i
   const content = htmlToPdfmake(prepared.html, {
     window: browserWindow,
     defaultStyles: {
-      h1: { fontSize: 17, bold: true, color: "#00378c", marginBottom: 10 },
-      h2: { fontSize: 13, bold: true, marginBottom: 6 },
-      h3: { fontSize: 11, bold: true, marginBottom: 5 },
-      p: { margin: [0, 2, 0, 5] },
-      td: { margin: [3, 3, 3, 3] },
-      th: { bold: true, margin: [3, 4, 3, 4] },
-      table: { margin: [0, 5, 0, 10] },
+      h1: { fontSize: 14, bold: true, color: "#00378c", marginBottom: 6 },
+      h2: { fontSize: 11, bold: true, marginBottom: 4 },
+      h3: { fontSize: 9.5, bold: true, marginBottom: 3 },
+      p: { margin: [0, 1, 0, 3] },
+      td: { margin: [2, 2, 2, 2] },
+      th: { bold: true, margin: [2, 3, 2, 3] },
+      table: { margin: [0, 3, 0, 6] },
     },
   }) as Content;
   const styles: StyleDictionary = {
     num: { alignment: "right" }, right: { alignment: "right" }, center: { alignment: "center" },
     "primary-text": { bold: true, color: "#00378c" },
     "group-title": { bold: true, fontSize: 11, color: "#00378c", margin: [0, 8, 0, 3] },
-    title: { fontSize: 17, bold: true, color: "#00378c", margin: [0, 0, 0, 6] },
-    label: { bold: true, color: "#475569" }, sub: { color: "#64748b", margin: [0, 0, 0, 8] },
-    signature: { margin: [0, 24, 0, 0], alignment: "right" },
-    empty: { margin: [0, 20, 0, 20], alignment: "center", color: "#64748b" },
+    title: { fontSize: 14, bold: true, color: "#00378c", margin: [0, 0, 0, 4] },
+    label: { bold: true, color: "#475569" }, sub: { color: "#64748b", margin: [0, 0, 0, 5] },
+    signature: { margin: [0, 14, 0, 0], alignment: "right" },
+    empty: { margin: [0, 12, 0, 12], alignment: "center", color: "#64748b" },
   };
   return {
     info: { title: identity.title, author: identity.company, subject: "Freight report" },
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation: report.orientation || (prepared.maxColumns > 7 ? "landscape" : "portrait"),
-    pageMargins: [32, 58, 32, 40],
-    defaultStyle: { font: "Inter", fontSize: prepared.maxColumns > 14 ? 7 : 8.5, color: "#172033", lineHeight: 1.15 },
+    pageMargins: [28, 48, 28, 32],
+    defaultStyle: { font: "Inter", fontSize: prepared.maxColumns > 14 ? 6.5 : 7.5, color: "#172033", lineHeight: 1.05 },
     styles,
     header: {
-      margin: [32, 20, 32, 0],
+      margin: [28, 14, 28, 0],
       columns: [
-        { text: identity.company, color: "#00378c", bold: true, fontSize: 12 },
-        { text: identity.title, alignment: "right", color: "#64748b", fontSize: 9 },
+        { text: identity.company, color: "#00378c", bold: true, fontSize: 10 },
+        { text: identity.title, alignment: "right", color: "#64748b", fontSize: 8 },
       ],
     },
     footer: (page, count) => ({
-      margin: [32, 10, 32, 0], fontSize: 7, color: "#64748b",
+      margin: [28, 8, 28, 0], fontSize: 6.5, color: "#64748b",
       columns: [
         { text: `${identity.user} | ${identity.generatedAt}` },
         { text: `Page ${page} of ${count}`, alignment: "right", width: 90 },
