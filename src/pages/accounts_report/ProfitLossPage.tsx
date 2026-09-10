@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Building2, CalendarDays, Filter, Loader2, Search } from "lucide-react";
+import { BarChart3, Loader2, Search } from "lucide-react";
 
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
+import { Button } from "../../components/ui/Button";
+import { MultiSelectField, type MultiSelectOption } from "../../components/ui/MultiSelectField";
 import { ReportFilterHeader } from "../../components/reports/ReportFilterHeader";
 import { ReportPreviewDialog } from "../../components/reports/ReportPreviewDialog";
 import { useAuth } from "../../state/AuthContext";
@@ -48,64 +51,26 @@ function toDisplayDate(value: string) {
   return `${day}/${month}/${year}`;
 }
 
-// ─── Small presentational bits (mirrors the Freight report page look) ────────
-
-function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
-  return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      <span>
-        {label} {required && <span className="text-destructive normal-case">*</span>}
-      </span>
-      {children}
-    </label>
-  );
+function toInputDate(value: string) {
+  if (!value) return "";
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
 }
 
-function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
-  return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-        <Icon size={16} />
-      </span>
-      <div className="min-w-0 leading-tight">
-        <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
-        <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>
-          {value}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Field wrapper (same style as Freight page) ───────────────────────────────
 
-function SummaryBadge({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className={`rounded-md border px-3 py-1.5 ${strong ? "border-primary/20 bg-primary/10 text-primary" : "bg-muted/40 text-foreground"}`}>
-      <div className="text-[9px] font-semibold uppercase text-muted-foreground">{label}</div>
-      <div className="text-sm font-semibold">{value}</div>
-    </div>
-  );
-}
-
-// Small local button so the primary action matches app styling without an
-// extra import; swap for ../../components/ui/Button if you prefer that one.
-function PrimaryButton({
+function Field({
+  label,
   children,
-  onClick,
-  disabled,
 }: {
+  label: string;
   children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-    >
+    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+      {label}
       {children}
-    </button>
+    </label>
   );
 }
 
@@ -121,25 +86,24 @@ export default function ProfitLossPage() {
   const [divisionList, setDivisionList] = useState<Division[]>([]);
   const [divisionLoading, setDivisionLoading] = useState(false);
   const [division, setDivision] = useState("");
-  const divisionName = useMemo(
-    () => divisionList.find((d) => d.div_code === division)?.div_name,
-    [divisionList, division],
-  );
 
   // ── Form state ───────────────────────────────────────────────────────────
   const [dateFrom, setDateFrom] = useState(getStartOfYear());
   const [dateTo, setDateTo] = useState(getToday());
+  const [reportPeriod, setReportPeriod] = useState("D"); // Daily / Monthly / Yearly
+  const [reportMode, setReportMode] = useState("D"); // Detail / Grouped
+  const [reportVariant, setReportVariant] = useState(""); // Standard / etc.
 
   // ── Report / drill state ─────────────────────────────────────────────────
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [message, setMessage] = useState("Select filters and generate the report.");
+  const [message, setMessage] = useState("Select filters and run the report.");
 
   const [drillStack, setDrillStack] = useState<DrillState[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
 
-  // ── Report preview dialog state (replaces the old popup window) ──────────
+  // ── Report preview dialog state ──────────────────────────────────────────
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -170,10 +134,7 @@ export default function ProfitLossPage() {
     fetchDivisions();
   }, [companyCode, loginId]);
 
-  // ── postMessage listener for drill-down clicks ────────────────────────────
-  // The report HTML now renders directly inside ReportPreviewDialog's iframe
-  // (a child of THIS page), so window.parent from the report already points
-  // here — no popup-window relay script is needed any more.
+  // ── postMessage listener for drill-down clicks ───────────────────────────
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
@@ -181,8 +142,6 @@ export default function ProfitLossPage() {
 
       setDrillLoading(true);
       setReportError(null);
-      // Clear the preview URL so the dialog shows its own loading state
-      // while the drill-down HTML is being fetched.
       setPreviewUrl((prev) => {
         if (prev) window.URL.revokeObjectURL(prev);
         return "";
@@ -240,12 +199,11 @@ export default function ProfitLossPage() {
     return () => window.removeEventListener("message", handleMessage);
   }, [loginId]);
 
-  // ── Keep the dialog's blob URL in sync with whatever should be showing ───
-  // (root report, or the current top of the drill-down stack).
+  // ── Keep the dialog's blob URL in sync ───────────────────────────────────
   useEffect(() => {
     if (!previewOpen) return;
-    if (drillLoading) return; // dialog shows its own spinner meanwhile
-    if (activeHtml === null || activeHtml === undefined) return; // still generating root report
+    if (drillLoading) return;
+    if (activeHtml === null || activeHtml === undefined) return;
 
     const blob = new Blob([activeHtml], { type: "text/html;charset=utf-8" });
     const url = window.URL.createObjectURL(blob);
@@ -256,7 +214,6 @@ export default function ProfitLossPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewOpen, activeHtml, drillLoading]);
 
-  // Revoke the blob URL on unmount.
   useEffect(() => {
     return () => {
       if (previewUrl) window.URL.revokeObjectURL(previewUrl);
@@ -272,6 +229,9 @@ export default function ProfitLossPage() {
     division_code: division || "All",
     from_date: dateFrom,
     to_date: dateTo,
+    report_period: reportPeriod,
+    report_mode: reportMode,
+    report_variant: reportVariant,
   });
 
   const handleGenerate = async () => {
@@ -282,8 +242,6 @@ export default function ProfitLossPage() {
     setDrillStack([]);
     setMessage("");
 
-    // Open the dialog right away — it shows its own loading spinner until
-    // previewUrl is populated by the sync effect above.
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
     setPreviewOpen(true);
@@ -301,13 +259,18 @@ export default function ProfitLossPage() {
     }
   };
 
+  // ── Clear All (exactly like Freight page) ────────────────────────────────
   const handleReset = () => {
     setDivision("");
     setDateFrom(getStartOfYear());
     setDateTo(getToday());
+    setReportPeriod("D");
+    setReportMode("D");
+    setReportVariant("");
+    setReportHtml(null);
+    setDrillStack([]);
     setReportError(null);
-    setMessage("Select filters and generate the report.");
-    closePreview();
+    setMessage("Select filters and run the report.");
   };
 
   const closePreview = () => {
@@ -364,89 +327,120 @@ export default function ProfitLossPage() {
     }
   };
 
-  const pageTitle = "Profit & Loss";
-
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <section className="freight-ui-standard freight-report-screen">
       <div className="freight-report-card">
+        {/* ── Title bar (same as Freight) ─────────────────────────────────── */}
         <div className="freight-report-titlebar">
-          <h1>{pageTitle}</h1>
+          <h1>Profit &amp; Loss</h1>
           <span className="freight-report-title-dot" aria-hidden="true" />
-          <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
-            {division && <SummaryBadge label="Division" value={division} strong />}
-          </div>
         </div>
 
+        {/* ── Report Filters header with Clear All ───────────────────────── */}
         <ReportFilterHeader onClear={handleReset} />
 
-        <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-3">
-          <SummaryStripItem
-            icon={CalendarDays}
-            label="Period"
-            value={`${toDisplayDate(dateFrom) || "Start"} – ${toDisplayDate(dateTo) || "Today"}`}
-          />
-          <SummaryStripItem
-            icon={Building2}
+        {/* ── Filter fields ──────────────────────────────────────────────── */}
+        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <MultiSelectField
+            className="freight-report-multi-select"
             label="Division"
-            value={division ? `${division}${divisionName ? ` - ${divisionName}` : ""}` : "All divisions"}
+            options={divisionList.map(
+              (d): MultiSelectOption => ({
+                value: d.div_code,
+                label: `${d.div_code} – ${d.div_name}`,
+              })
+            )}
+            loading={divisionLoading}
+            value={division ? [division] : []}
+            onChange={(next) => setDivision(next[0] ?? "")}
           />
-          <SummaryStripItem icon={BarChart3} label="Report" value={pageTitle} />
+
+          <Field label="From">
+            <BiscDatePicker
+              value={toInputDate(dateFrom)}
+              onChange={(value) => {
+                if (!dateTo || value <= dateTo) setDateFrom(value);
+              }}
+            />
+          </Field>
+
+          <Field label="To">
+            <BiscDatePicker
+              value={toInputDate(dateTo)}
+              onChange={(value) => {
+                if (!dateFrom || value >= dateFrom) setDateTo(value);
+              }}
+            />
+          </Field>
         </div>
 
-        {/* Fixed: was "md:grid-cols-2 xl:grid-cols-4" which split the 3 fields
-            across two rows on medium screens. Now fixed to 3 columns so
-            Division / From / To always sit in a single row from md upward. */}
-        <div className="freight-report-fields grid grid-cols-1 gap-3 p-3 md:grid-cols-3">
-          <Field label="Division">
+        {/* ── Second row: Period / Report Mode / Report Variant ─────────── */}
+        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-3">
+          <Field label="Period">
             <select
-              value={division}
-              onChange={(e) => setDivision(e.target.value)}
-              disabled={divisionLoading}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:opacity-50"
+              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              value={reportPeriod}
+              onChange={(e) => setReportPeriod(e.target.value)}
             >
-              <option value="">— All Divisions —</option>
-              {divisionList.map((d) => (
-                <option key={d.div_code} value={d.div_code}>
-                  {d.div_code} – {d.div_name}
-                </option>
-              ))}
+              <option value="D">Daily</option>
+              <option value="M">Monthly</option>
+              <option value="Y">Yearly</option>
             </select>
           </Field>
 
-          <Field label="From" required>
-            <input
-              type="date"
-              value={dateFrom}
-              max={dateTo || undefined}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground shadow-sm"
-            />
+          <Field label="Report Mode">
+            <select
+              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              value={reportMode}
+              onChange={(e) => setReportMode(e.target.value)}
+            >
+              <option value="D">Detail</option>
+              <option value="G">Grouped</option>
+            </select>
           </Field>
 
-          <Field label="To" required>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground shadow-sm"
-            />
+          <Field label="Report Variant">
+            <select
+              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              value={reportVariant}
+              onChange={(e) => setReportVariant(e.target.value)}
+            >
+              <option value="">Standard</option>
+              <option value="ANALYSIS">Analysis</option>
+              <option value="SUMMARY">Summary</option>
+              <option value="CROSSTAB">Cross Tab</option>
+            </select>
           </Field>
         </div>
 
+        {/* ── Actions bar (right aligned, same as Freight) ──────────────── */}
         <div className="freight-report-actions">
-          <PrimaryButton onClick={handleGenerate} disabled={!canGenerate || reportLoading}>
-            {reportLoading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-            {reportLoading ? "Generating..." : "Generate Report"}
-          </PrimaryButton>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleGenerate}
+            disabled={!canGenerate || reportLoading}
+          >
+            {reportLoading ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Search size={15} />
+            )}{" "}
+            Generate Report
+          </Button>
         </div>
-        {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
+
+        {/* ── Message ────────────────────────────────────────────────────── */}
+        {message ? (
+          <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p>
+        ) : null}
         {reportError && !previewOpen ? (
           <p className="px-3 pb-3 text-sm text-destructive">{reportError}</p>
         ) : null}
       </div>
 
+      {/* ── Preview dialog ──────────────────────────────────────────────── */}
       {previewOpen && (
         <ReportPreviewDialog
           title={dialogTitle}

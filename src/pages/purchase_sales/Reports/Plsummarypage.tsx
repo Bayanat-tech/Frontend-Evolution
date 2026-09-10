@@ -1,766 +1,441 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import {
-    RotateCcw,
-    FileText,
-    Eye,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, Eye, FileText, Filter, RotateCcw, UserRound } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
-import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
-import {
-    getPLSummaryReportHtml,
-    getPLSummaryReportExcel
-} from "../../../api/transactions";
+import { getDynamicLookupaccount, LookupRow } from "../../../api/lookups";
+import { getPLSummaryReportExcel, getPLSummaryReportHtml } from "../../../api/transactions";
 import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
-
-interface PLSummaryReportParams {
-    parameter: string;
-    loginid: string;
-    company_code: string;
-    mode: ReportMode;
-    fromdate: string;
-    todate: string;
-    docno: string;
-    salesman: string;
-    group: string;
-    brand: string;
-    prodcategory: string;
-    prodtype: string;
-    manu: string;
-    cust: string;
-    [key: string]: any;
-}
-
-const LOOKUP_PARAMS = {
-    group: "PURCHASE_SALE_MSE_PRODGROUP",
-    brand: "PURCHASE_SALE_MSE_PRODBRAND",
-    category: "PURCHASE_SALE_MSE_PRODCATEGORY",
-    type: "PURCHASE_SALE_MSE_PRODTYPE",
-    manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",
-    customer: "PURCHASE_SALE_MSE_CUSTOMER",
-    salesman: "PURCHASE_SALE_MSE_SALESMAN",
-    docno: "PURCHASE_SALE_SALESINVOICE_DOCNO", // ← new lookup added in procedure
-} as const;
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { Button } from "../../../components/ui/Button";
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
+import { Input } from "../../../components/ui/Input";
+import { MultiSelectField, type MultiSelectOption } from "../../../components/ui/MultiSelectField";
 
 export type ReportMode =
-    | "invoicewise"
-    | "customerwise"
-    | "salesmanwise"
-    | "customergroupwise"
-    | "groupcustomerwise";
-
-const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
-    { value: "invoicewise", label: "Invoice wise" },
-    { value: "customerwise", label: "Customer wise" },
-    { value: "salesmanwise", label: "Salesman wise" },
-    { value: "customergroupwise", label: "Customer-Group wise" },
-    { value: "groupcustomerwise", label: "Group-Customer wise" },
-];
+  | "invoicewise"
+  | "customerwise"
+  | "salesmanwise"
+  | "customergroupwise"
+  | "groupcustomerwise";
 
 type TabKey = "group" | "brand" | "category" | "type" | "manufacturer" | "customer";
 
-const TABS: { key: TabKey; label: string; lookupParam: string; valueField: string; nameField: string }[] = [
-    { key: "group", label: "Group", lookupParam: LOOKUP_PARAMS.group, valueField: "group_code", nameField: "group_name" },
-    { key: "brand", label: "Brand", lookupParam: LOOKUP_PARAMS.brand, valueField: "brand_code", nameField: "brand_name" },
-    { key: "category", label: "Category", lookupParam: LOOKUP_PARAMS.category, valueField: "category_code", nameField: "category_name" },
-    { key: "type", label: "Type", lookupParam: LOOKUP_PARAMS.type, valueField: "prodtype_code", nameField: "prodtype_name" },
-    { key: "manufacturer", label: "Manufacturer", lookupParam: LOOKUP_PARAMS.manufacturer, valueField: "manu_code", nameField: "manu_name" },
-    { key: "customer", label: "Customer", lookupParam: LOOKUP_PARAMS.customer, valueField: "ac_code", nameField: "ac_name" },
-];
+interface PLSummaryReportParams {
+  parameter: string;
+  loginid: string;
+  company_code: string;
+  mode: ReportMode;
+  fromdate: string;
+  todate: string;
+  docno: string;
+  salesman: string;
+  group: string;
+  brand: string;
+  prodcategory: string;
+  prodtype: string;
+  manu: string;
+  cust: string;
+  [key: string]: any;
+}
 
 interface Selections {
-    group: string[];
-    brand: string[];
-    category: string[];
-    type: string[];
-    manufacturer: string[];
-    customer: string[];
+  group: string[];
+  brand: string[];
+  category: string[];
+  type: string[];
+  manufacturer: string[];
+  customer: string[];
 }
 
 const EMPTY_SELECTIONS: Selections = {
-    group: [], brand: [], category: [], type: [], manufacturer: [], customer: [],
+  group: [], brand: [], category: [], type: [], manufacturer: [], customer: [],
 };
 
-// ─── Shared styles ─────────────────────────────────────────────────────────
+const LOOKUP_PARAMS = {
+  group: "PURCHASE_SALE_MSE_PRODGROUP",
+  brand: "PURCHASE_SALE_MSE_PRODBRAND",
+  category: "PURCHASE_SALE_MSE_PRODCATEGORY",
+  type: "PURCHASE_SALE_MSE_PRODTYPE",
+  manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",
+  customer: "PURCHASE_SALE_MSE_CUSTOMER",
+  salesman: "PURCHASE_SALE_MSE_SALESMAN",
+  docno: "PURCHASE_SALE_SALESINVOICE_DOCNO",
+} as const;
 
-const inputStyle: React.CSSProperties = {
-    width: "100%",
-    fontSize: 12,
-    padding: "8px 10px",
-    border: "1px solid #d1d5db",
-    borderRadius: 7,
-    background: "#fff",
-    color: "#111827",
-    boxSizing: "border-box",
-    outline: "none",
-};
+const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
+  { value: "invoicewise", label: "Invoice wise" },
+  { value: "customerwise", label: "Customer wise" },
+  { value: "salesmanwise", label: "Salesman wise" },
+  { value: "customergroupwise", label: "Customer-Group wise" },
+  { value: "groupcustomerwise", label: "Group-Customer wise" },
+];
 
-function FloatLabel({ label, required, children, bgColor = "#fff" }: {
-    label: string;
-    required?: boolean;
-    children: React.ReactNode;
-    bgColor?: string;
-}) {
-    return (
-        <div style={{ position: "relative", marginTop: 6 }}>
-            <span style={{
-                position: "absolute", top: -8, left: 10, fontSize: 11, color: "#6b7280",
-                background: bgColor, padding: "0 4px", zIndex: 1, textTransform: "uppercase",
-                letterSpacing: "0.05em", fontWeight: 500,
-            }}>
-                {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
-            </span>
-            {children}
-        </div>
-    );
+const TABS: { key: TabKey; label: string; lookupParam: string; valueField: string; nameField: string }[] = [
+  { key: "group", label: "Group", lookupParam: LOOKUP_PARAMS.group, valueField: "group_code", nameField: "group_name" },
+  { key: "brand", label: "Brand", lookupParam: LOOKUP_PARAMS.brand, valueField: "brand_code", nameField: "brand_name" },
+  { key: "category", label: "Category", lookupParam: LOOKUP_PARAMS.category, valueField: "category_code", nameField: "category_name" },
+  { key: "type", label: "Type", lookupParam: LOOKUP_PARAMS.type, valueField: "prodtype_code", nameField: "prodtype_name" },
+  { key: "manufacturer", label: "Manufacturer", lookupParam: LOOKUP_PARAMS.manufacturer, valueField: "manu_code", nameField: "manu_name" },
+  { key: "customer", label: "Customer", lookupParam: LOOKUP_PARAMS.customer, valueField: "ac_code", nameField: "ac_name" },
+];
+
+function splitCsv(value: string) {
+  return value ? value.split(",").map((x) => x.trim()).filter(Boolean) : [];
 }
 
-const DateField: React.FC<{
-    value: string; onChange: (v: string) => void; max?: string; min?: string;
-}> = ({ value, onChange, max, min }) => (
-    <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        min={min}
-        max={max}
-        style={{ ...inputStyle, color: value ? "#111827" : "#9ca3af", cursor: "pointer" }}
-    />
-);
-
-// ─── Single-select searchable lookup (Sales Person / Invoice No) ──────────
-
-type SingleLookupProps = {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    loadOptions: () => Promise<LookupRow[]>;
-    valueField: string;
-    displayFields: string[];
-    bgColor?: string;
-};
-
-function SingleSelectLookup({ label, value, onChange, loadOptions, valueField, displayFields, bgColor = "#fff" }: SingleLookupProps) {
-    const [open, setOpen] = useState(false);
-    const [rows, setRows] = useState<LookupRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState("");
-    const wrapRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const handleClick = (e: MouseEvent) => {
-            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-                setOpen(false);
-                setSearch("");
-            }
-        };
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, [open]);
-
-    const openDropdown = async () => {
-        const next = !open;
-        setOpen(next);
-        if (next && rows.length === 0 && !loading) {
-            setLoading(true);
-            try { setRows(await loadOptions()); } finally { setLoading(false); }
-        }
-    };
-
-    const term = search.trim().toLowerCase();
-    const filtered = term
-        ? rows.filter((r) => Object.values(r).some((v) => String(v ?? "").toLowerCase().includes(term)))
-        : rows;
-
-    const selectedRow = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === value);
-    const displayText = !value ? "All" : selectedRow ? getLookupText(selectedRow, displayFields) : value;
-
-    return (
-        <div ref={wrapRef} style={{ position: "relative" }}>
-            <FloatLabel label={label} bgColor={bgColor}>
-                <button
-                    type="button"
-                    onClick={openDropdown}
-                    style={{ ...inputStyle, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left" }}
-                >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: value ? "#111827" : "#9ca3af" }}>
-                        {displayText}
-                    </span>
-                </button>
-            </FloatLabel>
-            {open && (
-                <div style={{
-                    position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "#fff",
-                    border: "0.5px solid #d1d5db", borderRadius: 6, boxShadow: "0 6px 16px rgba(0,0,0,0.1)",
-                    zIndex: 50, maxHeight: 260, display: "flex", flexDirection: "column", overflow: "hidden",
-                }}>
-                    <div style={{ padding: "6px 8px", borderBottom: "0.5px solid #e5e7eb" }}>
-                        <input
-                            type="text" autoFocus value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search..."
-                            style={{ ...inputStyle, fontSize: 11, padding: "4px 8px" }}
-                        />
-                    </div>
-                    <div style={{ overflowY: "auto", flex: 1 }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: !value ? "#EFF6FF" : "transparent" }}>
-                            <input type="radio" checked={!value} onChange={() => { onChange(""); setOpen(false); setSearch(""); }} />
-                            All
-                        </label>
-                        {loading ? (
-                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>Loading...</div>
-                        ) : filtered.length === 0 ? (
-                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>No records found</div>
-                        ) : filtered.map((row, idx) => {
-                            const v = String(getLookupValue(row, valueField) ?? "");
-                            const text = getLookupText(row, displayFields);
-                            return (
-                                <label key={v || idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", background: value === v ? "#F5F9FF" : "transparent" }}>
-                                    <input type="radio" checked={value === v} onChange={() => { onChange(v); setOpen(false); setSearch(""); }} />
-                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#374151" }}>{text}</span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+function toApiCodeString(values: string[]) {
+  return values.length ? values.join(",") : "All";
 }
 
-const ALL_SENTINEL = "__ALL__";
-
-type MultiSelectDropdownProps = {
-    label: string;
-    selected: string[];
-    onChange: (values: string[]) => void;
-    loadOptions: () => Promise<LookupRow[]>;
-    valueField: string;
-    displayFields: string[];
-    placeholder?: string;
-    bgColor?: string;
-};
-
-function MultiSelectDropdown({
-    label,
-    selected,
-    onChange,
-    loadOptions,
-    valueField,
-    displayFields,
-    placeholder = "All",
-    bgColor = "#fff",
-}: MultiSelectDropdownProps) {
-    const [open, setOpen] = useState(false);
-    const [rows, setRows] = useState<LookupRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState("");
-    const wrapRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const handleClick = (e: MouseEvent) => {
-            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-                setOpen(false);
-                setSearch("");
-            }
-        };
-        const handleKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") {
-                setOpen(false);
-                setSearch("");
-            }
-        };
-        document.addEventListener("mousedown", handleClick);
-        document.addEventListener("keydown", handleKey);
-        return () => {
-            document.removeEventListener("mousedown", handleClick);
-            document.removeEventListener("keydown", handleKey);
-        };
-    }, [open]);
-
-    const openDropdown = async () => {
-        const next = !open;
-        setOpen(next);
-        if (next && rows.length === 0 && !loading) {
-            setLoading(true);
-            try {
-                setRows(await loadOptions());
-            } finally {
-                setLoading(false);
-            }
-        }
-    };
-
-    const term = search.trim().toLowerCase();
-    const filteredRows = term
-        ? rows.filter((row) => Object.values(row).some((v) => String(v ?? "").toLowerCase().includes(term)))
-        : rows;
-
-    const allValues = rows.map((r) => String(getLookupValue(r, valueField) ?? "")).filter(Boolean);
-
-    const isAllSelected =
-        selected.includes(ALL_SENTINEL) ||
-        (allValues.length > 0 && allValues.every((v) => selected.includes(v)));
-
-    const toggleAll = () => {
-        if (isAllSelected) onChange([]);
-        else onChange([ALL_SENTINEL]);
-    };
-
-    const toggleOne = (val: string) => {
-        const base = selected.includes(ALL_SENTINEL) ? allValues : selected;
-        if (base.includes(val)) onChange(base.filter((v) => v !== val));
-        else onChange([...base, val]);
-    };
-
-    const displayText = isAllSelected
-        ? "All"
-        : selected.length === 0
-            ? placeholder
-            : selected.length === 1
-                ? (() => {
-                    const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
-                    return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
-                })()
-                : `${selected.length} selected`;
-
-    return (
-        <div ref={wrapRef} style={{ position: "relative" }}>
-            <FloatLabel label={label} bgColor={bgColor}>
-                <button
-                    type="button"
-                    onClick={openDropdown}
-                    style={{
-                        ...inputStyle,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        cursor: "pointer",
-                        textAlign: "left",
-                    }}
-                >
-                    <span
-                        style={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            color: selected.length ? "#111827" : "#9ca3af",
-                        }}
-                    >
-                        {displayText}
-                    </span>
-                </button>
-            </FloatLabel>
-
-            {open && (
-                <div
-                    style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        background: "#fff",
-                        border: "0.5px solid #d1d5db",
-                        borderRadius: 6,
-                        boxShadow: "0 6px 16px rgba(0,0,0,0.1)",
-                        zIndex: 50,
-                        maxHeight: 260,
-                        display: "flex",
-                        flexDirection: "column",
-                        overflow: "hidden",
-                    }}
-                >
-                    <div style={{ padding: "6px 8px", borderBottom: "0.5px solid #e5e7eb", flexShrink: 0 }}>
-                        <input
-                            type="text"
-                            autoFocus
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search..."
-                            style={{ ...inputStyle, fontSize: 11, padding: "4px 8px" }}
-                        />
-                    </div>
-                    <div style={{ overflowY: "auto", flex: 1 }}>
-                        {loading ? (
-                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>Loading...</div>
-                        ) : filteredRows.length === 0 ? (
-                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>No records found</div>
-                        ) : (
-                            <>
-                                <label
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                        padding: "7px 10px",
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        background: isAllSelected ? "#EFF6FF" : "transparent",
-                                        color: isAllSelected ? "#185FA5" : "#111827",
-                                        borderBottom: "0.5px solid #f3f4f6",
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isAllSelected}
-                                        onChange={toggleAll}
-                                        style={{ accentColor: "#185FA5", width: 14, height: 14 }}
-                                    />
-                                    All
-                                </label>
-                                {filteredRows.map((row, idx) => {
-                                    const val = String(getLookupValue(row, valueField) ?? "");
-                                    const checked = isAllSelected || selected.includes(val);
-                                    const text = getLookupText(row, displayFields.length ? displayFields : [valueField]);
-                                    return (
-                                        <label
-                                            key={val || idx}
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 8,
-                                                padding: "6px 10px",
-                                                fontSize: 12,
-                                                cursor: "pointer",
-                                                background: checked ? "#F5F9FF" : "transparent",
-                                            }}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={checked}
-                                                onChange={() => toggleOne(val)}
-                                                style={{ accentColor: "#185FA5", width: 14, height: 14 }}
-                                            />
-                                            <span
-                                                style={{
-                                                    overflow: "hidden",
-                                                    textOverflow: "ellipsis",
-                                                    whiteSpace: "nowrap",
-                                                    color: "#374151",
-                                                }}
-                                            >
-                                                {text}
-                                            </span>
-                                        </label>
-                                    );
-                                })}
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+function firstValue(values: string[]) {
+  return values[0] || "";
 }
 
-function toApiCodeString(selected: string[]): string {
-    if (selected.length === 0) return "All";
-    if (selected.includes(ALL_SENTINEL)) return "All";
-    return selected.join(",");
+function setFilter<T extends Record<string, any>>(setter: React.Dispatch<React.SetStateAction<T>>, key: keyof T, value: string) {
+  setter((current) => ({ ...current, [key]: value }));
 }
 
-// ─── Main Component ─────────────────────────────────────────────────────────
+function optionLabel(options: { label: string; value: string }[], value: string) {
+  return options.find((x) => x.value === value)?.label || "All";
+}
+
+function toInputDate(value: string) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
+function toDisplayDate(value: string) {
+  const v = toInputDate(value);
+  if (!v) return "";
+  const [y, m, d] = v.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function formatAmount(value: number) {
+  return value.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function firstExisting(row: LookupRow, key: string) {
+  return row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
+}
+
+function formatText(value: unknown) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function buildTotals(rows: LookupRow[]) {
+  const fields = ["REVENUE", "EXPENSE", "PROFIT"];
+  return fields
+    .map((field) => ({
+      label: field.replace(/_/g, " "),
+      value: rows.reduce((sum, row) => sum + Number(firstExisting(row, field) || 0), 0),
+    }))
+    .filter((x) => x.value !== 0);
+}
+
+async function loadLookup(parameter: string, companyCode: string) {
+  const rows = await getDynamicLookupaccount({
+    parameter,
+    loginid: "ADMIN",
+    code1: companyCode,
+    code2: "", code3: "", code4: "",
+    number1: 0, number2: 0, number3: 0, number4: 0,
+    date1: null, date2: null, date3: null, date4: null,
+  });
+  return Array.isArray(rows) ? rows : [];
+}
+
+function usePLLookup(parameter: string, companyCode: string, valueField: string, nameField: string, loginId: string) {
+  const [options, setOptions] = useState<MultiSelectOption[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    getDynamicLookupaccount({
+      parameter,
+      loginid: loginId,
+      code1: companyCode,
+      code2: "", code3: "", code4: "",
+      number1: 0, number2: 0, number3: 0, number4: 0,
+      date1: null, date2: null, date3: null, date4: null,
+    })
+      .then((rows) => {
+        if (!alive) return;
+        const safeRows = Array.isArray(rows) ? rows : [];
+        setOptions(safeRows.map((row: LookupRow) => {
+          const value = String(firstExisting(row, valueField) ?? "");
+          const name = String(firstExisting(row, nameField) ?? "");
+          return { value, label: name && name !== value ? `${value} - ${name}` : value };
+        }).filter((x) => x.value));
+      })
+      .catch(() => alive && setOptions([]))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, [parameter, companyCode, valueField, nameField, loginId]);
+
+  return { options, loading };
+}
 
 export default function PLSummaryPage() {
-    const { user } = useAuth();
-    const companyCode = user?.company_code ?? "";
-    const loginId = user?.loginid ?? user?.username ?? "ADMIN";
+  const { user } = useAuth();
+  const companyCode = user?.company_code ?? "";
+  const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
-    const [error, setError] = useState("");
-    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [salesman, setSalesman] = useState("");
+  const [mode, setMode] = useState<ReportMode>("invoicewise");
+  const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("Select filters and run the report.");
+  const [rows, setRows] = useState<LookupRow[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
+  const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
 
-    // ── Report preview dialog state (replaces the old window.open tab) ──────
-    const [previewOpen, setPreviewOpen] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState("");
-    const [previewError, setPreviewError] = useState("");
+  const invoiceLookup = usePLLookup(LOOKUP_PARAMS.docno, companyCode, "doc_no", "inv_no", loginId);
+  const salesmanLookup = usePLLookup(LOOKUP_PARAMS.salesman, companyCode, "salesman_code", "salesman_name", loginId);
 
-    const [fromDateIso, setFromDateIso] = useState("");
-    const [toDateIso, setToDateIso] = useState("");
-    const [invoiceNo, setInvoiceNo] = useState(""); // ← ata doc_no value store hoto (dropdown selected)
-    const [salesman, setSalesman] = useState("");
-    const [mode, setMode] = useState<ReportMode>("invoicewise");
-    const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
+  const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
+  const totals = useMemo(() => buildTotals(rows), [rows]);
+  const invoiceDisplay = invoiceLookup.options.find((x) => x.value === invoiceNo)?.label || "All invoices";
+  const salesmanDisplay = salesmanLookup.options.find((x) => x.value === salesman)?.label || "All sales persons";
 
-    const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
+  useEffect(() => () => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
-    const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
+  const buildRequestParams = useCallback((): PLSummaryReportParams => ({
+    parameter: "PL_SUMMARY_REPORT",
+    loginid: loginId,
+    company_code: companyCode,
+    mode,
+    fromdate: fromDate || "All",
+    todate: toDate || "All",
+    docno: invoiceNo || "0",
+    salesman: salesman || "All",
+    group: toApiCodeString(selections.group),
+    brand: toApiCodeString(selections.brand),
+    prodcategory: toApiCodeString(selections.category),
+    prodtype: toApiCodeString(selections.type),
+    manu: toApiCodeString(selections.manufacturer),
+    cust: toApiCodeString(selections.customer),
+  }), [companyCode, fromDate, invoiceNo, loginId, mode, salesman, selections, toDate]);
 
-    // Revoke the blob URL whenever it changes or the component unmounts.
-    useEffect(() => {
-        return () => {
-            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-        };
-    }, [previewUrl]);
+  const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    lastRequestRef.current = params;
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+    setPreviewError("");
+    setPreviewOpen(true);
 
-    const buildRequestParams = (): PLSummaryReportParams => ({
-        parameter: "PL_SUMMARY_REPORT",
-        loginid: loginId,
-        company_code: companyCode,
-        mode,
-        fromdate: fromDateIso || "All",
-        todate: toDateIso || "All",
-        docno: invoiceNo || "0",
-        salesman: salesman || "All",
-        group: toApiCodeString(selections.group),
-        brand: toApiCodeString(selections.brand),
-        prodcategory: toApiCodeString(selections.category),
-        prodtype: toApiCodeString(selections.type),
-        manu: toApiCodeString(selections.manufacturer),
-        cust: toApiCodeString(selections.customer),
-    });
+    try {
+      const html = await getPLSummaryReportHtml(params);
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      setPreviewUrl(window.URL.createObjectURL(blob));
+      setRows([]);
+      setHasGeneratedReport(true);
+      setMessage("Report generated successfully.");
+    } catch (err: any) {
+      const msg = err?.message || "Failed to load report. Please try again.";
+      setError(msg);
+      setPreviewError(msg);
+      setMessage(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [previewUrl]);
 
-    const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
-        setLoading(true);
-        setError("");
-        lastRequestRef.current = params;
+  function handleGenerate() {
+    if (!dateRangeValid) return;
+    void fetchReport(buildRequestParams());
+  }
 
-        // Open the dialog immediately with the loading state, instead of
-        // opening a new browser tab.
-        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-        setPreviewUrl("");
-        setPreviewError("");
-        setPreviewOpen(true);
+  function handleReset() {
+    setFromDate("");
+    setToDate("");
+    setInvoiceNo("");
+    setSalesman("");
+    setMode("invoicewise");
+    setSelections(EMPTY_SELECTIONS);
+    setRows([]);
+    setError("");
+    setMessage("Select filters and run the report.");
+    setHasGeneratedReport(false);
+  }
 
-        try {
-            const html = await getPLSummaryReportHtml(params);
-            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-            const url = window.URL.createObjectURL(blob);
-            setPreviewUrl(url);
-            setHasGeneratedReport(true);
-            setLastGeneratedAt(new Date());
-        } catch (err: any) {
-            const message = err?.message ?? "Failed to load report. Please try again.";
-            setPreviewError(message);
-            setError(message);
-        } finally {
-            setLoading(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+  function closePreview() {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewOpen(false);
+    setPreviewUrl("");
+    setPreviewError("");
+  }
 
-    const handleGenerateReport = () => {
-        if (!dateRangeValid) return;
-        fetchReport(buildRequestParams());
-    };
+  async function handleExcel() {
+    if (!lastRequestRef.current) {
+      setError("Generate the report at least once before exporting to Excel.");
+      return;
+    }
+    setExporting(true);
+    try {
+      await getPLSummaryReportExcel(lastRequestRef.current);
+    } catch {
+      setPreviewError("Excel export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
-    const handleReset = () => {
-        setFromDateIso(""); setToDateIso(""); setInvoiceNo(""); setSalesman("");
-        setMode("invoicewise"); setSelections(EMPTY_SELECTIONS);
-        setError(""); setHasGeneratedReport(false); setLastGeneratedAt(null);
-    };
-
-    const closePreview = () => {
-        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-        setPreviewOpen(false);
-        setPreviewUrl("");
-        setPreviewError("");
-    };
-
-    const handleExcel = async () => {
-        if (!lastRequestRef.current) {
-            setError("Generate the report at least once before exporting to Excel.");
-            return;
-        }
-        setExporting(true);
-        try {
-            await getPLSummaryReportExcel(lastRequestRef.current);
-        } catch (err) {
-            console.error("Excel export error:", err);
-            setPreviewError("Excel export failed. Please try again.");
-        } finally {
-            setExporting(false);
-        }
-    };
-
-    const BG = "#EEF5FD";
-    return (
-        <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
-            <style>{`
-                .action-btn-primary:hover { background: #1e40af !important; }
-                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
-
-            <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
-
-                    {/* Header */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                        <FileText size={17} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>P&amp;L Summary Report</span>
-                        {hasGeneratedReport && (
-                            <span style={{ fontSize: 10, background: "#d1fae5", color: "#065f46", padding: "2px 10px", borderRadius: 12, fontWeight: 500 }}>
-                                Report Generated
-                            </span>
-                        )}
-                    </div>
-
-                    {error && (
-                        <div style={{ marginBottom: 10, padding: "8px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, color: "#dc2626", fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                            <span>⚠️</span>{error}
-                            <button onClick={() => setError("")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}>✕</button>
-                        </div>
-                    )}
-
-                    {!dateRangeValid && (
-                        <div style={{ marginBottom: 10, padding: "8px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, color: "#92400e", fontSize: 12 }}>
-                            From date must be on or before To date.
-                        </div>
-                    )}
-
-                    {/* ── Top fields + Report Criteria ── */}
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-                        <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                            <FloatLabel label="Date From" bgColor={BG}>
-                                <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
-                            </FloatLabel>
-                            <FloatLabel label="Date To" bgColor={BG}>
-                                <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
-                            </FloatLabel>
-
-                            {/* Invoice No — ata SingleSelectLookup dropdown */}
-                            <SingleSelectLookup
-                                label="Invoice No"
-                                bgColor={BG}
-                                value={invoiceNo}
-                                onChange={setInvoiceNo}
-                                valueField="doc_no"
-                                displayFields={["inv_no"]}
-                                loadOptions={() =>
-                                    getDynamicLookupaccount({
-                                        parameter: LOOKUP_PARAMS.docno,
-                                        loginid: loginId,
-                                        code1: companyCode,
-                                        code2: "", code3: "", code4: "",
-                                        number1: 0, number2: 0, number3: 0, number4: 0,
-                                        date1: null, date2: null, date3: null, date4: null,
-                                    })
-                                }
-                            />
-                            <SingleSelectLookup
-                                label="Sales Person"
-                                bgColor={BG}
-                                value={salesman}
-                                onChange={setSalesman}
-                                valueField="salesman_code"
-                                displayFields={["salesman_code", "salesman_name"]}
-                                loadOptions={() =>
-                                    getDynamicLookupaccount({
-                                        parameter: LOOKUP_PARAMS.salesman,
-                                        loginid: loginId,
-                                        code1: companyCode,
-                                        code2: "", code3: "", code4: "",
-                                        number1: 0, number2: 0, number3: 0, number4: 0,
-                                        date1: null, date2: null, date3: null, date4: null,
-                                    })
-                                }
-                            />
-                        </div>
-
-                        {/* Report Criteria box */}
-                        <div style={{ border: "0.5px solid #d1d5db", borderRadius: 8, padding: "8px 12px" }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: "#185FA5", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-                                Report Criteria
-                            </div>
-                            {MODE_OPTIONS.map((opt) => (
-                                <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontSize: 12, cursor: "pointer", color: "#374151" }}>
-                                    <input type="radio" name="reportMode" checked={mode === opt.value} onChange={() => setMode(opt.value)} />
-                                    {opt.label}
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* ── Group / Brand / Category / Type / Manufacturer / Customer ── */}
-                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 12 }}>
-                        {TABS.map((t) => (
-                            <MultiSelectDropdown
-                                key={t.key}
-                                label={t.label}
-                                bgColor={BG}
-                                selected={selections[t.key]}
-                                onChange={(vals) => setSelections((s) => ({ ...s, [t.key]: vals }))}
-                                valueField={t.valueField}
-                                displayFields={[t.valueField, t.nameField]}
-                                placeholder="All"
-                                loadOptions={() =>
-                                    getDynamicLookupaccount({
-                                        parameter: t.lookupParam,
-                                        loginid: loginId,
-                                        code1: companyCode,
-                                        code2: "", code3: "", code4: "",
-                                        number1: 0, number2: 0, number3: 0, number4: 0,
-                                        date1: null, date2: null, date3: null, date4: null,
-                                    })
-                                }
-                            />
-                        ))}
-                    </div>
-                    <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginLeft: 4 }}>
-                        Leave a field on "All" to include every value for that filter.
-                    </div>
-
-                    {/* Status bar */}
-                    {hasGeneratedReport && (
-                        <div style={{ marginTop: 10, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>✅</span>
-                                <span style={{ fontSize: 12, color: "#065f46" }}>Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}</span>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (previewUrl) setPreviewOpen(true);
-                                    else setError("Report is no longer available. Please generate again.");
-                                }}
-                                style={{ padding: "4px 12px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-                            >
-                                <Eye size={12} /> Open Report
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Action bar — Print / Excel / Open-in-new-window now live inside ReportPreviewDialog */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button className="action-btn-excel" onClick={handleReset} disabled={loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: loading ? 0.6 : 1 }}>
-                            <RotateCcw size={13} /> Reset
-                        </button>
-                        <button className="action-btn-primary" onClick={handleGenerateReport} disabled={loading || !dateRangeValid}
-                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5", cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
-                            {loading ? (
-                                <>
-                                    <span style={{ width: 12, height: 12, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                                    Generating...
-                                </>
-                            ) : (
-                                <><Eye size={13} /> View Report</>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {previewOpen && (
-                <ReportPreviewDialog
-                    title="P&L Summary Report"
-                    pdfUrl={previewUrl}
-                    error={previewError}
-                    exporting={exporting}
-                    onExcel={handleExcel}
-                    onClose={closePreview}
-                    onDownload={() => {}}
-                    downloadName="PL_Summary_Report.html"
-                />
-            )}
+  return (
+    <section className="freight-ui-standard freight-report-screen">
+      <div className="freight-report-card">
+        <div className="freight-report-titlebar">
+          <h1>P&amp;L Summary Report</h1>
+          <span className="freight-report-title-dot" aria-hidden="true" />
+          <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
+            <SummaryBadge label="Records" value={String(rows.length)} />
+            {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
+          </div>
         </div>
-    );
+
+        <ReportFilterHeader onClear={handleReset} />
+
+        {error && <div className="mx-3 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠️ {error}</div>}
+        {!dateRangeValid && <div className="mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">From date must be on or before To date.</div>}
+
+        <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
+          <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(fromDate) || "Start"} – ${toDisplayDate(toDate) || "Today"}`} />
+          <SummaryStripItem icon={UserRound} label="Sales Person" value={salesmanDisplay} />
+          <SummaryStripItem icon={FileText} label="Invoice" value={invoiceDisplay} />
+          <SummaryStripItem icon={Filter} label="Report Type" value={optionLabel(MODE_OPTIONS, mode)} />
+        </div>
+
+        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="From"><BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} /></Field>
+          <Field label="To"><BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} /></Field>
+
+          <MultiSelectField
+            className="freight-report-multi-select"
+            label="Invoice No"
+            options={invoiceLookup.options}
+            loading={invoiceLookup.loading}
+            value={splitCsv(invoiceNo)}
+            onChange={(next) => setInvoiceNo(firstValue(next))}
+          />
+
+          <MultiSelectField
+            className="freight-report-multi-select"
+            label="Sales Person"
+            options={salesmanLookup.options}
+            loading={salesmanLookup.loading}
+            value={splitCsv(salesman)}
+            onChange={(next) => setSalesman(firstValue(next))}
+          />
+
+          <Field label="Report Criteria">
+            <select
+              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as ReportMode)}
+            >
+              {MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        <div className="freight-report-fields grid gap-3 border-t bg-muted/10 p-3 md:grid-cols-2 xl:grid-cols-3">
+          {TABS.map((tab) => (
+            <PLMultiSelect
+              key={tab.key}
+              tab={tab}
+              companyCode={companyCode}
+              loginId={loginId}
+              value={selections[tab.key]}
+              onChange={(next) => setSelections((current) => ({ ...current, [tab.key]: next }))}
+            />
+          ))}
+        </div>
+
+        <div className="freight-report-actions flex items-center justify-end gap-2">
+          <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
+            <Eye size={14} /> {loading ? "Generating..." : "Generate Report"}
+          </Button>
+        </div>
+
+        {hasGeneratedReport && <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p>}
+      </div>
+
+      {previewOpen && (
+        <ReportPreviewDialog
+          title="P&L Summary Report"
+          pdfUrl={previewUrl}
+          error={previewError}
+          exporting={exporting}
+          onExcel={handleExcel}
+          onClose={closePreview}
+          onDownload={() => {}}
+          downloadName="PL_Summary_Report.html"
+        />
+      )}
+    </section>
+  );
+}
+
+function PLMultiSelect({
+  tab, companyCode, loginId, value, onChange,
+}: {
+  tab: { key: TabKey; label: string; lookupParam: string; valueField: string; nameField: string };
+  companyCode: string;
+  loginId: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const lookup = usePLLookup(tab.lookupParam, companyCode, tab.valueField, tab.nameField, loginId);
+  return (
+    <MultiSelectField
+      className="freight-report-multi-select"
+      label={tab.label}
+      options={lookup.options}
+      loading={lookup.loading}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">{label}{children}</label>;
+}
+
+function SummaryBadge({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`rounded-md border px-3 py-1.5 ${strong ? "border-primary/20 bg-primary/10 text-primary" : "bg-muted/40 text-foreground"}`}>
+      <div className="text-[9px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={16} /></span>
+      <div className="min-w-0 leading-tight">
+        <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+        <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>{value}</div>
+      </div>
+    </div>
+  );
 }
