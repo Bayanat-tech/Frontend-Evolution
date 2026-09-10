@@ -39,6 +39,7 @@ export function FreightReportPreview() {
   return (
     <ReportPreviewDialog
       title={request.title}
+      className="freight-report-preview-freight"
       pdfUrl={pdfUrl}
       error={failure}
       exporting={exporting}

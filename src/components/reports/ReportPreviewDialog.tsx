@@ -2,6 +2,18 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Download, ExternalLink, FileSpreadsheet, Loader2, X } from "lucide-react";
 
+export type ReportPreviewDialogProps = {
+  title: string;
+  pdfUrl: string;
+  error?: string;
+  exporting: boolean;
+  onExcel: () => void;
+  onClose: () => void;
+  onDownload: () => void;
+  downloadName: string;
+  className?: string;
+};
+
 export function ReportPreviewDialog({
   title,
   pdfUrl,
@@ -11,16 +23,8 @@ export function ReportPreviewDialog({
   onClose,
   onDownload,
   downloadName,
-}: {
-  title: string;
-  pdfUrl: string;
-  error?: string;
-  exporting: boolean;
-  onExcel: () => void;
-  onClose: () => void;
-  onDownload: () => void;
-  downloadName: string;
-}) {
+  className = "",
+}: ReportPreviewDialogProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,7 +61,7 @@ export function ReportPreviewDialog({
 
   return createPortal(
     <div className="freight-report-preview-backdrop">
-      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="report-preview-title" className="freight-report-preview">
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="report-preview-title" className={`freight-report-preview ${className}`.trim()}>
         <header>
           <div><span>REPORT PREVIEW</span><h2 id="report-preview-title">{title}</h2></div>
           <button type="button" aria-label="Close report preview" onClick={onClose}><X size={20} /></button>
