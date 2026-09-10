@@ -607,7 +607,7 @@ export function JobProductionOrderEditor({
 
                 {activeLineTab === "lines" && (
                   <div className="grid gap-3 p-2">
-                    <PurchaseOrderHeaderForm
+                    {/* <PurchaseOrderHeaderForm
                       form={form}
                       docType={PO_DOC_TYPE.FGP}
                       setForm={setForm}
@@ -617,7 +617,7 @@ export function JobProductionOrderEditor({
                       editMode={editMode}
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
-                    />
+                    /> */}
 
                     {/* <PurchaseOrderLinesTable
                       rows={rows}
