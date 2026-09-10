@@ -1,3 +1,4 @@
+import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
@@ -1029,6 +1030,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
   const enquiryNr = lookupText(row, "enquiry_nr");
   const enquiryType = lookupText(row, "enquiry_type") || (screenType === "rfq" ? "RFQ" : "EQI");
   if (!companyCode || !enquiryNr) return;
+  const preview = openFreightReport(`${enquiryLabel} ${enquiryNr}`);
   try {
     const response = await api.post<{ success?: boolean; data?: { header?: LookupRow | null; details?: LookupRow[] }; message?: string }>(
       isRfq ? "/api/freight/rfq/get" : "/api/freight/enquiry/get",
@@ -1041,8 +1043,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     const printDetails = (response.data?.data?.details || [])
       .map((detail) => normalizeLookupRow(detail))
       .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
-    renderPrintWindow(printHeader, printDetails, enquiryLabel);
+    preview.ready({ html: buildFreightPrintHtml(printHeader, printDetails, enquiryLabel), filename: `${enquiryLabel}-${enquiryNr}`, orientation: "portrait" });
   } catch (error) {
+    preview.fail(error);
     setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to print ${enquiryLabel}` });
   }
 };
@@ -2844,7 +2847,7 @@ function formatDisplayDate(input: string) {
 //   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 // }
 
-function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+function buildFreightPrintHtml(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
   const rows = activeDetails.length
     ? activeDetails
@@ -2905,11 +2908,11 @@ function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], labe
           <button class="btn-close" onclick="window.close()">Close</button>
         </div>
         <div class="frame">
-          <h1>REQUEST</h1>
+          <h1>${escapeHtml(label)}</h1>
 
           <div class="top-row">
             <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
-            <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+            <div><span class="label">${escapeHtml(label)} No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
           </div>
 
           <div class="party-grid">
@@ -2947,22 +2950,7 @@ function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], labe
     </html>
   `;
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = window.URL.createObjectURL(blob);
-
-  const width = 960;
-  const height = 760;
-  const left = Math.max(0, (window.screen.width - width) / 2);
-  const top = Math.max(0, (window.screen.height - height) / 2);
-  const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`;
-
-  const printWindow = window.open(url, "_blank", features);
-  if (!printWindow) {
-    window.URL.revokeObjectURL(url);
-    alert("Please allow popups for this site to view the print preview.");
-    return;
-  }
-  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+  return html;
 }
 
 function escapeHtml(value: string) {
