@@ -1,557 +1,608 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import {
-    BarChart2,
-    RotateCcw,
-    Printer,
-    Loader2,
-    ChevronUp,
-    ChevronDown,
-} from "lucide-react";
-import { getDynamicLookup } from "../../../api/lookups";
+import { useEffect, useRef, useState } from "react";
+import { BarChart3, Building2, CalendarDays, Loader2, Search, Users } from "lucide-react";
+
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 import { useAuth } from "../../../state/AuthContext";
-import { openVisaExpiryReport } from "../../../api/transactions";
+import { getDynamicLookup } from "../../../api/lookups";
+import {
+  getVisaExpiryReportHtml,
+  getVisaExpiryReportExcelDownload,
+} from "../../../api/transactions";
 
-
-// ─── Types ──────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LookupOption {
-    code: string;
-    name: string;
+  code: string;
+  name: string;
 }
 
 type EmployeeFilter = "A" | "ALL";
 
-// ─── Date helpers ────────────────────────────────────────────────────────────────
+// ─── Date helpers ───────────────────────────────────────────────────────────────
 
 const getToday = (): string => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(
+    n.getDate()
+  ).padStart(2, "0")}`;
 };
 
 const getNextMonth = (): string => {
-    const n = new Date();
-    n.setMonth(n.getMonth() + 1);
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  const n = new Date();
+  n.setMonth(n.getMonth() + 1);
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(
+    n.getDate()
+  ).padStart(2, "0")}`;
 };
 
-// ─── Shared styles ────────────────────────────────────────────────────────────────
-
-const fieldLabelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#6b7280",
-    marginBottom: 5,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-};
-
-const inputStyle: React.CSSProperties = {
-    width: "100%",
-    fontSize: 12,
-    padding: "6px 9px",
-    border: "0.5px solid #d1d5db",
-    borderRadius: 6,
-    background: "#fff",
-    color: "#111827",
-    boxSizing: "border-box",
-};
-
-const radioLabelStyle: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    fontSize: 12,
-    cursor: "pointer",
-    color: "#374151",
-};
-
-// ─── Searchable Dropdown ──────────────────────────────────────────────────────────
-
-interface SearchableDropdownProps {
-    label: string;
-    value: LookupOption | null;
-    onChange: (v: LookupOption | null) => void;
-    options: LookupOption[];
-    placeholder?: string;
+function toDisplayDate(value: string) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
 }
 
-const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
-    label,
-    value,
-    onChange,
-    options,
-    placeholder = "Search...",
-}) => {
-    const [search, setSearch] = useState("");
-    const [open, setOpen] = useState(false);
-    const [display, setDisplay] = useState("");
-
-    useEffect(() => {
-        if (!value) {
-            setDisplay("");
-            setSearch("");
-        } else {
-            setDisplay(`${value.code} - ${value.name}`);
-        }
-    }, [value]);
-
-    const filtered = options.filter((o) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return (
-            o.code.toLowerCase().includes(q) ||
-            o.name.toLowerCase().includes(q)
-        );
-    });
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearch(e.target.value);
-        setOpen(true);
-        if (value) onChange(null);
-    };
-
-    return (
-        <div style={{ position: "relative" }}>
-            <div style={fieldLabelStyle}>{label}</div>
-            <input
-                type="text"
-                placeholder={placeholder}
-                value={search !== "" ? search : display}
-                onChange={handleInputChange}
-                onFocus={() => setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                style={inputStyle}
-            />
-            {open && (
-                <div style={{
-                    position: "absolute", zIndex: 200, top: "calc(100% + 2px)", left: 0, right: 0,
-                    background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 180, overflowY: "auto",
-                }}>
-                    <div
-                        className="dd-option"
-                        style={{
-                            padding: "6px 12px", fontSize: 11, color: "#9ca3af",
-                            cursor: "pointer", borderBottom: "0.5px solid #f3f4f6",
-                        }}
-                        onMouseDown={() => {
-                            onChange(null);
-                            setDisplay("");
-                            setSearch("");
-                            setOpen(false);
-                        }}
-                    >
-                        — All —
-                    </div>
-
-                    {filtered.length === 0 ? (
-                        <div style={{ padding: "8px 12px", fontSize: 12, color: "#9ca3af" }}>
-                            No results found
-                        </div>
-                    ) : (
-                        filtered.map((o) => (
-                            <div
-                                key={o.code}
-                                className="dd-option"
-                                style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
-                                onMouseDown={() => {
-                                    onChange(o);
-                                    setDisplay(`${o.code} - ${o.name}`);
-                                    setSearch("");
-                                    setOpen(false);
-                                }}
-                            >
-                                <span style={{ fontWeight: 500 }}>{o.code}</span>
-                                <span style={{ color: "#6b7280", marginLeft: 6 }}>{o.name}</span>
-                            </div>
-                        ))
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-// ─── Generic lookup fetcher ───────────────────────────────────────────────────────
+// ─── Generic lookup fetcher ───────────────────────────────────────────────────
 
 const fetchLookup = async (
-    parameter: string,
-    loginId: string,
-    companyCode: string,
-    codeKey: string,
-    nameKey: string,
-    extraNameKey?: string
+  parameter: string,
+  loginId: string,
+  companyCode: string,
+  codeKey: string,
+  nameKey: string,
+  extraNameKey?: string
 ): Promise<LookupOption[]> => {
-    try {
-        const res = await getDynamicLookup({
-            parameter,
-            loginid: loginId,
-            code1: companyCode,
-            code2: "", code3: "", code4: "",
-            number1: 0, number2: 0, number3: 0, number4: 0,
-            date1: null, date2: null, date3: null, date4: null,
-        });
+  try {
+    const res = await getDynamicLookup({
+      parameter,
+      loginid: loginId,
+      code1: companyCode,
+      code2: "", code3: "", code4: "",
+      number1: 0, number2: 0, number3: 0, number4: 0,
+      date1: null, date2: null, date3: null, date4: null,
+    });
 
-        if (Array.isArray(res) && res.length > 0) {
-            console.log(`[${parameter}] First record keys:`, Object.keys(res[0]));
-            console.log(`[${parameter}] First record sample:`, res[0]);
-        } else {
-            console.warn(`[${parameter}] Empty or non-array response:`, res);
-        }
-
-        return Array.isArray(res)
-            ? res
-                .filter((x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== "")
-                .map((x: any) => ({
-                    code: String(x[codeKey]),
-                    name: extraNameKey && x[extraNameKey]
-                        ? `${x[nameKey] ?? ""} (${x[extraNameKey]})`
-                        : x[nameKey] ?? "",
-                }))
-            : [];
-    } catch (err) {
-        console.error(`[${parameter}] Fetch error:`, err);
-        return [];
-    }
+    return Array.isArray(res)
+      ? res
+          .filter((x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== "")
+          .map((x: any) => ({
+            code: String(x[codeKey]),
+            name: extraNameKey && x[extraNameKey]
+              ? `${x[nameKey] ?? ""} (${x[extraNameKey]})`
+              : x[nameKey] ?? "",
+          }))
+      : [];
+  } catch (err) {
+    console.error(`[${parameter}] Fetch error:`, err);
+    return [];
+  }
 };
 
-// ─── Main Component ───────────────────────────────────────────────────────────────
+// ─── Small presentational bits (mirrors ProfitLossPage look) ─────────────────
+
+function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+      <span>
+        {label} {required && <span className="text-destructive normal-case">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 leading-tight">
+        <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+        <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryBadge({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`rounded-md border px-3 py-1.5 ${strong ? "border-primary/20 bg-primary/10 text-primary" : "bg-muted/40 text-foreground"}`}>
+      <div className="text-[9px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function PrimaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Searchable popover select (same interaction as PLSummaryPage's SingleSelectLookup) ──
+
+function SearchableSelect({
+  label,
+  value,
+  onChange,
+  options,
+  loading,
+  placeholder = "All",
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: LookupOption[];
+  loading?: boolean;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? options.filter((o) => o.code.toLowerCase().includes(term) || o.name.toLowerCase().includes(term))
+    : options;
+
+  const selected = options.find((o) => o.code === value);
+  const displayText = !value ? placeholder : selected ? `${selected.code} - ${selected.name}` : value;
+
+  return (
+    <Field label={label} required={required}>
+      <div ref={wrapRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((p) => !p)}
+          disabled={loading}
+          className="flex h-8 w-full items-center justify-between rounded-md border bg-background px-2 text-left text-sm normal-case text-foreground shadow-sm disabled:opacity-50"
+        >
+          <span className={`truncate ${value ? "text-foreground" : "text-muted-foreground"}`}>{displayText}</span>
+        </button>
+
+        {open && (
+          <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 overflow-hidden rounded-md border bg-white shadow-lg">
+            <div className="border-b p-1.5">
+              <input
+                type="text"
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="h-7 w-full rounded-md border bg-background px-2 text-xs normal-case text-foreground shadow-sm"
+              />
+            </div>
+            <div className="max-h-48 overflow-y-auto">
+              <label
+                className={`flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 text-sm normal-case font-semibold ${
+                  !value ? "bg-primary/5 text-primary" : "text-foreground"
+                }`}
+              >
+                <input
+                  type="radio"
+                  checked={!value}
+                  onChange={() => {
+                    onChange("");
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="accent-primary"
+                />
+                {placeholder}
+              </label>
+
+              {filtered.length === 0 ? (
+                <div className="px-3 py-2 text-sm normal-case text-muted-foreground">No results found</div>
+              ) : (
+                filtered.map((o) => (
+                  <label
+                    key={o.code}
+                    className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm normal-case ${
+                      value === o.code ? "bg-primary/5" : ""
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      checked={value === o.code}
+                      onChange={() => {
+                        onChange(o.code);
+                        setOpen(false);
+                        setSearch("");
+                      }}
+                      className="accent-primary"
+                    />
+                    <span className="truncate">
+                      <span className="font-medium">{o.code}</span>
+                      <span className="ml-1.5 text-muted-foreground">{o.name}</span>
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function VisaExpiryListingPage() {
-    const { user } = useAuth();
-    const companyCode = user?.company_code ?? "";
-    const loginId = user?.loginid ?? user?.username ?? "ADMIN";
+  const { user } = useAuth();
+  const companyCode = user?.company_code ?? "";
+  const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    // ── Lookup options ────────────────────────────────────────────────────────────
-    const [divisionOptions, setDivisionOptions] = useState<LookupOption[]>([]);
-    const [departmentOptions, setDepartmentOptions] = useState<LookupOption[]>([]);
-    const [sectionOptions, setSectionOptions] = useState<LookupOption[]>([]);
-    const [gradeOptions, setGradeOptions] = useState<LookupOption[]>([]);
-    const [designationOptions, setDesignationOptions] = useState<LookupOption[]>([]);
-    const [employeeOptions, setEmployeeOptions] = useState<LookupOption[]>([]);
-    const [sponsorOptions, setSponsorOptions] = useState<LookupOption[]>([]);
+  // ── Lookup options ────────────────────────────────────────────────────────
+  const [divisionOptions, setDivisionOptions] = useState<LookupOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<LookupOption[]>([]);
+  const [sectionOptions, setSectionOptions] = useState<LookupOption[]>([]);
+  const [gradeOptions, setGradeOptions] = useState<LookupOption[]>([]);
+  const [designationOptions, setDesignationOptions] = useState<LookupOption[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<LookupOption[]>([]);
+  const [sponsorOptions, setSponsorOptions] = useState<LookupOption[]>([]);
+  const [lookupsLoading, setLookupsLoading] = useState(false);
 
-    // ── Selected filter values ────────────────────────────────────────────────────
-    const [division, setDivision] = useState<LookupOption | null>(null);
-    const [department, setDepartment] = useState<LookupOption | null>(null);
-    const [section, setSection] = useState<LookupOption | null>(null);
-    const [grade, setGrade] = useState<LookupOption | null>(null);
-    const [designation, setDesignation] = useState<LookupOption | null>(null);
-    const [employee, setEmployee] = useState<LookupOption | null>(null);
-    const [sponsor, setSponsor] = useState<LookupOption | null>(null);
+  // ── Selected filter values (plain codes, matching SearchableSelect) ──────
+  const [division, setDivision] = useState("");
+  const [department, setDepartment] = useState("");
+  const [section, setSection] = useState("");
+  const [grade, setGrade] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [employee, setEmployee] = useState("");
+  const [sponsor, setSponsor] = useState("");
 
-    // ── Date + radio ──────────────────────────────────────────────────────────────
-    const [visaExpiryFrom, setVisaExpiryFrom] = useState(getToday());
-    const [visaExpiryTo, setVisaExpiryTo] = useState(getNextMonth());
-    const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
+  // ── Date + radio ──────────────────────────────────────────────────────────
+  const [visaExpiryFrom, setVisaExpiryFrom] = useState(getToday());
+  const [visaExpiryTo, setVisaExpiryTo] = useState(getNextMonth());
+  const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
-    // ── UI state ──────────────────────────────────────────────────────────────────
-    const [generating, setGenerating] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
-    const [filtersOpen, setFiltersOpen] = useState(true);
+  // ── Report / preview dialog state ────────────────────────────────────────
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [message, setMessage] = useState("Select filters and generate the report.");
 
-    // ── Fetch all lookups on mount ────────────────────────────────────────────────
-    useEffect(() => {
-        const load = async () => {
-            const [div, dept, sec, grd, desig, emp, spon] = await Promise.all([
-                fetchLookup("AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginId, companyCode, "div_code", "div_name"),
-                fetchLookup("HR_CAM_DEPARTMENT_DEPTCODE", loginId, companyCode, "dept_code", "dept_short_name"),
-                fetchLookup("AC_ASSETS_SECTION", loginId, companyCode, "section_code", "section_name"),
-                fetchLookup("AC_ASSETS_HR_GRADE_LIST", loginId, companyCode, "grade_code", "grade_name"),
-                fetchLookup("MST_HR_MS_HR_DESIGNATION_LIST", loginId, companyCode, "desg_code", "desg_name"),
-                fetchLookup("AC_ASSETS_HR_EMPLOYEE_LIST", loginId, companyCode, "emp_id", "emp_name"),
-                fetchLookup("AC_ASSETS_HR_SPONSOR", loginId, companyCode, "sponsor_name", "sponsor_short_name"),
-            ]);
-            setDivisionOptions(div);
-            setDepartmentOptions(dept);
-            setSectionOptions(sec);
-            setGradeOptions(grd);
-            setDesignationOptions(desig);
-            setEmployeeOptions(emp);
-            setSponsorOptions(spon);
-        };
-        load();
-    }, []);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [exporting, setExporting] = useState(false);
 
-    // ── Reset ─────────────────────────────────────────────────────────────────────
-    const handleReset = () => {
-        setDivision(null);
-        setDepartment(null);
-        setSection(null);
-        setGrade(null);
-        setDesignation(null);
-        setEmployee(null);
-        setSponsor(null);
-        setVisaExpiryFrom("");
-        setVisaExpiryTo("");
-        setEmployeeFilter("A");
-        setReportError(null);
+  const canGenerate = Boolean(visaExpiryFrom && visaExpiryTo);
+  const employeeFilterLabel = employeeFilter === "A" ? "Active Employees" : "All Employees";
+  const dialogTitle = "Visa Expiry Report";
+  const divisionName = divisionOptions.find((d) => d.code === division)?.name;
+
+  // ── Fetch all lookups on mount ───────────────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      setLookupsLoading(true);
+      try {
+        const [div, dept, sec, grd, desig, emp, spon] = await Promise.all([
+          fetchLookup("AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginId, companyCode, "div_code", "div_name"),
+          fetchLookup("HR_CAM_DEPARTMENT_DEPTCODE", loginId, companyCode, "dept_code", "dept_short_name"),
+          fetchLookup("AC_ASSETS_SECTION", loginId, companyCode, "section_code", "section_name"),
+          fetchLookup("AC_ASSETS_HR_GRADE_LIST", loginId, companyCode, "grade_code", "grade_name"),
+          fetchLookup("MST_HR_MS_HR_DESIGNATION_LIST", loginId, companyCode, "desg_code", "desg_name"),
+          fetchLookup("AC_ASSETS_HR_EMPLOYEE_LIST", loginId, companyCode, "emp_id", "emp_name"),
+          fetchLookup("AC_ASSETS_HR_SPONSOR", loginId, companyCode, "sponsor_name", "sponsor_short_name"),
+        ]);
+        setDivisionOptions(div);
+        setDepartmentOptions(dept);
+        setSectionOptions(sec);
+        setGradeOptions(grd);
+        setDesignationOptions(desig);
+        setEmployeeOptions(emp);
+        setSponsorOptions(spon);
+      } finally {
+        setLookupsLoading(false);
+      }
     };
+    load();
+  }, [companyCode, loginId]);
 
-    // ── Generate ──────────────────────────────────────────────────────────────────
-    const handleGenerate = async () => {
-        if (!visaExpiryFrom || !visaExpiryTo) {
-            setReportError("Please select both Visa Expiry From and To dates.");
-            return;
-        }
+  // ── Keep the dialog's blob URL in sync with the generated report HTML ────
+  useEffect(() => {
+    if (!previewOpen) return;
+    if (reportHtml === null || reportHtml === undefined) return;
 
-        setReportError(null);
-        setGenerating(true);
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    setPreviewUrl((prev) => {
+      if (prev) window.URL.revokeObjectURL(prev);
+      return url;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewOpen, reportHtml]);
 
-        try {
-            await openVisaExpiryReport({
-                parameter: "Hr_Report_VISA_EXPIRY_REPORT",
-                loginid: loginId,
-                code1: companyCode,
-                code2: division?.code ?? "",
-                code3: department?.code ?? "",
-                code4: section?.code ?? "",
-                code5: grade?.code ?? "",
-                code6: designation?.code ?? "",
-                code7: employee?.code ?? "",
-                code8: sponsor?.code ?? "",
-                code9: employeeFilter,
-                date1: visaExpiryFrom,
-                date2: visaExpiryTo,
-            });
-        } catch (err: any) {
-            setReportError(err?.message ?? "Failed to generate report. Please try again.");
-            console.error(err);
-        } finally {
-            setGenerating(false);
-        }
+  useEffect(() => {
+    return () => {
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     };
+  }, [previewUrl]);
 
-    // ─── Render ───────────────────────────────────────────────────────────────────
-    return (
-        <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", minHeight: "100%" }}>
-            <style>{`
-                .action-btn:hover          { background: #f9fafb !important; }
-                .action-btn-primary:hover  { background: #0C447C !important; border-color: #0C447C !important; }
-                .dd-option:hover           { background: #f0f7ff; }
-                .collapse-btn:hover        { background: #f0f7ff !important; }
-                @keyframes spin            { to { transform: rotate(360deg); } }
-            `}</style>
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
-            <div style={{margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+  const buildPayload = () => ({
+    parameter: "Hr_Report_VISA_EXPIRY_REPORT",
+    loginid: loginId,
+    code1: companyCode,
+    code2: division || "",
+    code3: department || "",
+    code4: section || "",
+    code5: grade || "",
+    code6: designation || "",
+    code7: employee || "",
+    code8: sponsor || "",
+    code9: employeeFilter,
+    date1: visaExpiryFrom,
+    date2: visaExpiryTo,
+  });
 
-                {/* ══ Card — Filters + Action bar ════════════════════════════════════ */}
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+  const handleGenerate = async () => {
+    if (!canGenerate) {
+      setReportError("Please select both Visa Expiry From and To dates.");
+      return;
+    }
 
-                    {/* Card header — collapsible */}
-                    <div
-                        style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "16px 24px", cursor: "pointer",
-                            borderBottom: filtersOpen ? "0.5px solid #e5e7eb" : "none",
-                        }}
-                        onClick={() => setFiltersOpen((p) => !p)}
-                    >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <BarChart2 size={18} color="#185FA5" />
-                            <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>
-                                Visa Expiry Report Filter
-                            </span>
-                        </div>
-                        <button
-                            className="collapse-btn"
-                            style={{
-                                background: "none", border: "none", cursor: "pointer",
-                                padding: "4px 6px", borderRadius: 6, color: "#6b7280",
-                            }}
-                        >
-                            {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
-                    </div>
+    setReportLoading(true);
+    setReportError(null);
+    setReportHtml(null);
+    setMessage("");
 
-                    {filtersOpen && (
-                        <div style={{ padding: "20px 24px" }}>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+    setPreviewOpen(true);
 
-                                {/* ── Col 1: Division, Department, Section ── */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 240, flex: "1 1 240px" }}>
-                                    <SearchableDropdown
-                                        label="Division"
-                                        value={division}
-                                        onChange={setDivision}
-                                        options={divisionOptions}
-                                        placeholder="Search division..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Department"
-                                        value={department}
-                                        onChange={setDepartment}
-                                        options={departmentOptions}
-                                        placeholder="Search department..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Section"
-                                        value={section}
-                                        onChange={setSection}
-                                        options={sectionOptions}
-                                        placeholder="Search section..."
-                                    />
-                                </div>
+    try {
+      const html = await getVisaExpiryReportHtml(buildPayload());
+      setReportHtml(html);
+      setMessage("Report generated successfully.");
+    } catch (err: any) {
+      const errorMessage = err?.message ?? "Failed to generate report";
+      setReportError(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
-                                {/* ── Col 2: Grade, Employee, Sponsor, Designation ── */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 240, flex: "1 1 240px" }}>
-                                    <SearchableDropdown
-                                        label="Grade"
-                                        value={grade}
-                                        onChange={setGrade}
-                                        options={gradeOptions}
-                                        placeholder="Search grade..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Employee Code"
-                                        value={employee}
-                                        onChange={setEmployee}
-                                        options={employeeOptions}
-                                        placeholder="Search employee..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Sponsor"
-                                        value={sponsor}
-                                        onChange={setSponsor}
-                                        options={sponsorOptions}
-                                        placeholder="Search sponsor..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Designation"
-                                        value={designation}
-                                        onChange={setDesignation}
-                                        options={designationOptions}
-                                        placeholder="Search designation..."
-                                    />
-                                </div>
+  const handleReset = () => {
+    setDivision("");
+    setDepartment("");
+    setSection("");
+    setGrade("");
+    setDesignation("");
+    setEmployee("");
+    setSponsor("");
+    setVisaExpiryFrom(getToday());
+    setVisaExpiryTo(getNextMonth());
+    setEmployeeFilter("A");
+    setReportError(null);
+    setMessage("Select filters and generate the report.");
+    closePreview();
+  };
 
-                                {/* ── Col 3: Visa Expiry dates + Employee type ── */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 220, flex: "1 1 220px" }}>
+  const closePreview = () => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewOpen(false);
+    setPreviewUrl("");
+    setReportHtml(null);
+  };
 
-                                    {/* Visa Expiry date range */}
-                                    <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
-                                        <legend style={{
-                                            fontSize: 10, color: "#6b7280", padding: "0 4px",
-                                            textTransform: "uppercase", letterSpacing: "0.05em",
-                                        }}>
-                                            Visa Expiry
-                                        </legend>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-                                            <div>
-                                                <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>From</div>
-                                                <input
-                                                    type="date"
-                                                    value={visaExpiryFrom}
-                                                    max={visaExpiryTo || undefined}
-                                                    onChange={(e) => setVisaExpiryFrom(e.target.value)}
-                                                    style={inputStyle}
-                                                />
-                                            </div>
-                                            <div>
-                                                <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>To</div>
-                                                <input
-                                                    type="date"
-                                                    value={visaExpiryTo}
-                                                    min={visaExpiryFrom || undefined}
-                                                    onChange={(e) => setVisaExpiryTo(e.target.value)}
-                                                    style={inputStyle}
-                                                />
-                                            </div>
-                                        </div>
-                                    </fieldset>
+  const handleExcel = async () => {
+    setExporting(true);
+    try {
+      await getVisaExpiryReportExcelDownload(buildPayload());
+    } catch (err: any) {
+      setReportError(err?.message ?? "Failed to download Excel");
+    } finally {
+      setExporting(false);
+    }
+  };
 
-                                    {/* Employee type radio */}
-                                    <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
-                                        <legend style={{
-                                            fontSize: 10, color: "#6b7280", padding: "0 4px",
-                                            textTransform: "uppercase", letterSpacing: "0.05em",
-                                        }}>
-                                            Employee Type
-                                        </legend>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-                                            <label style={radioLabelStyle}>
-                                                <input
-                                                    type="radio"
-                                                    name="empFilter"
-                                                    value="A"
-                                                    checked={employeeFilter === "A"}
-                                                    onChange={() => setEmployeeFilter("A")}
-                                                    style={{ accentColor: "#185FA5" }}
-                                                />
-                                                Active Employees
-                                            </label>
-                                            <label style={radioLabelStyle}>
-                                                <input
-                                                    type="radio"
-                                                    name="empFilter"
-                                                    value="ALL"
-                                                    checked={employeeFilter === "ALL"}
-                                                    onChange={() => setEmployeeFilter("ALL")}
-                                                    style={{ accentColor: "#185FA5" }}
-                                                />
-                                                All Employees
-                                            </label>
-                                        </div>
-                                    </fieldset>
-                                </div>
-                            </div>
-
-                            {/* Error banner */}
-                            {reportError && (
-                                <div style={{
-                                    marginTop: 14, fontSize: 12, color: "#dc2626",
-                                    background: "#fef2f2", border: "0.5px solid #fecaca",
-                                    borderRadius: 6, padding: "6px 12px",
-                                }}>
-                                    ⚠ {reportError}
-                                </div>
-                            )}
-
-                            {/* Action bar */}
-                            <div style={{
-                                display: "flex", justifyContent: "flex-end", gap: 8,
-                                paddingTop: 20, marginTop: 20, borderTop: "0.5px solid #e5e7eb",
-                            }}>
-                                <button
-                                    className="action-btn"
-                                    onClick={handleReset}
-                                    disabled={generating}
-                                    style={{
-                                        padding: "7px 16px", border: "0.5px solid #d1d5db",
-                                        background: "#fff", cursor: generating ? "not-allowed" : "pointer",
-                                        display: "flex", alignItems: "center", gap: 6,
-                                        fontSize: 12, borderRadius: 6, color: "#374151",
-                                        opacity: generating ? 0.6 : 1,
-                                    }}
-                                >
-                                    <RotateCcw size={13} /> Reset
-                                </button>
-
-                                <button
-                                    className="action-btn-primary"
-                                    onClick={handleGenerate}
-                                    disabled={generating}
-                                    style={{
-                                        padding: "7px 16px", border: "0.5px solid #185FA5",
-                                        background: "#185FA5", cursor: generating ? "not-allowed" : "pointer",
-                                        display: "flex", alignItems: "center", gap: 6,
-                                        fontSize: 12, borderRadius: 6, color: "#fff",
-                                        opacity: generating ? 0.7 : 1,
-                                    }}
-                                >
-                                    {generating
-                                        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating…</>
-                                        : <><Printer size={13} /> Generate Report</>
-                                    }
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-            </div>
+  // ─── Render ────────────────────────────────────────────────────────────────
+  return (
+    <section className="freight-ui-standard freight-report-screen">
+      <div className="freight-report-card">
+        <div className="freight-report-titlebar">
+          <h1>{dialogTitle}</h1>
+          <span className="freight-report-title-dot" aria-hidden="true" />
+          <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
+            {division && <SummaryBadge label="Division" value={division} strong />}
+          </div>
         </div>
-    );
+
+        <ReportFilterHeader onClear={handleReset} />
+
+        <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-3">
+          <SummaryStripItem
+            icon={CalendarDays}
+            label="Visa Expiry Period"
+            value={`${toDisplayDate(visaExpiryFrom) || "Start"} – ${toDisplayDate(visaExpiryTo) || "End"}`}
+          />
+          <SummaryStripItem
+            icon={Building2}
+            label="Division"
+            value={division ? `${division}${divisionName ? ` - ${divisionName}` : ""}` : "All divisions"}
+          />
+          <SummaryStripItem icon={Users} label="Employee Type" value={employeeFilterLabel} />
+        </div>
+
+        <div className="freight-report-fields grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <SearchableSelect
+            label="Division"
+            value={division}
+            onChange={setDivision}
+            options={divisionOptions}
+            loading={lookupsLoading}
+            placeholder="All Divisions"
+          />
+          <SearchableSelect
+            label="Department"
+            value={department}
+            onChange={setDepartment}
+            options={departmentOptions}
+            loading={lookupsLoading}
+            placeholder="All Departments"
+          />
+          <SearchableSelect
+            label="Section"
+            value={section}
+            onChange={setSection}
+            options={sectionOptions}
+            loading={lookupsLoading}
+            placeholder="All Sections"
+          />
+          <SearchableSelect
+            label="Grade"
+            value={grade}
+            onChange={setGrade}
+            options={gradeOptions}
+            loading={lookupsLoading}
+            placeholder="All Grades"
+          />
+          <SearchableSelect
+            label="Employee Code"
+            value={employee}
+            onChange={setEmployee}
+            options={employeeOptions}
+            loading={lookupsLoading}
+            placeholder="All Employees"
+          />
+          <SearchableSelect
+            label="Sponsor"
+            value={sponsor}
+            onChange={setSponsor}
+            options={sponsorOptions}
+            loading={lookupsLoading}
+            placeholder="All Sponsors"
+          />
+          <SearchableSelect
+            label="Designation"
+            value={designation}
+            onChange={setDesignation}
+            options={designationOptions}
+            loading={lookupsLoading}
+            placeholder="All Designations"
+          />
+
+          <Field label="From" required>
+            <input
+              type="date"
+              value={visaExpiryFrom}
+              max={visaExpiryTo || undefined}
+              onChange={(e) => setVisaExpiryFrom(e.target.value)}
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm normal-case text-foreground shadow-sm"
+            />
+          </Field>
+
+          <Field label="To" required>
+            <input
+              type="date"
+              value={visaExpiryTo}
+              min={visaExpiryFrom || undefined}
+              onChange={(e) => setVisaExpiryTo(e.target.value)}
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm normal-case text-foreground shadow-sm"
+            />
+          </Field>
+
+          <Field label="Employee Type">
+            <div className="flex h-8 items-center gap-4 normal-case">
+              <label className="flex items-center gap-1.5 text-sm font-medium normal-case text-foreground">
+                <input
+                  type="radio"
+                  name="empFilter"
+                  value="A"
+                  checked={employeeFilter === "A"}
+                  onChange={() => setEmployeeFilter("A")}
+                  className="accent-primary"
+                />
+                Active
+              </label>
+              <label className="flex items-center gap-1.5 text-sm font-medium normal-case text-foreground">
+                <input
+                  type="radio"
+                  name="empFilter"
+                  value="ALL"
+                  checked={employeeFilter === "ALL"}
+                  onChange={() => setEmployeeFilter("ALL")}
+                  className="accent-primary"
+                />
+                All
+              </label>
+            </div>
+          </Field>
+        </div>
+
+        <div className="freight-report-actions">
+          <PrimaryButton onClick={handleGenerate} disabled={!canGenerate || reportLoading}>
+            {reportLoading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+            {reportLoading ? "Generating..." : "Generate Report"}
+          </PrimaryButton>
+        </div>
+        {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
+        {reportError && !previewOpen ? (
+          <p className="px-3 pb-3 text-sm text-destructive">{reportError}</p>
+        ) : null}
+      </div>
+
+      {previewOpen && (
+        <ReportPreviewDialog
+          title={dialogTitle}
+          pdfUrl={previewUrl}
+          error={reportError || undefined}
+          exporting={exporting}
+          onExcel={handleExcel}
+          onClose={closePreview}
+          onDownload={() => {}}
+          downloadName={`${dialogTitle.replace(/[^a-z0-9]+/gi, "_")}.html`}
+        />
+      )}
+    </section>
+  );
 }
