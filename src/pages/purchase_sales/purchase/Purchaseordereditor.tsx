@@ -72,6 +72,7 @@ export function PurchaseOrderEditor({
   const [error, setError] = useState("");
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // ---- Send Back dialog state ----
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
@@ -123,6 +124,7 @@ export function PurchaseOrderEditor({
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
 
   ]);
   useEffect(() => {
@@ -406,15 +408,20 @@ useEffect(() => {
     }, "Purchase Quotation saved as draft");
   };
 
-  const handleSubmit = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
-    return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
-  };
+const handleSubmitClick = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  setShowSubmitConfirm(true);
+};
+
+const confirmSubmit = () => {
+  setShowSubmitConfirm(false);
+  return runAction("submit", async () => {
+    await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
+};
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -507,7 +514,7 @@ useEffect(() => {
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        onSubmit={(event) => { event.preventDefault(); handleSubmitClick(); }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -619,10 +626,23 @@ useEffect(() => {
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-              {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+       {isPendingTab && (
+  <div className="relative">
+    <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+      {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+      {actionLoading === "submit" ? "Submitting..." : "Submit"}
+    </Button>
+    {showSubmitConfirm && (
+      <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+        <p className="mb-2 text-sm text-gray-700">Submit this Purchase Order?</p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+          <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
             {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">

@@ -157,6 +157,7 @@ export interface PurchaseOrderForm {
   delivery_contact: string;
   delivery_tel: string;
   delivery_email: string;
+    tx_compnt_perc_1?: number;
 
   // SDN
   sdn_company_code?: string;

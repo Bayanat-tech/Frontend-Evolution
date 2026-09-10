@@ -25,6 +25,7 @@ import {
   LcurrDisAmount,
   lineTaxAmount,
   amountBeforeDiscPrice,
+  TotalDiscAmount,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
@@ -140,10 +141,10 @@ export function PurchaseInvoiceLinesTable({
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
-  const totalAmount = rows.reduce((sum, row) => sum + linePOAmount(row), 0);
-  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPoPrice(row), 0);
-  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
-  const grandTotal = totalAmount - totalDiscPrice - discAmt;
+  const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const grandTotal = totalAmount - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const discountScope = form.discount_scoope || "ITEM";
 
@@ -540,12 +541,12 @@ export function PurchaseInvoiceLinesTable({
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
         <div className="flex items-center justify-end gap-8">
-          <span className="text-muted-foreground">Amount Total</span>
+         <span className="text-muted-foreground">Base Total Amount</span>
           <strong className="text-emerald-600">{formatAmount(totalAmount)}</strong>
         </div>
         <div className="flex items-center justify-end gap-8">
           <span className="text-muted-foreground">Discount</span>
-          <strong>{formatAmount(totalDiscPrice + discAmt)}</strong>
+          <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
         </div>
         <div className="flex items-center justify-end gap-8">
           <span className="text-muted-foreground">Total</span>

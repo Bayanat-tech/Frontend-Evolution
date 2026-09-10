@@ -80,6 +80,7 @@ export function PurchaseQuotationEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -87,7 +88,7 @@ export function PurchaseQuotationEditor({
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
-const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
 
   useEffect(() => {
@@ -114,6 +115,7 @@ const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | 
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
 
   ]);
   useEffect(() => {
@@ -255,68 +257,68 @@ const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | 
       [field]: value,
     }));
   };
-  
 
 
-const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
-  const totalAmount = rows.reduce(
-    (sum, row) => sum + amountBeforeDiscPrice(row),
-    0
-  );
 
-  if (totalAmount <= 0) return;
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
 
-  const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+    if (totalAmount <= 0) return;
 
-  let discountAmount = 0;
-  let discountPercent = 0;
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
 
-  if (type === "amount") {
-    discountAmount = Number(inputValue) || 0;
-    discountPercent = (discountAmount / totalAmount) * 100;
-  } else {
-    discountPercent = Number(inputValue) || 0;
-    discountAmount = totalAmount * (discountPercent / 100);
-  }
+    let discountAmount = 0;
+    let discountPercent = 0;
 
-  setDiscountEditType(type);
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
 
-  setForm((current) => ({
-    ...current,
-    disc_hdr_price: discountAmount,
-    disc_hdr_percent: discountPercent,
-  }));
+    setDiscountEditType(type);
 
-  setRows((current) =>
-    current.map((row) => {
-      const amount = amountBeforeDiscPrice(row);
-      return {
-        ...row,
-        disc_percent: discountPercent,
-        disc_price: amount * (discountPercent / 100),
-      };
-    })
-  );
-};
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
 
-const rowsAmountSignature = rows
-  .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
-  .join(",");
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
 
-const effectiveDiscountType: "amount" | "percent" | null =
-  discountEditType ??
-  (numberOrZero(form.disc_hdr_percent) !== 0
-    ? "percent"
-    : numberOrZero(form.disc_hdr_price) !== 0
-      ? "amount"
-      : null);
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
 
-useEffect(() => {
-  if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
-  applyDiscountCalculation(effectiveDiscountType);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [rowsAmountSignature, form.discount_scoope]);
-  
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
+
 
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -333,7 +335,7 @@ useEffect(() => {
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0,
+         tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -361,15 +363,19 @@ useEffect(() => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
   };
-
-  const handleSubmit = () => {
+  const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
+    }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
   };
   const handleCancel = () =>
     runAction("cancel", async () => {
@@ -462,7 +468,7 @@ useEffect(() => {
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -522,7 +528,7 @@ useEffect(() => {
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
               <PurchaseOrderHeaderForm
-              // calculateDiscount={applyDiscountCalculation}
+                // calculateDiscount={applyDiscountCalculation}
                 form={form}
                 docType={PO_DOC_TYPE.PQA}
                 setForm={setForm}
@@ -562,10 +568,24 @@ useEffect(() => {
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-              {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+            {isPendingTab && (
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
 
             {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
