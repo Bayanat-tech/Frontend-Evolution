@@ -811,6 +811,7 @@ const showApproveRejectButtons =
                 onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
                 onClick={() => {
                   const missing = validateBeforeSubmit();
+                   console.log("SUBMIT BLOCKED BY:", missing); 
                   if (missing.length > 0) {
                     setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
                     return;

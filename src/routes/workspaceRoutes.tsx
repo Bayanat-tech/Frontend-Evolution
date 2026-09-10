@@ -202,6 +202,8 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+import EmployeeDetailsPage from "../pages/hr/Employee Details/Employeedetailspage";
+import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
@@ -383,6 +385,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Employee Master",
     match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
     element: () => <EmployeeMasterPage />
+  },
+  {
+    name: "Employee Details",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
+    element: () => <EmployeeDetailsPage />
   },
 
   {
@@ -778,7 +785,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Freight Job Sheet",
     match: (context) => isFreightJobSheetRoute(context),
-    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="jobsheet" />,
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="job" />,
   },
   {
     name: "Freight Pack List",
@@ -1400,8 +1407,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "PO Order Register Report",
   match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
   element: () => <PoOrderRegisterPage />,
-}
+},
 
+
+{
+  name: "Purchase Request Register(old) Report",
+  match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
+  element: () => <PrRegisterOldPage />,
+}
 
 
 ];
@@ -1490,6 +1503,13 @@ function isPoOrderRegisterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+  );
+}
+
+function isPurchaseRequestRegisterOldRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/purchase_request_register"
   );
 }
 

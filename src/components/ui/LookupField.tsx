@@ -85,7 +85,7 @@ export function LookupField({
       const belowSpace = viewportHeight - rect.bottom - 10;
       const aboveSpace = rect.top - 10;
       const preferredSpace = belowSpace >= 200 ? belowSpace : Math.max(belowSpace, aboveSpace);
-      const maxHeight = Math.max(240, Math.min(380, preferredSpace));
+      const maxHeight = Math.max(280, Math.min(520, preferredSpace));
       const opensAbove = belowSpace < 200 && aboveSpace > belowSpace;
 
       // Horizontal alignment: if trigger is on right side of screen or overflows, align flush with trigger's right edge
@@ -299,7 +299,7 @@ export function LookupField({
                 <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
                 <input
                   autoFocus
-                  className="w-full h-7.5 pl-8 pr-7 rounded-lg border border-slate-300 focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 bg-white text-slate-800 text-[11.5px] placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
+                  className="lookup-search-input w-full h-9 min-h-9 pl-8 pr-7 rounded-lg border border-slate-300 focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 bg-white text-slate-800 text-[11.5px] placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search code or description..."
@@ -369,7 +369,7 @@ export function LookupField({
                             return (
                               <td
                                 className={`px-2.5 py-1 text-xs truncate whitespace-nowrap max-w-[220px] ${
-                                  columnIndex === 0 ? "font-semibold text-[#00378C] font-mono text-[11px]" : "text-slate-700"
+                                  columnIndex === 0 ? "font-semibold text-[#00378C] text-[11.5px]" : "text-slate-700 text-[11.5px]"
                                 }`}
                                 key={column.field}
                                 title={cellText}

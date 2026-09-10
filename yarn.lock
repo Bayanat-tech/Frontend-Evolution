@@ -818,7 +818,7 @@ date-fns@^4.1.0:
 
 dayjs@^1.11.23:
   version "1.11.23"
-  resolved "https://registry.yarnpkg.com/dayjs/-/dayjs-1.11.23.tgz#b0a363506dde5f36cf5075e42ebe8115165a8c79"
+  resolved "https://registry.npmjs.org/dayjs/-/dayjs-1.11.23.tgz"
   integrity sha512-QDTCU0M0MxR3hQfnlDJfwekQiaanm1ubOD231u73WBckQ/fsamwRLiE2GBz6D3a/xF1NgfiDLJjXBa1hYOYTtQ==
 
 debug@4, debug@^4.1.0, debug@^4.3.1:

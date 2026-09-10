@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { HeaderProfile } from "../components/HeaderProfile";
@@ -113,9 +113,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
-  const userDisplayName = user?.username || user?.loginid || "User";
-  const companyName = user?.company_name || user?.company_code || "Company";
+  const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "Company";
   const isFreightModule = (appCode || "").toLowerCase() === "fms";
+  const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
@@ -161,22 +161,21 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   };
 
   return (
-    <div className="workspace">
+    <div className="workspace" style={{ fontFamily: "Inter, sans-serif" }}>
       <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
-        <div className="sidebar-top">
-          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title={companyName}>
-            <span className="sidebar-logo-wrap">
-              <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
-            </span>
-            <span className="sidebar-brand-copy"><strong>{companyName}</strong></span>
-          </Link>
-        </div>
 
         <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
           {!displayCollapsed && (
-            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
-              {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
-            </p>
+            <div
+              className="sidebar-module-heading"
+              style={{
+                "--module-accent": moduleMeta?.accent.icon || "#00378c",
+                "--module-accent-light": moduleMeta?.accent.light || "#eff6ff",
+              } as CSSProperties}
+              title={moduleMeta?.fullForm || "Workspace"}
+            >
+              <span className="sidebar-module-name">{moduleMeta?.fullForm || "Workspace"}</span>
+            </div>
           )}
           <button
             className="icon-button sidebar-toggle"
@@ -198,6 +197,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               setExpanded={setExpanded}
               appCode={appCode || ""}
               pathname={location.pathname}
+              selectedMenu={activeMenu}
               level={1}
               siblingIndex={index + 1}
               onNavigate={handleMenuNavigate}
@@ -206,44 +206,28 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         </nav>
 
         <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
-          {!displayCollapsed && (
-            <div className="sidebar-company-card">
-              <span><Building2 size={13} /> Company</span>
-              <strong>{companyName}</strong>
-            </div>
-          )}
+          <div className="sidebar-company-row" title={companyName} aria-label={companyName}>
+            <Building2 size={16} aria-hidden="true" />
+            {!displayCollapsed && <span>{companyName}</span>}
+          </div>
           <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
-            <ArrowLeft size={15} />
+            <LayoutGrid size={16} />
             {!displayCollapsed && "Switch Module"}
           </Link>
+          <HeaderProfile variant="sidebar" user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
         </div>
       </aside>
       {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
 
-      <section className="workspace-main">
+      <section className={cn("workspace-main", isFreightModule && "bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
         <div className="mobile-appbar">
-          <Link to="/apps" className="mobile-brand" aria-label="Bayanat Technology">
-            <span className="sidebar-logo-wrap">
-              <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
-            </span>
-          </Link>
           <button className="icon-button" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu" title="Open menu">
             <Menu size={19} />
           </button>
         </div>
-        <header className="workspace-header">
-          <div className="workspace-header-actions">
-            <HeaderProfile
-              user={user}
-              dark={dark}
-              onToggleTheme={onToggleTheme}
-              onLogout={handleLogout}
-            />
-          </div>
-        </header>
 
-        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui")}>
-          <nav className="breadcrumb">
+        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
+          <nav className="breadcrumb" aria-label="Breadcrumb">
             <Link to="/apps">
               <Home size={14} /> Home
             </Link>
@@ -264,7 +248,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
                 <span className="breadcrumb-segment" key={node.id || `${node.title}-${index}`}>
                   <ChevronRight size={14} />
                   {isLast || !target ? (
-                    <span className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
+                    <span aria-current={isLast ? "page" : undefined} className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
                   ) : (
                     <Link to={target}>{titleCase(node.title)}</Link>
                   )}
@@ -310,6 +294,7 @@ function MenuItem({
   pathname,
   level,
   siblingIndex,
+  selectedMenu,
   onNavigate,
 }: {
   item: MenuNode;
@@ -320,6 +305,7 @@ function MenuItem({
   pathname: string;
   level: number;
   siblingIndex?: number;
+  selectedMenu?: MenuNode;
   onNavigate: () => void;
 }) {
   const key = item.id || item.title;
@@ -327,7 +313,7 @@ function MenuItem({
   const hasChildren = children.length > 0;
   const path = cleanPath(item.url_path);
   const to = path ? `/workspace/${appCode}/${path}` : "#";
-  const directActive = isPathActive(path, pathname);
+  const directActive = item === selectedMenu;
   const branchActive = !directActive && Boolean(children.some((child) => isMenuNodeActive(child, pathname)));
   const shouldRenderChildren = !collapsed && expanded[key];
   const displayTitle = titleCase(item.title);
@@ -340,6 +326,7 @@ function MenuItem({
           onClick={() => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))}
           title={displayTitle}
           aria-label={displayTitle}
+          aria-expanded={Boolean(shouldRenderChildren)}
         >
           <span className="nav-link-copy">
             <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
@@ -358,6 +345,7 @@ function MenuItem({
                 setExpanded={setExpanded}
                 appCode={appCode}
                 pathname={pathname}
+                selectedMenu={selectedMenu}
                 level={level + 1}
                 siblingIndex={index + 1}
                 onNavigate={onNavigate}
@@ -370,7 +358,7 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", directActive && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
+    <Link className={cn("nav-item", directActive && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} aria-current={directActive ? "page" : undefined} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
         <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
@@ -379,10 +367,16 @@ function MenuItem({
   );
 }
 
-function MenuIcon({ item, level, siblingIndex, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
-  if (level >= 2) return <span className={cn("nav-index", className)} aria-hidden="true">{siblingIndex}</span>;
+function MenuIcon({ item, level, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
+  if (level >= 2) {
+    return (
+      <span className={cn("nav-dot-wrap grid place-items-center w-4 h-4 shrink-0 mr-1", className)} aria-hidden="true">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 nav-bullet transition-all" />
+      </span>
+    );
+  }
   const Icon = getMenuIcon(item);
-  return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
+  return <Icon className={className} size={level === 1 ? 17 : 14} aria-hidden="true" />;
 }
 
 function getMenuIcon(item: MenuNode): LucideIcon {
@@ -458,9 +452,9 @@ function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
 function findActiveMenuPath(items: MenuNode[], pathname: string): MenuNode[] {
   for (const item of items) {
     const path = cleanPath(item.url_path);
-    if (isPathActive(path, pathname)) return [item];
     const childPath = findActiveMenuPath(item.children || [], pathname);
     if (childPath.length) return [item, ...childPath];
+    if (isPathActive(path, pathname)) return [item];
   }
   return [];
 }
