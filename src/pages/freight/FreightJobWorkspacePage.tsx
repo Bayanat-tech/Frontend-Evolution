@@ -53,7 +53,7 @@ const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boo
   { key: "alerts", label: "Alerts", icon: Bell, ready: true },
   { key: "instructions", label: "Instructions", icon: Info, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
-  { key: "deposits", label: "Deposits", icon: WalletCards, ready: true },
+  // { key: "deposits", label: "Deposits", icon: WalletCards, ready: true },
   { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
 ];
 
