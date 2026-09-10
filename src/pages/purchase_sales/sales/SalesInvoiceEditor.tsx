@@ -385,50 +385,23 @@ export function SalesInvoiceEditor({
     }
   };
 
-  const handleSaveAsDraft = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    if (!form.inv_no) return setError("Invoice Number is required");
-    if (!form.inv_date) return setError("Invoice Date is required");
-  }
-
-  runAction(
+const handleSaveAsDraft = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (!form.inv_no) return setError("Invoice Number is required");
+  if (!form.inv_date) return setError("Invoice Date is required");
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+  return runAction(
     "draft",
     async () => {
-      await runWorkflow(
-        "SAVEASDRAFT",
-        SO_DOC_TYPE.SIN,
-        form,
-        rows,
-        user?.company_code,
-        user?.loginid || user?.username,
-      );
+      await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
     },
     "Sales Invoice saved as draft",
   );
+};
 
-  // const handleSubmit = () => {
-  //   if (!form.div_code) return setError("Division is required");
-  //   if (!form.ac_code) return setError("A/c Code is required");
-  //   if (!form.curr_code) return setError("Currency is required");
-  //   if (!form.inv_no) return setError("Invoice Number  is required");
-  //   if (!form.inv_date) return setError("Invoice Date is required");
-  //   return runAction(
-  //     "submit",
-  //     async () => {
-  //       await runWorkflow(
-  //         "SUBMITTED",
-  //         SO_DOC_TYPE.SIN,
-  //         form,
-  //         rows,
-  //         user?.company_code,
-  //         user?.loginid || user?.username,
-  //       );
-  //     },
-  //     editMode ? "Sales Invoice updated successfully" : "Sales Invoice created successfully",
-  //   );
-  // };
+  
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
