@@ -1,13 +1,12 @@
 import type { TDocumentDefinitions, Content, StyleDictionary } from "pdfmake/interfaces";
 import { api } from "../../../api/client";
-import type { WmsReportDocument } from "./wmsReportPreviewStore";
+import type { PsReportDocument } from "./psReportPreviewStore";
 
 export type ReportIdentity = { title: string; company: string; user: string; generatedAt: string };
-export const reportFilename = (title: string) => title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim() || "WMS report";
+export const reportFilename = (title: string) => title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim() || "Purchase Sale report";
 
 // Duplicated from Freight's report-document pipeline (not imported) so this
-// module has no dependency on the Freight feature folder. Generic HTML
-// cleanup — nothing here is Freight-specific.
+// module has no dependency on the Freight feature folder. Generic HTML cleanup.
 export function prepareReportHtml(html: string, browserWindow: Window = window) {
   const parser = new (browserWindow as Window & typeof globalThis).DOMParser();
   const doc = parser.parseFromString(html, "text/html");
@@ -45,7 +44,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
   return { doc, html: doc.body.innerHTML, maxColumns };
 }
 
-export async function buildWmsPdfDefinition(report: WmsReportDocument, identity: ReportIdentity, browserWindow: Window = window): Promise<TDocumentDefinitions> {
+export async function buildPsPdfDefinition(report: PsReportDocument, identity: ReportIdentity, browserWindow: Window = window): Promise<TDocumentDefinitions> {
   const { default: htmlToPdfmake } = await import("html-to-pdfmake");
   const prepared = prepareReportHtml(report.html, browserWindow);
   const content = htmlToPdfmake(prepared.html, {
@@ -70,7 +69,7 @@ export async function buildWmsPdfDefinition(report: WmsReportDocument, identity:
     empty: { margin: [0, 12, 0, 12], alignment: "center", color: "#64748b" },
   };
   return {
-    info: { title: identity.title, author: identity.company, subject: "WMS report" },
+    info: { title: identity.title, author: identity.company, subject: "Purchase Sale report" },
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation: report.orientation || (prepared.maxColumns > 7 ? "landscape" : "portrait"),
     pageMargins: [28, 48, 28, 32],
@@ -108,9 +107,9 @@ async function fontVfs() {
   return fontPromise;
 }
 
-export async function createWmsPdf(report: WmsReportDocument, identity: ReportIdentity) {
+export async function createPsPdf(report: PsReportDocument, identity: ReportIdentity) {
   const [{ default: pdfMake }, definition, vfs] = await Promise.all([
-    import("pdfmake/build/pdfmake"), buildWmsPdfDefinition(report, identity), fontVfs(),
+    import("pdfmake/build/pdfmake"), buildPsPdfDefinition(report, identity), fontVfs(),
   ]);
   type ReportFonts = { Inter: { normal: string; bold: string; italics: string; bolditalics: string } };
   const fonts: ReportFonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
@@ -123,14 +122,13 @@ export async function createWmsPdf(report: WmsReportDocument, identity: ReportId
         vfs?: Record<string, string>,
       ) => { getBlob: (callback: (blob: Blob) => void) => void };
       createPdf(definition, undefined, fonts, vfs).getBlob(resolve);
-    }
-    catch (error) { reject(error); }
+    } catch (error) { reject(error); }
   });
 }
 
 // Unlike Freight, this does NOT derive an .xlsx from the rendered HTML client-side.
-// Stock Summary already has a working backend export; this just calls it.
-export async function downloadWmsExcel(report: WmsReportDocument, identity: ReportIdentity) {
+// Purchase Order already has a working backend export; this just calls it.
+export async function downloadPsExcel(report: PsReportDocument, identity: ReportIdentity) {
   if (!report.excelEndpoint) throw new Error("Excel export is not available for this report.");
   const response = await api.post(report.excelEndpoint, report.excelPayload ?? {}, { responseType: "blob" });
   const url = URL.createObjectURL(new Blob([response.data]));

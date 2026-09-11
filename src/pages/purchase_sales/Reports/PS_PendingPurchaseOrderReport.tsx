@@ -2,10 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   RotateCcw,
-  Printer,
   Check,
-  FileText,
-  Download,
   BarChart2,
   Eye,
 } from "lucide-react";
@@ -15,6 +12,7 @@ import {
   type DynamicQueryParams,
 } from "../../../api/lookups";
 import { api } from "../../../api/client";
+import { openPsReport } from "../../../components/purchase-sales/reports/psReportPreviewStore";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -287,8 +285,6 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   const [pending, setPending] = useState<Filters>(buildDefaultFilters());
   const [applied, setApplied] = useState<Filters>(buildDefaultFilters());
 
-  const reportWindowRef = useRef<Window | null>(null);
-
   const setPendingField = <K extends keyof Filters>(key: K, val: Filters[K]) =>
     setPending((prev) => ({ ...prev, [key]: val }));
 
@@ -377,20 +373,12 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     };
   };
 
-  // ── Fetch the report HTML from the API and open it in a new browser tab
+  // Fetch the report HTML and hand it to the shared preview dialog.
   const handleGenerate = async () => {
     setError("");
     setLoading(true);
 
-    const newTab = window.open("", "_blank");
-    if (!newTab) {
-      setLoading(false);
-      setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-      return;
-    }
-    newTab.document.write(
-      "<title>Pending Purchase Order Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>"
-    );
+    const preview = openPsReport("Pending Purchase Order Report");
 
     try {
       const body = buildBody(pending);
@@ -403,56 +391,20 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
 
       const htmlContent = typeof res.data === "string" ? res.data : String(res.data);
 
-      newTab.document.open();
-      newTab.document.write(htmlContent);
-      newTab.document.close();
-
-      reportWindowRef.current = newTab;
+      preview.ready({
+        html: htmlContent,
+        filename: `pending_po_${body.report_type}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "landscape",
+        excelEndpoint: "/api/purchase-sales/reports/pending-po/excel",
+        excelPayload: body,
+      });
       setHasGenerated(true);
       setLastGeneratedAt(new Date());
     } catch (e: any) {
-      newTab.document.open();
-      newTab.document.write(
-        "<title>Pending Purchase Order Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>"
-      );
-      newTab.document.close();
-      setError(
-        e?.response?.data?.message ||
-          e?.message ||
-          "Failed to generate report"
-      );
+      const failure = e?.response?.data?.message || e?.message || "Failed to generate report";
+      setError(failure);
+      preview.fail(failure);
       setHasGenerated(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleExcel = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const body = buildBody(hasGenerated ? applied : pending);
-      const res = await api.post("/api/purchase-sales/reports/pending-po/excel", body, {
-        responseType: "blob",
-      });
-
-      const blob = new Blob([res.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `pending_po_${body.report_type}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(
-        e?.response?.data?.message ||
-          e?.message ||
-          "Excel export failed"
-      );
     } finally {
       setLoading(false);
     }
@@ -468,15 +420,6 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   };
 
   // ── Print (targets the most recently opened report tab)
-  const handlePrint = () => {
-    if (reportWindowRef.current && !reportWindowRef.current.closed) {
-      reportWindowRef.current.focus();
-      reportWindowRef.current.print();
-    } else {
-      setError("No open report tab to print. Generate the report again.");
-    }
-  };
-
   const row2: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
@@ -728,11 +671,7 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
               </div>
               <button
                 onClick={() => {
-                  if (reportWindowRef.current && !reportWindowRef.current.closed) {
-                    reportWindowRef.current.focus();
-                  } else {
-                    setError("Report tab is closed. Please generate again.");
-                  }
+                  setError("The report is available in the preview dialog.");
                 }}
                 style={{
                   padding: "4px 12px",
@@ -779,46 +718,6 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
               }}
             >
               <RotateCcw size={13} /> Reset
-            </button>
-
-            <button
-              className="action-btn-excel"
-              onClick={handleExcel}
-              disabled={loading}
-              style={{
-                padding: "7px 16px",
-                border: "0.5px solid #d1d5db",
-                background: "#fff",
-                cursor: loading ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                borderRadius: 6,
-              }}
-            >
-              <Download size={13} /> Excel
-            </button>
-
-            <button
-              className="action-btn-excel"
-              onClick={handlePrint}
-              disabled={loading || !hasGenerated}
-              style={{
-                padding: "7px 16px",
-                border: "0.5px solid #d1d5db",
-                background: "#fff",
-                cursor:
-                  loading || !hasGenerated ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                borderRadius: 6,
-                opacity: !hasGenerated ? 0.5 : 1,
-              }}
-            >
-              <Printer size={13} /> Print
             </button>
 
             <button
