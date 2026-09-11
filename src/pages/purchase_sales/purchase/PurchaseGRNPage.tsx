@@ -1,12 +1,13 @@
-import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
+import { Download, Edit2, Loader2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions } from "../../../api/transactions";
+import { Division, getDivisions, getGrnPrintReportPreviewUrl, exportGrnPrintReportExcel } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
@@ -86,6 +87,13 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
+  // ── Row-level report preview dialog state ────────────────────────────────
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
+
   const loadLookups = async () => {
     const divisionData = await getDivisions();
     setDivisions(divisionData);
@@ -157,6 +165,85 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+  // Revoke the blob URL whenever it changes or the component unmounts, so we
+  // don't leak memory across repeated print actions.
+  useEffect(() => {
+    return () => {
+      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    };
+  }, [reportPreviewUrl]);
+
+  // Track which row's excel export is in flight, so only that row's button shows a spinner.
+  const [exportingRowDocNo, setExportingRowDocNo] = useState<string | null>(null);
+
+  const handleExportRowExcel = async (row: PurchaseOrderRow) => {
+    if (!row.doc_no) return;
+    setExportingRowDocNo(row.doc_no);
+    try {
+      await exportGrnPrintReportExcel({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: row.doc_no,
+      } as any);
+    } catch (exportError) {
+      setNotice({ type: "error", message: exportError instanceof Error ? exportError.message : "Error while exporting to Excel" });
+    } finally {
+      setExportingRowDocNo(null);
+    }
+  };
+
+  // ── Row-level print handler ───────────────────────────────────────────────
+  const handlePrintRow = async (row: PurchaseOrderRow) => {
+    if (!row.doc_no) return;
+
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
+    setReportPreviewDocNo(row.doc_no);
+    setReportPreviewOpen(true);
+
+    try {
+      const url = await getGrnPrintReportPreviewUrl({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: row.doc_no,
+      } as any);
+      setReportPreviewUrl(url);
+    } catch (printError) {
+      setReportPreviewError(printError instanceof Error ? printError.message : "Error while generating report");
+    }
+  };
+
+  const closeReportPreview = () => {
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewOpen(false);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
+    setReportPreviewDocNo("");
+  };
+
+  const handleReportPreviewExcel = async () => {
+    if (!reportPreviewDocNo) return;
+    setReportPreviewExporting(true);
+    try {
+      await exportGrnPrintReportExcel({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: reportPreviewDocNo,
+      } as any);
+    } catch (exportError) {
+      setReportPreviewError(exportError instanceof Error ? exportError.message : "Error while exporting to Excel");
+    } finally {
+      setReportPreviewExporting(false);
+    }
+  };
+
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -189,11 +276,17 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
+          <Button size="icon" variant="ghost" onClick={() => void handlePrintRow(row.original)} title="Print / PDF">
             <Printer size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Excel">
-            <Download size={15} />
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Excel"
+            disabled={exportingRowDocNo === row.original.doc_no}
+            onClick={() => void handleExportRowExcel(row.original)}
+          >
+            {exportingRowDocNo === row.original.doc_no ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
           </Button>
         </div>
       ),
@@ -299,6 +392,19 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
             }}
           />
         </div>
+      )}
+
+      {reportPreviewOpen && (
+        <ReportPreviewDialog
+          title={`Purchase GRN ${reportPreviewDocNo}`.trim()}
+          pdfUrl={reportPreviewUrl}
+          error={reportPreviewError}
+          exporting={reportPreviewExporting}
+          onExcel={handleReportPreviewExcel}
+          onClose={closeReportPreview}
+          onDownload={() => {}}
+          downloadName={`GRN_${reportPreviewDocNo || "report"}.html`}
+        />
       )}
 
       <Dialog

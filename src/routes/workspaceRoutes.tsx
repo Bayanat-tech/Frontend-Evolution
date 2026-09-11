@@ -210,6 +210,7 @@ import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_
 import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
+import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 
 
  type WorkspaceRouteContext = {
@@ -1355,6 +1356,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isHrEmpDependantsRoute(pathname),
     element: () => <HrEmpDependantsPage/>
   },
+  {
+    name : "Vacation Settlement",
+    match: ({pathname}) => isVacationSettlementRoute(pathname),
+    element: () => <VacationSettlementPage/>
+  },
   
   {
     name: "HR Master",
@@ -1462,6 +1468,13 @@ function isHrEmpDependantsRoute(pathname: string) {
 
 
 
+function isVacationSettlementRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/transactions/vacation_settlement") ||
+    normalized.includes("/hcm/hcm/transactions/vacation%20settlement")
+  );
+}
 
 
 function isHrHolidayCalendarRoute(pathname: string) {
