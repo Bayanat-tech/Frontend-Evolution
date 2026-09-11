@@ -8,7 +8,8 @@ export type VendorView =
   | "profile"
   | "outstanding"
   | "status"
-  | "statement";
+  | "statement"
+  | "waybillInvoices";
 
 export type VendorPageProps = {
   routePath?: string;

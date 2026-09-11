@@ -11,6 +11,20 @@ type ApiResponse<T> = {
 
 export type VendorRow = Record<string, unknown>;
 
+export type WaybillRequest = {
+  id?: number;
+  waybill_load_number: string;
+  destination_name: string;
+  scheduled_vehicle: string;
+  pickup_date: string;
+  vendor_name: string;
+  rig_id: string;
+  file_name?: string;
+  status?: string;
+  raw_text?: string;
+  created_at?: string;
+};
+
 export type VendorRequestPayload = {
   COMPANY_CODE?: string;
   DOC_NO?: string;
@@ -48,6 +62,24 @@ function assertSuccess<T>(response: ApiResponse<T>, fallback: string) {
   if (response.success === false) {
     throw new Error(response.message || response.details || response.error || fallback);
   }
+}
+
+export async function getWaybillRequests() {
+  const { data } = await api.get<ApiResponse<WaybillRequest[]>>("/api/vms/waybill-requests");
+  assertSuccess(data, "Unable to load waybill requests");
+  return (data.data || []).map((row) => {
+    const normalized = { ...row } as WaybillRequest & Record<string, unknown>;
+    Object.entries(row).forEach(([key, value]) => {
+      normalized[key.toLowerCase()] = value;
+    });
+    return normalized;
+  });
+}
+
+export async function saveWaybillRequest(payload: WaybillRequest) {
+  const { data } = await api.post<ApiResponse<WaybillRequest>>("/api/vms/waybill-requests", payload);
+  assertSuccess(data, "Unable to save waybill request");
+  return data.data;
 }
 
 export async function getVendorAccounts(search = "", companyCode?: string) {

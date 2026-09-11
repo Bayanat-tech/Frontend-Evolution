@@ -4,6 +4,7 @@ export function getVendorViewFromPath(routePath = ""): VendorView {
   const text = routePath.toLowerCase();
   const compact = text.replace(/[^a-z0-9]/g, "");
 
+  if (compact.includes("waybillrequest") || compact.includes("waybillinvoice")) return "waybillInvoices";
   if (compact.includes("vendorregistration") || compact.includes("registration")) return "registration";
   if (compact.includes("vendorprofile") || compact.includes("profile")) return "profile";
   if (compact.includes("vendoroutstanding") || compact.includes("invoiceoutstanding") || compact.includes("outstanding")) return "outstanding";
@@ -34,5 +35,7 @@ export function isVendorRouteText(routeText = "") {
     compact.includes("vendorrequest") ||
     compact.includes("vendoroutstanding") ||
     compact.includes("vendorstatus")
+    || compact.includes("waybillrequest")
+    || compact.includes("waybillinvoice")
   );
 }
