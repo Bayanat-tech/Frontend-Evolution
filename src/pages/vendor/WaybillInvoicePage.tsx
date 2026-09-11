@@ -1,4 +1,4 @@
-import { FileText, LoaderCircle, ScanLine, UploadCloud } from "lucide-react";
+import { FileText, LoaderCircle, UploadCloud } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -53,6 +53,11 @@ function extractFromLines(text: string, labels: string[]) {
   return lines[index].replace(labelPattern, "").replace(/^[\s:#-]+/, "").trim() || lines[index + 1] || "";
 }
 
+function extractLast(text: string, pattern: RegExp) {
+  const matches = [...text.matchAll(new RegExp(pattern.source, `${pattern.flags.replace("g", "")}g`))];
+  return matches.at(-1)?.[1]?.trim().replace(/\s{2,}/g, " ") || "";
+}
+
 function extractWaybillFields(text: string): WaybillRequest {
   const field = (labels: string[]) => extractValue(text, labels) || extractFromLines(text, labels);
   const exact = (pattern: RegExp) => text.match(pattern)?.[1]?.trim().replace(/\s{2,}/g, " ") || "";
@@ -60,8 +65,8 @@ function extractWaybillFields(text: string): WaybillRequest {
     exact(/(?:Waybill\s*#?\s*|Load\s*Number\s*:\s*)([A-Z0-9-]+)(?:\s|$)/im) ||
     exact(/(?:Waybill\s*#?\s*)\r?\n\s*([A-Z0-9-]+)/im);
   const destination =
-    exact(/Destination\s+Name\s*:\s*([^\r\n]+)/i) ||
-    exact(/Destination\s+Name\s*:?\s*\r?\n\s*([^\r\n]+)/i);
+    extractLast(text, /Destination\s+Name\s*:\s*([^\r\n]+)/i) ||
+    extractLast(text, /Destination\s+Name\s*:?\s*\r?\n\s*([^\r\n]+)/i);
   const scheduledVehicle =
     exact(/Scheduled\s+Vehicle\s*:\s*([A-Z0-9/ -]+)/i) ||
     exact(/Reported\s+Vehicle\s*:\s*Scheduled\s+Vehicle\s*:\s*([A-Z0-9/ -]+)/i);
@@ -79,9 +84,27 @@ function extractWaybillFields(text: string): WaybillRequest {
   };
 }
 
+function chooseBestOcrText(candidates: string[]) {
+  const labels = [
+    /waybill/i,
+    /load\s+number/i,
+    /destination\s+name/i,
+    /scheduled\s+vehicle/i,
+    /pickup\s+date/i,
+    /vendor\s+name/i,
+    /rig\s+id/i,
+  ];
+  return candidates
+    .map((text) => ({
+      text,
+      score: labels.reduce((score, label) => score + (label.test(text) ? 1 : 0), 0),
+    }))
+    .sort((left, right) => right.score - left.score || right.text.length - left.text.length)[0]?.text || "";
+}
+
 async function readWaybill(file: File, onProgress: (message: string) => void) {
   const pdf = await getDocument({ data: await file.arrayBuffer() }).promise;
-  const textParts: string[] = [];
+  const pageTexts: Array<{ pageNumber: number; text: string }> = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 3 });
@@ -123,16 +146,18 @@ async function readWaybill(file: File, onProgress: (message: string) => void) {
       tessedit_pageseg_mode: "6",
       preserve_interword_spaces: "1",
     });
-    const candidates = [originalResult.data.text, enhancedResult.data.text];
-    textParts.push(candidates.sort((left, right) => right.length - left.length)[0]);
+    pageTexts.push({
+      pageNumber,
+      text: chooseBestOcrText([originalResult.data.text, enhancedResult.data.text]),
+    });
   }
-  return textParts.join("\n");
+  return pageTexts;
 }
 
 export function WaybillInvoicePage() {
   const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useState<WaybillRequest>(emptyWaybill);
+  const [drafts, setDrafts] = useState<WaybillRequest[]>([]);
   const [rows, setRows] = useState<WaybillRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -151,8 +176,6 @@ export function WaybillInvoicePage() {
 
   useEffect(() => { void loadRows(); }, []);
 
-  const update = (key: keyof WaybillRequest, value: string) => setDraft((current) => ({ ...current, [key]: value }));
-
   const handleFile = async (file?: File) => {
     if (!file) return;
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
@@ -162,19 +185,22 @@ export function WaybillInvoicePage() {
     setNotice(null);
     setLoading(true);
     try {
-      const rawText = await readWaybill(file, setProgress);
-      const extracted = extractWaybillFields(rawText);
-      const hasFields = fieldLabels.some(([key]) => String(extracted[key] || "").trim());
-      setDraft({
-        ...emptyWaybill,
-        ...extracted,
-        waybill_load_number: extracted.waybill_load_number || file.name.match(/\d{6,}/)?.[0] || "",
-        file_name: file.name,
+      const pageTexts = await readWaybill(file, setProgress);
+      const extractedPages = pageTexts.map(({ pageNumber, text }) => {
+        const extracted = extractWaybillFields(text);
+        return {
+          ...emptyWaybill,
+          ...extracted,
+          waybill_load_number: extracted.waybill_load_number || file.name.match(/\d{6,}/)?.[0] || "",
+          file_name: `${file.name} - Page ${pageNumber}`,
+        };
       });
+      const hasFields = extractedPages.some((page) => fieldLabels.some(([key]) => String(page[key] || "").trim()));
+      setDrafts(extractedPages);
       setNotice({
         type: hasFields ? "success" : "error",
         message: hasFields
-          ? "OCR complete. Verify the extracted values before saving."
+          ? `${extractedPages.length} page(s) read. Verify each shipment before saving.`
           : "OCR completed, but no recognizable waybill labels were found. Review the OCR text below or use a clearer scan.",
       });
     } catch (error) {
@@ -186,16 +212,19 @@ export function WaybillInvoicePage() {
   };
 
   const save = async () => {
-    const missing = fieldLabels.filter(([key]) => !String(draft[key] || "").trim());
-    if (missing.length) {
-      setNotice({ type: "error", message: `Complete: ${missing.map(([, label]) => label).join(", ")}.` });
+    const invalidPage = drafts.findIndex((draft) => fieldLabels.some(([key]) => !String(draft[key] || "").trim()));
+    if (invalidPage >= 0) {
+      const missing = fieldLabels.filter(([key]) => !String(drafts[invalidPage][key] || "").trim());
+      setNotice({ type: "error", message: `Page ${invalidPage + 1} requires: ${missing.map(([, label]) => label).join(", ")}.` });
       return;
     }
     setLoading(true);
     try {
-      await saveWaybillRequest({ ...draft, company_code: user?.company_code } as WaybillRequest);
-      setDraft(emptyWaybill);
-      setNotice({ type: "success", message: "Waybill saved for invoice verification." });
+      for (const draft of drafts) {
+        await saveWaybillRequest({ ...draft, company_code: user?.company_code } as WaybillRequest);
+      }
+      setDrafts([]);
+      setNotice({ type: "success", message: `${drafts.length} waybill page(s) saved for invoice verification.` });
       await loadRows();
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save waybill." });
@@ -214,35 +243,35 @@ export function WaybillInvoicePage() {
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
       <input ref={inputRef} hidden type="file" accept="application/pdf" onChange={(event) => void handleFile(event.target.files?.[0])} />
       {progress && <div className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="animate-spin" size={14} /> {progress}</div>}
-      {draft.raw_text && (
+      {drafts.length > 0 && (
         <Card>
-          <CardHeader><div className="text-sm font-semibold">OCR text detected</div></CardHeader>
-          <CardContent>
-            <textarea
-              className="min-h-32 w-full rounded-md border bg-background p-2 font-mono text-xs"
-              value={String(draft.raw_text)}
-              readOnly
-              aria-label="OCR text detected from uploaded PDF"
-            />
-          </CardContent>
-        </Card>
-      )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <Card>
-          <CardHeader><div className="flex items-center gap-2 font-semibold"><ScanLine size={16} /> Review extracted fields</div></CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            {fieldLabels.map(([key, label]) => (
-              <label key={key} className="grid gap-1 text-sm">
-                <span className="font-medium text-muted-foreground">{label} *</span>
-                <Input value={String(draft[key] || "")} onChange={(event) => update(key, event.target.value)} />
-              </label>
+          <CardHeader><div className="text-sm font-semibold">Review extracted fields ({drafts.length} page(s))</div></CardHeader>
+          <CardContent className="grid gap-5">
+            {drafts.map((draft, pageIndex) => (
+              <div key={`${draft.file_name}-${pageIndex}`} className="grid gap-3 rounded-md border p-3">
+                <div className="text-sm font-semibold">Shipment page {pageIndex + 1} of {drafts.length}</div>
+                <div className="text-xs text-muted-foreground">{draft.file_name}</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {fieldLabels.map(([key, label]) => (
+                    <label key={key} className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{label} *</span>
+                      <Input
+                        value={String(draft[key] || "")}
+                        onChange={(event) => setDrafts((current) => current.map((item, index) => index === pageIndex ? { ...item, [key]: event.target.value } : item))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
-            <div className="md:col-span-2 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDraft(emptyWaybill)}>Clear</Button>
-              <Button onClick={() => void save()} disabled={loading}><FileText size={15} /> Save waybill</Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDrafts([])}>Clear</Button>
+              <Button onClick={() => void save()} disabled={loading}><FileText size={15} /> Save {drafts.length} waybill(s)</Button>
             </div>
           </CardContent>
         </Card>
+      )}
+      <div className="grid gap-4">
         <DataTable
           columns={fieldLabels.map(([key, label]) => ({ accessorKey: key, header: label }))}
           data={rows}
