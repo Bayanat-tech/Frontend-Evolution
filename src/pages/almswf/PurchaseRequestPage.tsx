@@ -1,5 +1,5 @@
 // src/pages/almswf/PurchaseRequestPage.tsx
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
 import { Plus, Eye, Edit2, RefreshCw } from "lucide-react";
@@ -15,7 +15,6 @@ import { almsCommonSelect } from "../../api/alms";
 const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
   const raw = String(val || "");
   if (!raw || raw === "null" || raw === "undefined") return "NA";
@@ -24,7 +23,6 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// Display status derived from LAST_ACTION / FINAL_APPROVED
 function statusOf(row: TPurchaseSummaryTxn): string {
   const finalApproved = String((row as any).FINAL_APPROVED ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
@@ -45,19 +43,26 @@ function getStatusBadgeStyle(status: string) {
   return { bg, color, border };
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 interface PurchaseRequestPageProps {
   initialTab?: number;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+type TaskPopupData = {
+  existingData: TPurchaseSummaryTxn | null;
+  isEditMode: boolean;
+  isViewMode: boolean;
+  flowCode: string;
+  flowDescription: string;
+  docType?: string;
+  docNo?: string;
+};
+
 const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
   const queryClient = useQueryClient();
 
-  // ── State ───────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(initialTab);
   const [query, setQuery] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
@@ -65,27 +70,29 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // ── Popup state ─────────────────────────────────────────────────────────────
-  const [taskPopup, setTaskPopup] = useState({
+  const [taskPopup, setTaskPopup] = useState<{
+    open: boolean;
+    title: string;
+    data: TaskPopupData;
+  }>({
     open: false,
     title: "",
     data: {
-      existingData: null as TPurchaseSummaryTxn | null,
+      existingData: null,
       isEditMode: false,
       isViewMode: false,
-      flowCode: "" as string,
-      flowDescription: "" as string,
+      flowCode: "",
+      flowDescription: "",
     },
   });
 
-  // ── Approval-flow confirmation popup ──────────────────────────────────────
   const [flowConfirm, setFlowConfirm] = useState({
     open: false,
     loading: false,
     rows: [] as { flowCode: string; flowDescription: string; divCode: string; divName: string }[],
     selectedFlowCode: "",
   });
-  // ── Query with proper typing ──────────────────────────────────────────────
+
   const activeCode3 = TAB_CODE3[activeTab];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
 
@@ -123,11 +130,9 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
 
   const rows = useMemo(() => data ?? [], [data]);
 
-  // ── Client-side search filtering ──────────────────────────────────────────
   const filteredRows = useMemo(() => {
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
-
     if (isPoGeneratedTab) {
       return (rows as TPPOGenerated[]).filter((row) =>
         [row.PO_NUMBER, row.PR_NUMBER, row.SUPPLIER_CODE, row.SUPPLIER_NAME, row.PR_DESCRIPTION]
@@ -135,7 +140,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
           .some((field) => String(field).toLowerCase().includes(q))
       );
     }
-
     return (rows as TPurchaseSummaryTxn[]).filter((row) =>
       [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).SUPPLIER, (row as any).SUPPLIER_NAME]
         .filter(Boolean)
@@ -143,7 +147,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     );
   }, [rows, query, isPoGeneratedTab]);
 
-  // ── Auto-dismiss notice ────────────────────────────────────────────────────
   useEffect(() => {
     if (isError) {
       setNotice({
@@ -153,8 +156,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     }
   }, [isError, error]);
 
-
-  // ── Popup handlers ──────────────────────────────────────────────────────────
   const openAddPopup = async () => {
     setFlowConfirm({ open: true, loading: true, rows: [], selectedFlowCode: "" });
     try {
@@ -167,7 +168,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         code4: "",
       });
 
-      // Fetch divisions
       const divisions = await almsCommonSelect({
         parameter: "PS_PREQUEST_ENTRY_DIVISION",
         loginid,
@@ -226,7 +226,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   };
 
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
-    // Get flow code and description from the row data
     const flowCode = (row as any).FLOW_CODE || "";
     const flowDescription = (row as any).FLOW_DESCRIPTION || "";
 
@@ -235,6 +234,8 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
       title: `${actionType === "edit" ? "Edit" : "View"} PR - ${row.REQUEST_NUMBER}`,
       data: {
         existingData: row,
+        // IMPORTANT: If action is "edit", force edit mode and disable view mode.
+        // This ensures the form is fully editable regardless of PR status.
         isEditMode: actionType === "edit",
         isViewMode: actionType === "view",
         flowCode: flowCode,
@@ -243,38 +244,60 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     });
   };
 
-  const closePopup = (refresh?: boolean) => {
+  // Stable callback — prevents child re-mounts / stale closures
+  const closePopup = useCallback((refresh?: boolean) => {
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
       queryClient.invalidateQueries({ queryKey: ["purchase-request-page", loginid, companyCode] });
     }
-  };
+  }, [queryClient, loginid, companyCode]);
+
+  // Called by AddPRRequestPage after first Save Draft — keeps parent state in sync
+  // so that reopening the same modal (without closing) targets the same PR.
+  const handleSavedDraft = useCallback((savedRequestNumber: string) => {
+    setTaskPopup((prev) => {
+      // Only update if it's a "new" popup that just got a number
+      if (!prev.data.existingData && savedRequestNumber) {
+        const syntheticRow = {
+          REQUEST_NUMBER: savedRequestNumber,
+          FLOW_CODE: prev.data.flowCode,
+          FLOW_DESCRIPTION: prev.data.flowDescription,
+        } as unknown as TPurchaseSummaryTxn;
+        return {
+          ...prev,
+          title: `Edit PR - ${savedRequestNumber}`,
+          data: {
+            ...prev.data,
+            existingData: syntheticRow,
+          },
+        };
+      }
+      return prev;
+    });
+  }, []);
 
   const handleRefresh = () => {
     setNotice(null);
     refetch();
   };
 
-  // ── View PO Handler ────────────────────────────────────────────────────────
   const handlePoView = (row: TPPOGenerated) => {
     const prNumber = row.PR_NUMBER || '';
-
     setTaskPopup({
       open: true,
       title: `PO - ${row.PO_NUMBER}`,
       data: {
-        existingData: prNumber ? { REQUEST_NUMBER: prNumber } as any : null,
+        existingData: prNumber ? ({ REQUEST_NUMBER: prNumber } as any) : null,
         isEditMode: false,
         isViewMode: true,
         flowCode: "",
         flowDescription: "",
         docType: row.DOC_TYPE || "LPO",
         docNo: String(row.PO_NUMBER),
-      } as any,
+      },
     });
   };
 
-  // ── PR Columns ─────────────────────────────────────────────────────────────
   const prColumns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
       {
@@ -348,32 +371,36 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         id: "actions",
         header: "Actions",
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              title="View"
-              onClick={() => handleActions("view", row.original)}
-            >
-              <Eye size={15} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Edit"
-              onClick={() => handleActions("edit", row.original)}
-            >
-              <Edit2 size={15} />
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          // Same rule as AddPRRequestPage: only disable when FINAL_APPROVED = Y
+          const isFinalApproved = String((row.original as any).FINAL_APPROVED || "").toUpperCase() === "Y";
+          return (
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                title="View"
+                onClick={() => handleActions("view", row.original)}
+              >
+                <Eye size={15} />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                title={isFinalApproved ? "Approved — cannot edit" : "Edit"}
+                onClick={() => handleActions("edit", row.original)}
+                disabled={isFinalApproved}
+              >
+                <Edit2 size={15} />
+              </Button>
+            </div>
+          );
+        },
       },
     ],
     []
   );
 
-  // ── PO Columns ─────────────────────────────────────────────────────────────
   const poColumns = useMemo<ColumnDef<TPPOGenerated>[]>(
     () => [
       {
@@ -395,12 +422,8 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         header: "Supplier",
         cell: ({ row }) => {
           const r = row.original;
-          if (r.SUPPLIER_CODE && r.SUPPLIER_NAME) {
-            return `${r.SUPPLIER_CODE} - ${r.SUPPLIER_NAME}`;
-          }
-          if (r.SUPPLIER_CODE) {
-            return r.SUPPLIER_CODE;
-          }
+          if (r.SUPPLIER_CODE && r.SUPPLIER_NAME) return `${r.SUPPLIER_CODE} - ${r.SUPPLIER_NAME}`;
+          if (r.SUPPLIER_CODE) return r.SUPPLIER_CODE;
           return "—";
         },
       },
@@ -423,91 +446,44 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         header: "PR Description",
         cell: ({ row }) => row.original.PR_DESCRIPTION || "—",
       },
-      // {
-      //   accessorKey: "TOTAL_ITEMS",
-      //   header: "Items",
-      //   cell: ({ row }) => row.original.TOTAL_ITEMS || 0,
-      // },
-      // {
-      //   accessorKey: "PO_TOTAL_AMOUNT",
-      //   header: "PO Amount",
-      //   cell: ({ row }) => {
-      //     const amt = row.original.PO_TOTAL_AMOUNT || 0;
-      //     return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
-      //   },
-      // },
-      // {
-      //   id: "actions",
-      //   header: "Action",
-      //   enableSorting: false,
-      //   cell: ({ row }) => (
-      //     <Button
-      //       size="icon"
-      //       variant="ghost"
-      //       title="View PO"
-      //       onClick={() => handlePoView(row.original)}
-      //     >
-      //       <Eye size={15} />
-      //     </Button>
-      //   ),
-      // },
     ],
     []
   );
 
   const columns = isPoGeneratedTab ? poColumns : prColumns;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <section className="finance-list-page grid gap-4">
-      {/* Header */}
       <div className="finance-list-heading">
         <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Request</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Manage purchase requisition requests</p>
         </div>
         <div className="finance-list-actions">
-          <Button
-            variant="outline"
-            size="icon"
-            title="Refresh"
-            aria-label="Refresh"
-            onClick={handleRefresh}
-          >
+          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={handleRefresh}>
             <RefreshCw size={15} />
           </Button>
-          <Button
-            title="Add Purchase Request"
-            onClick={() => void openAddPopup()}
-            style={{ background: "#082A89" }}
-          >
+          <Button title="Add Purchase Request" onClick={() => void openAddPopup()} style={{ background: "#082A89" }}>
             <Plus size={15} /> Add PR
           </Button>
         </div>
       </div>
 
-      {/* Auto-dismiss alert */}
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Custom Tab Bar */}
       <div className="flex flex-wrap gap-2 rounded-md">
         {TAB_LABELS.map((label, index) => (
           <Button
             key={index}
             size="default"
             variant={activeTab === index ? "default" : "outline"}
-            onClick={() => {
-              setActiveTab(index);
-              setPageIndex(0);
-            }}
+            onClick={() => { setActiveTab(index); setPageIndex(0); }}
             className="px-6 py-2.5 min-w-[120px]"
             style={{
               fontSize: "15px",
               fontWeight: activeTab === index ? 600 : 500,
               transition: "all 0.2s ease",
-              ...(activeTab === index && {
-                boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
-              })
+              ...(activeTab === index && { boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)" }),
             }}
           >
             {label}
@@ -515,7 +491,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         ))}
       </div>
 
-      {/* Data Table */}
       <div className="min-h-[650px]">
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
@@ -524,10 +499,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
           title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
           subtitle={isPoGeneratedTab ? "Generated PO List" : "Purchase Request List"}
           searchValue={query}
-          onSearchChange={(value) => {
-            setQuery(value);
-            setPageIndex(0);
-          }}
+          onSearchChange={(value) => { setQuery(value); setPageIndex(0); }}
           searchPlaceholder={isPoGeneratedTab ? "Search PO number, PR number, supplier..." : "Search request no, description, user..."}
           loading={isLoading}
           emptyText={isPoGeneratedTab ? "No purchase orders generated yet" : "No purchase requests found"}
@@ -543,22 +515,14 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
           pageSize={pageSize}
           totalRows={filteredRows.length}
           columnFilters={columnFilters}
-          onColumnFiltersChange={(filters) => {
-            setColumnFilters(filters);
-            setPageIndex(0);
-          }}
+          onColumnFiltersChange={(filters) => { setColumnFilters(filters); setPageIndex(0); }}
           onPageChange={setPageIndex}
-          onPageSizeChange={(nextPageSize) => {
-            setPageSize(nextPageSize);
-            setPageIndex(0);
-          }}
+          onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPageIndex(0); }}
           getRowId={(row: any, index) => row.REQUEST_NUMBER || row.PO_NUMBER || `temp-${index}`}
         />
       </div>
 
-      {/* ─── Approval Flow confirmation popup ─── */}
-      // ─── Approval Flow confirmation popup ───
-      {/* ─── Approval Flow confirmation popup ─── */}
+      {/* Approval Flow Dialog */}
       <Dialog
         open={flowConfirm.open}
         wide={false}
@@ -646,8 +610,8 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
             }
             flowCode={taskPopup.data.flowCode}
             flowDescription={taskPopup.data.flowDescription}
-            docType={(taskPopup.data as any).docType}
-            docNo={(taskPopup.data as any).docNo}
+            docType={taskPopup.data.docType}
+            docNo={taskPopup.data.docNo}
             onClose={closePopup}
           />
         )}

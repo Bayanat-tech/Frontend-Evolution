@@ -39,123 +39,150 @@ function fmt3(n: number) {
 function num(v: unknown) { return Number(v) || 0; }
 function newId() { return `${Date.now()}_${Math.random().toString(36).slice(2)}`; }
 
-// ─── PO-style calculation helpers ─────────────────────────────────────────
-function itemQty(item: Partial<TPRItem>, userLevel: number) {
-  return userLevel >= 2 ? num(item.ALLOCATED_APPROVED_QUANTITY) : num(item.REQUEST_QUANTITY);
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function isSameUom(item: TPRItem): boolean {
+  const primary = String(item.P_UOM || "").trim().toUpperCase();
+  const loose = String(item.L_UOM || "").trim().toUpperCase();
+  return !!primary && primary === loose;
 }
 
-function itemDiscPrice(item: Partial<TPRItem>) {
-  return num(item.ITEM_RATE) * (num(item.DISCOUNT_AMOUNT) / 100);
+function computeQuantity(item: TPRItem): number {
+  const qtyPuom = num(item.QTY_PUOM);
+  const qtyLuom = num(item.QTY_LUOM);
+  const uppp = num(item.UPPP);
+  return isSameUom(item) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
-function itemFinalRate(item: Partial<TPRItem>) {
-  return num(item.ITEM_RATE) - itemDiscPrice(item);
+function computeApprovedQuantity(item: TPRItem): number {
+  const qtyPuom = num((item as any).APPROVED_QTY_PUOM);
+  const qtyLuom = num((item as any).APPROVED_QTY_LUOM);
+  const uppp = num((item as any).APPROVED_UPPP);
+  return isSameUom(item) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
-function itemAmount(item: Partial<TPRItem>, userLevel: number) {
-  return itemFinalRate(item) * itemQty(item, userLevel);
+function amountBeforeDisc(item: TPRItem): number {
+  return num(item.ITEM_RATE) * computeQuantity(item);
 }
 
-function itemNetAmount(item: Partial<TPRItem>, userLevel: number) {
-  return itemAmount(item, userLevel);
+function itemDiscPrice(item: TPRItem): number {
+  return amountBeforeDisc(item) * (num(item.DISCOUNT_AMOUNT) / 100);
 }
 
-function itemTaxAmount(item: Partial<TPRItem>, userLevel: number) {
-  return itemNetAmount(item, userLevel) * (num(item.TX_COMPNT_PERC_1) / 100);
+function itemFinalRate(item: TPRItem): number {
+  const qty = computeQuantity(item);
+  if (qty === 0) return num(item.ITEM_RATE);
+  return num(item.ITEM_RATE) - (itemDiscPrice(item) / qty);
 }
 
-function itemLcurrAmount(item: Partial<TPRItem>, exRate: number, userLevel: number) {
-  return itemAmount(item, userLevel) * (exRate || 1);
+function itemAmount(item: TPRItem): number {
+  return itemFinalRate(item) * computeQuantity(item);
 }
 
-function itemTaxLcurrAmount(item: Partial<TPRItem>, exRate: number, userLevel: number) {
-  return itemTaxAmount(item, userLevel) * (exRate || 1);
+function itemNetAmount(item: TPRItem): number {
+  return itemAmount(item);
 }
 
-function itemLcurrAfterDiscount(item: Partial<TPRItem>, exRate: number, userLevel: number) {
-  return itemLcurrAmount(item, exRate, userLevel) + itemTaxLcurrAmount(item, exRate, userLevel);
+function itemTaxAmount(item: TPRItem): number {
+  return itemNetAmount(item) * (num(item.TX_COMPNT_PERC_1) / 100);
 }
 
-function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number, userLevel: number): T {
+function itemLcurrAmount(item: TPRItem, exRate: number): number {
+  return itemAmount(item) * (exRate || 1);
+}
+
+function itemTaxLcurrAmount(item: TPRItem, exRate: number): number {
+  return itemTaxAmount(item) * (exRate || 1);
+}
+
+function itemLcurrAfterDisc(item: TPRItem, exRate: number): number {
+  return itemLcurrAmount(item, exRate) + itemTaxLcurrAmount(item, exRate);
+}
+
+function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number): T {
   const rate = exRate || 1;
-  item.FINAL_RATE = itemFinalRate(item);
-  item.AMOUNT = itemAmount(item, userLevel);
-  item.TX_COMPNT_AMT_1 = itemTaxAmount(item, userLevel);
-  (item as any).LCURR_AMT = itemLcurrAmount(item, rate, userLevel);
-  (item as any).TX_COMPNT_LCURAMT_1 = itemTaxLcurrAmount(item, rate, userLevel);
-  (item as any).LCURR_AFTER_DISCOUNT = itemLcurrAfterDiscount(item, rate, userLevel);
-  (item as any).BASE_AMOUNT = (item as any).LCURR_AMT;
-  (item as any).FINAL_AMOUNT = (item as any).LCURR_AMT + (item as any).TX_COMPNT_LCURAMT_1;
+  const qty = computeQuantity(item as TPRItem);
+  const amtBeforeDisc = amountBeforeDisc(item as TPRItem);
+  const discPrice = itemDiscPrice(item as TPRItem);
+  const finalRate = itemFinalRate(item as TPRItem);
+  const amount = itemAmount(item as TPRItem);
+  const taxAmt = itemTaxAmount(item as TPRItem);
+  const lcurrAmt = itemLcurrAmount(item as TPRItem, rate);
+  const taxLcurr = itemTaxLcurrAmount(item as TPRItem, rate);
+  const lcurrAfterDisc = itemLcurrAfterDisc(item as TPRItem, rate);
+
+  item.FINAL_RATE = finalRate;
+  item.AMOUNT = amount;
+  item.TX_COMPNT_AMT_1 = taxAmt;
+  (item as any).LCURR_AMT = lcurrAmt;
+  (item as any).TX_COMPNT_LCURAMT_1 = taxLcurr;
+  (item as any).LCURR_AFTER_DISCOUNT = lcurrAfterDisc;
+  (item as any).BASE_AMOUNT = lcurrAmt;
+  (item as any).FINAL_AMOUNT = lcurrAmt + taxLcurr;
+  (item as any).AMOUNT_BEFORE_DISC = amtBeforeDisc;
+  (item as any).DISC_PRICE = discPrice;
+  (item as any).QUANTITY = qty;
+  (item as any).ITEM_QTY = qty;
+  (item as any).ALLOCATED_APPROVED_QUANTITY = computeApprovedQuantity(item as TPRItem);
+
   return item;
 }
 
-// ─── Discount Distribution Helpers ─────────────────────────────────────────
-function calculateTotalUnitPrice(items: TPRItem[], userLevel: number): number {
+// ─── Discount Helpers ─────────────────────────────────────────────────────
+function calculateTotalUnitPrice(items: TPRItem[]): number {
   return items.reduce((total, item) => {
-    const qty = itemQty(item, userLevel);
+    const qty = computeQuantity(item);
     const rate = num(item.ITEM_RATE);
     return total + (rate * qty);
   }, 0);
 }
 
-function calculateAmountBeforeDisc(items: TPRItem[], userLevel: number): number {
+function calculateAmountBeforeDisc(items: TPRItem[]): number {
   return items.reduce((total, item) => {
-    const qty = itemQty(item, userLevel);
+    const qty = computeQuantity(item);
     const rate = num(item.ITEM_RATE);
     return total + (rate * qty);
   }, 0);
 }
 
-function distributeDiscountToItems(
-  items: TPRItem[], 
-  discPercent: number, 
-  userLevel: number
-): TPRItem[] {
-  const totalUnitPrice = calculateTotalUnitPrice(items, userLevel);
+function distributeDiscountToItems(items: TPRItem[], discPercent: number): TPRItem[] {
+  const totalUnitPrice = calculateTotalUnitPrice(items);
   if (totalUnitPrice === 0 || discPercent === 0) {
     return items.map(item => {
       const updated = { ...item, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
-      return recalcItem(updated, exRate, userLevel);
+      return recalcItem(updated, exRate);
     });
   }
-
   return items.map(item => {
-    const itemQtyVal = itemQty(item, userLevel);
+    const itemQtyVal = computeQuantity(item);
     const unitPrice = num(item.ITEM_RATE);
     const itemTotal = unitPrice * itemQtyVal;
     const itemDiscPercent = (itemTotal / totalUnitPrice) * discPercent;
-    
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
-    return recalcItem(updated, exRate, userLevel);
+    return recalcItem(updated, exRate);
   });
 }
 
-function distributeDiscountFromAmount(
-  items: TPRItem[], 
-  discAmount: number, 
-  userLevel: number
-): TPRItem[] {
-  const totalUnitPrice = calculateTotalUnitPrice(items, userLevel);
+function distributeDiscountFromAmount(items: TPRItem[], discAmount: number): TPRItem[] {
+  const totalUnitPrice = calculateTotalUnitPrice(items);
   if (totalUnitPrice === 0 || discAmount === 0) {
     return items.map(item => {
       const updated = { ...item, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
-      return recalcItem(updated, exRate, userLevel);
+      return recalcItem(updated, exRate);
     });
   }
-
   return items.map(item => {
-    const itemQtyVal = itemQty(item, userLevel);
+    const itemQtyVal = computeQuantity(item);
     const unitPrice = num(item.ITEM_RATE);
     const itemTotal = unitPrice * itemQtyVal;
     const itemDiscAmount = (itemTotal / totalUnitPrice) * discAmount;
     const itemDiscPercent = (itemDiscAmount / itemTotal) * 100;
-    
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
-    return recalcItem(updated, exRate, userLevel);
+    return recalcItem(updated, exRate);
   });
 }
 
@@ -166,12 +193,12 @@ function cleanNumericData(data: any): any {
     'FINAL_RATE', 'BASE_AMOUNT', 'FINAL_AMOUNT', 'LCURR_AMT',
     'TX_COMPNT_AMT_1', 'TX_COMPNT_LCURAMT_1', 'TX_COMPNT_PERC_1',
     'REQUEST_QUANTITY', 'ALLOCATED_APPROVED_QUANTITY',
-    'LCURR_AFTER_DISCOUNT'
+    'LCURR_AFTER_DISCOUNT', 'QTY_PUOM', 'QTY_LUOM', 'UPPP',
+    'QUANTITY', 'AMOUNT_BEFORE_DISC', 'DISC_PRICE',
+    'APPROVED_QTY_PUOM', 'APPROVED_QTY_LUOM', 'APPROVED_UPPP'
   ];
 
-  if (Array.isArray(data)) {
-    return data.map(item => cleanNumericData(item));
-  }
+  if (Array.isArray(data)) return data.map(item => cleanNumericData(item));
 
   if (data && typeof data === 'object') {
     const cleaned: any = {};
@@ -187,7 +214,6 @@ function cleanNumericData(data: any): any {
     }
     return cleaned;
   }
-
   return data;
 }
 
@@ -230,10 +256,20 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     SUPPLIER_CODE: "",
     SUPPLIER_NAME: "",
     CASH_IND: "",
-  };
+    P_UOM: "",
+    QTY_PUOM: 0,
+    L_UOM: "",
+    QTY_LUOM: 0,
+    UPPP: 0,
+    QUANTITY: 0,
+    AMOUNT_BEFORE_DISC: 0,
+    DISC_PRICE: 0,
+    APPROVED_QTY_PUOM: 0,
+    APPROVED_QTY_LUOM: 0,
+    APPROVED_UPPP: 0,
+  } as TPRItem;
 }
 
-// ─── Validation Function ──────────────────────────────────────────────────────
 function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
@@ -254,34 +290,29 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
     errors.push("At least one item is required");
   } else {
     items.forEach((item, index) => {
-      if (!item.ITEM_CODE) {
-        errors.push(`Item ${index + 1}: Item Code is required`);
+      if (!item.ITEM_CODE) errors.push(`Item ${index + 1}: Product Code is required`);
+      if (!item.ITEM_DESP) errors.push(`Item ${index + 1}: Product Description is required`);
+      if (userLevel >= 6 && !item.SUPPLIER) errors.push(`Item ${index + 1}: Supplier is required`);
+      if (userLevel === 1 && computeQuantity(item) <= 0) {
+        errors.push(`Item ${index + 1}: Quantity must be greater than 0`);
       }
-      if (!item.ITEM_DESP) {
-        errors.push(`Item ${index + 1}: Item Description is required`);
-      }
-      if (userLevel >= 6 && !item.SUPPLIER) {
-        errors.push(`Item ${index + 1}: Supplier is required`);
-      }
-      if (userLevel >= 2 && num(item.ALLOCATED_APPROVED_QUANTITY) <= 0) {
-        errors.push(`Item ${index + 1}: Approved Quantity must be greater than 0`);
-      }
-      if (userLevel === 1 && num(item.REQUEST_QUANTITY) <= 0) {
-        errors.push(`Item ${index + 1}: Request Quantity must be greater than 0`);
-      }
-      if (num(item.ITEM_RATE) <= 0) {
-        errors.push(`Item ${index + 1}: Rate must be greater than 0`);
-      }
-      if (!item.COST_CODE) {
-        errors.push(`Item ${index + 1}: Cost Code is required`);
-      }
+      if (num(item.ITEM_RATE) <= 0) errors.push(`Item ${index + 1}: Rate must be greater than 0`);
     });
   }
 
   return { valid: errors.length === 0, errors };
 }
 
-const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCode, flowDescription, docType = "PR", docNo, onClose }: AddPRRequestPageProps) => {
+const AddPRRequestPage = ({
+  isEditMode,
+  isViewMode = false,
+  existingData,
+  flowCode,
+  flowDescription,
+  docType = "PR",
+  docNo,
+  onClose,
+}: AddPRRequestPageProps) => {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
@@ -302,31 +333,28 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const [terms, setTerms] = useState<any[]>([]);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  const PDO_TYPE_MAP: Record<string, string> = {
-    'P': 'PDO-OTO',
-    'Q': 'PDO-NON-OTO',
-    'N': 'NON-PDO'
-  };
   const [userApprovalLevel, setUserApprovalLevel] = useState<number>(0);
   const [displayDate, setDisplayDate] = useState("");
   const isInitialized = useRef(false);
-  const disabled = isViewMode || saving;
+  const itemsLoadedRef = useRef(false);
 
-  // ─── Set Flow Code for New Document ─────────────────────────────
+  useEffect(() => {
+    itemsLoadedRef.current = false;
+  }, [existingData?.request_number]);
+
+  const isFinalApproved = String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y";
+  const effectiveViewMode = isFinalApproved || (isViewMode && !isEditMode);
+  const disabled = saving || effectiveViewMode;
+
   useEffect(() => {
     if (isEditMode || isViewMode) return;
     if (!flowCode) return;
-
     setHdr("FLOW_CODE", flowCode);
-    if (flowDescription) {
-      setHdr("FLOW_DESCRIPTION", flowDescription);
-    }
+    if (flowDescription) setHdr("FLOW_DESCRIPTION", flowDescription);
   }, [flowCode, flowDescription, isEditMode, isViewMode]);
 
   useEffect(() => {
     if (isInitialized.current) return;
-
-    // Only for NEW document (not edit/view)
     if (!isEditMode && !isViewMode) {
       const today = new Date();
       const day = String(today.getDate()).padStart(2, '0');
@@ -334,7 +362,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       const year = today.getFullYear();
       const formattedDate = `${day}/${month}/${year}`;
       const yyyyMMdd = today.toISOString().slice(0, 10);
-
       setDisplayDate(formattedDate);
       setHdr("REQUEST_DATE", yyyyMMdd);
       isInitialized.current = true;
@@ -353,7 +380,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }
   }, [header.REQUEST_DATE]);
 
-
   useEffect(() => {
     if ((isEditMode || isViewMode) && header.REQUEST_DATE) {
       const date = new Date(header.REQUEST_DATE);
@@ -366,9 +392,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }
   }, [isEditMode, isViewMode, header.REQUEST_DATE]);
 
-  // ─── Fetch user's approval level based on flow ──────────────
   useEffect(() => {
-    // New document → creator hamesha Level 1, API call ki zaroorat nahi
     if (!isEditMode && !isViewMode) {
       setUserApprovalLevel(1);
       return;
@@ -376,7 +400,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
     const fetchUserLevel = async () => {
       if (!user?.loginid || !companyCode || !header.FLOW_CODE) return;
-
       try {
         const result = await almsCommonSelect({
           parameter: "PS_PREQUEST_ENTRY_GET_USER_LEVEL",
@@ -386,7 +409,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
           code3: user?.loginid || "",
           code4: ""
         });
-
         if (result && result.length > 0) {
           const level = Number(result[0].FLOW_LEVEL) || 0;
           setUserApprovalLevel(level);
@@ -404,28 +426,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     fetchUserLevel();
   }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, isEditMode, isViewMode]);
 
-  const shouldShowSupplier = (): boolean => {
-    return userApprovalLevel >= 6;
-  };
-
-  const shouldShowApprovedQty = (): boolean => {
-    return userApprovalLevel >= 2;
-  };
-
-  const shouldShowTermsTab = (): boolean => {
-    return userApprovalLevel >= 6 || (header as any).FINAL_APPROVED === "Y";
-  };
+  const shouldShowSupplier = (): boolean => userApprovalLevel >= 6;
+  const shouldShowApprovedQty = (): boolean => userApprovalLevel >= 2;
+  const shouldShowTermsTab = (): boolean =>
+    userApprovalLevel >= 6 || (header as any).FINAL_APPROVED === "Y";
 
   // ─── Lookup Queries ──────────────────────────────────────────────
-  const { data: itemCodes = [] } = useQuery<LookupItem[]>({
-    queryKey: ["pr-items-lookup", companyCode],
+  const { data: productCodes = [] } = useQuery<LookupItem[]>({
+    queryKey: ["pr-product-lookup", companyCode],
     queryFn: () => almsCommonSelect({
-      parameter: "PS_PREQUEST_ENTRY_ITEMS",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST",
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode,
   });
@@ -434,11 +445,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-cost-lookup", companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_COSTS",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode,
   });
@@ -447,11 +454,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-tax-lookup", companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_TAX",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode,
   });
@@ -460,11 +463,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-tax-component-lookup", companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode,
   });
@@ -473,11 +472,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-supplier-lookup", companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_SUPPLIERS",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode && shouldShowSupplier(),
   });
@@ -486,11 +481,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-currency-lookup", companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_CURRENCY",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode,
   });
@@ -499,97 +490,64 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-division-lookup", companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_DIVISION",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
     }),
     enabled: !!companyCode,
   });
 
-  // ─── Fetch Header Data ────────────────────────────────────────────
   const { data: hdrList = [] } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({
       parameter: "PS_PREQUEST_ENTRY_HEADER_PAGE",
-      loginid,
-      code1: companyCode,
-      code2: "PR",
-      code3: requestNumber || "",
-      code4: ""
+      loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: ""
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
   });
 
-  // ─── Fetch Items Data ────────────────────────────────────────────
   const { data: itemList = [] } = useQuery<TPRItem[]>({
     queryKey: ["pr-item-list", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRItem>({
       parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE",
-      loginid,
-      code1: companyCode,
-      code2: "PR",
-      code3: requestNumber || "",
-      code4: ""
+      loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: ""
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
   });
 
-  // ─── Fetch Terms Data ────────────────────────────────────────────
   const { data: termsList = [] } = useQuery<any[]>({
     queryKey: ["pr-terms", requestNumber, companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_TERMS",
-      loginid,
-      code1: companyCode,
-      code2: requestNumber || "",
-      code3: "",
-      code4: "",
+      loginid, code1: companyCode, code2: requestNumber || "", code3: "", code4: "",
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
   });
 
-  // ─── Fetch Flow Details for DIV_CODE ────────────────────────────
   const { data: flowDetailData } = useQuery<LookupItem[]>({
     queryKey: ["pr-flow-details", flowCode, companyCode],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_GET_FLOW_DETAILS",
-      loginid,
-      code1: companyCode,
-      code2: flowCode || "",
-      code3: "",
-      code4: ""
+      loginid, code1: companyCode, code2: flowCode || "", code3: "", code4: ""
     }),
     enabled: !!flowCode && !!companyCode && !isEditMode && !isViewMode,
   });
 
-  // ─── Auto-populate Division from Flow ────────────────────────────
   useEffect(() => {
     if (isEditMode || isViewMode) return;
     if (!flowDetailData || flowDetailData.length === 0) return;
-
     const flow = flowDetailData[0];
     const divCode = flow.DIV_CODE || "";
-
     if (divCode) {
       setHdr("DIV_CODE", divCode);
       const div = divisionList.find((d: any) => d.DIV_CODE === divCode);
-      if (div) {
-        setHdr("DIV_NAME", div.DIV_NAME || "");
-      }
+      if (div) setHdr("DIV_NAME", div.DIV_NAME || "");
     }
   }, [flowDetailData, divisionList, isEditMode, isViewMode]);
 
-  // ─── Set Header Data ─────────────────────────────────────────────
   useEffect(() => {
     if (!isEditMode && !isViewMode) {
-      // Set flow code from props for new document
       if (flowCode) {
         setHdr("FLOW_CODE", flowCode);
-        if (flowDescription) {
-          setHdr("FLOW_DESCRIPTION", flowDescription);
-        }
+        if (flowDescription) setHdr("FLOW_DESCRIPTION", flowDescription);
       }
       setLoading(false);
       return;
@@ -615,48 +573,39 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }
   }, [hdrList, isEditMode, isViewMode, requestNumber, flowCode, flowDescription]);
 
-  // ─── Enrich Header Names from Lookups (fallback if API didn't return names) ───
   useEffect(() => {
     if (!isEditMode && !isViewMode) return;
     if (!header.CURR_CODE && !header.TX_CAT_CODE && !header.TX_COMPNTCAT_CODE_1) return;
 
     setHeader((prev) => {
       const updates: Partial<TPRHeader> & { TX_COMPNTCAT_NAME?: string } = {};
-
       if (prev.CURR_CODE && !prev.CURR_NAME && currencyList.length > 0) {
         const curr = currencyList.find((c: any) => c.CURR_CODE === prev.CURR_CODE);
         if (curr) updates.CURR_NAME = curr.CURR_NAME || "";
       }
-
       if (prev.TX_CAT_CODE && !prev.TX_CAT_NAME && taxCodes.length > 0) {
         const tax = taxCodes.find((t: any) => t.TX_CAT_CODE === prev.TX_CAT_CODE);
         if (tax) updates.TX_CAT_NAME = tax.TX_CAT_NAME || "";
       }
-
       if (prev.TX_COMPNTCAT_CODE_1 && !(prev as any).TX_COMPNTCAT_NAME && taxComponentList.length > 0) {
         const comp = taxComponentList.find((t: any) => t.TX_COMPNTCAT_CODE === prev.TX_COMPNTCAT_CODE_1);
         if (comp) updates.TX_COMPNTCAT_NAME = comp.TX_COMPNTCAT_NAME || "";
       }
-
       if (Object.keys(updates).length === 0) return prev;
       return { ...prev, ...updates };
     });
   }, [
-    header.CURR_CODE,
-    header.TX_CAT_CODE,
-    header.TX_COMPNTCAT_CODE_1,
-    currencyList,
-    taxCodes,
-    taxComponentList,
-    isEditMode,
-    isViewMode,
+    header.CURR_CODE, header.TX_CAT_CODE, header.TX_COMPNTCAT_CODE_1,
+    currencyList, taxCodes, taxComponentList, isEditMode, isViewMode,
   ]);
 
-  // ─── Set Items Data ──────────────────────────────────────────────
   useEffect(() => {
+    if (itemsLoadedRef.current) return;
+
     if (itemList.length === 0) {
       if (isViewMode && requestNumber) {
         setItems([]);
+        itemsLoadedRef.current = true;
       }
       return;
     }
@@ -665,7 +614,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       const base: TPRItem = {
         ...row,
         id: (row as any).id || newId(),
-        ITEM_DESP: row.ITEM_DESP || itemCodes.find((i) => i.ITEM_CODE === row.ITEM_CODE)?.ITEM_DESP || "",
+        ITEM_DESP: row.ITEM_DESP || productCodes.find((i) => i.PROD_CODE === row.ITEM_CODE)?.PROD_NAME || "",
         COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
         SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
         TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
@@ -674,23 +623,31 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         CAPEX_OPEX_NON_OPEX: (row as any).CAPEX || (row as any).CAPEX_OPEX_NON_OPEX || "",
         LCURR_AFTER_DISCOUNT: 0,
         CASH_IND: (row as any).CASH_IND || "",
+        P_UOM: (row as any).P_UOM || "",
+        QTY_PUOM: (row as any).QTY_PUOM || 0,
+        L_UOM: (row as any).L_UOM || "",
+        QTY_LUOM: (row as any).QTY_LUOM || 0,
+        UPPP: (row as any).UPPP || 0,
+        QUANTITY: 0,
+        AMOUNT_BEFORE_DISC: 0,
+        DISC_PRICE: 0,
+        APPROVED_QTY_PUOM: (row as any).APPROVED_QTY_PUOM || 0,
+        APPROVED_QTY_LUOM: (row as any).APPROVED_QTY_LUOM || 0,
+        APPROVED_UPPP: (row as any).APPROVED_UPPP || 0,
       } as TPRItem;
       const exRate = num(base.CURRENCY_RATE || header.CURRENCY_RATE || 1);
-      return recalcItem(base, exRate, userApprovalLevel);
+      return recalcItem(base, exRate);
     });
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
-  }, [userApprovalLevel]);
+    itemsLoadedRef.current = true;
+  }, [itemList, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber]);
 
-  // ─── Set Terms Data ──────────────────────────────────────────────
   useEffect(() => {
     if (termsList.length === 0) {
-      if (isViewMode && requestNumber) {
-        setTerms([]);
-      }
+      if (isViewMode && requestNumber) setTerms([]);
       return;
     }
-
     const enriched = termsList.map((row: any) => ({
       ...row,
       id: row.id || newId(),
@@ -699,22 +656,21 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     setTerms(enriched);
   }, [termsList, supplierList, isViewMode, requestNumber]);
 
-  const setHdr = (field: keyof TPRHeader, value: unknown) => setHeader((prev) => ({ ...prev, [field]: value }));
+  const setHdr = (field: keyof TPRHeader, value: unknown) =>
+    setHeader((prev) => ({ ...prev, [field]: value }));
 
   const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
   const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
-  const totalAmountBeforeDisc = calculateAmountBeforeDisc(items, userApprovalLevel);
+  const totalAmountBeforeDisc = calculateAmountBeforeDisc(items);
   const [headerExpanded, setHeaderExpanded] = useState(true);
-  
-  // ─── Discount Scope State ────────────────────────────────────────
-  const [discountScope, setDiscountScope] = useState<"ITEM" | "PO">("ITEM");
-  
-  // ─── Calculate Total Disc Amount ────────────────────────────────
-  const totalDiscAmount = items.reduce((sum, item) => sum + (num(item.ITEM_RATE) * num(item.DISCOUNT_AMOUNT) / 100 * itemQty(item, userApprovalLevel)), 0);
 
-  // ─── Calculate From Amount Functions ────────────────────────────
+  const [discountScope, setDiscountScope] = useState<"ITEM" | "PO">("ITEM");
+
+  const totalDiscAmount = items.reduce((sum, item) =>
+    sum + (num(item.ITEM_RATE) * num(item.DISCOUNT_AMOUNT) / 100 * computeQuantity(item)), 0);
+
   const calculateDiscountFromAmount = (type: "amount" | "percent") => {
     if (items.length === 0) {
       toast.warning("Please add items first", 4000);
@@ -727,12 +683,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         toast.warning("Please enter a discount amount first", 4000);
         return;
       }
-      
-      const updatedItems = distributeDiscountFromAmount(items, discAmount, userApprovalLevel);
+      const updatedItems = distributeDiscountFromAmount(items, discAmount);
       setItems(updatedItems);
-      
-      // Calculate and set the equivalent percentage
-      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+      const totalUnitPrice = calculateTotalUnitPrice(items);
       if (totalUnitPrice > 0) {
         const discPercent = (discAmount / totalUnitPrice) * 100;
         setHdr("DISCOUNT_AMOUNT", discPercent);
@@ -743,12 +696,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         toast.warning("Please enter a discount percentage first", 4000);
         return;
       }
-      
-      const updatedItems = distributeDiscountToItems(items, discPercent, userApprovalLevel);
+      const updatedItems = distributeDiscountToItems(items, discPercent);
       setItems(updatedItems);
-      
-      // Calculate and set the equivalent amount
-      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+      const totalUnitPrice = calculateTotalUnitPrice(items);
       if (totalUnitPrice > 0) {
         const discAmount = (discPercent / 100) * totalUnitPrice;
         setHdr("DISC_AMOUNT", discAmount);
@@ -760,16 +710,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel);
     if (!valid) {
       toast.error(errors[0], 5000);
-      setNotice({
-        type: "error",
-        message: errors.join(". ")
-      });
+      setNotice({ type: "error", message: errors.join(". ") });
       return false;
     }
     return true;
   };
 
-  const saveBulk = async (status: string, remark: string = "", overrides: Partial<Record<string, any>> = {}): Promise<{ success: boolean; message?: string;[key: string]: any }> => {
+  const saveBulk = async (
+    status: string,
+    remark: string = "",
+    overrides: Partial<Record<string, any>> = {}
+  ): Promise<{ success: boolean; message?: string;[key: string]: any }> => {
     const headerData = {
       REQUEST_NUMBER: requestNumber || null,
       COMPANY_CODE: companyCode,
@@ -883,7 +834,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       REQUEST_NUMBER: requestNumber || null,
       ITEM_CODE: item.ITEM_CODE || "",
       ITEM_RATE: item.ITEM_RATE || 0,
-      ITEM_QTY: item.ALLOCATED_APPROVED_QUANTITY || 0,
+      ITEM_QTY: computeQuantity(item),
       CURRENCY_RATE: item.CURRENCY_RATE || 1,
       AMOUNT: item.AMOUNT || 0,
       COMPANY_CODE: companyCode,
@@ -921,14 +872,14 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       DOC_DATE: new Date().toISOString(),
       DIV_CODE: "",
       SERIAL_NO: 0,
-      PROD_CODE: "",
-      PROD_NAME: "",
-      P_UOM: "",
-      QTY_PUOM: 0,
-      L_UOM: "",
-      QTY_LUOM: 0,
-      UPPP: 0,
-      QUANTITY: 0,
+      PROD_CODE: item.ITEM_CODE || "",
+      PROD_NAME: item.ITEM_DESP || "",
+      P_UOM: item.P_UOM || "",
+      QTY_PUOM: item.QTY_PUOM || 0,
+      L_UOM: item.L_UOM || "",
+      QTY_LUOM: item.QTY_LUOM || 0,
+      UPPP: item.UPPP || 0,
+      QUANTITY: computeQuantity(item),
       REQUIRED_DT: null,
       SIGN_IND: "-1",
       QTY_PROCESSED: 0,
@@ -940,7 +891,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       EDIT_DATE: null,
       ZONE_CODE: "",
       STOCK_QTY_WHENPRQ: 0,
-      REQUEST_QUANTITY: item.REQUEST_QUANTITY || 0,
+      REQUEST_QUANTITY: computeQuantity(item),
+      AMOUNT_BEFORE_DISC: (item as any).AMOUNT_BEFORE_DISC || 0,
+      DISC_PRICE: (item as any).DISC_PRICE || 0,
+      APPROVED_QTY_PUOM: (item as any).APPROVED_QTY_PUOM || 0,
+      APPROVED_QTY_LUOM: (item as any).APPROVED_QTY_LUOM || 0,
+      APPROVED_UPPP: (item as any).APPROVED_UPPP || 0,
     }));
 
     const termsData = terms.map((term) => ({
@@ -971,28 +927,49 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
   const [savingAction, setSavingAction] = useState<string | null>(null);
 
-  const runAction = async (status: string, successMsg: string, remark: string = "", overrides: Partial<Record<string, any>> = {}) => {
+  const runAction = async (
+    status: string,
+    successMsg: string,
+    remark: string = "",
+    overrides: Partial<Record<string, any>> = {}
+  ) => {
     if (saving) return;
 
     if (status !== "SAVEASDRAFT") {
-      if (!validateAndShowErrors()) {
-        return;
-      }
+      if (!validateAndShowErrors()) return;
     }
 
     setSavingAction(status);
     setNotice(null);
     try {
       const result = await saveBulk(status, remark, overrides);
-      if (result.success) {
-        toast.success(successMsg, 4000);
-        onClose(true);
-      } else {
+
+      if (!result.success) {
         throw new Error(result.message || "Failed to save");
       }
+
+      toast.success(successMsg, 4000);
+
+      if (status === "SAVEASDRAFT") {
+        const newRequestNumber =
+          result?.data?.request_number ||
+          result?.request_number ||
+          result?.data?.REQUEST_NUMBER ||
+          result?.REQUEST_NUMBER;
+        if (newRequestNumber) {
+          setRequestNumber(String(newRequestNumber));
+        }
+        setSavingAction(null);
+        return;
+      }
+
+      onClose(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed", 5000);
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Action failed" });
+      setNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Action failed",
+      });
     } finally {
       setSavingAction(null);
     }
@@ -1026,10 +1003,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.error("No PR to approve", 5000);
       return;
     }
-
-    if (!validateAndShowErrors()) {
-      return;
-    }
+    if (!validateAndShowErrors()) return;
 
     setSaving(true);
     setNotice(null);
@@ -1065,22 +1039,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     queryKey: ["pr-sendback-targets", requestNumber, companyCode, header.FLOW_LEVEL_RUNNING],
     queryFn: () => almsCommonSelect({
       parameter: "PS_PREQUEST_ENTRY_SENDBACK_TARGETS",
-      loginid,
-      code1: companyCode,
-      code2: requestNumber || "",
-      code3: String(header.FLOW_LEVEL_RUNNING || 0),
-      code4: "",
+      loginid, code1: companyCode, code2: requestNumber || "",
+      code3: String(header.FLOW_LEVEL_RUNNING || 0), code4: "",
     }),
     enabled: sendBackOpen && !!requestNumber,
   });
 
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
-
     if (header.USER_ID) {
       opts.push({ loginid: String(header.USER_ID), label: `${header.USER_ID} (Creator)`, level: 0 });
     }
-
     const seen = new Set(opts.map((o) => o.loginid));
     sendBackTargets.forEach((row: any) => {
       const lg = String(row.LOGINID || "");
@@ -1101,7 +1070,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.warning("Please enter a send back reason", 4000);
       return;
     }
-
     const target = sendBackOptions.find((o) => o.loginid === selectedSendBackTo);
     await runAction("SENDBACK", "PR sent back successfully!", remarkText, {
       FLOW_LEVEL_RUNNING: target?.level ?? 0,
@@ -1117,11 +1085,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.warning("Please enter a rejection reason", 4000);
       return;
     }
-
-    if (!validateAndShowErrors()) {
-      return;
-    }
-
+    if (!validateAndShowErrors()) return;
     setRejectOpen(false);
     const reason = remarkText;
     await runAction("REJECTED", "PR rejected successfully!", reason, {
@@ -1146,12 +1110,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
           TX_COMPNTCAT_NAME: (hdr as any).TX_COMPNTCAT_NAME || (item as any).TX_COMPNTCAT_NAME || "",
         };
         const exRate = num(merged.CURRENCY_RATE) || 1;
-        return recalcItem(merged, exRate, userApprovalLevel);
+        return recalcItem(merged, exRate);
       })
     );
   };
 
   const addItemLine = () => {
+    if (effectiveViewMode) return;
     const srNo = items.length + 1;
     const blank = blankItem(srNo, requestNumber ?? "", companyCode, header);
     blank.CURR_CODE = header.CURR_CODE || "";
@@ -1164,7 +1129,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     blank.CASH_IND = "N";
     (blank as any).id = newId();
     setItems([...items, blank]);
-
     setTimeout(() => {
       if (tableContainerRef.current) {
         tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
@@ -1173,6 +1137,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   };
 
   const removeItem = (id: string) => {
+    if (effectiveViewMode) return;
     const updated = items.filter((item) => (item as any).id !== id);
     const renumbered = updated.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
@@ -1185,31 +1150,41 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       const updated = [...prev];
       const item = { ...updated[index], [field]: value };
 
-      if (field === "ITEM_RATE" || field === "DISCOUNT_AMOUNT" || field === "ALLOCATED_APPROVED_QUANTITY" || field === "REQUEST_QUANTITY") {
-        const exRate = num(item.CURRENCY_RATE) || 1;
-        recalcItem(item, exRate, userApprovalLevel);
-      }
-      if (field === "CURRENCY_RATE") {
-        const rate = num(value);
-        item.CURRENCY_RATE = rate;
-        recalcItem(item, rate || 1, userApprovalLevel);
-      }
-      if (field === "TX_COMPNT_PERC_1") {
-        item.TX_COMPNT_PERC_1 = num(value);
-        const exRate = num(item.CURRENCY_RATE) || 1;
-        recalcItem(item, exRate, userApprovalLevel);
-      }
-      if (field === "TX_CAT_CODE" && typeof value === 'string') {
-        const found = taxCodes.find((t) => t.tx_cat_code === value);
+      if (field === "ITEM_CODE" && typeof value === 'string') {
+        const found = productCodes.find((p) => String(p.PROD_CODE) === value);
         if (found) {
-          item.TX_CAT_CODE = value;
-          item.TX_CAT_NAME = found.tx_cat_name || "";
-          item.TX_COMPNTCAT_CODE_1 = found.tx_compntcat_code_1 || "";
-          item.TX_COMPNT_PERC_1 = found.tx_compnt_perc_1 || 0;
-          const exRate = num(item.CURRENCY_RATE) || 1;
-          recalcItem(item, exRate, userApprovalLevel);
+          item.ITEM_CODE = value;
+          item.ITEM_DESP = found.PROD_NAME || "";
+          item.P_UOM = found.P_UOM || "";
+          item.L_UOM = found.L_UOM || "";
+          item.UPPP = Number(found.UPPP) || 0;
+          item.ITEM_RATE = Number(found.BASE_PRICE) || 0;
         }
       }
+
+      if ([
+        "ITEM_RATE", "DISCOUNT_AMOUNT", "QTY_PUOM", "QTY_LUOM", "UPPP",
+        "TX_COMPNT_PERC_1", "CURRENCY_RATE",
+        "APPROVED_QTY_PUOM", "APPROVED_QTY_LUOM", "APPROVED_UPPP"
+      ].includes(field as string)) {
+        const exRate = num(item.CURRENCY_RATE) || 1;
+        recalcItem(item, exRate);
+        if (["QTY_PUOM", "QTY_LUOM", "UPPP", "ITEM_CODE"].includes(field as string)) {
+          item.REQUEST_QUANTITY = computeQuantity(item);
+        }
+      }
+
+      if (field === "TX_CAT_CODE" && typeof value === 'string') {
+        const found = taxCodes.find((t) => t.TX_CAT_CODE === value);
+        if (found) {
+          item.TX_CAT_CODE = value;
+          item.TX_CAT_NAME = found.TX_CAT_NAME || "";
+          item.TX_COMPNTCAT_CODE_1 = found.TX_COMPNTCAT_CODE_1 || "";
+          item.TX_COMPNT_PERC_1 = found.TX_COMPNT_PERC_1 || 0;
+          recalcItem(item, num(item.CURRENCY_RATE) || 1);
+        }
+      }
+
       if (field === "TX_COMPNTCAT_CODE_1" && typeof value === 'string') {
         const found = taxComponentList.find((t) => t.TX_COMPNTCAT_CODE === value);
         if (found) {
@@ -1218,12 +1193,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
           if (found.TX_PERCNT !== undefined) {
             item.TX_COMPNT_PERC_1 = Number(found.TX_PERCNT) || 0;
           }
-          const exRate = num(item.CURRENCY_RATE) || 1;
-          recalcItem(item, exRate, userApprovalLevel);
+          recalcItem(item, num(item.CURRENCY_RATE) || 1);
         }
-      }
-      if (field === "CASH_IND" && typeof value === 'string') {
-        item.CASH_IND = value;
       }
 
       updated[index] = item;
@@ -1245,33 +1216,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   });
 
   const addTermLine = () => setTerms((prev) => [...prev, blankTerm()]);
-
   const removeTerm = (id: string) => setTerms((prev) => prev.filter((t) => t.id !== id));
-
   const updateTermField = (id: string, field: string, value: unknown) => {
     setTerms((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
-  };
-
-  const upsertTermForSupplier = (supplierCode: string, supplierName: string) => {
-    if (!supplierCode) return;
-    setTerms((prev) => {
-      if (prev.some((t) => t.SUPPLIER === supplierCode)) return prev;
-      return [
-        ...prev,
-        {
-          id: newId(),
-          COMPANY_CODE: companyCode,
-          SUPPLIER: supplierCode,
-          SUPPLIER_NAME: supplierName,
-          DLVR_TERM: "",
-          PAYMENT_TERMS: "",
-          WARRANTY: "",
-          REMARKS: "",
-          USER_ID: "",
-          USER_DT: null,
-        },
-      ];
-    });
   };
 
   const currencyColumns = [
@@ -1288,60 +1235,35 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     { field: "TX_COMPNTCAT_CODE", header: "Code" },
     { field: "TX_COMPNTCAT_NAME", header: "Name" },
   ];
-  const itemCodeColumns = [
-    { field: "ITEM_CODE", header: "Code" },
-    { field: "ITEM_DESP", header: "Description" },
-  ];
-  const costCodeColumns = [
-    { field: "COST_CODE", header: "Code" },
-    { field: "COST_NAME", header: "Name" },
+  const productColumns = [
+    { field: "PROD_CODE", header: "Code" },
+    { field: "PROD_NAME", header: "Name" },
+    { field: "P_UOM", header: "P Uom" },
+    { field: "L_UOM", header: "L Uom" },
+    // { field: "UPPP", header: "UPPP" },
+    // { field: "BASE_PRICE", header: "Base Price" },
   ];
   const supplierColumns = [
     { field: "SUPPLIER_CODE", header: "Code" },
     { field: "SUPPLIER_NAME", header: "Name" },
   ];
-  const taxTypeColumns = [
-    { field: "TX_TYPE_CODE", header: "Code" },
-    { field: "TX_TYPE_NAME", header: "Name" },
-    { field: "TX_TYPE_DESC", header: "Description" },
-  ];
-  const capexOptions = ["YES", "NO",];
-  const cashIndOptions = [
-    { value: "Y", label: "Cash" },
-    { value: "N", label: "Credit" }
-  ];
+
+  const canEditRequested = !disabled && userApprovalLevel < 2;
+  const canEditApproved = !disabled && userApprovalLevel >= 2;
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
       <style>{`
-        .commercial-lines-scroll {
-          scrollbar-width: auto;
-          scrollbar-color: #94a3b8 #e2e8f0;
-        }
-        .commercial-lines-scroll::-webkit-scrollbar {
-          height: 16px;
-          width: 16px;
-        }
-        .commercial-lines-scroll::-webkit-scrollbar-track {
-          background: #e2e8f0;
-        }
+        .commercial-lines-scroll { scrollbar-width: auto; scrollbar-color: #94a3b8 #e2e8f0; }
+        .commercial-lines-scroll::-webkit-scrollbar { height: 16px; width: 16px; }
+        .commercial-lines-scroll::-webkit-scrollbar-track { background: #e2e8f0; }
         .commercial-lines-scroll::-webkit-scrollbar-thumb {
-          background-color: #94a3b8;
-          border-radius: 8px;
-          border: 3px solid #e2e8f0;
+          background-color: #94a3b8; border-radius: 8px; border: 3px solid #e2e8f0;
         }
-        .commercial-lines-scroll::-webkit-scrollbar-thumb:hover {
-          background-color: #64748b;
-        }
-        .commercial-lines-scroll::-webkit-scrollbar-corner {
-          background: #e2e8f0;
-        }
-        .finance-lines-table td, .finance-lines-table th {
-          overflow: hidden;
-        }
-        .finance-lines-table td > * {
-          max-width: 100%;
-        }
+        .commercial-lines-scroll::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+        .commercial-lines-scroll::-webkit-scrollbar-corner { background: #e2e8f0; }
+        .finance-lines-table td, .finance-lines-table th { overflow: hidden; }
+        .finance-lines-table td > * { max-width: 100%; }
       `}</style>
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
@@ -1349,7 +1271,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
+                  {effectiveViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
                 </p>
                 <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
                   {docType !== "PR" ? "Purchase Order" : "Purchase Request"}
@@ -1363,9 +1285,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Flow Code</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">
-                  {header.FLOW_CODE || "—"}
-                </strong>
+                <strong className="block text-sm leading-tight text-primary-foreground">{header.FLOW_CODE || "—"}</strong>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
@@ -1377,9 +1297,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">{(header as any).purch_status}</Badge>
                 </div>
               )}
+              {isFinalApproved && (
+                <div className="commercial-summary-chip rounded-md border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-emerald-100">Final</span>
+                  <strong className="block text-sm leading-tight text-emerald-200">Approved</strong>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
+              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
+                <X size={16} />
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1391,7 +1319,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-              {/* ─── Header Section ─── */}
+              {/* Header Section */}
               <div className="flex-none rounded-md border bg-card overflow-hidden">
                 <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                   <div>
@@ -1409,9 +1337,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
                 {headerExpanded ? (
                   <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 p-3 items-start">
-                    {/* ── DOCUMENT box ── */}
                     <div className="space-y-3">
-                      {/* Document Section */}
                       <div className="rounded-md border">
                         <div className="border-b bg-muted/40 px-3 py-0.5">
                           <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Document</p>
@@ -1441,42 +1367,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                           <div className="col-span-1">
                             <label className="field">
                               <span>Request Date</span>
-                              <Input
-                                disabled
-                                type="text"
-                                placeholder="dd/mm/yyyy"
-                                value={displayDate}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  setDisplayDate(value);
-
-                                  const parts = value.split('/');
-                                  if (parts.length === 3) {
-                                    const day = parseInt(parts[0]);
-                                    const month = parseInt(parts[1]) - 1;
-                                    const year = parseInt(parts[2]);
-                                    const date = new Date(year, month, day);
-                                    if (!isNaN(date.getTime())) {
-                                      const yyyy = date.getFullYear();
-                                      const mm = String(date.getMonth() + 1).padStart(2, '0');
-                                      const dd = String(date.getDate()).padStart(2, '0');
-                                      setHdr("REQUEST_DATE", `${yyyy}-${mm}-${dd}`);
-                                    }
-                                  }
-                                }}
-                                className="w-full"
-                              />
+                              <Input disabled type="text" placeholder="dd/mm/yyyy" value={displayDate} className="w-full" />
                             </label>
                           </div>
                           <div className="col-span-1">
                             <label className="field">
                               <span>Flow Code</span>
-                              <Input
-                                disabled
-                                value={String(header.FLOW_CODE || "")}
-                                placeholder="Flow Code"
-                                className="w-full bg-muted/50"
-                              />
+                              <Input disabled value={String(header.FLOW_CODE || "")} placeholder="Flow Code" className="w-full bg-muted/50" />
                             </label>
                           </div>
                           <div className="col-span-2 grid grid-cols-3 gap-3">
@@ -1498,32 +1395,24 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                         </div>
                       </div>
 
-                      {/* ─── Discount Section - Updated with Scope and Calculate Buttons ─── */}
                       <div className="rounded-md border">
                         <div className="border-b bg-muted/40 px-3 py-0.5">
                           <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Discount</p>
                         </div>
                         <div className="grid grid-cols-1 gap-2 p-2">
-                          {/* Discount Scope Radio Buttons */}
                           <div className="flex items-center gap-4 border-b border-gray-100 pb-2">
-                            <span className="text-[9px] font-semibold text-foreground/75">
-                              Discount Applied To:
-                            </span>
-
+                            <span className="text-[9px] font-semibold text-foreground/75">Discount Applied To:</span>
                             <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
                               <input
-                                type="radio"
-                                name="discount_scope"
-                                value="PO"
+                                type="radio" name="discount_scope" value="PO"
                                 checked={discountScope === "PO"}
                                 disabled={disabled || items.length === 0}
                                 onChange={() => {
                                   setDiscountScope("PO");
-                                  // Reset individual item discounts when switching to PO scope
                                   setItems(prev => prev.map(item => {
                                     const updated = { ...item, DISCOUNT_AMOUNT: 0 };
                                     const exRate = num(updated.CURRENCY_RATE) || 1;
-                                    return recalcItem(updated, exRate, userApprovalLevel);
+                                    return recalcItem(updated, exRate);
                                   }));
                                   setHdr("DISCOUNT_AMOUNT", 0);
                                   setHdr("DISC_AMOUNT", 0);
@@ -1531,17 +1420,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               />
                               Entire PR
                             </label>
-
                             <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
                               <input
-                                type="radio"
-                                name="discount_scope"
-                                value="ITEM"
+                                type="radio" name="discount_scope" value="ITEM"
                                 checked={discountScope === "ITEM"}
                                 disabled={disabled || items.length === 0}
                                 onChange={() => {
                                   setDiscountScope("ITEM");
-                                  // Reset header discounts when switching to ITEM scope
                                   setHdr("DISCOUNT_AMOUNT", 0);
                                   setHdr("DISC_AMOUNT", 0);
                                 }}
@@ -1550,38 +1435,22 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             </label>
                           </div>
 
-                          {/* Discount Input Fields */}
                           <div className="grid grid-cols-4 gap-2">
                             <div className="col-span-1">
                               <label className="field">
                                 <span>Disc Amt</span>
                                 <Input
-                                  className="text-right"
-                                  type="number"
-                                  step="0.01"
-                                  disabled={
-                                    disabled ||
-                                    items.length === 0 ||
-                                    discountScope === "ITEM"
-                                  }
-                                  value={
-                                    discountScope === "ITEM"
-                                      ? totalDiscAmount.toFixed(3)
-                                      : num(header.DISC_AMOUNT).toFixed(3)
-                                  }
+                                  className="text-right" type="number" step="0.01"
+                                  disabled={disabled || items.length === 0 || discountScope === "ITEM"}
+                                  value={discountScope === "ITEM" ? totalDiscAmount.toFixed(3) : num(header.DISC_AMOUNT).toFixed(3)}
                                   onChange={(e) => {
                                     const discAmount = Number(e.target.value) || 0;
                                     setHdr("DISC_AMOUNT", discAmount);
                                     if (discAmount > 0 && discountScope === "PO") {
                                       setHdr("DISCOUNT_AMOUNT", 0);
-                                      const updatedItems = distributeDiscountFromAmount(
-                                        items, 
-                                        discAmount, 
-                                        userApprovalLevel
-                                      );
+                                      const updatedItems = distributeDiscountFromAmount(items, discAmount);
                                       setItems(updatedItems);
-                                      // Calculate and set equivalent percentage
-                                      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+                                      const totalUnitPrice = calculateTotalUnitPrice(items);
                                       if (totalUnitPrice > 0) {
                                         const discPercent = (discAmount / totalUnitPrice) * 100;
                                         setHdr("DISCOUNT_AMOUNT", discPercent);
@@ -1590,7 +1459,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                       setItems(prev => prev.map(item => {
                                         const updated = { ...item, DISCOUNT_AMOUNT: 0 };
                                         const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return recalcItem(updated, exRate, userApprovalLevel);
+                                        return recalcItem(updated, exRate);
                                       }));
                                       setHdr("DISCOUNT_AMOUNT", 0);
                                     }
@@ -1603,18 +1472,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               <label className="field">
                                 <span>Disc %</span>
                                 <Input
-                                  className="text-right"
-                                  type="number"
-                                  step="0.001"
-                                  disabled={
-                                    disabled ||
-                                    items.length === 0 ||
-                                    discountScope === "ITEM"
-                                  }
+                                  className="text-right" type="number" step="0.001"
+                                  disabled={disabled || items.length === 0 || discountScope === "ITEM"}
                                   value={
                                     discountScope === "ITEM"
                                       ? items.reduce((sum, item) => sum + num(item.DISCOUNT_AMOUNT), 0) > 0
-                                        ? (totalDiscAmount / calculateTotalUnitPrice(items, userApprovalLevel) * 100).toFixed(3)
+                                        ? (totalDiscAmount / calculateTotalUnitPrice(items) * 100).toFixed(3)
                                         : "0.000"
                                       : num(header.DISCOUNT_AMOUNT).toFixed(3)
                                   }
@@ -1623,14 +1486,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     setHdr("DISCOUNT_AMOUNT", discPercent);
                                     if (discPercent > 0 && discountScope === "PO") {
                                       setHdr("DISC_AMOUNT", 0);
-                                      const updatedItems = distributeDiscountToItems(
-                                        items, 
-                                        discPercent, 
-                                        userApprovalLevel
-                                      );
+                                      const updatedItems = distributeDiscountToItems(items, discPercent);
                                       setItems(updatedItems);
-                                      // Calculate and set equivalent amount
-                                      const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+                                      const totalUnitPrice = calculateTotalUnitPrice(items);
                                       if (totalUnitPrice > 0) {
                                         const discAmount = (discPercent / 100) * totalUnitPrice;
                                         setHdr("DISC_AMOUNT", discAmount);
@@ -1639,7 +1497,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                       setItems(prev => prev.map(item => {
                                         const updated = { ...item, DISCOUNT_AMOUNT: 0 };
                                         const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return recalcItem(updated, exRate, userApprovalLevel);
+                                        return recalcItem(updated, exRate);
                                       }));
                                       setHdr("DISC_AMOUNT", 0);
                                     }
@@ -1652,25 +1510,15 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               {discountScope === "PO" && (
                                 <>
                                   {Number(header.DISC_AMOUNT) > 0 ? (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
+                                    <Button type="button" size="sm" variant="outline"
                                       onClick={() => calculateDiscountFromAmount("amount")}
-                                      disabled={disabled || items.length === 0}
-                                      className="h-9"
-                                    >
+                                      disabled={disabled || items.length === 0} className="h-9">
                                       Calculate From Amount
                                     </Button>
                                   ) : Number(header.DISCOUNT_AMOUNT) > 0 ? (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
+                                    <Button type="button" size="sm" variant="outline"
                                       onClick={() => calculateDiscountFromAmount("percent")}
-                                      disabled={disabled || items.length === 0}
-                                      className="h-9"
-                                    >
+                                      disabled={disabled || items.length === 0} className="h-9">
                                       Calculate From %
                                     </Button>
                                   ) : null}
@@ -1682,7 +1530,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       </div>
                     </div>
 
-                    {/* ── CURRENCY & TAX box ── */}
                     <div className="rounded-md border">
                       <div className="border-b bg-muted/40 px-3 py-1.5">
                         <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Currency &amp; Tax</p>
@@ -1693,9 +1540,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             <span>Currency *</span>
                             <div className="w-full">
                               <LookupField
-                                label=""
-                                compact
-                                placeholder="Search Currency"
+                                label="" compact placeholder="Search Currency"
                                 value={header.CURR_CODE || ""}
                                 displayValue={
                                   header.CURR_CODE && header.CURR_NAME
@@ -1707,24 +1552,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                 displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
                                 loadOptions={() => almsCommonSelect({
                                   parameter: "PS_PREQUEST_ENTRY_CURRENCY",
-                                  loginid,
-                                  code1: companyCode,
-                                  code2: loginid,
-                                  code3: "",
-                                  code4: ""
+                                  loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                 })}
                                 onChange={(value, row) => {
                                   const currName = String(row?.CURR_NAME || row?.curr_name || "");
                                   const exRate = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
-
                                   setHdr("CURR_CODE", value);
                                   setHdr("CURR_NAME", currName);
                                   setHdr("CURRENCY_RATE", exRate);
-
                                   updateAllItemsWithHeader({
-                                    CURR_CODE: value,
-                                    CURR_NAME: currName,
-                                    CURRENCY_RATE: exRate,
+                                    CURR_CODE: value, CURR_NAME: currName, CURRENCY_RATE: exRate,
                                   });
                                 }}
                                 disabled={disabled}
@@ -1736,9 +1573,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                           <label className="field">
                             <span>Exchange Rate</span>
                             <Input
-                              disabled={disabled}
-                              type="number"
-                              step="0.0001"
+                              disabled={disabled} type="number" step="0.0001"
                               value={header.CURRENCY_RATE ?? ""}
                               onChange={(e) => {
                                 const rate = Number(e.target.value);
@@ -1755,9 +1590,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             <span>Tax Category</span>
                             <div className="w-full">
                               <LookupField
-                                label=""
-                                compact
-                                placeholder="Search Tax Category"
+                                label="" compact placeholder="Search Tax Category"
                                 value={header.TX_CAT_CODE || ""}
                                 displayValue={
                                   header.TX_CAT_CODE && header.TX_CAT_NAME
@@ -1769,28 +1602,20 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                 displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
                                 loadOptions={() => almsCommonSelect({
                                   parameter: "PS_PREQUEST_ENTRY_TAX",
-                                  loginid,
-                                  code1: companyCode,
-                                  code2: loginid,
-                                  code3: "",
-                                  code4: ""
+                                  loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                 })}
                                 onChange={(val, row) => {
                                   if (row) {
                                     const taxCode = String(row.TX_COMPNTCAT_CODE_1 || "");
                                     const taxPercent = Number(row.TX_COMPNT_PERC_1) || 0;
                                     const taxName = String(row.TX_CAT_NAME || "");
-
                                     setHdr("TX_CAT_CODE", val);
                                     setHdr("TX_CAT_NAME", taxName);
                                     setHdr("TX_COMPNTCAT_CODE_1", taxCode);
                                     setHdr("TX_COMPNT_PERC_1", taxPercent);
-
                                     updateAllItemsWithHeader({
-                                      TX_CAT_CODE: val,
-                                      TX_CAT_NAME: taxName,
-                                      TX_COMPNTCAT_CODE_1: taxCode,
-                                      TX_COMPNT_PERC_1: taxPercent,
+                                      TX_CAT_CODE: val, TX_CAT_NAME: taxName,
+                                      TX_COMPNTCAT_CODE_1: taxCode, TX_COMPNT_PERC_1: taxPercent,
                                     });
                                   }
                                 }}
@@ -1813,7 +1638,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                   prev.map((item) => {
                                     const merged: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
                                     const exRate = num(merged.CURRENCY_RATE) || 1;
-                                    return recalcItem(merged, exRate, userApprovalLevel);
+                                    return recalcItem(merged, exRate);
                                   })
                                 );
                               }}
@@ -1829,9 +1654,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             <span>Tax Code</span>
                             <div className="w-full">
                               <LookupField
-                                label=""
-                                compact
-                                placeholder="Search Tax Component"
+                                label="" compact placeholder="Search Tax Component"
                                 value={header.TX_COMPNTCAT_CODE_1 || ""}
                                 displayValue={
                                   header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME
@@ -1843,21 +1666,15 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                 displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
                                 loadOptions={() => almsCommonSelect({
                                   parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
-                                  loginid,
-                                  code1: companyCode,
-                                  code2: loginid,
-                                  code3: "",
-                                  code4: ""
+                                  loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                 })}
                                 onChange={(val, row) => {
                                   if (row && typeof row === 'object') {
                                     const taxComponentName = String(row.TX_COMPNTCAT_NAME || '');
                                     const taxPercent = Number(row.TX_PERCNT) || 0;
-
                                     setHdr("TX_COMPNTCAT_CODE_1", val);
                                     setHdr("TX_COMPNTCAT_NAME", taxComponentName);
                                     setHdr("TX_COMPNT_PERC_1", taxPercent);
-
                                     updateAllItemsWithHeader({
                                       TX_COMPNTCAT_CODE_1: val,
                                       TX_COMPNTCAT_NAME: taxComponentName,
@@ -1865,9 +1682,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     });
                                   } else {
                                     setHdr("TX_COMPNTCAT_CODE_1", val);
-                                    updateAllItemsWithHeader({
-                                      TX_COMPNTCAT_CODE_1: val,
-                                    });
+                                    updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
                                   }
                                 }}
                                 disabled={disabled}
@@ -1875,11 +1690,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             </div>
                           </label>
                         </div>
-
                       </div>
                     </div>
 
-                    {/* ── REMARKS box ── */}
                     <div className="rounded-md border w-full lg:col-span-2">
                       <div className="border-b bg-muted/40 px-3 py-1.5">
                         <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
@@ -1906,7 +1719,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               target.style.height = target.scrollHeight + 'px';
                             }}
                           />
-
                         </label>
                         <label className="field">
                           <span>Remarks *</span>
@@ -1935,28 +1747,18 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-sm text-muted-foreground">
-                    <span>
-                      <strong className="text-foreground">Doc No:</strong> {requestNumber || "New"}
-                    </span>
-                    <span>
-                      <strong className="text-foreground">Flow Code:</strong> {header.FLOW_CODE || "—"}
-                    </span>
-                    <span>
-                      <strong className="text-foreground">Currency:</strong> {header.CURR_CODE || "—"}
-                    </span>
+                    <span><strong className="text-foreground">Doc No:</strong> {requestNumber || "New"}</span>
+                    <span><strong className="text-foreground">Flow Code:</strong> {header.FLOW_CODE || "—"}</span>
+                    <span><strong className="text-foreground">Currency:</strong> {header.CURR_CODE || "—"}</span>
                     {(header as any).purch_status && (
-                      <span>
-                        <strong className="text-foreground">Status:</strong> {(header as any).purch_status}
-                      </span>
+                      <span><strong className="text-foreground">Status:</strong> {(header as any).purch_status}</span>
                     )}
-                    <span>
-                      <strong className="text-foreground">Remarks:</strong> {header.REMARKS || "—"}
-                    </span>
+                    <span><strong className="text-foreground">Remarks:</strong> {header.REMARKS || "—"}</span>
                   </div>
                 )}
               </div>
 
-              {/* ─── Tabs Container ─── */}
+              {/* Tabs Container */}
               <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border bg-card overflow-hidden">
                 <div className="flex flex-none items-center border-b bg-secondary/40">
                   <button
@@ -1982,12 +1784,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   )}
 
                   <div className="ml-auto px-3">
-                    {!isViewMode && activeTab === "items" && (
+                    {!effectiveViewMode && activeTab === "items" && (
                       <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addItemLine}>
                         <Plus size={14} /> Add Line
                       </Button>
                     )}
-                    {!isViewMode && activeTab === "terms" && shouldShowTermsTab() && (
+                    {!effectiveViewMode && activeTab === "terms" && shouldShowTermsTab() && (
                       <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addTermLine}>
                         <Plus size={14} /> Add Line
                       </Button>
@@ -1995,367 +1797,340 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   </div>
                 </div>
 
-                {/* ─── Items Tab Content ─── */}
+                {/* Items Tab Content */}
                 {activeTab === "items" && (
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     <div
                       ref={tableContainerRef}
-                      className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
-                      style={{
-                        overscrollBehavior: 'contain',
-                        scrollbarWidth: 'auto',
-                        scrollbarGutter: 'stable',
-                      }}
+                      className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-auto"
+                      style={{ overscrollBehavior: 'contain', scrollbarWidth: 'auto', scrollbarGutter: 'stable' }}
                     >
-                      <table className="finance-lines-table w-full table-fixed text-[10px] border-separate border-spacing-0">
+                      <table className="finance-lines-table w-full min-w-[2000px] table-fixed text-[10px] border-separate border-spacing-0">
                         <colgroup>
-                          <col style={{ width: "30px" }} />
-                          <col style={{ width: "140px" }} />
-                          <col style={{ width: "7%" }} />
-                          <col style={{ width: "3.5%" }} />
-                          {shouldShowApprovedQty() && <col style={{ width: "3.5%" }} />}
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "3%" }} />
-                          <col style={{ width: "3.5%" }} />
-                          {shouldShowSupplier() && <col style={{ width: "7%" }} />}
-                          <col style={{ width: "3.5%" }} />
-                          {/* Amount Before Disc - Added after Quantity */}
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "3%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "4%" }} />
-                          <col style={{ width: "3%" }} />
-                          <col style={{ width: "3.5%" }} />
-                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "30px" }} />     {/* SNo */}
+                          <col style={{ width: "270px" }} />    {/* Product */}
+                          <col style={{ width: "55px" }} />     {/* P Uom */}
+                          <col style={{ width: "60px" }} />     {/* PQTY */}
+                          <col style={{ width: "55px" }} />     {/* LUOM */}
+                          <col style={{ width: "60px" }} />     {/* LQTY */}
+                          <col style={{ width: "60px" }} />     {/* UPPP */}
+                          <col style={{ width: "70px" }} />     {/* ReqQty */}
+                          <col style={{ width: "60px" }} />     {/* APQTY */}
+                          <col style={{ width: "55px" }} />     {/* ALUOM */}
+                          <col style={{ width: "60px" }} />     {/* ALQTY */}
+                          <col style={{ width: "60px" }} />     {/* AUPPP */}
+                          <col style={{ width: "70px" }} />     {/* ApprQty */}
+                          <col style={{ width: "75px" }} />     {/* Unit Price */}
+                          <col style={{ width: "75px" }} />     {/* Amount Before Disc */}
+                          <col style={{ width: "65px" }} />     {/* Disc % */}
+                          <col style={{ width: "70px" }} />     {/* Disc Price */}
+                          <col style={{ width: "75px" }} />     {/* Unit Price Net Amt */}
+                          <col style={{ width: "75px" }} />     {/* Amount */}
+                          <col style={{ width: "80px" }} />     {/* Lcurr Amt */}
+                          <col style={{ width: "70px" }} />     {/* Tax Type */}
+                          <col style={{ width: "60px" }} />     {/* Tax % */}
+                          <col style={{ width: "75px" }} />     {/* Tax Amount */}
+                          <col style={{ width: "85px" }} />     {/* Tax Cat */}
+                          <col style={{ width: "85px" }} />     {/* Tax Code */}
+                          <col style={{ width: "80px" }} />     {/* Tax Lcurr */}
+                          <col style={{ width: "85px" }} />     {/* Lcurr After Tax */}
+                          <col style={{ width: "35px" }} />     {/* Action */}
                         </colgroup>
+
                         <thead className="sticky top-0 z-30 bg-primary text-[10px] text-primary-foreground">
+                          {/* Group header row */}
                           <tr>
-                            <th className="sticky left-0 z-40 bg-primary px-1 py-1.5 text-center border-r border-primary-foreground/10">
-                              No
+                            <th rowSpan={2} className="sticky left-0 z-40 bg-primary px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">SNo</th>
+                            <th rowSpan={2} className="sticky left-[30px] z-40 bg-primary px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Product Code</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">P Uom</th>
+
+                            <th colSpan={5} className="px-1 py-1.5 text-center align-middle border-l-2 border-r-2 border-b-2 border-primary-foreground/60">
+                              Requested Qty
                             </th>
-                            <th className="sticky left-[30px] z-40 bg-primary px-1 py-1.5 text-left border-r border-primary-foreground/10">
-                              Item *
+                            <th colSpan={5} className="px-1 py-1.5 text-center align-middle border-l-2 border-r-2 border-b-2 border-primary-foreground/60">
+                              Approved Qty
                             </th>
-                            <th className="px-1 py-1.5 text-left">Cost Code *</th>
-                            <th className="px-1 py-1.5 text-center">Req Qty</th>
-                            {shouldShowApprovedQty() && (
-                              <th className="px-1 py-1.5 text-center">Appr Qty *</th>
-                            )}
-                            <th className="px-1 py-1.5 text-right">Unit Price *</th>
-                            <th className="px-1 py-1.5 text-center">Currency</th>
-                            <th className="px-1 py-1.5 text-right">Ex Rate</th>
-                            {shouldShowSupplier() && (
-                              <th className="px-1 py-1.5 text-left">Supplier *</th>
-                            )}
-                            <th className="px-1 py-1.5 text-right">Quantity</th>
-                            {/* Amount Before Disc - Added after Quantity */}
-                            <th className="finance-amount-cell px-1 py-1.5 text-right">Amount Before Disc</th>
-                            <th className="px-1 py-1.5 text-right">Disc %</th>
-                            <th className="px-1 py-1.5 text-right">Disc Price</th>
-                            <th className="px-1 py-1.5 text-right">Net Amt</th>
-                            <th className="finance-amount-cell px-1 py-1.5 text-right">Amount</th>
-                            <th className="finance-amount-cell px-1 py-1.5 text-right">Lcurr Amt</th>
-                            <th className="px-1 py-1.5 text-left">Tax Cat</th>
-                            <th className="px-1 py-1.5 text-left">Tax Code</th>
-                            <th className="px-1 py-1.5 text-right">Tax %</th>
-                            <th className="finance-amount-cell px-1 py-1.5 text-right">Tax Amt</th>
-                            <th className="px-1 py-1.5 text-center">Tax Type</th>
-                            <th className="finance-amount-cell px-1 py-1.5 text-right">Tax Lcurr</th>
-                            <th className="finance-amount-cell px-1 py-1.5 text-right">Lcurr Aft Disc</th>
-                            <th className="px-1 py-1.5 text-center">Capex</th>
-                            <th className="px-1 py-1.5 text-center">Cash Ind</th>
-                            <th className="px-1 py-1.5 text-center">Action</th>
+
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20">Unit Price</th>
+
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Amount Before Disc</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Disc %</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Disc Price</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Unit Price Net Amt</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Amount</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Lcurr Amt Before Tax</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Tax Type</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Tax %</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Tax Amount</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Tax Cat</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Tax Code</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Tax Lcurr Amount</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Lcurr Amt After Tax</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Action</th>
+                          </tr>
+                          {/* Sub header row */}
+                          <tr>
+                            {/* Requested sub-columns */}
+                            <th className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20">PQTY</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LUOM</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LQTY</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">UPPP</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r-2 border-primary-foreground/20">ReqQty</th>
+                            {/* Approved sub-columns */}
+                            <th className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20">PQTY</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LUOM</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LQTY</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">UPPP</th>
+                            <th className="px-1 py-1.5 text-center align-middle border-r-2 border-primary-foreground/20">ApprQty</th>
                           </tr>
                         </thead>
+
                         <tbody>
                           {items.length === 0 ? (
-                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={25}>No items yet. Click "Add Line" to add items.</td></tr>
+                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={27}>No items yet. Click "Add Line" to add items.</td></tr>
                           ) : items.map((item) => {
                             const itemId = (item as any).id || String(item.ITEM_SRNO);
+                            const qty = computeQuantity(item);
+                            const approvedQty = computeApprovedQuantity(item);
+                            const amtBeforeDisc = amountBeforeDisc(item);
+                            const discPrice = itemDiscPrice(item);
+                            const finalRate = itemFinalRate(item);
+                            const amount = itemAmount(item);
+                            const taxAmt = itemTaxAmount(item);
+                            const lcurrAmt = itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                            const taxLcurr = itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                            const lcurrAfterDisc = itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
 
-                            const itemDisplay = item.ITEM_CODE && item.ITEM_DESP
+                            const productDisplay = item.ITEM_CODE && item.ITEM_DESP
                               ? `${item.ITEM_CODE} - ${item.ITEM_DESP}`
                               : (item.ITEM_CODE || "");
-
-                            const costDisplay = item.COST_CODE && item.COST_NAME
-                              ? `${item.COST_CODE} - ${item.COST_NAME}`
-                              : (item.COST_CODE || "");
-
-                            const supplierDisplay = item.SUPPLIER && item.SUPPLIER_NAME
-                              ? `${item.SUPPLIER} - ${item.SUPPLIER_NAME}`
-                              : (item.SUPPLIER || "");
-
-                            const taxCategoryDisplay = item.TX_CAT_CODE && (item as any).TX_CAT_NAME
-                              ? `${item.TX_CAT_CODE} - ${(item as any).TX_CAT_NAME}`
-                              : (item.TX_CAT_CODE || "");
-
-                            const taxComponentDisplay = item.TX_COMPNTCAT_CODE_1 && (item as any).TX_COMPNTCAT_NAME
-                              ? `${item.TX_COMPNTCAT_CODE_1} - ${(item as any).TX_COMPNTCAT_NAME}`
-                              : (item.TX_COMPNTCAT_CODE_1 || "");
-
-                            const currencyDisplay = item.CURR_CODE && (item as any).CURR_NAME
-                              ? `${item.CURR_CODE} - ${(item as any).CURR_NAME}`
-                              : (item.CURR_CODE || "");
-
-                            // Calculate amount before discount for this item
-                            const itemAmountBeforeDisc = num(item.ITEM_RATE) * itemQty(item, userApprovalLevel);
 
                             return (
                               <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
                                 <td className="sticky left-0 z-20 bg-background px-1 py-1 text-center border-r border-border">
                                   {item.ITEM_SRNO}
                                 </td>
+
                                 <td className="sticky left-[30px] z-20 bg-background px-1 py-1 border-r border-border">
                                   <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Search Item *"
+                                    label="" compact placeholder="Search Product *"
                                     value={item.ITEM_CODE || ""}
-                                    displayValue={itemDisplay}
-                                    columns={itemCodeColumns}
-                                    valueField="item_code"
-                                    displayFields={["item_code", "item_desp"]}
+                                    displayValue={productDisplay}
+                                    columns={productColumns}
+                                    valueField="PROD_CODE"
+                                    displayFields={["PROD_CODE", "PROD_NAME"]}
                                     loadOptions={() => almsCommonSelect({
-                                      parameter: "PS_PREQUEST_ENTRY_ITEMS",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
+                                      parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST",
+                                      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                     })}
                                     onChange={(val, row) => {
-                                      updateItemField(itemId, "ITEM_CODE", val);
                                       if (row) {
-                                        updateItemField(itemId, "ITEM_DESP", row.item_desp ?? row.ITEM_DESP ?? "");
+                                        setItems(prev => prev.map(it => {
+                                          if ((it as any).id !== itemId) return it;
+                                          const updated: TPRItem = {
+                                            ...it,
+                                            ITEM_CODE: String(val ?? ""),
+                                            ITEM_DESP: String(row.PROD_NAME ?? ""),
+                                            P_UOM: String(row.P_UOM ?? ""),
+                                            L_UOM: String(row.L_UOM ?? ""),
+                                            UPPP: Number(row.UPPP) || 0,
+                                            ITEM_RATE: Number(row.BASE_PRICE) || 0,
+                                          };
+                                          updated.REQUEST_QUANTITY = computeQuantity(updated);
+                                          const exRate = num(updated.CURRENCY_RATE) || 1;
+                                          return recalcItem(updated, exRate);
+                                        }));
                                       }
                                     }}
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-1 py-1">
-                                  <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Cost Code *"
-                                    value={item.COST_CODE || ""}
-                                    displayValue={costDisplay}
-                                    columns={costCodeColumns}
-                                    valueField="cost_code"
-                                    displayFields={["cost_code", "cost_name"]}
-                                    loadOptions={() => almsCommonSelect({
-                                      parameter: "PS_PREQUEST_ENTRY_COSTS",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
-                                    })}
-                                    onChange={(val, row) => {
-                                      updateItemField(itemId, "COST_CODE", val);
-                                      if (row) {
-                                        updateItemField(itemId, "COST_NAME", row.cost_name ?? row.COST_NAME ?? "");
-                                      }
-                                    }}
-                                    disabled={disabled}
-                                  />
+
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input disabled value={item.P_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
                                 </td>
-                                <td className="px-1 py-1">
+
+                                {/* REQUESTED QTY */}
+                                <td className="px-1 py-1 border-l-2 border-r border-border">
                                   <Input
-                                    type="number"
-                                    step="0.001"
-                                    value={item.REQUEST_QUANTITY || ""}
-                                    onChange={(e) => updateItemField(itemId, "REQUEST_QUANTITY", Number(e.target.value) || 0)}
-                                    disabled={disabled || userApprovalLevel >= 2}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    type="number" step="0.001"
+                                    value={item.QTY_PUOM || ""}
+                                    onChange={(e) => updateItemField(itemId, "QTY_PUOM", Number(e.target.value) || 0)}
+                                    disabled={!canEditRequested}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
                                     placeholder="0"
                                   />
                                 </td>
-                                {shouldShowApprovedQty() && (
-                                  <td className="px-1 py-1">
-                                    <Input
-                                      type="number"
-                                      step="0.001"
-                                      value={item.ALLOCATED_APPROVED_QUANTITY || ""}
-                                      onChange={(e) => updateItemField(itemId, "ALLOCATED_APPROVED_QUANTITY", Number(e.target.value) || 0)}
-                                      disabled={disabled}
-                                      className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                      placeholder="0"
-                                    />
-                                  </td>
-                                )}
-                                <td className="px-1 py-1">
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input disabled value={item.L_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
+                                </td>
+                                <td className="px-1 py-1 border-r border-border">
                                   <Input
-                                    type="number"
-                                    step="0.001"
+                                    type="number" step="0.001"
+                                    value={isSameUom(item) ? 0 : item.QTY_LUOM || ""}
+                                    onChange={(e) => updateItemField(itemId, "QTY_LUOM", Number(e.target.value) || 0)}
+                                    disabled={!canEditRequested || isSameUom(item)}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
+                                    placeholder="0"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input
+                                    type="number" step="0.001"
+                                    value={item.UPPP || ""}
+                                    onChange={(e) => updateItemField(itemId, "UPPP", Number(e.target.value) || 0)}
+                                    disabled={!canEditRequested}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
+                                    placeholder="0"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-r-2 border-border">
+                                  <Input disabled value={qty} className="h-7 w-full text-right text-[10px] px-1 font-semibold" />
+                                </td>
+
+                                {/* APPROVED QTY */}
+                                <td className="px-1 py-1 border-l-2 border-r border-border">
+                                  <Input
+                                    type="number" step="0.001"
+                                    value={(item as any).APPROVED_QTY_PUOM || ""}
+                                    onChange={(e) => updateItemField(itemId, "APPROVED_QTY_PUOM" as any, Number(e.target.value) || 0)}
+                                    disabled={!canEditApproved}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
+                                    placeholder="0"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input disabled value={item.L_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
+                                </td>
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input
+                                    type="number" step="0.001"
+                                    value={(item as any).APPROVED_QTY_LUOM || ""}
+                                    onChange={(e) => updateItemField(itemId, "APPROVED_QTY_LUOM" as any, Number(e.target.value) || 0)}
+                                    disabled={!canEditApproved || isSameUom(item)}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
+                                    placeholder="0"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input
+                                    type="number" step="0.001"
+                                    value={(item as any).APPROVED_UPPP || ""}
+                                    onChange={(e) => updateItemField(itemId, "APPROVED_UPPP" as any, Number(e.target.value) || 0)}
+                                    disabled={!canEditApproved}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
+                                    placeholder="0"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-r-2 border-border">
+                                  <Input
+                                    disabled
+                                    value={approvedQty}
+                                    className="h-7 w-full text-right text-[10px] px-1 font-semibold"
+                                  />
+                                </td>
+
+                                {/* UNIT PRICE (after Approved Qty) */}
+                                <td className="px-1 py-1 border-l-2 border-r border-border">
+                                  <Input
+                                    type="number" step="0.0001"
                                     value={item.ITEM_RATE || ""}
                                     onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)}
-                                    disabled={disabled}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    disabled={disabled || userApprovalLevel >= 2}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="px-1 py-1">
+
+                                {/* Amount Before Disc */}
+                                <td className="finance-amount-cell px-1 py-1 text-right text-blue-600 border-r border-border">
+                                  {fmt3(amtBeforeDisc)}
+                                </td>
+                                {/* Disc % */}
+                                <td className="px-1 py-1 border-r border-border">
                                   <Input
-                                    value={currencyDisplay}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      const code = val.split(" - ")[0] || val;
-                                      updateItemField(itemId, "CURR_CODE", code);
-                                      const name = val.split(" - ")[1] || "";
-                                      if (name) {
-                                        updateItemField(itemId, "CURR_NAME", name);
-                                      }
-                                    }}
-                                    disabled={disabled}
-                                    className="h-7 w-full text-center text-[10px] px-1"
-                                  />
-                                </td>
-                                <td className="px-1 py-1">
-                                  <Input
-                                    type="number"
-                                    step="0.0001"
-                                    value={item.CURRENCY_RATE || ""}
-                                    onChange={(e) => updateItemField(itemId, "CURRENCY_RATE", Number(e.target.value) || 1)}
-                                    disabled={disabled}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    placeholder="1"
-                                  />
-                                </td>
-                                {shouldShowSupplier() && (
-                                  <td className="px-1 py-1">
-                                    <LookupField
-                                      label=""
-                                      compact
-                                      placeholder="Supplier *"
-                                      value={item.SUPPLIER || ""}
-                                      displayValue={supplierDisplay}
-                                      columns={supplierColumns}
-                                      valueField="supplier_code"
-                                      displayFields={["supplier_code", "supplier_name"]}
-                                      loadOptions={() => almsCommonSelect({
-                                        parameter: "PS_PREQUEST_ENTRY_SUPPLIERS",
-                                        loginid,
-                                        code1: companyCode,
-                                        code2: loginid,
-                                        code3: "",
-                                        code4: ""
-                                      })}
-                                      onChange={(val, row) => {
-                                        const oldSupplier = item.SUPPLIER;
-
-                                        updateItemField(itemId, "SUPPLIER", val);
-
-                                        if (row) {
-                                          const supName = row.supplier_name ?? row.SUPPLIER_NAME ?? "";
-
-                                          updateItemField(itemId, "SUPPLIER_NAME", supName);
-                                          updateItemField(itemId, "SUPPLIER_CODE", row.supplier_code ?? val);
-
-                                          upsertTermForSupplier(val, supName as any);
-
-                                          if (oldSupplier && oldSupplier !== val) {
-                                            const stillUsed = items.some(
-                                              i =>
-                                                (i as any).id !== itemId &&
-                                                i.SUPPLIER === oldSupplier
-                                            );
-
-                                            if (!stillUsed) {
-                                              setTerms(prev =>
-                                                prev.filter(t => t.SUPPLIER !== oldSupplier)
-                                              );
-                                            }
-                                          }
-                                        }
-                                      }}
-                                      disabled={disabled}
-                                    />
-                                  </td>
-                                )}
-                                <td className="finance-amount-cell px-1 py-1 text-right">
-                                  {fmt3(itemQty(item, userApprovalLevel))}
-                                </td>
-                                {/* Amount Before Disc Column */}
-                                <td className="finance-amount-cell px-1 py-1 text-right text-blue-600">
-                                  {fmt3(itemAmountBeforeDisc)}
-                                </td>
-                                <td className="px-1 py-1">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
+                                    type="number" step="0.001"
                                     value={item.DISCOUNT_AMOUNT || ""}
                                     onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
                                     disabled={disabled || discountScope === "PO"}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right">
-                                  {fmt3(itemDiscPrice(item))}
+                                {/* Disc Price */}
+                                <td className="finance-amount-cell px-1 py-1 text-right border-r border-border">{fmt3(discPrice)}</td>
+                                {/* Final Rate */}
+                                <td className="finance-amount-cell px-1 py-1 text-right border-r border-border">{fmt3(finalRate)}</td>
+                                {/* Amount */}
+                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-green-600 border-r border-border">
+                                  {fmt3(amount)}
                                 </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right">
-                                  {fmt3(item.FINAL_RATE)}
+                                {/* Lcurr Amt */}
+                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">
+                                  {fmt3(lcurrAmt)}
                                 </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-green-600">
-                                  {fmt3(item.AMOUNT)}
+                                {/* Tax Type */}
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Select
+                                    className="h-7 w-full text-[10px] px-1"
+                                    value={item.TAX_TYPE || "N"}
+                                    onChange={(e) => updateItemField(itemId, "TAX_TYPE", e.target.value)}
+                                    disabled={disabled}
+                                  >
+                                    <option value="N">No Tax</option>
+                                    <option value="S">Std Tax</option>
+                                    <option value="Z">Zero</option>
+                                    <option value="E">Exempt</option>
+                                  </Select>
                                 </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600">
-                                  {fmt3((item as any).LCURR_AMT || 0)}
+                                {/* Tax % */}
+                                <td className="px-1 py-1 border-r border-border">
+                                  <Input
+                                    type="number" step="0.01"
+                                    value={item.TX_COMPNT_PERC_1 || ""}
+                                    onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)}
+                                    disabled={disabled}
+                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
+                                    placeholder="0"
+                                  />
                                 </td>
-                                <td className="px-1 py-1">
+                                {/* Tax Amount */}
+                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(taxAmt)}</td>
+                                {/* Tax Cat */}
+                                <td className="px-1 py-1 border-r border-border">
                                   <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Tax Category"
+                                    label="" compact placeholder="Tax Cat"
                                     value={item.TX_CAT_CODE || ""}
-                                    displayValue={taxCategoryDisplay}
+                                    displayValue={item.TX_CAT_CODE && item.TX_CAT_NAME ? `${item.TX_CAT_CODE} - ${item.TX_CAT_NAME}` : item.TX_CAT_CODE || ""}
                                     columns={taxCategoryColumns}
                                     valueField="TX_CAT_CODE"
                                     displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
                                     loadOptions={() => almsCommonSelect({
                                       parameter: "PS_PREQUEST_ENTRY_TAX",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
+                                      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                     })}
                                     onChange={(val, row) => {
                                       updateItemField(itemId, "TX_CAT_CODE", val);
                                       if (row) {
                                         updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || "");
                                         updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || "");
-                                        updateItemField(itemId, "TX_COMPNT_PERC_1", row.TX_COMPNT_PERC_1 || 0);
                                       }
                                     }}
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-1 py-1">
+                                {/* Tax Code */}
+                                <td className="px-1 py-1 border-r border-border">
                                   <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Tax Component"
+                                    label="" compact placeholder="Tax Code"
                                     value={item.TX_COMPNTCAT_CODE_1 || ""}
-                                    displayValue={taxComponentDisplay}
+                                    displayValue={item.TX_COMPNTCAT_CODE_1 && item.TX_COMPNTCAT_NAME ? `${item.TX_COMPNTCAT_CODE_1} - ${item.TX_COMPNTCAT_NAME}` : item.TX_COMPNTCAT_CODE_1 || ""}
                                     columns={taxComponentColumns}
                                     valueField="TX_COMPNTCAT_CODE"
                                     displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
                                     loadOptions={() => almsCommonSelect({
                                       parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
+                                      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                     })}
                                     onChange={(val, row) => {
                                       updateItemField(itemId, "TX_COMPNTCAT_CODE_1", val);
@@ -2369,79 +2144,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-1 py-1">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={item.TX_COMPNT_PERC_1 || ""}
-                                    onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)}
-                                    disabled={disabled}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    placeholder="0"
-                                  />
+                                {/* Tax Lcurr */}
+                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(taxLcurr)}</td>
+                                {/* Lcurr After Tax */}
+                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-blue-600 border-r border-border">
+                                  {fmt3(lcurrAfterDisc)}
                                 </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600">
-                                  {fmt3(item.TX_COMPNT_AMT_1)}
-                                </td>
-                                <td className="px-1 py-1">
-                                  <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Tax Type"
-                                    value={item.TAX_TYPE || "Std."}
-                                    displayValue={item.TAX_TYPE || "Std."}
-                                    columns={taxTypeColumns}
-                                    valueField="TX_TYPE_CODE"
-                                    displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
-                                    loadOptions={() => almsCommonSelect({
-                                      parameter: "PS_PREQUEST_ENTRY_TAX_TYPE",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
-                                    })}
-                                    onChange={(val) => updateItemField(itemId, "TAX_TYPE", val)}
-                                    disabled={disabled}
-                                  />
-                                </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600">
-                                  {fmt3((item as any).TX_COMPNT_LCURAMT_1 || 0)}
-                                </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-blue-600">
-                                  {fmt3((item as any).LCURR_AFTER_DISCOUNT || 0)}
-                                </td>
-                                <td className="px-1 py-1">
-                                  <Select
-                                    className="h-7 w-full text-[10px] px-1"
-                                    value={item.CAPEX_OPEX_NON_OPEX || ""}
-                                    onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX" as any, e.target.value)}
-                                    disabled={disabled}
-                                  >
-                                    <option value=""></option>
-                                    {capexOptions.map((opt) => (
-                                      <option key={opt} value={opt}>{opt}</option>
-                                    ))}
-                                  </Select>
-                                </td>
-                                <td className="px-1 py-1">
-                                  <Select
-                                    className="h-7 w-full text-[10px] px-1"
-                                    value={item.CASH_IND || "N"}
-                                    onChange={(e) => updateItemField(itemId, "CASH_IND", e.target.value)}
-                                    disabled={disabled}
-                                  >
-                                    {cashIndOptions.map((opt) => (
-                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                  </Select>
-                                </td>
+                                {/* Action */}
                                 <td className="px-1 py-1 text-center">
-                                  {!isViewMode && (
+                                  {!effectiveViewMode && (
                                     <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      type="button"
+                                      size="icon" variant="ghost" type="button"
                                       onClick={() => removeItem(itemId)}
                                       title="Remove"
                                       className="h-7 w-7 text-destructive hover:text-destructive"
@@ -2457,10 +2170,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       </table>
                     </div>
 
-                    {/* ─── Summary Footer - Original UI ─── */}
+                    {/* Summary Footer */}
                     <div className="sticky bottom-0 flex-none border-t bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-10">
                       <div className="flex items-center justify-end px-2 py-1">
                         <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider eyebrow m-0">Total Qty</span>
+                            <div className="text-sm font-semibold text-emerald-700">
+                              {items.reduce((sum, item) => sum + computeQuantity(item), 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
+                            </div>
+                          </div>
                           <div className="text-right">
                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider eyebrow m-0">Base Amount</span>
                             <div className="text-sm font-semibold text-emerald-700">{fmt3(totalBase)}</div>
@@ -2480,19 +2199,19 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   </div>
                 )}
 
-                {/* ─── Terms Tab Content ─── */}
+                {/* Terms Tab Content */}
                 {activeTab === "terms" && shouldShowTermsTab() && (
                   <div className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto">
                     <div className="relative">
                       <table className="finance-lines-table w-full min-w-[1200px] text-[12px] border-separate border-spacing-0">
                         <thead className="sticky top-0 z-10 bg-primary text-xs text-primary-foreground">
                           <tr>
-                            <th className="px-2 py-2 text-left w-[180px] min-w-[180px]">Supplier</th>
-                            <th className="px-2 py-2 text-left w-[180px] min-w-[180px]">Delivery Term</th>
-                            <th className="px-2 py-2 text-left w-[220px] min-w-[220px]">Payment Terms</th>
-                            <th className="px-2 py-2 text-left w-[160px] min-w-[160px]">Warranty</th>
-                            <th className="px-2 py-2 text-left w-[360px] min-w-[360px]">Remarks</th>
-                            <th className="px-2 py-2 text-center w-[55px] min-w-[55px]">Action</th>
+                            <th className="px-2 py-2 text-center align-middle w-[180px] min-w-[180px]">Supplier</th>
+                            <th className="px-2 py-2 text-center align-middle w-[180px] min-w-[180px]">Delivery Term</th>
+                            <th className="px-2 py-2 text-center align-middle w-[220px] min-w-[220px]">Payment Terms</th>
+                            <th className="px-2 py-2 text-center align-middle w-[160px] min-w-[160px]">Warranty</th>
+                            <th className="px-2 py-2 text-center align-middle w-[360px] min-w-[360px]">Remarks</th>
+                            <th className="px-2 py-2 text-center align-middle w-[55px] min-w-[55px]">Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2507,26 +2226,20 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={term.id}>
                                 <td className="px-2 py-1 w-[260px] min-w-[260px]">
                                   <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Supplier"
+                                    label="" compact placeholder="Supplier"
                                     value={term.SUPPLIER || ""}
                                     displayValue={termSupplierDisplay}
                                     columns={supplierColumns}
-                                    valueField="supplier_code"
-                                    displayFields={["supplier_code", "supplier_name"]}
+                                    valueField="SUPPLIER_CODE"
+                                    displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
                                     loadOptions={() => almsCommonSelect({
                                       parameter: "PS_PREQUEST_ENTRY_SUPPLIERS",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
+                                      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
                                     })}
                                     onChange={(val, row) => {
                                       updateTermField(term.id, "SUPPLIER", val);
                                       if (row) {
-                                        const supName = row.supplier_name ?? row.SUPPLIER_NAME ?? "";
+                                        const supName = row.SUPPLIER_NAME ?? "";
                                         updateTermField(term.id, "SUPPLIER_NAME", supName);
                                       }
                                     }}
@@ -2534,47 +2247,21 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                   />
                                 </td>
                                 <td className="px-2 py-1 w-[180px] min-w-[180px]">
-                                  <Input
-                                    value={term.DLVR_TERM || ""}
-                                    onChange={(e) => updateTermField(term.id, "DLVR_TERM", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-9 text-sm"
-                                    placeholder="Delivery Term"
-                                  />
+                                  <Input value={term.DLVR_TERM || ""} onChange={(e) => updateTermField(term.id, "DLVR_TERM", e.target.value)} disabled={disabled} className="h-9 text-sm" placeholder="Delivery Term" />
                                 </td>
                                 <td className="px-2 py-1 w-[220px] min-w-[220px]">
-                                  <Input
-                                    value={term.PAYMENT_TERMS || ""}
-                                    onChange={(e) => updateTermField(term.id, "PAYMENT_TERMS", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-9 text-sm"
-                                    placeholder="Payment Terms"
-                                  />
+                                  <Input value={term.PAYMENT_TERMS || ""} onChange={(e) => updateTermField(term.id, "PAYMENT_TERMS", e.target.value)} disabled={disabled} className="h-9 text-sm" placeholder="Payment Terms" />
                                 </td>
                                 <td className="px-2 py-1 w-[160px] min-w-[160px]">
-                                  <Input
-                                    value={term.WARRANTY || ""}
-                                    onChange={(e) => updateTermField(term.id, "WARRANTY", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-9 text-sm"
-                                    placeholder="Warranty"
-                                  />
+                                  <Input value={term.WARRANTY || ""} onChange={(e) => updateTermField(term.id, "WARRANTY", e.target.value)} disabled={disabled} className="h-9 text-sm" placeholder="Warranty" />
                                 </td>
                                 <td className="px-2 py-1 w-[260px] min-w-[260px]">
-                                  <Input
-                                    value={term.REMARKS || ""}
-                                    onChange={(e) => updateTermField(term.id, "REMARKS", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-9 text-sm"
-                                    placeholder="Remarks"
-                                  />
+                                  <Input value={term.REMARKS || ""} onChange={(e) => updateTermField(term.id, "REMARKS", e.target.value)} disabled={disabled} className="h-9 text-sm" placeholder="Remarks" />
                                 </td>
                                 <td className="px-2 py-1 text-center w-[55px] min-w-[55px]">
-                                  {!isViewMode && (
+                                  {!effectiveViewMode && (
                                     <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      type="button"
+                                      size="icon" variant="ghost" type="button"
                                       onClick={() => removeTerm(term.id)}
                                       title="Remove"
                                       className="h-8 w-8 text-destructive hover:text-destructive"
@@ -2596,9 +2283,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
           )}
         </div>
 
-        {/* ─── Footer ─── */}
+        {/* Footer */}
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
-          {!isViewMode && !(docType !== "PR") && (header as any).FINAL_APPROVED !== "Y" && (
+          {!effectiveViewMode && !(docType !== "PR") && (
             <div className="flex items-center gap-2">
               {userApprovalLevel <= 1 && (
                 <>
@@ -2623,9 +2310,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                     <ChevronLeft size={15} /> Send Back
                   </Button>
                   <Button
-                    disabled={saving}
-                    type="button"
-                    variant="default"
+                    disabled={saving} type="button" variant="default"
                     className="min-w-[110px] justify-center bg-destructive hover:bg-blue-700"
                     onClick={() => { setRemarkText(""); setRejectOpen(true); }}
                   >
@@ -2643,9 +2328,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                     <ChevronLeft size={15} /> Send Back
                   </Button>
                   <Button
-                    disabled={saving}
-                    type="button"
-                    variant="default"
+                    disabled={saving} type="button" variant="default"
                     className="min-w-[110px] justify-center bg-destructive hover:bg-blue-700"
                     onClick={() => { setRemarkText(""); setRejectOpen(true); }}
                   >
@@ -2667,7 +2350,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         </div>
       </section>
 
-      {/* ─── Attachments ─── */}
+      {/* Attachments */}
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
@@ -2680,8 +2363,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         flowLevel={Number(header.FLOW_LEVEL_RUNNING) || 1}
       />
 
-      {/* ─── Reject Dialog ─── */}
-      <Dialog open={rejectOpen} title="Reject Request" description="Enter the reason for rejection." onClose={() => setRejectOpen(false)}
+      {/* Reject Dialog */}
+      <Dialog
+        open={rejectOpen}
+        title="Reject Request"
+        description="Enter the reason for rejection."
+        onClose={() => setRejectOpen(false)}
         footer={
           <>
             <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
@@ -2702,7 +2389,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         </div>
       </Dialog>
 
-      {/* ─── Send Back Dialog ─── */}
+      {/* Send Back Dialog */}
       <Dialog
         open={sendBackOpen}
         title="Send Back Request"
@@ -2718,11 +2405,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         <div className="flex flex-col gap-3">
           <label className="field">
             <span>Send Back To *</span>
-            <Select
-              value={selectedSendBackTo}
-              onChange={(e) => setSelectedSendBackTo(e.target.value)}
-              className="w-full"
-            >
+            <Select value={selectedSendBackTo} onChange={(e) => setSelectedSendBackTo(e.target.value)} className="w-full">
               <option value="">Select user</option>
               {sendBackOptions.map((o) => (
                 <option key={o.loginid} value={o.loginid}>{o.label}</option>
