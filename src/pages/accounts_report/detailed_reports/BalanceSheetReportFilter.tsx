@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, Play, RefreshCw, X } from "lucide-react";
+import { BarChart2, ChevronLeft, Eye, Loader2, RefreshCw, X } from "lucide-react";
 
-import { Button } from "../../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
 import { useAuth } from "../../../state/AuthContext";
 import { api } from "../../../api/client";
 import { getBalanceSheetReportHtml, getBalanceSheetReportExcelDownload } from "../../../api/transactions";
 import { getDynamicLookup } from "../../../api/lookups";
-import ReportDialogPage from "../../../components/ReportDialogPage";
+import { closeFinanceReportPreview, openFinanceReport } from "../../../components/finance/reports/financeReportPreviewStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +42,33 @@ const getToday = (): string => {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 };
+
+// ─── Small presentational helpers (mirroring the Freight report layout) ──
+
+const BG = "#EEF5FD";
+const inputBaseStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "7px 10px",
+  fontSize: 12,
+  color: "#111827",
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
+  outline: "none",
+  background: "#fff",
+  boxSizing: "border-box",
+  fontFamily: "inherit",
+};
+
+function FloatLabel({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label style={{ position: "relative", marginTop: 6, display: "block" }}>
+      <span style={{ position: "absolute", top: -8, left: 10, zIndex: 1, padding: "0 4px", background: BG, color: "#6b7280", fontSize: 11, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+        {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
 
 // ─── Iframe renderer ──────────────────────────────────────────────────────────
 // Used for the main report AND every drill-down level. Scripts injected into
@@ -218,7 +243,7 @@ export default function BalanceSheetPage() {
       const id = ++viewSeq.current;
       setDrillLoading(true);
       setDrillError(null);
-      setDialogVisible(false); // remove the currently shown report before loading the next one
+      const preview = openFinanceReport(`${DRILL_TITLES[drillLevel]} · ${code}`);
 
       try {
         const { data } = await api.post<string>(endpoint, payload, {
@@ -237,7 +262,14 @@ export default function BalanceSheetPage() {
         };
 
         setDrillStack(prev => [...prev, entry]);
-        setDialogVisible(true); // show the drilled-down report
+        preview.ready({
+          html: data,
+          filename: `${DRILL_TITLES[drillLevel]}_${code}`,
+          orientation: "landscape",
+          excelEndpoint: DRILL_EXCEL_ENDPOINTS[drillLevel],
+          excelPayload: payload,
+        });
+        setDialogVisible(true);
       } catch (err: any) {
         if (id !== viewSeq.current) return; // superseded — don't resurrect a stale error
         const msg =
@@ -246,7 +278,8 @@ export default function BalanceSheetPage() {
           err?.message ||
           "Failed to load drill-down";
         setDrillError(String(msg));
-        setDialogVisible(true); // restore whatever was showing before the failed drill
+        preview.fail(String(msg));
+        setDialogVisible(true);
       } finally {
         if (id === viewSeq.current) setDrillLoading(false);
       }
@@ -280,6 +313,7 @@ export default function BalanceSheetPage() {
 
   const handleReset = () => {
     ++viewSeq.current; // invalidate anything still in flight
+    closeFinanceReportPreview();
     setAsOnDate(getToday());
     setDivisionCode("");
     setDialogVisible(false);
@@ -306,7 +340,7 @@ export default function BalanceSheetPage() {
     const id = ++viewSeq.current;
     setReportLoading(true);
     setReportError(null);
-    setDialogVisible(false); // remove whatever report is currently shown
+    const preview = openFinanceReport(pageTitle);
     setReportHtml(null);
     setDrillStack([]);
     setDrillError(null);
@@ -315,7 +349,14 @@ export default function BalanceSheetPage() {
       const data = await getBalanceSheetReportHtml(buildPayload());
       if (id !== viewSeq.current) return; // superseded — don't reopen a stale view
       setReportHtml(data);
-      setDialogVisible(true); // show the newly generated report
+      preview.ready({
+        html: data,
+        filename: pageTitle,
+        orientation: "landscape",
+        excelEndpoint: "/api/finance/transactions/report/balancesheet/excel",
+        excelPayload: buildPayload(),
+      });
+      setDialogVisible(true);
     } catch (err: any) {
       if (id !== viewSeq.current) return;
       const msg =
@@ -324,6 +365,7 @@ export default function BalanceSheetPage() {
         err?.message ||
         "Failed to generate report";
       setReportError(String(msg));
+      preview.fail(String(msg));
     } finally {
       if (id === viewSeq.current) setReportLoading(false);
     }
@@ -374,6 +416,7 @@ export default function BalanceSheetPage() {
 
   const handleCloseReport = () => {
     ++viewSeq.current; // invalidate anything still in flight
+    closeFinanceReportPreview();
     setDialogVisible(false);
     setReportHtml(null);
     setDrillStack([]);
@@ -404,6 +447,7 @@ export default function BalanceSheetPage() {
   };
 
   const canGenerate = Boolean(asOnDate);
+  const hasGenerated = reportHtml !== null;
   const pageTitle   = "Balance Sheet";
 
   // ── Derive what to show inside ReportDialogPage ────────────────────────────
@@ -412,142 +456,71 @@ export default function BalanceSheetPage() {
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
-      <section className="grid gap-4">
-
-        {/* Page Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
-              {pageTitle}
-            </h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
-              <RefreshCw size={15} />
-            </Button>
-
-            <Button disabled={!canGenerate || reportLoading} onClick={handleGenerateReport}>
-              {reportLoading ? (
-                <>
-                  <svg
-                    className="animate-spin h-3.5 w-3.5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <Play size={15} /> Generate Report
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Error Banner */}
-        {reportError && (
-          <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
-            <span className="font-semibold">Error:</span> {reportError}
-            <button
-              onClick={() => setReportError(null)}
-              className="ml-auto text-destructive/60 hover:text-destructive"
-            >
-              <X size={12} />
-            </button>
-          </div>
-        )}
-
-        {/* Filters */}
-        <Card className="border-border shadow-sm overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-primary" />
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">
-                  Parameters
-                </p>
-                <h2 className="text-[11px] font-semibold text-foreground leading-tight">
-                  Balance Sheet Filters
-                </h2>
+      <section className="balance-sheet-report-screen" style={{ minHeight: "100vh", padding: "6px 10px", background: "#f3f4f6", fontFamily: "system-ui, sans-serif" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <BarChart2 size={17} color="#185FA5" />
+                <h1 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#111827" }}>{pageTitle}</h1>
+                {hasGenerated && <span style={{ fontSize: 10, background: "#d1fae5", color: "#065f46", padding: "2px 10px", borderRadius: 12, fontWeight: 500 }}>Report Generated</span>}
               </div>
             </div>
-          </CardHeader>
 
-          <CardContent className="px-4 py-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+            {reportError && (
+              <div style={{ marginBottom: 10, padding: "8px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, color: "#dc2626", fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>{reportError}</span>
+                <button type="button" onClick={() => setReportError(null)} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "inherit", cursor: "pointer" }}><X size={12} /></button>
+              </div>
+            )}
 
-              {/* Division */}
-              <label className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-2">
-                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Division
-                </span>
-                <select
-                  value={divisionCode}
-                  onChange={(e) => setDivisionCode(e.target.value)}
-                  disabled={divisionsLoading}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50"
-                >
-                  <option value="">— All Divisions —</option>
-                  {divisions.map((d) => (
-                    <option key={d.div_code} value={d.div_code}>
-                      {d.div_code} – {d.div_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {/* As On Date */}
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  As On Date <strong className="text-destructive">*</strong>
-                </span>
-                <input
-                  type="date"
-                  value={asOnDate}
-                  onChange={(e) => setAsOnDate(e.target.value)}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                />
-              </label>
-
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: BG, borderRadius: 8, padding: "10px 12px" }}>
+                <FloatLabel label="As On Date" required>
+                  <input type="date" value={asOnDate} onChange={(e) => setAsOnDate(e.target.value)} style={inputBaseStyle} />
+                </FloatLabel>
+                <FloatLabel label="Division">
+                  <select value={divisionCode} onChange={(e) => setDivisionCode(e.target.value)} disabled={divisionsLoading} style={{ ...inputBaseStyle, cursor: "pointer", opacity: divisionsLoading ? 0.6 : 1 }}>
+                    <option value="">All Divisions</option>
+                    {divisions.map((d) => <option key={d.div_code} value={d.div_code}>{d.div_code} | {d.div_name}</option>)}
+                  </select>
+                </FloatLabel>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+
+            {hasGenerated && (
+              <div style={{ marginTop: 10, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, display: "flex", alignItems: "center", gap: 8, color: "#065f46", fontSize: 12 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 16 }}>✓</span> Report generated successfully</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
+              <button type="button" onClick={handleReset} disabled={reportLoading} style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: reportLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#111827" }}>
+                <RefreshCw size={13} /> Reset
+              </button>
+              <button type="button" onClick={handleGenerateReport} disabled={!canGenerate || reportLoading} style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: reportLoading ? "#94a3b8" : "#185FA5", cursor: reportLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff" }}>
+                {reportLoading ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />} {reportLoading ? "Generating..." : "Generate Report"}
+              </button>
+            </div>
+          </div>
 
         {/* Empty state placeholder while no report is generated */}
         {reportHtml === null && !reportLoading && (
-          <Card className="border-border shadow-sm overflow-hidden min-h-[220px]">
-            <div className="flex min-h-[220px] items-center justify-center p-10 text-[13px] text-muted-foreground select-none">
-              Set the parameters above and click&nbsp;
-              <strong className="font-semibold text-foreground ml-1">Generate Report</strong>
-            </div>
-          </Card>
+          <div className="mt-4 flex min-h-[220px] items-center justify-center rounded-xl border bg-white p-10 text-[13px] text-muted-foreground shadow-sm select-none">
+            Set the parameters above and click&nbsp;
+            <strong className="font-semibold text-foreground ml-1">Generate Report</strong>
+          </div>
         )}
 
         {/* Loading placeholder */}
         {reportLoading && (
-          <Card className="border-border shadow-sm overflow-hidden min-h-[220px]">
-            <div className="flex min-h-[220px] items-center justify-center gap-2 p-10 text-[13px] text-muted-foreground">
-              <svg
-                className="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              Generating report…
-            </div>
-          </Card>
+          <div className="mt-4 flex min-h-[220px] items-center justify-center gap-2 rounded-xl border bg-white p-10 text-[13px] text-muted-foreground shadow-sm">
+            <Loader2 size={16} className="animate-spin" />
+            Generating report…
+          </div>
         )}
 
+        </div>
       </section>
 
       {/* Transition overlay: shown for the moment between the old report
@@ -556,40 +529,6 @@ export default function BalanceSheetPage() {
         <ViewTransitionOverlay label="Loading drill-down…" />
       )}
 
-      {/* ── Report Dialog ──
-          key forces a full unmount/remount on every view change, so the
-          previous report's iframe (and any listeners it set up) is fully
-          torn down before the next one is created — never reused in place. */}
-      {reportHtml !== null && dialogVisible && (
-        <ReportDialogPage
-          key={topDrill ? `drill-${topDrill.id}` : "main"}
-          title={topDrill ? topDrill.label : pageTitle}
-          Report={IframeReportRenderer}
-          required_values={{ html: topDrill ? topDrill.html : reportHtml }}
-          excel={topDrill ? handleDrillExcel : handleExcel}
-          onClose={handleCloseReport}
-          headerSlot={
-            <div className="flex flex-col gap-0">
-              {/* Drill error */}
-              {drillError && (
-                <div className="flex items-center gap-2 px-4 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive">
-                  <span className="font-semibold">Drill-down error:</span> {drillError}
-                  <button onClick={() => setDrillError(null)} className="ml-auto">
-                    <X size={11} />
-                  </button>
-                </div>
-              )}
-
-              {/* Breadcrumb — only visible when drilled in */}
-              {drillStack.length > 0 && (
-                <div className="border-b border-border bg-muted/20">
-                  <DrillBreadcrumb stack={drillStack} onNavigate={handleDrillNavigate} />
-                </div>
-              )}
-            </div>
-          }
-        />
-      )}
     </>
   );
 }

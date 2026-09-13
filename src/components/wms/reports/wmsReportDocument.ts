@@ -30,13 +30,42 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
     children.forEach((child) => { row.insertCell().append(child); });
     grid.replaceWith(table);
   }
+
+  // Numeric-looking column detection: a column whose sampled body cells are
+  // mostly digits/commas/decimals/parens gets a narrow fixed width sized for
+  // a 6-digit number, instead of sharing width equally with text columns
+  // (e.g. a Product/description column) — previously every column got the
+  // same "*" share regardless of content, squeezing long labels.
+  const NUMERIC_COL_WIDTH = 44; // pt — fits "999,999" at this report family's font sizes
+  const NUMERIC_SAMPLE_SIZE = 8;
+  const isNumericText = (t: string) => /^-?[\d,().]+$/.test(t);
+
   let maxColumns = 0;
   doc.querySelectorAll("table").forEach((table) => {
     const columns = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
     const details = table.classList.contains("report-details-table");
     if (!details) maxColumns = Math.max(maxColumns, columns);
+
+    const bodyRows = Array.from(table.tBodies[0]?.rows || table.rows).filter(
+      (row) => !row.querySelector("th"),
+    );
+    const widths: Array<string | number> = Array.from({ length: columns }, (_, colIndex) => {
+      let numericCount = 0;
+      let sampleCount = 0;
+      for (const row of bodyRows) {
+        const cell = row.cells[colIndex];
+        const text = cell?.textContent?.trim() || "";
+        if (!text) continue;
+        sampleCount++;
+        if (isNumericText(text)) numericCount++;
+        if (sampleCount >= NUMERIC_SAMPLE_SIZE) break;
+      }
+      const isNumericColumn = sampleCount > 0 && numericCount / sampleCount >= 0.6;
+      return isNumericColumn ? NUMERIC_COL_WIDTH : "*";
+    });
+
     table.setAttribute("data-pdfmake", JSON.stringify({
-      widths: Array(columns).fill("*"),
+      widths: details ? Array(columns).fill("*") : widths,
       headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
       layout: details ? "noBorders" : "lightHorizontalLines",
     }));

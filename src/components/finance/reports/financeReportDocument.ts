@@ -117,8 +117,8 @@ export async function createFinancePdf(report: FinanceReportDocument, identity: 
         tableLayouts?: undefined,
         fonts?: Record<string, { normal: string; bold: string; italics: string; bolditalics: string }>,
         virtualFileSystem?: Record<string, string>,
-      ) => { getBlob: () => Promise<Blob> };
-      createPdf(definition, undefined, fonts, vfs).getBlob().then(resolve, reject);
+      ) => { getBlob: (callback: (blob: Blob) => void) => void };
+      createPdf(definition, undefined, fonts, vfs).getBlob(resolve);
     }
     catch (error) { reject(error); }
   });
