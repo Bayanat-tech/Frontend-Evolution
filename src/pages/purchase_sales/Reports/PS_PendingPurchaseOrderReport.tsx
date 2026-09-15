@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   RotateCcw,
-  Check,
   BarChart2,
   Eye,
 } from "lucide-react";
@@ -13,6 +12,7 @@ import {
 } from "../../../api/lookups";
 import { api } from "../../../api/client";
 import { openPsReport } from "../../../components/purchase-sales/reports/psReportPreviewStore";
+import { MultiSelectField } from "../../../components/ui/MultiSelectField";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -28,20 +28,89 @@ type LogoRow = { COMP_LOGO: string };
 
 type ReportCriteria = "Summary" | "Detail";
 
+interface Option {
+  value: string;
+  label: string;
+}
+
+interface LookupRow {
+  [key: string]: any;
+}
+
 interface Filters {
   dateFrom: string;
   dateTo: string;
-  docNo: string;
-  docNoName: string;
-  supplierCode: string;
-  supplierName: string;
-  productFrom: string;
-  productFromName: string;
-  productTo: string;
-  productToName: string;
+  docNo: string[];
+  supplierCode: string[];
+  productFrom: string[];
+  productTo: string[];
   reportType: ReportCriteria;
   cancelledPO: boolean;
 }
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+// Case-insensitive key lookup
+const getField = (row: LookupRow, ...keys: string[]): string => {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null) return String(row[k]);
+    const upper = k.toUpperCase();
+    if (row[upper] !== undefined && row[upper] !== null) return String(row[upper]);
+    const lower = k.toLowerCase();
+    if (row[lower] !== undefined && row[lower] !== null) return String(row[lower]);
+  }
+  return "";
+};
+
+// Rows with a code + name pair → { value: "code::name", label: "code - name" }
+// Composite value avoids collisions when the same code legitimately appears
+// on multiple rows with different names.
+const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] => {
+  const seen = new Set<string>();
+  const options: Option[] = [];
+  rows.forEach((r) => {
+    const code = getField(r, codeKey);
+    const name = getField(r, nameKey);
+    if (!code) return;
+    const value = `${code}::${name}`;
+    if (seen.has(value)) return;
+    seen.add(value);
+    options.push({ value, label: name ? `${code} | ${name}` : code });
+  });
+  return options.sort((a, b) => a.label.localeCompare(b.label));
+};
+
+// Recovers the underlying code from a composite "code::name" option value.
+const codeFromOptionValue = (v: string): string => v.split("::")[0];
+
+// Converts a selection array (composite values, or the "All" sentinel) into
+// a deduped list of real codes.
+const codesFromSelection = (values: string[]): string[] => {
+  if (!values.length || values.includes("All")) return ["All"];
+  const codes = new Set<string>();
+  values.forEach((v) => codes.add(codeFromOptionValue(v)));
+  return Array.from(codes);
+};
+
+// These four fields are single-value pickers (Doc No, Supplier, and the two
+// range endpoints Product From/To) rendered with MultiSelectField for visual
+// consistency with Stock Summary. Since MultiSelectField itself supports
+// multiple selections, this clips any selection down to just the most
+// recently picked value so the field still behaves as a single picker.
+const enforceSingle = (prevArr: string[], nextArr: string[]): string[] => {
+  if (!nextArr.length) return ["All"];
+  if (nextArr.includes("All") && !prevArr.includes("All")) return ["All"];
+  if (nextArr.length === 1) return nextArr;
+  const added = nextArr.find((v) => !prevArr.includes(v));
+  return added ? [added] : [nextArr[nextArr.length - 1]];
+};
+
+// Resolves a single-picker selection array down to one scalar code (or "All").
+const singleCode = (arr: string[]): string => {
+  const codes = codesFromSelection(arr);
+  if (!codes.length || codes.includes("All")) return "All";
+  return codes[0];
+};
 
 const toISODate = (d: Date) => {
   const y = d.getFullYear();
@@ -70,14 +139,10 @@ const defaultDateTo = () => toISODate(new Date());
 const buildDefaultFilters = (): Filters => ({
   dateFrom: defaultDateFrom(),
   dateTo: defaultDateTo(),
-  docNo: "",
-  docNoName: "",
-  supplierCode: "",
-  supplierName: "",
-  productFrom: "",
-  productFromName: "",
-  productTo: "",
-  productToName: "",
+  docNo: ["All"],
+  supplierCode: ["All"],
+  productFrom: ["All"],
+  productTo: ["All"],
   reportType: "Summary",
   cancelledPO: false,
 });
@@ -131,140 +196,6 @@ function FloatLabel({
     </div>
   );
 }
-
-// Generic Search Field component
-const SearchField: React.FC<{
-  options: Array<{ code: string; name: string; extra?: string }>;
-  code: string;
-  name: string;
-  onChange: (code: string, name: string) => void;
-  loading?: boolean;
-  placeholder?: string;
-  displayFormat?: (item: { code: string; name: string; extra?: string }) => string;
-}> = ({
-  options,
-  code,
-  name,
-  onChange,
-  loading,
-  placeholder = "All",
-  displayFormat,
-}) => {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(
-      (o) =>
-        o.name.toLowerCase().includes(q) ||
-        o.code.toLowerCase().includes(q)
-    );
-  }, [options, query]);
-
-  const getDisplayText = (item: { code: string; name: string; extra?: string }) => {
-    if (displayFormat) {
-      return displayFormat(item);
-    }
-    return `${item.code} | ${item.name}`;
-  };
-
-  return (
-    <div ref={rootRef} style={{ position: "relative" }}>
-      <input
-        type="text"
-        value={open ? query : name || code}
-        placeholder={loading ? "Loading…" : placeholder}
-        disabled={loading}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => setQuery(e.target.value)}
-        style={{
-          ...inputBaseStyle,
-          opacity: loading ? 0.6 : 1,
-          cursor: loading ? "not-allowed" : "text",
-        }}
-      />
-      {open && !loading && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: 4,
-            background: "#fff",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
-            zIndex: 50,
-            maxHeight: 220,
-            overflowY: "auto",
-            padding: 4,
-          }}
-        >
-          <div
-            onClick={() => {
-              onChange("", "");
-              setOpen(false);
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 8px",
-              fontSize: 12,
-              borderRadius: 4,
-              cursor: "pointer",
-              fontWeight: 600,
-              color: "#185FA5",
-              background: !code ? "#EEF5FD" : "transparent",
-            }}
-          >
-            {!code && <Check size={12} />} All
-          </div>
-          {filtered.map((s) => (
-            <div
-              key={s.code}
-              onClick={() => {
-                onChange(s.code, s.name);
-                setOpen(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 8px",
-                fontSize: 12,
-                borderRadius: 4,
-                cursor: "pointer",
-                color: "#374151",
-                background: code === s.code ? "#EEF5FD" : "transparent",
-              }}
-            >
-              {code === s.code && <Check size={12} color="#185FA5" />}
-              {getDisplayText(s)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 function uppercaseKeys<T>(row: Record<string, any>): T {
   const out: Record<string, any> = {};
@@ -354,18 +285,37 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
 
   const logoUrl = logoRows[0]?.COMP_LOGO || "";
 
+  // ── Dropdown options for the MultiSelectField pickers
+  const supplierOptions = useMemo(
+    () => mapCodeNameOptions(supplierRows, "AC_CODE", "AC_NAME"),
+    [supplierRows]
+  );
+  const productOptions = useMemo(
+    () => mapCodeNameOptions(productRows, "PROD_CODE", "PROD_NAME"),
+    [productRows]
+  );
+  const docOptions = useMemo(
+    () => mapCodeNameOptions(docRows, "DOC_NO", "DOC_TYPE"),
+    [docRows]
+  );
+
   const buildBody = (f: Filters) => {
     const from = parseISODate(f.dateFrom);
     const toInclusive = parseISODate(f.dateTo);
     const toExclusive = toInclusive ? addDays(toInclusive, 1) : null;
 
+    const supplierCodeVal = singleCode(f.supplierCode);
+    const productFromVal = singleCode(f.productFrom);
+    const productToVal = singleCode(f.productTo);
+    const docNoVal = singleCode(f.docNo);
+
     return {
       company_code: companyCode,
-      supplier_code: f.supplierCode || "All",
-      product_from: f.productFrom || "All",
-      product_to: f.productTo || "All",
+      supplier_code: supplierCodeVal,
+      product_from: productFromVal,
+      product_to: productToVal,
       cancelled: f.cancelledPO ? "Y" : "N",
-      doc_no: f.docNo ? Number(f.docNo) : 0,
+      doc_no: docNoVal !== "All" ? Number(docNoVal) : 0,
       date_from: from ? toISODate(from) : null,
       date_to: toExclusive ? toISODate(toExclusive) : null,
       report_type: f.reportType,
@@ -419,16 +369,10 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     setError("");
   };
 
-  // ── Print (targets the most recently opened report tab)
   const row2: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 10,
-  };
-
-  // Format for document number display
-  const formatDocDisplay = (item: { code: string; name: string; extra?: string }) => {
-    return `${item.code} | ${item.extra || ''}`;
   };
 
   return (
@@ -542,62 +486,50 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
 
             <div className="field-row" style={row2}>
               <FloatLabel label="Document No" bgColor={BG}>
-                <SearchField
-                  options={docRows.map(d => ({
-                    code: d.DOC_NO,
-                    name: d.DOC_NO,
-                    extra: d.DOC_TYPE
-                  }))}
-                  code={pending.docNo}
-                  name={pending.docNoName}
+                <MultiSelectField
+                  label=""
+                  options={docOptions}
+                  value={pending.docNo}
+                  onChange={(v: string[]) =>
+                    setPendingField("docNo", enforceSingle(pending.docNo, v))
+                  }
                   loading={isDocLoading}
-                  onChange={(code, name) => {
-                    setPendingField("docNo", code);
-                    setPendingField("docNoName", name);
-                  }}
-                  placeholder="All"
-                  displayFormat={formatDocDisplay}
                 />
               </FloatLabel>
               <FloatLabel label="Supplier" bgColor={BG}>
-                <SearchField
-                  options={supplierRows.map(s => ({ code: s.AC_CODE, name: s.AC_NAME }))}
-                  code={pending.supplierCode}
-                  name={pending.supplierName}
+                <MultiSelectField
+                  label=""
+                  options={supplierOptions}
+                  value={pending.supplierCode}
+                  onChange={(v: string[]) =>
+                    setPendingField("supplierCode", enforceSingle(pending.supplierCode, v))
+                  }
                   loading={isSupplierLoading}
-                  onChange={(code, name) => {
-                    setPendingField("supplierCode", code);
-                    setPendingField("supplierName", name);
-                  }}
                 />
               </FloatLabel>
             </div>
 
             <div className="field-row" style={row2}>
               <FloatLabel label="Product From" bgColor={BG}>
-                <SearchField
-                  options={productRows.map(p => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
-                  code={pending.productFrom}
-                  name={pending.productFromName}
+                <MultiSelectField
+                  label=""
+                  options={productOptions}
+                  value={pending.productFrom}
+                  onChange={(v: string[]) =>
+                    setPendingField("productFrom", enforceSingle(pending.productFrom, v))
+                  }
                   loading={isProductLoading}
-                  onChange={(code, name) => {
-                    setPendingField("productFrom", code);
-                    setPendingField("productFromName", name);
-                  }}
-                  placeholder="All"
                 />
               </FloatLabel>
               <FloatLabel label="Product To" bgColor={BG}>
-                <SearchField
-                  options={productRows.map(p => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
-                  code={pending.productTo}
-                  name={pending.productToName}
+                <MultiSelectField
+                  label=""
+                  options={productOptions}
+                  value={pending.productTo}
+                  onChange={(v: string[]) =>
+                    setPendingField("productTo", enforceSingle(pending.productTo, v))
+                  }
                   loading={isProductLoading}
-                  onChange={(code, name) => {
-                    setPendingField("productTo", code);
-                    setPendingField("productToName", name);
-                  }}
-                  placeholder="All"
                 />
               </FloatLabel>
             </div>
