@@ -11,6 +11,25 @@ type ApiResponse<T> = {
 
 export type VendorRow = Record<string, unknown>;
 
+export type WaybillMasterKind = "rates" | "wells" | "distances";
+export type WaybillMasterRow = Record<string, string | number | null> & { id: number };
+
+export async function getWaybillMaster(kind: WaybillMasterKind): Promise<WaybillMasterRow[]> {
+  const { data } = await api.get<ApiResponse<Record<string, unknown>[]>>(`/api/vms/waybill-masters/${kind}`);
+  assertSuccess(data, "Unable to load waybill master data");
+  return (data.data || []).map((row) => Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]),
+  ) as WaybillMasterRow);
+}
+
+export async function saveWaybillMaster(kind: WaybillMasterKind, payload: Record<string, string>, id?: number) {
+  const url = `/api/vms/waybill-masters/${kind}`;
+  const { data } = id
+    ? await api.put<ApiResponse<unknown>>(`${url}/${id}`, payload)
+    : await api.post<ApiResponse<unknown>>(url, payload);
+  assertSuccess(data, "Unable to save waybill master data");
+}
+
 export type WaybillRequest = {
   id?: number;
   waybill_load_number: string;
