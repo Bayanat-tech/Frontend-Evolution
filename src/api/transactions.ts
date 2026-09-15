@@ -1466,12 +1466,32 @@ export async function getProfitLossReportExcelDownload(params: ReportParams): Pr
 
 
 
-// ----------Visa Expiry Listing Report----------------
-export async function openVisaExpiryReport(params: ReportParams) {
-  await openReportInTab(
+// ----------Visa Expiry Listing Report — HTML (returns string, used for inline preview)----------------
+export async function getVisaExpiryReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
     `/api/finance/transactions/reports/getVisaExpiryReport/html`,
-    params
+    params,
+    { responseType: "text" }
   );
+  return response.data as string;
+}
+
+// ----------Visa Expiry Listing Report — Excel download----------------
+export async function getVisaExpiryReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getVisaExpiryReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `VisaExpiryReport_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export async function TransationReport(params: ReportParams) {
@@ -1588,6 +1608,7 @@ export async function getDnSummaryReportExcelDownload(params: ReportParams): Pro
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
 
 // export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {
 //     const response = await api.post(
