@@ -780,14 +780,8 @@ const AddPRRequestPage = ({
   }, [termsList, supplierList, isViewMode, requestNumber]);
 
   // ─── FIX: Details tab ke suppliers ko Terms tab mein auto-sync karo ───
-  // - Items se unique suppliers nikaalo
-  // - Terms mein missing suppliers ke liye naya row add karo
-  // - Agar item se supplier hata diya to Terms se bhi us auto-added row ko hata do
-  // - User ne manually jo terms add ki hain, unhe touch mat karo
   useEffect(() => {
-    // Sirf Level 6+ par active (jahan supplier column dikhta hai)
     if (userApprovalLevel < 6) return;
-    // Edit/View mode mein load hone se pehle skip karo
     if (items.length === 0) return;
 
     const itemSuppliers = new Set<string>();
@@ -804,7 +798,6 @@ const AddPRRequestPage = ({
       let next = [...prev];
       let changed = false;
 
-      // ── 1. Missing suppliers ke liye naya term row add karo ──
       itemSuppliers.forEach((sup) => {
         if (!termSuppliers.has(sup)) {
           const itemWithSup = items.find(
@@ -832,7 +825,6 @@ const AddPRRequestPage = ({
         }
       });
 
-      // ── 2. Auto-added rows remove karo agar woh items mein nahi hain ──
       const toRemove = new Set<string>();
       autoAddedSuppliersRef.current.forEach((sup) => {
         if (!itemSuppliers.has(sup)) {
@@ -1367,6 +1359,20 @@ const AddPRRequestPage = ({
       const item = { ...updated[index], [field]: value };
 
       if (field === "ITEM_CODE" && typeof value === 'string') {
+        // ─── FIX: Duplicate product check ───
+        const trimmed = value.trim().toUpperCase();
+        if (trimmed) {
+          const isDuplicate = prev.some(
+            (it) =>
+              (it as any).id !== id &&
+              String(it.ITEM_CODE || "").trim().toUpperCase() === trimmed
+          );
+          if (isDuplicate) {
+            toast.warning("This product is already added in another line.", 4000);
+            return prev; // reject the change
+          }
+        }
+
         const found = productCodes.find((p) => String(p.PROD_CODE) === value);
         if (found) {
           item.ITEM_CODE = value;
@@ -1451,7 +1457,6 @@ const AddPRRequestPage = ({
 
   const addTermLine = () => setTerms((prev) => [...prev, blankTerm()]);
 
-  // ─── FIX: removeTerm - auto-added set se bhi remove karo ───
   const removeTerm = (id: string) => {
     setTerms((prev) => {
       const term = prev.find((t) => t.id === id);
@@ -1492,6 +1497,19 @@ const AddPRRequestPage = ({
 
   const canEditRequested = !disabled && userApprovalLevel < 2;
   const canEditApproved = !disabled && userApprovalLevel >= 2;
+
+  // ─── FIX: Helper to get available product options (excluding already selected) ───
+  const getAvailableProducts = (currentItemId: string) => {
+    const selectedCodes = new Set(
+      items
+        .filter((it) => (it as any).id !== currentItemId)
+        .map((it) => String(it.ITEM_CODE || "").trim())
+        .filter(Boolean)
+    );
+    return productCodes.filter(
+      (p: any) => !selectedCodes.has(String(p.PROD_CODE || "").trim())
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
@@ -2079,7 +2097,6 @@ const AddPRRequestPage = ({
                           <col style={{ width: "60px" }} />
                           <col style={{ width: "60px" }} />
                           <col style={{ width: "70px" }} />
-                          {/* ─── Supplier column width (Level 6+) ─── */}
                           {shouldShowSupplier() && <col style={{ width: "220px" }} />}
                           <col style={{ width: "75px" }} />
                           <col style={{ width: "75px" }} />
@@ -2111,7 +2128,6 @@ const AddPRRequestPage = ({
                               Approved Qty
                             </th>
 
-                            {/* ─── Supplier column header (Level 6+) ─── */}
                             {shouldShowSupplier() && (
                               <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20 bg-primary">
                                 Supplier *
@@ -2195,14 +2211,41 @@ const AddPRRequestPage = ({
                                     columns={productColumns}
                                     valueField="PROD_CODE"
                                     displayFields={["PROD_CODE", "PROD_NAME"]}
-                                    loadOptions={() => almsCommonSelect({
-                                      parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST",
-                                      loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
-                                    })}
+                                    /* ─── FIX: Exclude already-selected products from dropdown ─── */
+                                    loadOptions={async () => {
+                                      const allProducts = await almsCommonSelect({
+                                        parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST",
+                                        loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
+                                      });
+                                      const selectedCodes = new Set(
+                                        items
+                                          .filter((it) => (it as any).id !== itemId)
+                                          .map((it) => String(it.ITEM_CODE || "").trim())
+                                          .filter(Boolean)
+                                      );
+                                      return (allProducts as any[]).filter(
+                                        (p: any) => !selectedCodes.has(String(p.PROD_CODE || "").trim())
+                                      );
+                                    }}
                                     onChange={(val, row) => {
                                       if (row) {
                                         setItems(prev => prev.map(it => {
                                           if ((it as any).id !== itemId) return it;
+
+                                          // ─── FIX: Duplicate check on direct set ───
+                                          const trimmed = String(val ?? "").trim().toUpperCase();
+                                          if (trimmed) {
+                                            const isDuplicate = prev.some(
+                                              (other) =>
+                                                (other as any).id !== itemId &&
+                                                String(other.ITEM_CODE || "").trim().toUpperCase() === trimmed
+                                            );
+                                            if (isDuplicate) {
+                                              toast.warning("This product is already added in another line.", 4000);
+                                              return it; // keep as-is
+                                            }
+                                          }
+
                                           const updated: TPRItem = {
                                             ...it,
                                             ITEM_CODE: String(val ?? ""),
@@ -2307,7 +2350,6 @@ const AddPRRequestPage = ({
                                   />
                                 </td>
 
-                                {/* ─── Supplier cell (Level 6+) ─── */}
                                 {shouldShowSupplier() && (
                                   <td className="px-1 py-1 border-l-2 border-r border-border">
                                     <LookupField
