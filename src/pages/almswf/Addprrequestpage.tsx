@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Save, Send, X, CheckCircle,
   ChevronLeft, Paperclip, FileText,
@@ -128,6 +128,63 @@ function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number): T {
   return item;
 }
 
+function recalcItemOnApprovedQty<T extends Partial<TPRItem>>(item: T, exRate: number): T {
+  const rate = exRate || 1;
+
+  const apprQtyPuom = num((item as any).APPROVED_QTY_PUOM);
+  const apprQtyLuom = num((item as any).APPROVED_QTY_LUOM);
+  const apprUppp = num((item as any).APPROVED_UPPP);
+
+  const primaryUom = String(item.P_UOM || "").trim().toUpperCase();
+  const looseUom = String(item.L_UOM || "").trim().toUpperCase();
+  const sameUom = !!primaryUom && primaryUom === looseUom;
+
+  const approvedQty = sameUom
+    ? apprQtyPuom
+    : apprQtyPuom * apprUppp + apprQtyLuom;
+
+  const reqQtyPuom = num(item.QTY_PUOM);
+  const reqQtyLuom = num(item.QTY_LUOM);
+  const reqUppp = num(item.UPPP);
+  const requestedQty = sameUom
+    ? reqQtyPuom
+    : reqQtyPuom * reqUppp + reqQtyLuom;
+
+  const unitPrice = num(item.ITEM_RATE);
+  const amtBeforeDisc = unitPrice * approvedQty;
+
+  const discPercent = num(item.DISCOUNT_AMOUNT);
+  const discPrice = amtBeforeDisc * (discPercent / 100);
+  const finalRate = approvedQty === 0 ? unitPrice : unitPrice - (discPrice / approvedQty);
+  const amount = finalRate * approvedQty;
+
+  const taxPerc = num(item.TX_COMPNT_PERC_1);
+  const taxAmt = amount * (taxPerc / 100);
+
+  const lcurrAmt = amount * rate;
+  const taxLcurr = taxAmt * rate;
+  const lcurrAfterDisc = lcurrAmt + taxLcurr;
+
+  item.FINAL_RATE = finalRate;
+  item.AMOUNT = amount;
+  item.TX_COMPNT_AMT_1 = taxAmt;
+  (item as any).LCURR_AMT = lcurrAmt;
+  (item as any).TX_COMPNT_LCURAMT_1 = taxLcurr;
+  (item as any).LCURR_AFTER_DISCOUNT = lcurrAfterDisc;
+  (item as any).BASE_AMOUNT = lcurrAmt;
+  (item as any).FINAL_AMOUNT = lcurrAmt + taxLcurr;
+  (item as any).AMOUNT_BEFORE_DISC = amtBeforeDisc;
+  (item as any).DISC_PRICE = discPrice;
+
+  (item as any).QUANTITY = approvedQty;
+  (item as any).ITEM_QTY = approvedQty;
+  (item as any).ALLOCATED_APPROVED_QUANTITY = approvedQty;
+
+  (item as any).REQUEST_QUANTITY = requestedQty;
+
+  return item;
+}
+
 // ─── Discount Helpers ─────────────────────────────────────────────────────
 function calculateTotalUnitPrice(items: TPRItem[]): number {
   return items.reduce((total, item) => {
@@ -145,13 +202,15 @@ function calculateAmountBeforeDisc(items: TPRItem[]): number {
   }, 0);
 }
 
-function distributeDiscountToItems(items: TPRItem[], discPercent: number): TPRItem[] {
+function distributeDiscountToItems(items: TPRItem[], discPercent: number, userApprovalLevel: number): TPRItem[] {
   const totalUnitPrice = calculateTotalUnitPrice(items);
   if (totalUnitPrice === 0 || discPercent === 0) {
     return items.map(item => {
       const updated = { ...item, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
-      return recalcItem(updated, exRate);
+      return userApprovalLevel >= 2
+        ? recalcItemOnApprovedQty(updated, exRate)
+        : recalcItem(updated, exRate);
     });
   }
   return items.map(item => {
@@ -161,17 +220,21 @@ function distributeDiscountToItems(items: TPRItem[], discPercent: number): TPRIt
     const itemDiscPercent = (itemTotal / totalUnitPrice) * discPercent;
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
-    return recalcItem(updated, exRate);
+    return userApprovalLevel >= 2
+      ? recalcItemOnApprovedQty(updated, exRate)
+      : recalcItem(updated, exRate);
   });
 }
 
-function distributeDiscountFromAmount(items: TPRItem[], discAmount: number): TPRItem[] {
+function distributeDiscountFromAmount(items: TPRItem[], discAmount: number, userApprovalLevel: number): TPRItem[] {
   const totalUnitPrice = calculateTotalUnitPrice(items);
   if (totalUnitPrice === 0 || discAmount === 0) {
     return items.map(item => {
       const updated = { ...item, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
-      return recalcItem(updated, exRate);
+      return userApprovalLevel >= 2
+        ? recalcItemOnApprovedQty(updated, exRate)
+        : recalcItem(updated, exRate);
     });
   }
   return items.map(item => {
@@ -182,7 +245,9 @@ function distributeDiscountFromAmount(items: TPRItem[], discAmount: number): TPR
     const itemDiscPercent = (itemDiscAmount / itemTotal) * 100;
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
-    return recalcItem(updated, exRate);
+    return userApprovalLevel >= 2
+      ? recalcItemOnApprovedQty(updated, exRate)
+      : recalcItem(updated, exRate);
   });
 }
 
@@ -317,6 +382,7 @@ const AddPRRequestPage = ({
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -337,10 +403,18 @@ const AddPRRequestPage = ({
   const [displayDate, setDisplayDate] = useState("");
   const isInitialized = useRef(false);
   const itemsLoadedRef = useRef(false);
+  const lastLoadedRequestRef = useRef<string | undefined>(undefined);
 
+  // ─── FIX: Track auto-added suppliers (items → terms sync) ───
+  const autoAddedSuppliersRef = useRef<Set<string>>(new Set());
+
+  // ─── FIX: Reset itemsLoadedRef jab bhi requestNumber change ho ───
   useEffect(() => {
-    itemsLoadedRef.current = false;
-  }, [existingData?.request_number]);
+    if (lastLoadedRequestRef.current !== requestNumber) {
+      itemsLoadedRef.current = false;
+      lastLoadedRequestRef.current = requestNumber;
+    }
+  }, [requestNumber]);
 
   const isFinalApproved = String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y";
   const effectiveViewMode = isFinalApproved || (isViewMode && !isEditMode);
@@ -502,6 +576,8 @@ const AddPRRequestPage = ({
       loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: ""
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: itemList = [] } = useQuery<TPRItem[]>({
@@ -511,6 +587,8 @@ const AddPRRequestPage = ({
       loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: ""
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: termsList = [] } = useQuery<any[]>({
@@ -520,6 +598,8 @@ const AddPRRequestPage = ({
       loginid, code1: companyCode, code2: requestNumber || "", code3: "", code4: "",
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: flowDetailData } = useQuery<LookupItem[]>({
@@ -599,6 +679,7 @@ const AddPRRequestPage = ({
     currencyList, taxCodes, taxComponentList, isEditMode, isViewMode,
   ]);
 
+  // ─── Item load effect (Level-aware recalc) ───
   useEffect(() => {
     if (itemsLoadedRef.current) return;
 
@@ -635,13 +716,55 @@ const AddPRRequestPage = ({
         APPROVED_QTY_LUOM: (row as any).APPROVED_QTY_LUOM || 0,
         APPROVED_UPPP: (row as any).APPROVED_UPPP || 0,
       } as TPRItem;
+
+      const reqQtyPuom = num(base.QTY_PUOM);
+      const reqQtyLuom = num(base.QTY_LUOM);
+      const reqUppp = num(base.UPPP);
+
+      const appQtyPuom = num((base as any).APPROVED_QTY_PUOM);
+      const appQtyLuom = num((base as any).APPROVED_QTY_LUOM);
+      const appUppp = num((base as any).APPROVED_UPPP);
+
+      if (appQtyPuom === 0 && reqQtyPuom > 0) {
+        (base as any).APPROVED_QTY_PUOM = reqQtyPuom;
+      }
+      if (appQtyLuom === 0 && reqQtyLuom > 0) {
+        (base as any).APPROVED_QTY_LUOM = reqQtyLuom;
+      }
+      if (appUppp === 0 && reqUppp > 0) {
+        (base as any).APPROVED_UPPP = reqUppp;
+      }
+
       const exRate = num(base.CURRENCY_RATE || header.CURRENCY_RATE || 1);
+
+      if (userApprovalLevel >= 2) {
+        return recalcItemOnApprovedQty(base, exRate);
+      }
       return recalcItem(base, exRate);
     });
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
     itemsLoadedRef.current = true;
-  }, [itemList, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber]);
+  }, [itemList, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
+
+  // ─── FIX: userApprovalLevel change hone ke baad items ko dobara recalc karo ───
+  useEffect(() => {
+    if (userApprovalLevel < 2) return;
+    setItems((prev) => {
+      if (prev.length === 0) return prev;
+      let changed = false;
+      const next = prev.map((item) => {
+        const exRate = num(item.CURRENCY_RATE) || 1;
+        const recalculated = recalcItemOnApprovedQty({ ...item }, exRate);
+        if (num(recalculated.AMOUNT) !== num(item.AMOUNT)) {
+          changed = true;
+        }
+        return recalculated;
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userApprovalLevel]);
 
   useEffect(() => {
     if (termsList.length === 0) {
@@ -656,6 +779,87 @@ const AddPRRequestPage = ({
     setTerms(enriched);
   }, [termsList, supplierList, isViewMode, requestNumber]);
 
+  // ─── FIX: Details tab ke suppliers ko Terms tab mein auto-sync karo ───
+  // - Items se unique suppliers nikaalo
+  // - Terms mein missing suppliers ke liye naya row add karo
+  // - Agar item se supplier hata diya to Terms se bhi us auto-added row ko hata do
+  // - User ne manually jo terms add ki hain, unhe touch mat karo
+  useEffect(() => {
+    // Sirf Level 6+ par active (jahan supplier column dikhta hai)
+    if (userApprovalLevel < 6) return;
+    // Edit/View mode mein load hone se pehle skip karo
+    if (items.length === 0) return;
+
+    const itemSuppliers = new Set<string>();
+    items.forEach((it) => {
+      const sup = String(it.SUPPLIER || "").trim();
+      if (sup) itemSuppliers.add(sup);
+    });
+
+    setTerms((prev) => {
+      const termSuppliers = new Set(
+        prev.map((t) => String(t.SUPPLIER || "").trim()).filter(Boolean)
+      );
+
+      let next = [...prev];
+      let changed = false;
+
+      // ── 1. Missing suppliers ke liye naya term row add karo ──
+      itemSuppliers.forEach((sup) => {
+        if (!termSuppliers.has(sup)) {
+          const itemWithSup = items.find(
+            (it) => String(it.SUPPLIER || "").trim() === sup
+          );
+          const supName =
+            (itemWithSup as any)?.SUPPLIER_NAME ||
+            supplierList.find((s: any) => s.SUPPLIER_CODE === sup)?.SUPPLIER_NAME ||
+            "";
+
+          next.push({
+            id: newId(),
+            COMPANY_CODE: companyCode,
+            SUPPLIER: sup,
+            SUPPLIER_NAME: supName,
+            DLVR_TERM: "",
+            PAYMENT_TERMS: "",
+            WARRANTY: "",
+            REMARKS: "",
+            USER_ID: "",
+            USER_DT: null,
+          });
+          autoAddedSuppliersRef.current.add(sup);
+          changed = true;
+        }
+      });
+
+      // ── 2. Auto-added rows remove karo agar woh items mein nahi hain ──
+      const toRemove = new Set<string>();
+      autoAddedSuppliersRef.current.forEach((sup) => {
+        if (!itemSuppliers.has(sup)) {
+          toRemove.add(sup);
+        }
+      });
+
+      if (toRemove.size > 0) {
+        const filtered = next.filter((t) => {
+          const sup = String(t.SUPPLIER || "").trim();
+          if (toRemove.has(sup) && autoAddedSuppliersRef.current.has(sup)) {
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length !== next.length) {
+          next = filtered;
+          changed = true;
+        }
+        toRemove.forEach((sup) => autoAddedSuppliersRef.current.delete(sup));
+      }
+
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, userApprovalLevel, supplierList]);
+
   const setHdr = (field: keyof TPRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
 
@@ -664,6 +868,8 @@ const AddPRRequestPage = ({
   const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
   const totalAmountBeforeDisc = calculateAmountBeforeDisc(items);
+  const totalQtyPuom = items.reduce((sum, item) => sum + num(item.QTY_PUOM), 0);
+  const totalQtyLuom = items.reduce((sum, item) => sum + num(item.QTY_LUOM), 0);
   const [headerExpanded, setHeaderExpanded] = useState(true);
 
   const [discountScope, setDiscountScope] = useState<"ITEM" | "PO">("ITEM");
@@ -683,7 +889,7 @@ const AddPRRequestPage = ({
         toast.warning("Please enter a discount amount first", 4000);
         return;
       }
-      const updatedItems = distributeDiscountFromAmount(items, discAmount);
+      const updatedItems = distributeDiscountFromAmount(items, discAmount, userApprovalLevel);
       setItems(updatedItems);
       const totalUnitPrice = calculateTotalUnitPrice(items);
       if (totalUnitPrice > 0) {
@@ -696,7 +902,7 @@ const AddPRRequestPage = ({
         toast.warning("Please enter a discount percentage first", 4000);
         return;
       }
-      const updatedItems = distributeDiscountToItems(items, discPercent);
+      const updatedItems = distributeDiscountToItems(items, discPercent, userApprovalLevel);
       setItems(updatedItems);
       const totalUnitPrice = calculateTotalUnitPrice(items);
       if (totalUnitPrice > 0) {
@@ -950,6 +1156,10 @@ const AddPRRequestPage = ({
 
       toast.success(successMsg, 4000);
 
+      queryClient.invalidateQueries({ queryKey: ["pr-header"] });
+      queryClient.invalidateQueries({ queryKey: ["pr-item-list"] });
+      queryClient.invalidateQueries({ queryKey: ["pr-terms"] });
+
       if (status === "SAVEASDRAFT") {
         const newRequestNumber =
           result?.data?.request_number ||
@@ -957,6 +1167,8 @@ const AddPRRequestPage = ({
           result?.data?.REQUEST_NUMBER ||
           result?.REQUEST_NUMBER;
         if (newRequestNumber) {
+          itemsLoadedRef.current = false;
+          lastLoadedRequestRef.current = undefined;
           setRequestNumber(String(newRequestNumber));
         }
         setSavingAction(null);
@@ -1022,6 +1234,11 @@ const AddPRRequestPage = ({
       }
 
       toast.success("PR approved successfully!", 4000);
+
+      queryClient.invalidateQueries({ queryKey: ["pr-header"] });
+      queryClient.invalidateQueries({ queryKey: ["pr-item-list"] });
+      queryClient.invalidateQueries({ queryKey: ["pr-terms"] });
+
       onClose(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve", 5000);
@@ -1110,6 +1327,10 @@ const AddPRRequestPage = ({
           TX_COMPNTCAT_NAME: (hdr as any).TX_COMPNTCAT_NAME || (item as any).TX_COMPNTCAT_NAME || "",
         };
         const exRate = num(merged.CURRENCY_RATE) || 1;
+
+        if (userApprovalLevel >= 2) {
+          return recalcItemOnApprovedQty(merged, exRate);
+        }
         return recalcItem(merged, exRate);
       })
     );
@@ -1129,11 +1350,6 @@ const AddPRRequestPage = ({
     blank.CASH_IND = "N";
     (blank as any).id = newId();
     setItems([...items, blank]);
-    setTimeout(() => {
-      if (tableContainerRef.current) {
-        tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
-      }
-    }, 50);
   };
 
   const removeItem = (id: string) => {
@@ -1162,13 +1378,21 @@ const AddPRRequestPage = ({
         }
       }
 
+      const approvedFields = ["APPROVED_QTY_PUOM", "APPROVED_QTY_LUOM", "APPROVED_UPPP"];
+
       if ([
         "ITEM_RATE", "DISCOUNT_AMOUNT", "QTY_PUOM", "QTY_LUOM", "UPPP",
         "TX_COMPNT_PERC_1", "CURRENCY_RATE",
-        "APPROVED_QTY_PUOM", "APPROVED_QTY_LUOM", "APPROVED_UPPP"
+        ...approvedFields
       ].includes(field as string)) {
         const exRate = num(item.CURRENCY_RATE) || 1;
-        recalcItem(item, exRate);
+
+        if (userApprovalLevel >= 2) {
+          recalcItemOnApprovedQty(item, exRate);
+        } else {
+          recalcItem(item, exRate);
+        }
+
         if (["QTY_PUOM", "QTY_LUOM", "UPPP", "ITEM_CODE"].includes(field as string)) {
           item.REQUEST_QUANTITY = computeQuantity(item);
         }
@@ -1181,7 +1405,12 @@ const AddPRRequestPage = ({
           item.TX_CAT_NAME = found.TX_CAT_NAME || "";
           item.TX_COMPNTCAT_CODE_1 = found.TX_COMPNTCAT_CODE_1 || "";
           item.TX_COMPNT_PERC_1 = found.TX_COMPNT_PERC_1 || 0;
-          recalcItem(item, num(item.CURRENCY_RATE) || 1);
+          const exRate = num(item.CURRENCY_RATE) || 1;
+          if (userApprovalLevel >= 2) {
+            recalcItemOnApprovedQty(item, exRate);
+          } else {
+            recalcItem(item, exRate);
+          }
         }
       }
 
@@ -1193,7 +1422,12 @@ const AddPRRequestPage = ({
           if (found.TX_PERCNT !== undefined) {
             item.TX_COMPNT_PERC_1 = Number(found.TX_PERCNT) || 0;
           }
-          recalcItem(item, num(item.CURRENCY_RATE) || 1);
+          const exRate = num(item.CURRENCY_RATE) || 1;
+          if (userApprovalLevel >= 2) {
+            recalcItemOnApprovedQty(item, exRate);
+          } else {
+            recalcItem(item, exRate);
+          }
         }
       }
 
@@ -1216,7 +1450,19 @@ const AddPRRequestPage = ({
   });
 
   const addTermLine = () => setTerms((prev) => [...prev, blankTerm()]);
-  const removeTerm = (id: string) => setTerms((prev) => prev.filter((t) => t.id !== id));
+
+  // ─── FIX: removeTerm - auto-added set se bhi remove karo ───
+  const removeTerm = (id: string) => {
+    setTerms((prev) => {
+      const term = prev.find((t) => t.id === id);
+      if (term) {
+        const sup = String(term.SUPPLIER || "").trim();
+        if (sup) autoAddedSuppliersRef.current.delete(sup);
+      }
+      return prev.filter((t) => t.id !== id);
+    });
+  };
+
   const updateTermField = (id: string, field: string, value: unknown) => {
     setTerms((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
   };
@@ -1228,8 +1474,6 @@ const AddPRRequestPage = ({
   const taxCategoryColumns = [
     { field: "TX_CAT_CODE", header: "Code" },
     { field: "TX_CAT_NAME", header: "Name" },
-    { field: "TX_COMPNTCAT_CODE_1", header: "Tax Code" },
-    { field: "TX_COMPNT_PERC_1", header: "Tax %" },
   ];
   const taxComponentColumns = [
     { field: "TX_COMPNTCAT_CODE", header: "Code" },
@@ -1240,8 +1484,6 @@ const AddPRRequestPage = ({
     { field: "PROD_NAME", header: "Name" },
     { field: "P_UOM", header: "P Uom" },
     { field: "L_UOM", header: "L Uom" },
-    // { field: "UPPP", header: "UPPP" },
-    // { field: "BASE_PRICE", header: "Base Price" },
   ];
   const supplierColumns = [
     { field: "SUPPLIER_CODE", header: "Code" },
@@ -1265,8 +1507,11 @@ const AddPRRequestPage = ({
         .finance-lines-table td, .finance-lines-table th { overflow: hidden; }
         .finance-lines-table td > * { max-width: 100%; }
       `}</style>
-      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+      <section
+        className="payment-workbench commercial-editor flex h-screen flex-col overflow-hidden"
+        style={{ height: '100vh', maxHeight: '100vh', overflow: 'hidden' }}
+      >
+        <CardHeader className="commercial-command-header flex-none border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
@@ -1312,15 +1557,15 @@ const AddPRRequestPage = ({
           </div>
         </CardHeader>
 
-        <div className="min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden p-3">
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-3">
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
           ) : (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+            <div className="flex min-w-0 flex-col gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
               {/* Header Section */}
-              <div className="flex-none rounded-md border bg-card overflow-hidden">
+              <div className="flex-none rounded-md border bg-card">
                 <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                   <div>
                     <p className="eyebrow m-0">Header</p>
@@ -1412,7 +1657,9 @@ const AddPRRequestPage = ({
                                   setItems(prev => prev.map(item => {
                                     const updated = { ...item, DISCOUNT_AMOUNT: 0 };
                                     const exRate = num(updated.CURRENCY_RATE) || 1;
-                                    return recalcItem(updated, exRate);
+                                    return userApprovalLevel >= 2
+                                      ? recalcItemOnApprovedQty(updated, exRate)
+                                      : recalcItem(updated, exRate);
                                   }));
                                   setHdr("DISCOUNT_AMOUNT", 0);
                                   setHdr("DISC_AMOUNT", 0);
@@ -1448,7 +1695,7 @@ const AddPRRequestPage = ({
                                     setHdr("DISC_AMOUNT", discAmount);
                                     if (discAmount > 0 && discountScope === "PO") {
                                       setHdr("DISCOUNT_AMOUNT", 0);
-                                      const updatedItems = distributeDiscountFromAmount(items, discAmount);
+                                      const updatedItems = distributeDiscountFromAmount(items, discAmount, userApprovalLevel);
                                       setItems(updatedItems);
                                       const totalUnitPrice = calculateTotalUnitPrice(items);
                                       if (totalUnitPrice > 0) {
@@ -1459,7 +1706,9 @@ const AddPRRequestPage = ({
                                       setItems(prev => prev.map(item => {
                                         const updated = { ...item, DISCOUNT_AMOUNT: 0 };
                                         const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return recalcItem(updated, exRate);
+                                        return userApprovalLevel >= 2
+                                          ? recalcItemOnApprovedQty(updated, exRate)
+                                          : recalcItem(updated, exRate);
                                       }));
                                       setHdr("DISCOUNT_AMOUNT", 0);
                                     }
@@ -1486,7 +1735,7 @@ const AddPRRequestPage = ({
                                     setHdr("DISCOUNT_AMOUNT", discPercent);
                                     if (discPercent > 0 && discountScope === "PO") {
                                       setHdr("DISC_AMOUNT", 0);
-                                      const updatedItems = distributeDiscountToItems(items, discPercent);
+                                      const updatedItems = distributeDiscountToItems(items, discPercent, userApprovalLevel);
                                       setItems(updatedItems);
                                       const totalUnitPrice = calculateTotalUnitPrice(items);
                                       if (totalUnitPrice > 0) {
@@ -1497,7 +1746,9 @@ const AddPRRequestPage = ({
                                       setItems(prev => prev.map(item => {
                                         const updated = { ...item, DISCOUNT_AMOUNT: 0 };
                                         const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return recalcItem(updated, exRate);
+                                        return userApprovalLevel >= 2
+                                          ? recalcItemOnApprovedQty(updated, exRate)
+                                          : recalcItem(updated, exRate);
                                       }));
                                       setHdr("DISC_AMOUNT", 0);
                                     }
@@ -1638,6 +1889,9 @@ const AddPRRequestPage = ({
                                   prev.map((item) => {
                                     const merged: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
                                     const exRate = num(merged.CURRENCY_RATE) || 1;
+                                    if (userApprovalLevel >= 2) {
+                                      return recalcItemOnApprovedQty(merged, exRate);
+                                    }
                                     return recalcItem(merged, exRate);
                                   })
                                 );
@@ -1759,7 +2013,7 @@ const AddPRRequestPage = ({
               </div>
 
               {/* Tabs Container */}
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border bg-card overflow-hidden">
+              <div className="flex min-w-0 flex-col rounded-md border bg-card">
                 <div className="flex flex-none items-center border-b bg-secondary/40">
                   <button
                     onClick={() => setActiveTab("items")}
@@ -1780,6 +2034,11 @@ const AddPRRequestPage = ({
                         }`}
                     >
                       Terms & Conditions
+                      {terms.length > 0 && (
+                        <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
+                          {terms.length}
+                        </span>
+                      )}
                     </button>
                   )}
 
@@ -1799,46 +2058,47 @@ const AddPRRequestPage = ({
 
                 {/* Items Tab Content */}
                 {activeTab === "items" && (
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div className="flex min-w-0 flex-col">
                     <div
                       ref={tableContainerRef}
-                      className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-auto"
+                      className="commercial-lines-scroll min-w-0 overflow-x-auto overflow-y-visible"
                       style={{ overscrollBehavior: 'contain', scrollbarWidth: 'auto', scrollbarGutter: 'stable' }}
                     >
                       <table className="finance-lines-table w-full min-w-[2000px] table-fixed text-[10px] border-separate border-spacing-0">
                         <colgroup>
-                          <col style={{ width: "30px" }} />     {/* SNo */}
-                          <col style={{ width: "270px" }} />    {/* Product */}
-                          <col style={{ width: "55px" }} />     {/* P Uom */}
-                          <col style={{ width: "60px" }} />     {/* PQTY */}
-                          <col style={{ width: "55px" }} />     {/* LUOM */}
-                          <col style={{ width: "60px" }} />     {/* LQTY */}
-                          <col style={{ width: "60px" }} />     {/* UPPP */}
-                          <col style={{ width: "70px" }} />     {/* ReqQty */}
-                          <col style={{ width: "60px" }} />     {/* APQTY */}
-                          <col style={{ width: "55px" }} />     {/* ALUOM */}
-                          <col style={{ width: "60px" }} />     {/* ALQTY */}
-                          <col style={{ width: "60px" }} />     {/* AUPPP */}
-                          <col style={{ width: "70px" }} />     {/* ApprQty */}
-                          <col style={{ width: "75px" }} />     {/* Unit Price */}
-                          <col style={{ width: "75px" }} />     {/* Amount Before Disc */}
-                          <col style={{ width: "65px" }} />     {/* Disc % */}
-                          <col style={{ width: "70px" }} />     {/* Disc Price */}
-                          <col style={{ width: "75px" }} />     {/* Unit Price Net Amt */}
-                          <col style={{ width: "75px" }} />     {/* Amount */}
-                          <col style={{ width: "80px" }} />     {/* Lcurr Amt */}
-                          <col style={{ width: "70px" }} />     {/* Tax Type */}
-                          <col style={{ width: "60px" }} />     {/* Tax % */}
-                          <col style={{ width: "75px" }} />     {/* Tax Amount */}
-                          <col style={{ width: "85px" }} />     {/* Tax Cat */}
-                          <col style={{ width: "85px" }} />     {/* Tax Code */}
-                          <col style={{ width: "80px" }} />     {/* Tax Lcurr */}
-                          <col style={{ width: "85px" }} />     {/* Lcurr After Tax */}
-                          <col style={{ width: "35px" }} />     {/* Action */}
+                          <col style={{ width: "30px" }} />
+                          <col style={{ width: "270px" }} />
+                          <col style={{ width: "55px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "55px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "70px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "55px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "70px" }} />
+                          {/* ─── Supplier column width (Level 6+) ─── */}
+                          {shouldShowSupplier() && <col style={{ width: "220px" }} />}
+                          <col style={{ width: "75px" }} />
+                          <col style={{ width: "75px" }} />
+                          <col style={{ width: "65px" }} />
+                          <col style={{ width: "70px" }} />
+                          <col style={{ width: "75px" }} />
+                          <col style={{ width: "75px" }} />
+                          <col style={{ width: "80px" }} />
+                          <col style={{ width: "70px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "75px" }} />
+                          <col style={{ width: "85px" }} />
+                          <col style={{ width: "85px" }} />
+                          <col style={{ width: "80px" }} />
+                          <col style={{ width: "85px" }} />
+                          <col style={{ width: "35px" }} />
                         </colgroup>
 
                         <thead className="sticky top-0 z-30 bg-primary text-[10px] text-primary-foreground">
-                          {/* Group header row */}
                           <tr>
                             <th rowSpan={2} className="sticky left-0 z-40 bg-primary px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">SNo</th>
                             <th rowSpan={2} className="sticky left-[30px] z-40 bg-primary px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Product Code</th>
@@ -1850,6 +2110,13 @@ const AddPRRequestPage = ({
                             <th colSpan={5} className="px-1 py-1.5 text-center align-middle border-l-2 border-r-2 border-b-2 border-primary-foreground/60">
                               Approved Qty
                             </th>
+
+                            {/* ─── Supplier column header (Level 6+) ─── */}
+                            {shouldShowSupplier() && (
+                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20 bg-primary">
+                                Supplier *
+                              </th>
+                            )}
 
                             <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20">Unit Price</th>
 
@@ -1868,15 +2135,12 @@ const AddPRRequestPage = ({
                             <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">Lcurr Amt After Tax</th>
                             <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Action</th>
                           </tr>
-                          {/* Sub header row */}
                           <tr>
-                            {/* Requested sub-columns */}
                             <th className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20">PQTY</th>
                             <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LUOM</th>
                             <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LQTY</th>
                             <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">UPPP</th>
                             <th className="px-1 py-1.5 text-center align-middle border-r-2 border-primary-foreground/20">ReqQty</th>
-                            {/* Approved sub-columns */}
                             <th className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-primary-foreground/20">PQTY</th>
                             <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LUOM</th>
                             <th className="px-1 py-1.5 text-center align-middle border-r border-primary-foreground/20">LQTY</th>
@@ -1887,23 +2151,35 @@ const AddPRRequestPage = ({
 
                         <tbody>
                           {items.length === 0 ? (
-                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={27}>No items yet. Click "Add Line" to add items.</td></tr>
+                            <tr>
+                              <td
+                                className="px-3 py-8 text-center text-muted-foreground"
+                                colSpan={shouldShowSupplier() ? 28 : 27}
+                              >
+                                No items yet. Click "Add Line" to add items.
+                              </td>
+                            </tr>
                           ) : items.map((item) => {
                             const itemId = (item as any).id || String(item.ITEM_SRNO);
                             const qty = computeQuantity(item);
                             const approvedQty = computeApprovedQuantity(item);
-                            const amtBeforeDisc = amountBeforeDisc(item);
-                            const discPrice = itemDiscPrice(item);
-                            const finalRate = itemFinalRate(item);
-                            const amount = itemAmount(item);
-                            const taxAmt = itemTaxAmount(item);
-                            const lcurrAmt = itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
-                            const taxLcurr = itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
-                            const lcurrAfterDisc = itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
+
+                            const amtBeforeDisc = num((item as any).AMOUNT_BEFORE_DISC) || amountBeforeDisc(item);
+                            const discPrice = num((item as any).DISC_PRICE) || itemDiscPrice(item);
+                            const finalRate = num(item.FINAL_RATE) || itemFinalRate(item);
+                            const amount = num(item.AMOUNT) || itemAmount(item);
+                            const taxAmt = num(item.TX_COMPNT_AMT_1) || itemTaxAmount(item);
+                            const lcurrAmt = num((item as any).LCURR_AMT) || itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                            const taxLcurr = num((item as any).TX_COMPNT_LCURAMT_1) || itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                            const lcurrAfterDisc = num((item as any).LCURR_AFTER_DISCOUNT) || itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
 
                             const productDisplay = item.ITEM_CODE && item.ITEM_DESP
                               ? `${item.ITEM_CODE} - ${item.ITEM_DESP}`
                               : (item.ITEM_CODE || "");
+
+                            const supplierDisplay = item.SUPPLIER && (item as any).SUPPLIER_NAME
+                              ? `${item.SUPPLIER} - ${(item as any).SUPPLIER_NAME}`
+                              : (item.SUPPLIER || "");
 
                             return (
                               <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
@@ -1938,6 +2214,9 @@ const AddPRRequestPage = ({
                                           };
                                           updated.REQUEST_QUANTITY = computeQuantity(updated);
                                           const exRate = num(updated.CURRENCY_RATE) || 1;
+                                          if (userApprovalLevel >= 2) {
+                                            return recalcItemOnApprovedQty(updated, exRate);
+                                          }
                                           return recalcItem(updated, exRate);
                                         }));
                                       }
@@ -1950,7 +2229,6 @@ const AddPRRequestPage = ({
                                   <Input disabled value={item.P_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
                                 </td>
 
-                                {/* REQUESTED QTY */}
                                 <td className="px-1 py-1 border-l-2 border-r border-border">
                                   <Input
                                     type="number" step="0.001"
@@ -1988,7 +2266,6 @@ const AddPRRequestPage = ({
                                   <Input disabled value={qty} className="h-7 w-full text-right text-[10px] px-1 font-semibold" />
                                 </td>
 
-                                {/* APPROVED QTY */}
                                 <td className="px-1 py-1 border-l-2 border-r border-border">
                                   <Input
                                     type="number" step="0.001"
@@ -2030,23 +2307,45 @@ const AddPRRequestPage = ({
                                   />
                                 </td>
 
-                                {/* UNIT PRICE (after Approved Qty) */}
+                                {/* ─── Supplier cell (Level 6+) ─── */}
+                                {shouldShowSupplier() && (
+                                  <td className="px-1 py-1 border-l-2 border-r border-border">
+                                    <LookupField
+                                      label="" compact placeholder="Search Supplier *"
+                                      value={item.SUPPLIER || ""}
+                                      displayValue={supplierDisplay}
+                                      columns={supplierColumns}
+                                      valueField="SUPPLIER_CODE"
+                                      displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
+                                      loadOptions={() => almsCommonSelect({
+                                        parameter: "PS_PREQUEST_ENTRY_SUPPLIERS",
+                                        loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
+                                      })}
+                                      onChange={(val, row) => {
+                                        updateItemField(itemId, "SUPPLIER", val);
+                                        if (row) {
+                                          updateItemField(itemId, "SUPPLIER_NAME", row.SUPPLIER_NAME || "");
+                                        }
+                                      }}
+                                      disabled={disabled}
+                                    />
+                                  </td>
+                                )}
+
                                 <td className="px-1 py-1 border-l-2 border-r border-border">
                                   <Input
                                     type="number" step="0.0001"
                                     value={item.ITEM_RATE || ""}
                                     onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)}
-                                    disabled={disabled || userApprovalLevel >= 2}
+                                    disabled={disabled || userApprovalLevel < 1}
                                     className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]"
                                     placeholder="0"
                                   />
                                 </td>
 
-                                {/* Amount Before Disc */}
                                 <td className="finance-amount-cell px-1 py-1 text-right text-blue-600 border-r border-border">
                                   {fmt3(amtBeforeDisc)}
                                 </td>
-                                {/* Disc % */}
                                 <td className="px-1 py-1 border-r border-border">
                                   <Input
                                     type="number" step="0.001"
@@ -2057,19 +2356,14 @@ const AddPRRequestPage = ({
                                     placeholder="0"
                                   />
                                 </td>
-                                {/* Disc Price */}
                                 <td className="finance-amount-cell px-1 py-1 text-right border-r border-border">{fmt3(discPrice)}</td>
-                                {/* Final Rate */}
                                 <td className="finance-amount-cell px-1 py-1 text-right border-r border-border">{fmt3(finalRate)}</td>
-                                {/* Amount */}
                                 <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-green-600 border-r border-border">
                                   {fmt3(amount)}
                                 </td>
-                                {/* Lcurr Amt */}
                                 <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">
                                   {fmt3(lcurrAmt)}
                                 </td>
-                                {/* Tax Type */}
                                 <td className="px-1 py-1 border-r border-border">
                                   <Select
                                     className="h-7 w-full text-[10px] px-1"
@@ -2083,7 +2377,6 @@ const AddPRRequestPage = ({
                                     <option value="E">Exempt</option>
                                   </Select>
                                 </td>
-                                {/* Tax % */}
                                 <td className="px-1 py-1 border-r border-border">
                                   <Input
                                     type="number" step="0.01"
@@ -2094,9 +2387,7 @@ const AddPRRequestPage = ({
                                     placeholder="0"
                                   />
                                 </td>
-                                {/* Tax Amount */}
                                 <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(taxAmt)}</td>
-                                {/* Tax Cat */}
                                 <td className="px-1 py-1 border-r border-border">
                                   <LookupField
                                     label="" compact placeholder="Tax Cat"
@@ -2119,7 +2410,6 @@ const AddPRRequestPage = ({
                                     disabled={disabled}
                                   />
                                 </td>
-                                {/* Tax Code */}
                                 <td className="px-1 py-1 border-r border-border">
                                   <LookupField
                                     label="" compact placeholder="Tax Code"
@@ -2144,13 +2434,10 @@ const AddPRRequestPage = ({
                                     disabled={disabled}
                                   />
                                 </td>
-                                {/* Tax Lcurr */}
                                 <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(taxLcurr)}</td>
-                                {/* Lcurr After Tax */}
                                 <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-blue-600 border-r border-border">
                                   {fmt3(lcurrAfterDisc)}
                                 </td>
-                                {/* Action */}
                                 <td className="px-1 py-1 text-center">
                                   {!effectiveViewMode && (
                                     <Button
@@ -2171,29 +2458,34 @@ const AddPRRequestPage = ({
                     </div>
 
                     {/* Summary Footer */}
-                    <div className="sticky bottom-0 flex-none border-t bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-10">
-                      <div className="flex items-center justify-end px-2 py-1">
-                        <div className="flex items-center gap-6">
-                          <div className="text-right">
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider eyebrow m-0">Total Qty</span>
-                            <div className="text-sm font-semibold text-emerald-700">
-                              {items.reduce((sum, item) => sum + computeQuantity(item), 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider eyebrow m-0">Base Amount</span>
-                            <div className="text-sm font-semibold text-emerald-700">{fmt3(totalBase)}</div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider eyebrow m-0">Tax</span>
-                            <div className="text-sm font-semibold text-emerald-700">{fmt3(totalTax)}</div>
-                          </div>
-                          <div className="h-8 w-px bg-border"></div>
-                          <div className="text-right">
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider eyebrow m-0">Net Amount</span>
-                            <div className="text-xl font-bold text-emerald-700">{fmt3(totalFinalAmount)}</div>
-                          </div>
-                        </div>
+                    <div className="sticky bottom-0 z-40 grid grid-cols-2 gap-x-8 gap-y-1 border-t bg-card px-3 py-2 text-sm shadow-[0_-2px_8px_rgba(0,0,0,0.08)] max-md:grid-cols-1">
+                      <div className="flex items-center justify-end gap-8">
+                        <span className="text-muted-foreground">Total Qty (Puom)</span>
+                        <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
+                      </div>
+                      <div className="flex items-center justify-end gap-8">
+                        <span className="text-muted-foreground">Total Qty (Luom)</span>
+                        <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
+                      </div>
+                      <div className="flex items-center justify-end gap-8">
+                        <span className="text-muted-foreground">Base Total Amount</span>
+                        <strong className="text-emerald-600">{fmt3(totalAmount)}</strong>
+                      </div>
+                      <div className="flex items-center justify-end gap-8">
+                        <span className="text-muted-foreground">Discount</span>
+                        <strong>{fmt3(totalDiscAmount)}</strong>
+                      </div>
+                      <div className="flex items-center justify-end gap-8">
+                        <span className="text-muted-foreground">Amount Before Tax</span>
+                        <strong>{fmt3(totalAmount - totalDiscAmount)}</strong>
+                      </div>
+                      <div className="flex items-center justify-end gap-8">
+                        <span className="text-muted-foreground">Tax</span>
+                        <strong>{fmt3(totalTax)}</strong>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end gap-8 border-t pt-1 max-md:col-span-1">
+                        <span className="font-semibold text-muted-foreground">Amount After Tax</span>
+                        <strong className="text-base text-emerald-600">{fmt3(totalFinalAmount)}</strong>
                       </div>
                     </div>
                   </div>
@@ -2201,7 +2493,7 @@ const AddPRRequestPage = ({
 
                 {/* Terms Tab Content */}
                 {activeTab === "terms" && shouldShowTermsTab() && (
-                  <div className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto">
+                  <div className="commercial-lines-scroll min-w-0 overflow-x-auto overflow-y-visible">
                     <div className="relative">
                       <table className="finance-lines-table w-full min-w-[1200px] text-[12px] border-separate border-spacing-0">
                         <thead className="sticky top-0 z-10 bg-primary text-xs text-primary-foreground">
@@ -2284,7 +2576,7 @@ const AddPRRequestPage = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
+        <div className="flex-none flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
           {!effectiveViewMode && !(docType !== "PR") && (
             <div className="flex items-center gap-2">
               {userApprovalLevel <= 1 && (

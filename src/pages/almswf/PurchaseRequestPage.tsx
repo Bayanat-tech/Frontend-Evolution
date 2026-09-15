@@ -1,4 +1,4 @@
-// src/pages/almswf/PurchaseRequestPage.tsx
+
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
@@ -95,6 +95,8 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
 
   const activeCode3 = TAB_CODE3[activeTab];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
+  // Edit is only allowed in the Pending tab
+  const isPendingTab = activeCode3 === "PENDING";
 
   const prQuery = useQuery({
     queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "pr"],
@@ -252,8 +254,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     }
   }, [queryClient, loginid, companyCode]);
 
-  // Called by AddPRRequestPage after first Save Draft — keeps parent state in sync
-  // so that reopening the same modal (without closing) targets the same PR.
+
   const handleSavedDraft = useCallback((savedRequestNumber: string) => {
     setTaskPopup((prev) => {
       // Only update if it's a "new" popup that just got a number
@@ -357,6 +358,11 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         },
       },
       {
+        accessorKey: "Reason",
+        header: "Reason",
+        cell: ({ row }) => (row.original as any).REASON || "—",   
+      },
+      {
         accessorKey: "next_action_by",
         header: "Next Action By",
         cell: ({ row }) => {
@@ -384,21 +390,24 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
               >
                 <Eye size={15} />
               </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                title={isFinalApproved ? "Approved — cannot edit" : "Edit"}
-                onClick={() => handleActions("edit", row.original)}
-                disabled={isFinalApproved}
-              >
-                <Edit2 size={15} />
-              </Button>
+              {/* Edit button only visible in Pending tab and not final approved */}
+              {isPendingTab && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title={isFinalApproved ? "Approved  — cannot edit" : "Edit"}
+                  onClick={() => handleActions("edit", row.original)}
+                  disabled={isFinalApproved}
+                >
+                  <Edit2 size={15} />
+                </Button>
+              )}
             </div>
           );
         },
       },
     ],
-    []
+    [isPendingTab]
   );
 
   const poColumns = useMemo<ColumnDef<TPPOGenerated>[]>(
