@@ -228,12 +228,12 @@ export function FreightPacklistPage({
   const airCargoColumns: CargoColumn[] = [
   { key: "no_of_packings", label: "No. of Pcs", width: "90px", type: "number" },
   { key: "quantity", label: "Quantity", width: "90px", type: "number" },
-  { key: "puom", label: "UOM", width: "130px", lookupUom: true },
+  { key: "puom", label: "UOM", width: "150px", lookupUom: true },
   { key: "volume", label: "Volume", width: "90px", type: "number" },
   { key: "gross_wt", label: "Gross Wt", width: "95px", type: "number" },
   { key: "kg_ind", label: "KG Ind", width: "75px", type: "select", options: ["K", "L"] },
   { key: "rate_class", label: "Rate Class", width: "100px" },
-  // { key: "amount", label: "Total", width: "100px", type: "number", readOnly: true },
+  { key: "item_no", label: "Commodity Item No", width: "100px", type: "number" },
 
   { key: "charge_wt", label: "Chargeable Wt", width: "110px", type: "number" },
   { key: "rate_ind", label: "Rate Ind", width: "95px", type: "select", options: ["N", "A", "R"] },
@@ -247,7 +247,8 @@ const seaCargoColumns: CargoColumn[] = [
   { key: "gross_wt", label: "Gross Wt", width: "120px", type: "number" },
   { key: "net_wt", label: "Net Wt", width: "120px", type: "number" },
   { key: "volume", label: "Cube (m3)", width: "120px", type: "number" },
-  
+  // { key: "container_type", label: "Container Type", width: "120px" },
+  { key: "cargo_details", label: "Container Details", width: "850px" },
 ];
 
 const roadCargoColumns: CargoColumn[] = [
@@ -258,9 +259,9 @@ const roadCargoColumns: CargoColumn[] = [
   { key: "gross_wt", label: "Gross Wt", width: "100px", type: "number" },
   { key: "volume", label: "Volume", width: "100px", type: "number" },
   { key: "charge_wt", label: "Chg Wt", width: "100px", type: "number" },
+  { key: "cargo_details", label: "Container Details", width: "600px" },
 ];
-
-const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCargoColumns;
+const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCargoColumns;
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -619,8 +620,12 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
             <Textarea rows={3} label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} />
             <Textarea rows={2} label="Notify Name" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
             <Textarea rows={3} label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} />
-            <Field label="Airline Name" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} className="lg:col-span-1" />
-            <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} />
+            {isAir && (
+              <>
+                <Field label="Airline Name" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} className="lg:col-span-1" />
+                <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} />
+              </>
+            )}
           </div>
         </Panel>
 
@@ -715,16 +720,21 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
   {isAir ? (
   <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
     <Textarea label="Nature And Quantity Of Goods" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} required />
-    <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
-    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} className="col-span-2" />
+    {/* <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} /> */}
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} 
+    // className="col-span-2" 
+    />
   </div>
 ) : (
   <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
     <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
     {isRoad ? (
-    <Textarea label="Cargo Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
-    ): null}
-    <Textarea label="Cargo Desc" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
+    <>
+      {/* <Textarea label="Cargo Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} /> */}
+      <Textarea label="Cargo Desc" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
+      <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
+    </>
+    ) : null}
     <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
   </div>
 )}
@@ -742,55 +752,16 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
         )} 
 
 
-        <Panel className="pack-transport-panel lg:col-span-12" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
+          {!isAir && (
+        <Panel className="pack-transport-panel lg:col-span-12" icon={mode.icon} title="Container / Carrier" meta={pack.container_no || "Container pending"}>
           <div className="freight-job-field-grid freight-job-field-grid-4">
-            {/* {isAir ? (
-              <>
-                <Field label="HAWB" value={pack.hawb} onChange={(value) => setPackField(setPack, "hawb", value)} />
-                <Field label="Airline" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} />
-                <Field label="IATA Code" value={pack.agents_iata_code} onChange={(value) => setPackField(setPack, "agents_iata_code", value)} />
-                <SelectField label="Charge Code" value={pack.chg_code} options={["PP", "CC"]} onChange={(value) => setPackField(setPack, "chg_code", value)} />
-                <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)} />
-                <Field label="Issue Place" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
-                <Field label="Issue Date" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
-                <Field label="Ship On Board" type="date" value={pack.shipon_board} onChange={(value) => setPackField(setPack, "shipon_board", value)} />
-                <Field label="Status" value={pack.shipment_status} onChange={(value) => setPackField(setPack, "shipment_status", value)} />
-              </>
-            ) : (
-              <>
-                <Field label="Vessel / Vehicle" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
-                <Field label="Voyage / Trip" value={pack.voyage_no} onChange={(value) => setPackField(setPack, "voyage_no", value)} />
-                <Textarea rows={2} label={mode.code === "S" ? "Container Summary" : "Truck No"} value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} />
-                <Field label="Size" value={pack.container_size} onChange={(value) => setPackField(setPack, "container_size", value)} />
-                <Field label="Type" value={pack.container_type} onChange={(value) => setPackField(setPack, "container_type", value)} />
-                <Field label="Import BL" value={pack.import_blno} onChange={(value) => setPackField(setPack, "import_blno", value)} />
-              </>
-            )} */}
-
-  {isAir ? (
-  <>
-    {/* <Field label="HAWB" value={pack.hawb} onChange={(value) => setPackField(setPack, "hawb", value)} /> */}
-     {/* <Field label="AWB No" value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
-    <Field label="AWB Date" type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />  */}
-    {/* <Field label="Airline Name" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} className="lg:col-span-2" />
-    <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)}className="lg:col-span-2" /> */}
-    {/* <Field label="Agent IATA Code" value={pack.agents_iata_code} onChange={(value) => setPackField(setPack, "agents_iata_code", value)} />
-    <SelectField label="Charge Code" value={pack.chg_code} options={["PP", "CC"]} onChange={(value) => setPackField(setPack, "chg_code", value)} />
-    <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} />
-    <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)}className="lg:col-span-2"  /> */}
-    {/* <Field label="Ship On Board" type="date" value={pack.shipon_board} onChange={(value) => setPackField(setPack, "shipon_board", value)} />
-    <Field label="Status" value={pack.shipment_status} onChange={(value) => setPackField(setPack, "shipment_status", value)} /> */}
-  </>
-) : isSea ? (
+  {isSea ? (
   <>
     <Field label="Vessel Name" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
-    {/* <Field label="Voyage No" value={pack.voyage_no} onChange={(value) => setPackField(setPack, "voyage_no", value)} /> */}
-    <Textarea rows={2} label="Container Summary" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} />
-    {/* <Field label="Size" value={pack.container_size} onChange={(value) => setPackField(setPack, "container_size", value)} /> */}
-    {/* <Field label="Type" value={pack.container_type} onChange={(value) => setPackField(setPack, "container_type", value)} /> */}
-    {/* <Field label="Import BL" value={pack.import_blno} onChange={(value) => setPackField(setPack, "import_blno", value)} /> */}
+    {/* <Textarea rows={2} label="Container Summary" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} /> */}
     <Field label="Shipped On Board" type="date" value={pack.shipon_board} onChange={(value) => setPackField(setPack, "shipon_board", value)} />
-    <Field label="Shipment Status" value={pack.shipment_status} onChange={(value) => setPackField(setPack, "shipment_status", value)} />
+    {/* <Field label="Shipment Status" value={pack.shipment_status} onChange={(value) => setPackField(setPack, "shipment_status", value)} /> */}
+    <SelectField label="Shipment Status" value={pack.shipment_status} options={["LCL/FCL", "FCL/FCL", "FCL/LCL", "LCL/LCL"]} onChange={(value) => setPackField(setPack, "shipment_status", value)} />
     <Field label="Freight Chgs (Master)" value={pack.frt_chgs_master} onChange={(value) => setPackField(setPack, "frt_chgs_master", value)} />
     <Field label="Freight Chgs (House)" value={pack.frt_chgs_house} onChange={(value) => setPackField(setPack, "frt_chgs_house", value)} />
   </>
@@ -798,18 +769,25 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
   <>
    <Field label="HBWL No" value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
     <Field label="WB Date" type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
-    <Textarea label="Truck No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} required/>
-    <Field label="Vehicle Type" value={pack.container_type} onChange={(value) => setPackField(setPack, "container_type", value)} />
+    <Field label="Truck No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} required/>
+    <Lookup
+  label="Vehicle Type"
+  value={pack.container_type}
+  valueField="vtype_code"
+  displayFields={["vtype_code", "vtype_name"]}
+  columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Name" }]}
+  loadOptions={(search) => lookup("freight_vehicle_type", companyCode, "NULL", "NULL", search)}
+  onChange={(value) => setPackField(setPack, "container_type", value)}
+/>
     <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} />
-    {/* <Field label="Agent Amt" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
-    <Field label="Carrier Amt" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} /> */}
-    {/* <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
-    <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} /> */}
-    <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} className="col-span-3"/>
+    {/* <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} className="col-span-4"/> */}
   </>
 )}
           </div>
         </Panel>
+        )}
+
+
 
         {mode.code === "S" && (
           <Panel className="lg:col-span-12" icon={Ship} title="Container Details" meta={`${containers.length} container${containers.length === 1 ? "" : "s"}`}>
@@ -842,13 +820,12 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
       <Field label="Port of Discharge" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
       <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} />
       <Field label="Frt Amt" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} />
-      <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} className="lg:col-span-2" />
-      <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)}className="lg:col-span-2" />
-      <Lookup label="Agent Country" value={pack.agent_country} valueField="COUNTRY_CODE" displayFields={["COUNTRY_CODE", "COUNTRY_NAME"]} columns={[{ field: "COUNTRY_CODE", header: "Code" }, { field: "COUNTRY_NAME", header: "Country" }]} loadOptions={(search) => lookup("freight_country", companyCode, "NULL", "NULL", search)} onChange={(value) => setPackField(setPack, "agent_country", value)} />
-      <Field label="Issuing Carrier" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
+       {/* <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} className="lg:col-span-2" />
+       <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)}className="lg:col-span-2" />
+      <Lookup label="Agent Country" value={pack.agent_country} valueField="COUNTRY_CODE" displayFields={["COUNTRY_CODE", "COUNTRY_NAME"]} columns={[{ field: "COUNTRY_CODE", header: "Code" }, { field: "COUNTRY_NAME", header: "Country" }]} loadOptions={(search) => lookup("freight_country", companyCode, "NULL", "NULL", search)} onChange={(value) => setPackField(setPack, "agent_country", value)} /> */} 
+      <Field label="Issuing Carrier Name" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
       <Field label="Issuing Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} className="lg:col-span-2"  />
-      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
-      <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
+      {/* <Field label="Org B/L Desc" value={pack.org_bl_desc} onChange={(value) => setPackField(setPack, "org_bl_desc", value)}   className="lg:col-span-2" /> */}
     </div>
   </Panel>
 )}
@@ -880,18 +857,18 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
               <Field label="Dec Val of Carriage" value={pack.dec_val_carr} onChange={(value) => setPackField(setPack, "dec_val_carr", value)} />
               <Field label="Dec Val of Customs" value={pack.dec_val_cus} onChange={(value) => setPackField(setPack, "dec_val_cus", value)} />
               <Field label="Insurance Amt" value={pack.amt_insurance} onChange={(value) => setPackField(setPack, "amt_insurance", value)} />
-              
+            
               <Field label="Valuation Chg" type="number" value={pack.valuation_chg} onChange={(value) => setPackField(setPack, "valuation_chg", value)} />
               <Field label="Tax Chg" type="number" value={pack.tax_chg} onChange={(value) => setPackField(setPack, "tax_chg", value)} />
-              <Field label="Carrier Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
-              <SelectField label="Rate Ind" value={pack.rate_ind} options={["N", "A", "R"]} onChange={(value) => setPackField(setPack, "rate_ind", value)} />
+              {/* <Field label="Carrier Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} /> */}
+              {/* <SelectField label="Rate Ind" value={pack.rate_ind} options={["N", "A", "R"]} onChange={(value) => setPackField(setPack, "rate_ind", value)} />
               <SelectField label="KG Ind" value={pack.kg_ind} options={["K", "L"]} onChange={(value) => setPackField(setPack, "kg_ind", value)} />
-              <Field label="Rate Class" value={pack.rate_class} onChange={(value) => setPackField(setPack, "rate_class", value)} />
-              <Field label="Item No" value={pack.item_no} onChange={(value) => setPackField(setPack, "item_no", value)} />
-              <Field label="Commodity Item No" value={pack.item_no} onChange={(value) => setPackField(setPack, "item_no", value)} />
-              <Field label="Executed On" type="date" value={pack.executed_on} onChange={(value) => setPackField(setPack, "executed_on", value)} />
+              <Field label="Rate Class" value={pack.rate_class} onChange={(value) => setPackField(setPack, "rate_class", value)} /> */}
+              {/* <Field label="Item No" value={pack.item_no} onChange={(value) => setPackField(setPack, "item_no", value)} /> */}
+              {/* <Field label="Commodity Item No" value={pack.item_no} onChange={(value) => setPackField(setPack, "item_no", value)} /> */}
+              {/* <Field label="Executed On" type="date" value={pack.executed_on} onChange={(value) => setPackField(setPack, "executed_on", value)} /> */}
               {/* <Field label="Executed By" value={pack.executed_by} onChange={(value) => setPackField(setPack, "executed_by", value)} /> */}
-               <Field label="Place" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
+               {/* <Field label="Place" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} /> */}
             </div>
           </Panel>
         )}
@@ -902,16 +879,11 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
           </Panel>
         )}
 
-        <Panel
-  className="lg:col-span-12"
-  icon={FileSignature}
-  title="Terms & Agent Details"
-  meta={pack.terms_of_delivery || "Delivery & agent details"}
->
-  <div className="freight-job-field-grid freight-job-field-grid-4">
-    <Field label="Frt Amt" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} />
-    <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
-    <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} />
+        <Panel className="lg:col-span-12" icon={FileSignature} title="Terms & Agent Details" meta={pack.terms_of_delivery || "Delivery & agent details"} >
+  {/* <div className="freight-job-field-grid freight-job-field-grid-4">
+    {/* <Field label="Frt Amt" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} /> */}
+    {/* <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} /> */}
+    {/* <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} />
     <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)} />
     <Lookup
       label="Agent Country"
@@ -927,7 +899,57 @@ const cargoColumns = isAir ? airCargoColumns : isSea ? seaCargoColumns : roadCar
     <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
     <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
     <Textarea className="sm:col-span-2" label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
-  </div>
+  </div> */} 
+
+  <div className="freight-job-field-grid freight-job-field-grid-4">
+  <Field label="Ex Rate" type="number" value={pack.ex_rate} onChange={(value) => setPackField(setPack, "ex_rate", value)} />
+  {/* <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
+  <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} /> */}
+
+  {isAir && (
+    <>
+      {/* <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} />
+      <Field label="Agent Add" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)} /> */}
+      <Field label="Agent Chrg Amount" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
+      <Field label="Carrier Chg Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
+      <Field label="Executed On" type="date" value={pack.executed_on} onChange={(value) => setPackField(setPack, "executed_on", value)} />
+      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
+      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
+      <Textarea className="sm:col-span-2" label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
+    </>
+  )}
+
+  {isSea && (
+    <>
+      {/* <Field label="Frt Amt" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} /> */}
+      <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} />
+      <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)} />
+      <Lookup
+        label="Agent Country"
+        value={pack.agent_country}
+        valueField="COUNTRY_CODE"
+        displayFields={["COUNTRY_CODE", "COUNTRY_NAME"]}
+        columns={[{ field: "COUNTRY_CODE", header: "Code" }, { field: "COUNTRY_NAME", header: "Country" }]}
+        loadOptions={(search) => lookup("freight_country", companyCode, "NULL", "NULL", search)}
+        onChange={(value) => setPackField(setPack, "agent_country", value)}
+      />
+      <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
+      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
+      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
+    </>
+  )}
+
+  {isRoad && (
+    <>
+      <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
+      <Field label="Agent Amt" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
+      <Field label="Carrier Amt" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
+      <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
+      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
+      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
+    </>
+  )}
+</div>
 </Panel>
         </div>
         </PackEditContext.Provider>
@@ -1111,7 +1133,7 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     bl_mode: "LCL",
     container_no: "",
     container_size: "",
-    container_type: "STANDARD",
+    container_type: "",
     vessel_name: "",
     voyage_no: "",
     bl_no: "",
@@ -1198,7 +1220,7 @@ function emptyContainer(srNo: number): ContainerLine {
   return {
     srno: String(srNo),
     container_no: "",
-    container_type: "STANDARD",
+    container_type: "",
     t_f: "T",
     seal_no: "",
     volume: "0",
@@ -1297,7 +1319,13 @@ function CargoMeasureTable({
 
   return (
     <div className="freight-cargo-table overflow-hidden rounded-md border bg-background">
-      <div className="overflow-auto">
+      {/* <div className="overflow-auto">
+        <div
+          className="grid gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground"
+          style={{ gridTemplateColumns: gridTemplate }}
+        > */}
+
+              <div className="overflow-auto" style={{ width: "fit-content", minWidth: "100%" }}>
         <div
           className="grid gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground"
           style={{ gridTemplateColumns: gridTemplate }}
