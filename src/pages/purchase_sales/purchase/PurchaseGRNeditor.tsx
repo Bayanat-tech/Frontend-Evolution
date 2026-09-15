@@ -5,9 +5,10 @@ import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
-import { exportGrnPrintReportExcel, openGrnPrintReport,  } from "../../../api/transactions";
+import { exportGrnPrintReportExcel, getGrnPrintReportPreviewUrl } from "../../../api/transactions";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
+
 
 import {
   ActionKey,
@@ -42,6 +43,7 @@ import { RejectDialog } from "./Rejectdialog";
 import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
 import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -71,6 +73,11 @@ export function PurchaseGRNEditor({
 
   const [printing, setPrinting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+
+  // ── Report preview dialog state ──────────────────────────────────────────
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportPreviewError, setReportPreviewError] = useState("");
 
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
@@ -189,6 +196,14 @@ export function PurchaseGRNEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
+  // Revoke the blob URL whenever it changes or the component unmounts, so we
+  // don't leak memory across repeated print actions.
+  useEffect(() => {
+    return () => {
+      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    };
+  }, [reportPreviewUrl]);
+
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
@@ -254,26 +269,44 @@ const handleSubmit = () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase GRN cancelled");
 
+  // ── Print now opens the in-app preview dialog instead of a new window ────
   const handlePrintGrn = async () => {
     if (!form.doc_no) {
       setError("Save the GRN before printing");
       return;
     }
+
+    // Reset previous preview state and open the dialog immediately so the
+    // user sees the loading spinner inside ReportPreviewDialog right away.
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+
     setPrinting(true);
     setError("");
     try {
-      await openGrnPrintReport({
+      const url = await getGrnPrintReportPreviewUrl({
         parameter: "GRN_Print",
         loginid: user?.loginid || user?.username || "ADMIN",
         company_code: user?.company_code,
         doc_type: PO_DOC_TYPE.GRN,
         doc_no: form.doc_no,
       } as any);
+      setReportPreviewUrl(url);
     } catch (printError) {
-      setError(printError instanceof Error ? printError.message : "Error while printing");
+      setReportPreviewError(printError instanceof Error ? printError.message : "Error while generating report");
     } finally {
       setPrinting(false);
     }
+  };
+
+  const closeReportPreview = () => {
+    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewOpen(false);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
   };
 
   const handleExportGrnExcel = async () => {
@@ -534,6 +567,19 @@ const handleSubmit = () => {
           </div>
         </div>
       </form>
+
+      {reportPreviewOpen && (
+        <ReportPreviewDialog
+          title={`Purchase GRN ${form.doc_no || ""}`.trim()}
+          pdfUrl={reportPreviewUrl}
+          error={reportPreviewError}
+          exporting={exportingExcel}
+          onExcel={handleExportGrnExcel}
+          onClose={closeReportPreview}
+          onDownload={() => {}}
+          downloadName={`GRN_${form.doc_no || "report"}.html`}
+        />
+      )}
 
       <SendBackDialog
         open={sendBackDialogOpen}

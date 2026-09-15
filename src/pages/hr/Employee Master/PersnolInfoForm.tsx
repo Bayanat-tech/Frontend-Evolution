@@ -139,7 +139,6 @@ const PersnolInfoForm = ({
               <button
                 type="button"
                 onClick={() => setFileUploadDialog(true)}
-                disabled
                 className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border hover:border-primary"
                 title={form.emp_photo ? "Change Picture" : "Upload Profile Picture"}
               >
