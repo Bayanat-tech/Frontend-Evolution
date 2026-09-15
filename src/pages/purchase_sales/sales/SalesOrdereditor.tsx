@@ -7,6 +7,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 
 import {
   ActionKey,
@@ -39,7 +40,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSOrderReportHtml } from "../../../api/transactions";
+import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -86,6 +87,14 @@ export function SalesOrderEditor({
   const [rejectError, setRejectError] = useState("");
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+
+  // ── Report preview dialog state ──────────────────────────────────────────
+  // reportPreviewUrl is a local blob: URL built from the HTML string the
+  // backend returns — ReportPreviewDialog just treats it like any pdfUrl.
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
 
 
@@ -220,6 +229,13 @@ export function SalesOrderEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
+  // Revoke the blob URL whenever it changes or the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    };
+  }, [reportPreviewUrl]);
+
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
@@ -334,36 +350,58 @@ export function SalesOrderEditor({
     }
   };
 
-
-
-  const handlePrint = () => {
-    if (!form.doc_no) return;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Popup blocked — please allow popups to print.");
+  // ── Print now opens the in-app ReportPreviewDialog instead of a new tab ──
+  const openReport = async () => {
+    if (!form.doc_no) {
+      setError("Save the Sales Order before printing");
       return;
     }
-    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
 
-    getSOrderReportHtml({
-      company_code: user?.company_code,
-      doc_type: SO_DOC_TYPE.SO,
-      doc_no: form.doc_no,
-    })
-      .then((html) => {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-      })
-      .catch((printError) => {
-        printWindow.document.open();
-        printWindow.document.write(
-          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
-          }</p>`
-        );
-        printWindow.document.close();
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+
+    try {
+      const html = await getSOrderReportHtml({
+        company_code: user?.company_code,
+        doc_type: SO_DOC_TYPE.SO,
+        doc_no: form.doc_no,
       });
+      const blob = new Blob([html], { type: "text/html" });
+      setReportPreviewUrl(window.URL.createObjectURL(blob));
+    } catch (printError) {
+      setReportPreviewError(printError instanceof Error ? printError.message : "Unable to load report");
+    }
+  };
+
+  const closeReportPreview = () => {
+    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewOpen(false);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
+  };
+
+  const handleExportExcel = async () => {
+    if (!form.doc_no) {
+      setError("Save the Sales Order before exporting to Excel");
+      return;
+    }
+    setReportPreviewExporting(true);
+    try {
+      await getSoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: SO_DOC_TYPE.SO,
+        doc_no: form.doc_no,
+      });
+    } catch (exportError) {
+      const message = exportError instanceof Error ? exportError.message : "Error while exporting to Excel";
+      if (reportPreviewOpen) setReportPreviewError(message);
+      else setError(message);
+    } finally {
+      setReportPreviewExporting(false);
+    }
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
@@ -514,10 +552,19 @@ export function SalesOrderEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary" onClick={handlePrint}>
+                  <Button type="button" variant="secondary" onClick={() => void openReport()}>
                     <Printer size={15} /> Print
                   </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button
+                    aria-label="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => void handleExportExcel()}
+                    disabled={reportPreviewExporting}
+                  >
+                    {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  </Button>
                 </>
               )}
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -620,15 +667,37 @@ export function SalesOrderEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrint} disabled={!form.doc_no}>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={() => void openReport()} disabled={!form.doc_no}>
               <Printer size={15} />
             </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
+            <Button
+              aria-label="Download"
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={!form.doc_no || reportPreviewExporting}
+              onClick={() => void handleExportExcel()}
+            >
+              {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            </Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>
       </form>
+
+      {reportPreviewOpen && (
+        <ReportPreviewDialog
+          title={`Sales Order ${form.doc_no || ""}`.trim()}
+          pdfUrl={reportPreviewUrl}
+          error={reportPreviewError}
+          exporting={reportPreviewExporting}
+          onExcel={handleExportExcel}
+          onClose={closeReportPreview}
+          onDownload={() => {}}
+          downloadName={`SO_${form.doc_no || "report"}.html`}
+        />
+      )}
 
       <SendBackDialog
         open={sendBackDialogOpen}

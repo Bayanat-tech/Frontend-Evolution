@@ -1,14 +1,15 @@
-// PoOrderRegister.tsx
+// PoOrderRegisterPage.tsx
 "use client";
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Printer, RotateCcw, FileText, Download, Eye } from "lucide-react";
+import { Printer, RotateCcw, FileText, Download, Loader2 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 import {
-    getPoOrderRegisterReportHtml,
+      getPoOrderRegisterReportHtml,
     getPoOrderRegisterReportExcel,
 } from "../../../api/transactions";
 
@@ -348,12 +349,7 @@ export default function PoOrderRegisterPage() {
     const companyCode = user?.company_code ?? "";
     const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
     const [error, setError] = useState("");
-    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
-    const reportWindowRef = useRef<Window | null>(null);
 
     const [fromDateIso, setFromDateIso] = useState("");
     const [toDateIso, setToDateIso] = useState("");
@@ -373,6 +369,13 @@ export default function PoOrderRegisterPage() {
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
 
+    // ── Report preview dialog state (matches PurchaseGRNPage pattern) ──────
+    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+    const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+    const [reportPreviewError, setReportPreviewError] = useState("");
+    const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+    const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
+
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
     const buildRequestParams = (): PoOrderRegisterParams => ({
@@ -387,40 +390,56 @@ export default function PoOrderRegisterPage() {
         with_so_ref: reportCriteria === "SO_REF_ONLY" ? "Y" : "N",
     });
 
-    const fetchReport = useCallback(async (params: PoOrderRegisterParams) => {
-        setLoading(true);
-        setError("");
+    // Revoke the blob URL whenever it changes or the component unmounts, so we
+    // don't leak memory across repeated report generations.
+    useEffect(() => {
+        return () => {
+            if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+        };
+    }, [reportPreviewUrl]);
+
+       const handleGenerateReport = useCallback(async () => {
+        if (!dateRangeValid) return;
+
+        const params = buildRequestParams();
         lastRequestRef.current = params;
 
-        const newTab = window.open("", "_blank");
-        if (!newTab) {
-            setLoading(false);
-            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-            return;
-        }
-        newTab.document.write("<title>PO Order Register</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
+        if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+        setReportPreviewUrl("");
+        setReportPreviewError("");
+        setReportPreviewOpen(true);
+        setReportPreviewLoading(true);
+        setError("");
 
         try {
             const html = await getPoOrderRegisterReportHtml(params);
-            newTab.document.open();
-            newTab.document.write(html);
-            newTab.document.close();
-            reportWindowRef.current = newTab;
-            setHasGeneratedReport(true);
-            setLastGeneratedAt(new Date());
+            const blob = new Blob([html], { type: "text/html" });
+            const url = window.URL.createObjectURL(blob);
+            setReportPreviewUrl(url);
         } catch (err: any) {
-            newTab.document.open();
-            newTab.document.write("<title>PO Order Register</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
-            newTab.document.close();
-            setError(err?.message ?? "Failed to load report. Please try again.");
+            setReportPreviewError(err?.message ?? "Failed to load report. Please try again.");
         } finally {
-            setLoading(false);
+            setReportPreviewLoading(false);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
+    const closeReportPreview = () => {
+        if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+        setReportPreviewOpen(false);
+        setReportPreviewUrl("");
+        setReportPreviewError("");
+    };
 
-    const handleGenerateReport = () => {
-        if (!dateRangeValid) return;
-        fetchReport(buildRequestParams());
+    const handleReportPreviewExcel = async () => {
+        if (!lastRequestRef.current) return;
+        setReportPreviewExporting(true);
+        try {
+            await getPoOrderRegisterReportExcel(lastRequestRef.current);
+        } catch (exportError: any) {
+            setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
+        } finally {
+            setReportPreviewExporting(false);
+        }
     };
 
     const handleReset = () => {
@@ -429,32 +448,7 @@ export default function PoOrderRegisterPage() {
         setPoNumber("");
         setProdCodeFrom("");
         setReportCriteria("ALL");
-        setError(""); setHasGeneratedReport(false); setLastGeneratedAt(null);
-    };
-
-    const handlePrint = () => {
-        if (reportWindowRef.current && !reportWindowRef.current.closed) {
-            reportWindowRef.current.focus();
-            reportWindowRef.current.print();
-        } else {
-            setError("No open report tab to print. Generate the report again.");
-        }
-    };
-
-    const handleExcel = async () => {
-        if (!lastRequestRef.current) {
-            setError("Generate the report at least once before exporting to Excel.");
-            return;
-        }
-        setExporting(true);
-        try {
-            await getPoOrderRegisterReportExcel(lastRequestRef.current);
-        } catch (err) {
-            console.error("Excel export error:", err);
-            alert("Excel export failed. Please try again.");
-        } finally {
-            setExporting(false);
-        }
+        setError("");
     };
 
     const BG = "#EEF5FD";
@@ -474,11 +468,6 @@ export default function PoOrderRegisterPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                         <FileText size={17} color="#185FA5" />
                         <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>PO Order Register</span>
-                        {hasGeneratedReport && (
-                            <span style={{ fontSize: 10, background: "#d1fae5", color: "#065f46", padding: "2px 10px", borderRadius: 12, fontWeight: 500 }}>
-                                Report Generated
-                            </span>
-                        )}
                     </div>
 
                     {error && (
@@ -557,33 +546,20 @@ export default function PoOrderRegisterPage() {
                                     onChange={(value: string, row: any) => {
                                         setAcCode(value);
                                         setAcName(text(getLookupValue(row || {}, "ac_name")));
-                                        setPoNumber("");
                                     }}
                                 />
                             </div>
 
                             <div style={{ minWidth: 0 }}>
-                                <LookupField
-                                    label="PO Number"
-                                    value={poNumber}
-                                    displayValue={poNumber}
-                                    columns={[
-                                        { field: "doc_no", header: "PO No" },
-                                        { field: "doc_date", header: "Date" },
-                                        { field: "ac_name", header: "Supplier" },
-                                    ]}
-                                    valueField="doc_no"
-                                    displayFields={["doc_no"]}
-                                    loadOptions={() =>
-                                        getDynamicLookup({
-                                            parameter: "Account_PORPT_DOCNO_BY_SUPPLIER",
-                                            code1: companyCode,
-                                            code2: acCode,
-                                        })
-                                    }
-                                    disabled={!acCode}
-                                    onChange={(value: string) => setPoNumber(value)}
-                                />
+                                <FloatLabel label="PO Number" bgColor={BG}>
+                                    <input
+                                        type="text"
+                                        value={poNumber}
+                                        onChange={(e) => setPoNumber(e.target.value)}
+                                        placeholder="number"
+                                        style={inputStyle}
+                                    />
+                                </FloatLabel>
                             </div>
                         </div>
 
@@ -695,53 +671,39 @@ export default function PoOrderRegisterPage() {
                         Leave a field on "All" to include every value for that filter.
                     </div>
 
-                    {/* Status bar */}
-                    {hasGeneratedReport && (
-                        <div style={{ marginTop: 10, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>✅</span>
-                                <span style={{ fontSize: 12, color: "#065f46" }}>Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}</span>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (reportWindowRef.current && !reportWindowRef.current.closed) reportWindowRef.current.focus();
-                                    else setError("Report tab is closed. Please generate again.");
-                                }}
-                                style={{ padding: "4px 12px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-                            >
-                                <Eye size={12} /> Open Report
-                            </button>
-                        </div>
-                    )}
-
                     {/* Action bar */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button className="action-btn-excel" onClick={handleReset} disabled={loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: loading ? 0.6 : 1 }}>
+                        <button className="action-btn-excel" onClick={handleReset} disabled={reportPreviewLoading}
+                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: reportPreviewLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: reportPreviewLoading ? 0.6 : 1 }}>
                             <RotateCcw size={13} /> Reset
                         </button>
-                        <button className="action-btn-excel" onClick={handlePrint} disabled={!hasGeneratedReport || loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading) ? 0.5 : 1 }}>
-                            <Printer size={13} /> Print
-                        </button>
-                        <button className="action-btn-excel" onClick={handleExcel} disabled={!hasGeneratedReport || loading || exporting}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1 }}>
-                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
-                        </button>
-                        <button className="action-btn-primary" onClick={handleGenerateReport} disabled={loading || !dateRangeValid}
-                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5", cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
-                            {loading ? (
+                        <button className="action-btn-primary" onClick={handleGenerateReport} disabled={reportPreviewLoading || !dateRangeValid}
+                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: (reportPreviewLoading || !dateRangeValid) ? "#94a3b8" : "#185FA5", cursor: (reportPreviewLoading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
+                            {reportPreviewLoading ? (
                                 <>
-                                    <span style={{ width: 12, height: 12, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                                    <Loader2 size={13} className="animate-spin" />
                                     Generating...
                                 </>
                             ) : (
-                                <><Eye size={13} /> Generate Report</>
+                                <><Printer size={13} /> Print / Preview</>
                             )}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {reportPreviewOpen && (
+                <ReportPreviewDialog
+                    title="PO Order Register"
+                    pdfUrl={reportPreviewUrl}
+                    error={reportPreviewError}
+                    exporting={reportPreviewExporting}
+                    onExcel={handleReportPreviewExcel}
+                    onClose={closeReportPreview}
+                    onDownload={() => {}}
+                    downloadName="PO_Order_Register_Report.html"
+                />
+            )}
         </div>
     );
 }

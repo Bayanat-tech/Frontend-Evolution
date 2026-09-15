@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Download, FileText, Loader2, Printer, X } from "lucide-react";
 // import { PurchaseOrderForm } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
@@ -12,6 +12,7 @@ import {
   getSalesAccountDetailsReportExcel,
 } from "../../../api/transactions";
 import { PurchaseOrderForm } from "./SalesOrdertypes";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 
 // The 3 report types available in the dropdown/radio group.
 type SalesPrintReportType = "SI" | "SI_TAX" | "ACCOUNT";
@@ -115,6 +116,21 @@ export function SalesInvoicePrintDialog({
   const [loadingAction, setLoadingAction] = useState<"print" | "excel" | null>(null);
   const [reportError, setReportError] = useState("");
 
+  // ── Report preview dialog state (same pattern used across the app) ─────
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
+
+  // Revoke the blob URL whenever it changes or the component unmounts, so we
+  // don't leak memory across repeated print actions.
+  useEffect(() => {
+    return () => {
+      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    };
+  }, [reportPreviewUrl]);
+
   if (!open) return null;
 
   const docNo = String(form.doc_no || (form as any).si_doc_no || "");
@@ -135,35 +151,39 @@ export function SalesInvoicePrintDialog({
     reportType === "ACCOUNT" ? getSalesAccountDetailsReportExcel :
     getSalesInvoiceReportExcel;
 
+  // ── Print now opens the in-app preview dialog instead of a new window ───
   const handlePrint = async () => {
     if (!docNo) {
       setReportError("Doc No is missing — cannot fetch the report.");
       return;
     }
     setReportError("");
-    setLoadingAction("print");
 
-    const newTab = window.open("", "_blank");
-    if (!newTab) {
-      setLoadingAction(null);
-      setReportError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-      return;
-    }
-    newTab.document.write("<title>Sales Invoice</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
+    setLoadingAction("print");
 
     try {
       const html = await getHtmlFn()(buildApiParams());
-      newTab.document.open();
-      newTab.document.write(html);
-      newTab.document.close();
+      const blob = new Blob([html], { type: "text/html" });
+      const url = window.URL.createObjectURL(blob);
+      setReportPreviewUrl(url);
     } catch (err: any) {
-      newTab.document.open();
-      newTab.document.write("<title>Sales Invoice</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
-      newTab.document.close();
-      setReportError(err?.message || "Failed to load report.");
+      setReportPreviewError(err?.message || "Failed to load report.");
     } finally {
+      setReportPreviewLoading(false);
       setLoadingAction(null);
     }
+  };
+
+  const closeReportPreview = () => {
+    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewOpen(false);
+    setReportPreviewUrl("");
+    setReportPreviewError("");
   };
 
   const handleExcel = async () => {
@@ -179,6 +199,19 @@ export function SalesInvoicePrintDialog({
       setReportError(err?.message || "Excel export failed.");
     } finally {
       setLoadingAction(null);
+    }
+  };
+
+  // Excel button inside the report-preview dialog itself (mirrors PurchaseGRNPage pattern)
+  const handleReportPreviewExcel = async () => {
+    if (!docNo) return;
+    setReportPreviewExporting(true);
+    try {
+      await getExcelFn()(buildApiParams());
+    } catch (err: any) {
+      setReportPreviewError(err?.message || "Excel export failed.");
+    } finally {
+      setReportPreviewExporting(false);
     }
   };
 
@@ -310,6 +343,19 @@ export function SalesInvoicePrintDialog({
           </button>
         </div>
       </div>
+
+      {reportPreviewOpen && (
+        <ReportPreviewDialog
+          title={`Sales Invoice ${docNo}`.trim()}
+          pdfUrl={reportPreviewUrl}
+          error={reportPreviewError}
+          exporting={reportPreviewExporting}
+          onExcel={handleReportPreviewExcel}
+          onClose={closeReportPreview}
+          onDownload={() => {}}
+          downloadName={`SalesInvoice_${docNo || "report"}.html`}
+        />
+      )}
     </div>
   );
 }
