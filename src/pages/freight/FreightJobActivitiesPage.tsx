@@ -490,7 +490,7 @@ export function FreightJobActivitiesPage({
   <span />
   <div className="freight-activity-tax-group sales flex items-center gap-1.5 shrink-0">
     <span className="font-semibold text-primary uppercase text-[10px] tracking-wider min-w-[55px]">Sales Tax:</span>
-    <div className="w-24">
+    <div className="w-28">
       <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
     </div>
     <div className="w-28">
@@ -510,7 +510,7 @@ export function FreightJobActivitiesPage({
 
   <div className="freight-activity-tax-group cost flex items-center gap-1.5 shrink-0 border-l border-border/60 pl-8">
     <span className="font-semibold text-emerald-700 uppercase text-[10px] tracking-wider min-w-[55px]">Cost Tax:</span>
-    <div className="w-24">
+    <div className="w-28">
       <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
     </div>
     <div className="w-28">

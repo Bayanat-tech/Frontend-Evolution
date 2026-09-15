@@ -85,12 +85,9 @@ export interface TPRHeader {
   DIV_NAME?: string;
   DEPT_CODE_FLOW?: string;
   DEPT_NAME?: string;
-  TX_COMPNTCAT_NAME?:  string;
+  TX_COMPNTCAT_NAME?: string;
   DISCOUNT_AMOUNT?: number;
   DISC_AMOUNT?: number;
-
-
-
 }
 
 export type TPRItem = {
@@ -135,6 +132,15 @@ export type TPRItem = {
   REMARKS?: string;
   LCURR_AFTER_DISCOUNT?: number;
   CASH_IND?: string;
+  // New PO-style fields
+  P_UOM: string;
+  QTY_PUOM: number;
+  L_UOM: string;
+  QTY_LUOM: number;
+  UPPP: number;
+  QUANTITY: number;
+  AMOUNT_BEFORE_DISC: number;
+  DISC_PRICE: number;
 };
 
 export type TPRterm = {
