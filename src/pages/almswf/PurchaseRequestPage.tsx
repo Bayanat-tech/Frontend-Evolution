@@ -358,9 +358,19 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         },
       },
       {
-        accessorKey: "Reason",
+        accessorKey: "sentback_reason",
         header: "Reason",
-        cell: ({ row }) => (row.original as any).REASON || "—",   
+        cell: ({ row }) => {
+          const r = row.original as any;
+          return (
+            r.SENTBACK_REASON ||
+            r.sentback_reason ||
+            r.REJECT_REASON ||
+            r.reject_reason ||
+            r.REASON ||
+            "—"
+          );
+        },
       },
       {
         accessorKey: "next_action_by",

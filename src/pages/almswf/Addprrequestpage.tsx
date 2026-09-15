@@ -405,10 +405,8 @@ const AddPRRequestPage = ({
   const itemsLoadedRef = useRef(false);
   const lastLoadedRequestRef = useRef<string | undefined>(undefined);
 
-  // ─── FIX: Track auto-added suppliers (items → terms sync) ───
   const autoAddedSuppliersRef = useRef<Set<string>>(new Set());
 
-  // ─── FIX: Reset itemsLoadedRef jab bhi requestNumber change ho ───
   useEffect(() => {
     if (lastLoadedRequestRef.current !== requestNumber) {
       itemsLoadedRef.current = false;
@@ -747,7 +745,6 @@ const AddPRRequestPage = ({
     itemsLoadedRef.current = true;
   }, [itemList, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
 
-  // ─── FIX: userApprovalLevel change hone ke baad items ko dobara recalc karo ───
   useEffect(() => {
     if (userApprovalLevel < 2) return;
     setItems((prev) => {
@@ -779,7 +776,6 @@ const AddPRRequestPage = ({
     setTerms(enriched);
   }, [termsList, supplierList, isViewMode, requestNumber]);
 
-  // ─── FIX: Details tab ke suppliers ko Terms tab mein auto-sync karo ───
   useEffect(() => {
     if (userApprovalLevel < 6) return;
     if (items.length === 0) return;
@@ -860,10 +856,21 @@ const AddPRRequestPage = ({
   const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
   const totalAmountBeforeDisc = calculateAmountBeforeDisc(items);
-  const totalQtyPuom = items.reduce((sum, item) => sum + num(item.QTY_PUOM), 0);
-  const totalQtyLuom = items.reduce((sum, item) => sum + num(item.QTY_LUOM), 0);
-  const [headerExpanded, setHeaderExpanded] = useState(true);
 
+  // ─── FIX: Footer Qty level-aware (Level 2+ → approved qty) ───
+  const isApprovedLevel = userApprovalLevel >= 2;
+  const totalQtyPuom = items.reduce(
+    (sum, item) =>
+      sum + (isApprovedLevel ? num((item as any).APPROVED_QTY_PUOM) : num(item.QTY_PUOM)),
+    0
+  );
+  const totalQtyLuom = items.reduce(
+    (sum, item) =>
+      sum + (isApprovedLevel ? num((item as any).APPROVED_QTY_LUOM) : num(item.QTY_LUOM)),
+    0
+  );
+
+  const [headerExpanded, setHeaderExpanded] = useState(true);
   const [discountScope, setDiscountScope] = useState<"ITEM" | "PO">("ITEM");
 
   const totalDiscAmount = items.reduce((sum, item) =>
@@ -1254,19 +1261,32 @@ const AddPRRequestPage = ({
     enabled: sendBackOpen && !!requestNumber,
   });
 
+  // ─── FIX: Send Back options — lowercase/uppercase dono handle ───
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
+
     if (header.USER_ID) {
-      opts.push({ loginid: String(header.USER_ID), label: `${header.USER_ID} (Creator)`, level: 0 });
+      const creatorName = (header as any).CREATE_USER_NAME || "";
+      opts.push({
+        loginid: String(header.USER_ID),
+        label: creatorName ? `${creatorName}` : String(header.USER_ID),
+        level: 0,
+      });
     }
+
     const seen = new Set(opts.map((o) => o.loginid));
+
     sendBackTargets.forEach((row: any) => {
-      const lg = String(row.LOGINID || "");
+      const lg = String(row.loginid ?? row.LOGINID ?? "");
+      const empName = String(row.emp_name ?? row.EMP_NAME ?? "").trim();
+      const level = Number(row.flow_level_running ?? row.FLOW_LEVEL_RUNNING ?? 0) || 0;
+
       if (lg && !seen.has(lg) && lg !== loginid) {
         seen.add(lg);
-        opts.push({ loginid: lg, label: `${lg} (Level ${row.FLOW_LEVEL_RUNNING})`, level: Number(row.FLOW_LEVEL_RUNNING) || 0 });
+        opts.push({ loginid: lg, label: empName || lg, level });
       }
     });
+
     return opts;
   }, [header.USER_ID, sendBackTargets, loginid]);
 
@@ -1359,7 +1379,6 @@ const AddPRRequestPage = ({
       const item = { ...updated[index], [field]: value };
 
       if (field === "ITEM_CODE" && typeof value === 'string') {
-        // ─── FIX: Duplicate product check ───
         const trimmed = value.trim().toUpperCase();
         if (trimmed) {
           const isDuplicate = prev.some(
@@ -1369,7 +1388,7 @@ const AddPRRequestPage = ({
           );
           if (isDuplicate) {
             toast.warning("This product is already added in another line.", 4000);
-            return prev; // reject the change
+            return prev;
           }
         }
 
@@ -1498,7 +1517,6 @@ const AddPRRequestPage = ({
   const canEditRequested = !disabled && userApprovalLevel < 2;
   const canEditApproved = !disabled && userApprovalLevel >= 2;
 
-  // ─── FIX: Helper to get available product options (excluding already selected) ───
   const getAvailableProducts = (currentItemId: string) => {
     const selectedCodes = new Set(
       items
@@ -1582,7 +1600,6 @@ const AddPRRequestPage = ({
             <div className="flex min-w-0 flex-col gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-              {/* Header Section */}
               <div className="flex-none rounded-md border bg-card">
                 <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                   <div>
@@ -2030,7 +2047,6 @@ const AddPRRequestPage = ({
                 )}
               </div>
 
-              {/* Tabs Container */}
               <div className="flex min-w-0 flex-col rounded-md border bg-card">
                 <div className="flex flex-none items-center border-b bg-secondary/40">
                   <button
@@ -2074,7 +2090,6 @@ const AddPRRequestPage = ({
                   </div>
                 </div>
 
-                {/* Items Tab Content */}
                 {activeTab === "items" && (
                   <div className="flex min-w-0 flex-col">
                     <div
@@ -2211,7 +2226,6 @@ const AddPRRequestPage = ({
                                     columns={productColumns}
                                     valueField="PROD_CODE"
                                     displayFields={["PROD_CODE", "PROD_NAME"]}
-                                    /* ─── FIX: Exclude already-selected products from dropdown ─── */
                                     loadOptions={async () => {
                                       const allProducts = await almsCommonSelect({
                                         parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST",
@@ -2232,7 +2246,6 @@ const AddPRRequestPage = ({
                                         setItems(prev => prev.map(it => {
                                           if ((it as any).id !== itemId) return it;
 
-                                          // ─── FIX: Duplicate check on direct set ───
                                           const trimmed = String(val ?? "").trim().toUpperCase();
                                           if (trimmed) {
                                             const isDuplicate = prev.some(
@@ -2242,7 +2255,7 @@ const AddPRRequestPage = ({
                                             );
                                             if (isDuplicate) {
                                               toast.warning("This product is already added in another line.", 4000);
-                                              return it; // keep as-is
+                                              return it;
                                             }
                                           }
 
@@ -2499,15 +2512,29 @@ const AddPRRequestPage = ({
                       </table>
                     </div>
 
-                    {/* Summary Footer */}
+                    {/* ─── FIX: Summary Footer with level-aware Qty labels ─── */}
                     <div className="sticky bottom-0 z-40 grid grid-cols-2 gap-x-8 gap-y-1 border-t bg-card px-3 py-2 text-sm shadow-[0_-2px_8px_rgba(0,0,0,0.08)] max-md:grid-cols-1">
                       <div className="flex items-center justify-end gap-8">
-                        <span className="text-muted-foreground">Total Qty (Puom)</span>
-                        <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
+                        <span className="text-muted-foreground">
+                          Total Qty (Puom) {isApprovedLevel ? "Approved" : ""}
+                        </span>
+                        <strong>
+                          {totalQtyPuom.toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 3,
+                          })}
+                        </strong>
                       </div>
                       <div className="flex items-center justify-end gap-8">
-                        <span className="text-muted-foreground">Total Qty (Luom)</span>
-                        <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
+                        <span className="text-muted-foreground">
+                          Total Qty (Luom) {isApprovedLevel ? "Approved" : ""}
+                        </span>
+                        <strong>
+                          {totalQtyLuom.toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 3,
+                          })}
+                        </strong>
                       </div>
                       <div className="flex items-center justify-end gap-8">
                         <span className="text-muted-foreground">Base Total Amount</span>
@@ -2533,7 +2560,6 @@ const AddPRRequestPage = ({
                   </div>
                 )}
 
-                {/* Terms Tab Content */}
                 {activeTab === "terms" && shouldShowTermsTab() && (
                   <div className="commercial-lines-scroll min-w-0 overflow-x-auto overflow-y-visible">
                     <div className="relative">
@@ -2617,7 +2643,6 @@ const AddPRRequestPage = ({
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex-none flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
           {!effectiveViewMode && !(docType !== "PR") && (
             <div className="flex items-center gap-2">
@@ -2684,7 +2709,6 @@ const AddPRRequestPage = ({
         </div>
       </section>
 
-      {/* Attachments */}
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
@@ -2697,7 +2721,6 @@ const AddPRRequestPage = ({
         flowLevel={Number(header.FLOW_LEVEL_RUNNING) || 1}
       />
 
-      {/* Reject Dialog */}
       <Dialog
         open={rejectOpen}
         title="Reject Request"
@@ -2723,7 +2746,6 @@ const AddPRRequestPage = ({
         </div>
       </Dialog>
 
-      {/* Send Back Dialog */}
       <Dialog
         open={sendBackOpen}
         title="Send Back Request"
