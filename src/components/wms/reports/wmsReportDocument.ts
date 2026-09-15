@@ -1,14 +1,17 @@
 import type { TDocumentDefinitions, Content, StyleDictionary } from "pdfmake/interfaces";
-import type { FreightReportDocument } from "./reportPreviewStore";
+import { api } from "../../../api/client";
+import type { WmsReportDocument } from "./wmsReportPreviewStore";
 
 export type ReportIdentity = { title: string; company: string; user: string; generatedAt: string };
-export const reportFilename = (title: string) => title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim() || "Freight report";
+export const reportFilename = (title: string) => title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").trim() || "WMS report";
 
+// Duplicated from Freight's report-document pipeline (not imported) so this
+// module has no dependency on the Freight feature folder. Generic HTML
+// cleanup — nothing here is Freight-specific.
 export function prepareReportHtml(html: string, browserWindow: Window = window) {
   const parser = new (browserWindow as Window & typeof globalThis).DOMParser();
   const doc = parser.parseFromString(html, "text/html");
   doc.querySelectorAll("script,style,link,button,iframe,object,.viewerbar,.print-toolbar,.logo,.footer").forEach((el) => el.remove());
-  // Page numbering is supplied by PDFMake, not the old HTML's fixed '1 of 1'.
   doc.querySelectorAll(".meta > div").forEach((el) => { if (/^Page:/i.test(el.textContent?.trim() || "")) el.remove(); });
   doc.querySelectorAll("img").forEach((el) => el.remove());
   doc.querySelectorAll("*").forEach((el) => {
@@ -27,13 +30,42 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
     children.forEach((child) => { row.insertCell().append(child); });
     grid.replaceWith(table);
   }
+
+  // Numeric-looking column detection: a column whose sampled body cells are
+  // mostly digits/commas/decimals/parens gets a narrow fixed width sized for
+  // a 6-digit number, instead of sharing width equally with text columns
+  // (e.g. a Product/description column) — previously every column got the
+  // same "*" share regardless of content, squeezing long labels.
+  const NUMERIC_COL_WIDTH = 44; // pt — fits "999,999" at this report family's font sizes
+  const NUMERIC_SAMPLE_SIZE = 8;
+  const isNumericText = (t: string) => /^-?[\d,().]+$/.test(t);
+
   let maxColumns = 0;
   doc.querySelectorAll("table").forEach((table) => {
     const columns = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
     const details = table.classList.contains("report-details-table");
     if (!details) maxColumns = Math.max(maxColumns, columns);
+
+    const bodyRows = Array.from(table.tBodies[0]?.rows || table.rows).filter(
+      (row) => !row.querySelector("th"),
+    );
+    const widths: Array<string | number> = Array.from({ length: columns }, (_, colIndex) => {
+      let numericCount = 0;
+      let sampleCount = 0;
+      for (const row of bodyRows) {
+        const cell = row.cells[colIndex];
+        const text = cell?.textContent?.trim() || "";
+        if (!text) continue;
+        sampleCount++;
+        if (isNumericText(text)) numericCount++;
+        if (sampleCount >= NUMERIC_SAMPLE_SIZE) break;
+      }
+      const isNumericColumn = sampleCount > 0 && numericCount / sampleCount >= 0.6;
+      return isNumericColumn ? NUMERIC_COL_WIDTH : "*";
+    });
+
     table.setAttribute("data-pdfmake", JSON.stringify({
-      widths: Array(columns).fill("*"),
+      widths: details ? Array(columns).fill("*") : widths,
       headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
       layout: details ? "noBorders" : "lightHorizontalLines",
     }));
@@ -42,11 +74,10 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
   return { doc, html: doc.body.innerHTML, maxColumns };
 }
 
-export async function buildFreightPdfDefinition(report: FreightReportDocument, identity: ReportIdentity, browserWindow: Window = window): Promise<TDocumentDefinitions> {
+export async function buildWmsPdfDefinition(report: WmsReportDocument, identity: ReportIdentity, browserWindow: Window = window): Promise<TDocumentDefinitions> {
   const { default: htmlToPdfmake } = await import("html-to-pdfmake");
   const prepared = prepareReportHtml(report.html, browserWindow);
   const content = htmlToPdfmake(prepared.html, {
-    // html-to-pdfmake supports browsers; its declarations only name JSDOM.
     window: browserWindow as unknown as import("jsdom").DOMWindow,
     defaultStyles: {
       h1: { fontSize: 14, bold: true, color: "#00378c", marginBottom: 6 },
@@ -68,7 +99,7 @@ export async function buildFreightPdfDefinition(report: FreightReportDocument, i
     empty: { margin: [0, 12, 0, 12], alignment: "center", color: "#64748b" },
   };
   return {
-    info: { title: identity.title, author: identity.company, subject: "Freight report" },
+    info: { title: identity.title, author: identity.company, subject: "WMS report" },
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation: report.orientation || (prepared.maxColumns > 7 ? "landscape" : "portrait"),
     pageMargins: [28, 48, 28, 32],
@@ -106,34 +137,35 @@ async function fontVfs() {
   return fontPromise;
 }
 
-export async function createFreightPdf(report: FreightReportDocument, identity: ReportIdentity) {
+export async function createWmsPdf(report: WmsReportDocument, identity: ReportIdentity) {
   const [{ default: pdfMake }, definition, vfs] = await Promise.all([
-    import("pdfmake/build/pdfmake.js"), buildFreightPdfDefinition(report, identity), fontVfs(),
+    import("pdfmake/build/pdfmake"), buildWmsPdfDefinition(report, identity), fontVfs(),
   ]);
-  const fonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
+  type ReportFonts = { Inter: { normal: string; bold: string; italics: string; bolditalics: string } };
+  const fonts: ReportFonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
   return new Promise<Blob>((resolve, reject) => {
-    try { pdfMake.createPdf(definition, undefined, fonts, vfs).getBlob(resolve); }
+    try {
+      const createPdf = pdfMake.createPdf as unknown as (
+        definition: TDocumentDefinitions,
+        tableLayouts?: unknown,
+        fonts?: ReportFonts,
+        vfs?: Record<string, string>,
+      ) => { getBlob: (callback: (blob: Blob) => void) => void };
+      createPdf(definition, undefined, fonts, vfs).getBlob(resolve);
+    }
     catch (error) { reject(error); }
   });
 }
 
-export async function downloadFreightExcel(report: FreightReportDocument, identity: ReportIdentity) {
-  const XLSX = await import("xlsx");
-  const { doc } = prepareReportHtml(report.html);
-  const workbook = XLSX.utils.book_new();
-  const metadata = XLSX.utils.aoa_to_sheet([
-    [identity.title], ["Company", identity.company], ["Generated by", identity.user], ["Generated at", identity.generatedAt], [],
-    ...Array.from(doc.querySelectorAll(".params,.meta,.top,.top-row,.party-block,.info-grid,.field,.totals,.signature,.report-details-table")).map((element) => [element.textContent?.trim() || ""]),
-  ]);
-  metadata["!cols"] = [{ wch: 30 }, { wch: 65 }];
-  XLSX.utils.book_append_sheet(workbook, metadata, "Report details");
-  Array.from(doc.querySelectorAll("table")).filter((table) => !table.classList.contains("report-details-table")).forEach((table, index) => {
-    table.querySelectorAll("td.num,td.right").forEach((cell) => {
-      const value = cell.textContent?.trim().replace(/,/g, "") || "";
-      if (/^-?\d+(\.\d+)?$/.test(value)) { cell.setAttribute("data-t", "n"); cell.setAttribute("data-v", value); }
-    });
-    const sheet = XLSX.utils.table_to_sheet(table, { raw: true });
-    XLSX.utils.book_append_sheet(workbook, sheet, `Report ${index + 1}`);
-  });
-  XLSX.writeFile(workbook, `${reportFilename(report.filename || identity.title)}.xlsx`);
+// Unlike Freight, this does NOT derive an .xlsx from the rendered HTML client-side.
+// Stock Summary already has a working backend export; this just calls it.
+export async function downloadWmsExcel(report: WmsReportDocument, identity: ReportIdentity) {
+  if (!report.excelEndpoint) throw new Error("Excel export is not available for this report.");
+  const response = await api.post(report.excelEndpoint, report.excelPayload ?? {}, { responseType: "blob" });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${reportFilename(report.filename || identity.title)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
