@@ -140,7 +140,7 @@ export function PurchaseOrderLinesTable({
   const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
   const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-  const grandTotal = totalAmount - TotalDiscAmount(rows) ;
+  const grandTotal = totalAmount - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const discountScope = form.discount_scoope || "ITEM";
@@ -435,7 +435,7 @@ export function PurchaseOrderLinesTable({
                       }}
                     />
                   </td>
-                  <td className="finance-amount-cell px-2 py-1">
+                  {/* <td className="finance-amount-cell px-2 py-1">
                     <Input
                       className="finance-money-input"
                       disabled={headerAndLineDisabled}
@@ -450,6 +450,19 @@ export function PurchaseOrderLinesTable({
                           quantity: computeQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
                         });
                       }}
+                    />
+                  </td> */}
+
+
+                  <td className="finance-amount-cell px-2 py-1">
+                    <Input
+                      className="finance-money-input"
+                      disabled
+                      readOnly
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.uppp}
                     />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">

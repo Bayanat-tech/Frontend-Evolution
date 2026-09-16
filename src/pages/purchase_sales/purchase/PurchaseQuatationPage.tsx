@@ -1,4 +1,4 @@
-import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
+import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 import { Division, getDivisions } from "../../../api/transactions";
@@ -78,6 +78,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
+  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";  
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
@@ -184,9 +185,18 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
+          {/* <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
-          </Button>
+          </Button> */}
+
+          <Button
+  size="icon"
+  variant="ghost"
+  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+  title={isViewOnlyTab ? "View" : "Edit"}
+>
+  {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+</Button>
           <Button size="icon" variant="ghost" title="Print / PDF">
             <Printer size={15} />
           </Button>
@@ -196,7 +206,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       ),
     },
-  ], []);
+  ], [isViewOnlyTab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
