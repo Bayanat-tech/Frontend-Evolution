@@ -88,25 +88,30 @@ export interface NewReportPageProps {
 }
 
 /** Props for the preview dialog */
+import type { ReactNode } from "react";
+
+/**
+ * Props for NewReportDialog.
+ * Existing callers remain compatible; headerSlot is optional for drill-down UIs.
+ */
 export interface NewReportDialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  /** Full report HTML (main or current drill level) */
   htmlContent: string | null;
   loading?: boolean;
   error?: string | null;
-  meta?: {
-    companyName?: string;
-    recordCount?: number | string;
-    generatedAt?: string;
-    user?: string;
-    period?: string;
-    principal?: string;
-    status?: string;
-    [key: string]: string | number | undefined;
-  };
+  /** Optional metadata shown by some hosts; unused by core dialog */
+  meta?: Record<string, unknown> | null;
   onExportExcel?: () => void;
   exportingExcel?: boolean;
   onOpenInNewWindow?: () => void;
   onDownloadPdf?: () => void;
+  /**
+   * Optional UI above the toolbar (breadcrumbs, drill loading/error).
+   * Does not affect page measurement or print layout.
+   */
+  headerSlot?: ReactNode;
 }
+
