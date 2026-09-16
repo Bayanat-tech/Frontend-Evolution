@@ -574,8 +574,8 @@ const AddPRRequestPage = ({
       loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: ""
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   const { data: itemList = [] } = useQuery<TPRItem[]>({
@@ -585,8 +585,8 @@ const AddPRRequestPage = ({
       loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: ""
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   const { data: termsList = [] } = useQuery<any[]>({
@@ -596,8 +596,8 @@ const AddPRRequestPage = ({
       loginid, code1: companyCode, code2: requestNumber || "", code3: "", code4: "",
     }),
     enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 
   const { data: flowDetailData } = useQuery<LookupItem[]>({
@@ -677,7 +677,6 @@ const AddPRRequestPage = ({
     currencyList, taxCodes, taxComponentList, isEditMode, isViewMode,
   ]);
 
-  // ─── Item load effect (Level-aware recalc) ───
   useEffect(() => {
     if (itemsLoadedRef.current) return;
 
@@ -857,7 +856,6 @@ const AddPRRequestPage = ({
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
   const totalAmountBeforeDisc = calculateAmountBeforeDisc(items);
 
-  // ─── FIX: Footer Qty level-aware (Level 2+ → approved qty) ───
   const isApprovedLevel = userApprovalLevel >= 2;
   const totalQtyPuom = items.reduce(
     (sum, item) =>
@@ -1132,6 +1130,7 @@ const AddPRRequestPage = ({
 
   const [savingAction, setSavingAction] = useState<string | null>(null);
 
+  // ✅ FIX: Draft ho ya Submit — dono pe dialog band, parent list refresh karega
   const runAction = async (
     status: string,
     successMsg: string,
@@ -1155,25 +1154,8 @@ const AddPRRequestPage = ({
 
       toast.success(successMsg, 4000);
 
-      queryClient.invalidateQueries({ queryKey: ["pr-header"] });
-      queryClient.invalidateQueries({ queryKey: ["pr-item-list"] });
-      queryClient.invalidateQueries({ queryKey: ["pr-terms"] });
-
-      if (status === "SAVEASDRAFT") {
-        const newRequestNumber =
-          result?.data?.request_number ||
-          result?.request_number ||
-          result?.data?.REQUEST_NUMBER ||
-          result?.REQUEST_NUMBER;
-        if (newRequestNumber) {
-          itemsLoadedRef.current = false;
-          lastLoadedRequestRef.current = undefined;
-          setRequestNumber(String(newRequestNumber));
-        }
-        setSavingAction(null);
-        return;
-      }
-
+      // ✅ Draft aur Submit dono pe: dialog band karo, parent active tab refetch karega
+      setSavingAction(null);
       onClose(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed", 5000);
@@ -1181,7 +1163,6 @@ const AddPRRequestPage = ({
         type: "error",
         message: err instanceof Error ? err.message : "Action failed",
       });
-    } finally {
       setSavingAction(null);
     }
   };
@@ -1234,10 +1215,6 @@ const AddPRRequestPage = ({
 
       toast.success("PR approved successfully!", 4000);
 
-      queryClient.invalidateQueries({ queryKey: ["pr-header"] });
-      queryClient.invalidateQueries({ queryKey: ["pr-item-list"] });
-      queryClient.invalidateQueries({ queryKey: ["pr-terms"] });
-
       onClose(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve", 5000);
@@ -1261,7 +1238,6 @@ const AddPRRequestPage = ({
     enabled: sendBackOpen && !!requestNumber,
   });
 
-  // ─── FIX: Send Back options — lowercase/uppercase dono handle ───
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
 
@@ -2512,7 +2488,6 @@ const AddPRRequestPage = ({
                       </table>
                     </div>
 
-                    {/* ─── FIX: Summary Footer with level-aware Qty labels ─── */}
                     <div className="sticky bottom-0 z-40 grid grid-cols-2 gap-x-8 gap-y-1 border-t bg-card px-3 py-2 text-sm shadow-[0_-2px_8px_rgba(0,0,0,0.08)] max-md:grid-cols-1">
                       <div className="flex items-center justify-end gap-8">
                         <span className="text-muted-foreground">
