@@ -673,6 +673,8 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         job_no_to: "",
         dept_code_from: clearAllSentinel(filters.dept_code_from),
         dept_code_to: "",
+        doc_no_from: clearAllSentinel(filters.doc_no_from),
+        doc_no_to: "",
       };
       const response = await api.post<{ success?: boolean; data?: LookupRow[]; totalCount?: number }>("/api/freight/reports/run", payload);
       if (response.data.success === false) throw new Error("Unable to generate report.");
@@ -933,18 +935,29 @@ function AdvancedReportFilters({
               />
             </div>
           ) : (
-            <RangeLookup
-              label={config.title === "RFQ List" ? "RFQ No" : "Enquiry No"}
-              companyCode={companyCode}
-              parameter={config.title === "RFQ List" ? "freight_rfq_report" : "freight_approved_enquiry"}
-              valueField="ENQUIRY_NR"
-              displayFields={["ENQUIRY_NR", "PRIN_CODE"]}
-              fromKey="doc_no_from"
-              toKey="doc_no_to"
-              filters={filters}
-              setFilters={setFilters}
-            />
-          ))}
+          //   <RangeLookup
+          //     label={config.title === "RFQ List" ? "RFQ No" : "Enquiry No"}
+          //     companyCode={companyCode}
+          //     parameter={config.title === "RFQ List" ? "freight_rfq_report" : "freight_approved_enquiry"}
+          //     valueField="ENQUIRY_NR"
+          //     displayFields={["ENQUIRY_NR", "PRIN_CODE"]}
+          //     fromKey="doc_no_from"
+          //     toKey="doc_no_to"
+          //     filters={filters}
+          //     setFilters={setFilters}
+          //   />
+          // ))}
+
+          <LookupMultiFilter
+            label={config.title === "RFQ List" ? "RFQ No" : "Enquiry No"}
+            companyCode={companyCode}
+            parameter={config.title === "RFQ List" ? "freight_rfq_report" : "freight_approved_enquiry"}
+            valueField="ENQUIRY_NR"
+            displayFields={["ENQUIRY_NR", "PRIN_CODE"]}
+            value={filters.doc_no_from}
+            onChange={(value) => setFilter(setFilters, "doc_no_from", value)}
+           />
+         ))}
         {items.includes("departmentRange") && (
           <LookupMultiFilter
             label="Department"
