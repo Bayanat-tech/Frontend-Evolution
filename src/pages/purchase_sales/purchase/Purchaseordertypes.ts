@@ -272,6 +272,8 @@ export interface PurchaseOrderForm {
   inv_date?: string;
   tx_compnt_1_expmt?: string;
   tx_compnt_perc_1?: number;
+  pinvoice_total_amount?: number;
+  discount_scoope: "PO" | "ITEM";
 
 }
 

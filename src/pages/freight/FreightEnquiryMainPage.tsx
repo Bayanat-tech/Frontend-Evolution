@@ -2870,7 +2870,7 @@ function buildFreightPrintHtml(header: EnquiryHeader, details: EnquiryDetail[], 
         <style>
           @page { margin: 14mm; }
           * { box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+          body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; color: #1f2937; padding: 20px; }
           .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
           h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
           .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
@@ -2894,7 +2894,7 @@ function buildFreightPrintHtml(header: EnquiryHeader, details: EnquiryDetail[], 
             margin: -20px -20px 20px -20px;
           }
           .print-toolbar button {
-            font-family: Arial, sans-serif; font-size: 12px; font-weight: 600;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600;
             padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1;
           }
           .print-toolbar .btn-print { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }

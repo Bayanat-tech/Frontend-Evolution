@@ -607,7 +607,7 @@ export function JobProductionOrderEditor({
 
                 {activeLineTab === "lines" && (
                   <div className="grid gap-3 p-2">
-                    <PurchaseOrderHeaderForm
+                    {/* <PurchaseOrderHeaderForm
                       form={form}
                       docType={PO_DOC_TYPE.FGP}
                       setForm={setForm}
@@ -617,9 +617,9 @@ export function JobProductionOrderEditor({
                       editMode={editMode}
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
-                    />
+                    /> */}
 
-                    <PurchaseOrderLinesTable
+                    {/* <PurchaseOrderLinesTable
                       rows={rows}
                       form={form}
                       ex_rate={form.ex_rate}
@@ -630,7 +630,7 @@ export function JobProductionOrderEditor({
                       discAmt={form.disc_price}
                       companyCode={user?.company_code}
                       loginid={user?.loginid || user?.username}
-                    />
+                    /> */}
 
                     {/* Pass ex_rate as optional; JobconsumLinesTable accepts it but doesn't require it */}
                     <JobconsumLinesTable
