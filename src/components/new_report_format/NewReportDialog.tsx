@@ -661,11 +661,11 @@ export function NewReportDialog({
             background: "#111827",
           }}
         >
-          {/* Collapsible page navigator */}
+          {/* Collapsible page navigator — real mini previews of each page */}
           <div
             style={{
-              width: navOpen ? 120 : 0,
-              minWidth: navOpen ? 120 : 0,
+              width: navOpen ? (orientation === "portrait" ? 100 : 132) : 0,
+              minWidth: navOpen ? (orientation === "portrait" ? 100 : 132) : 0,
               background: "#1f2937",
               borderRight: navOpen ? "1px solid #374151" : "none",
               padding: navOpen ? "12px 8px" : 0,
@@ -683,74 +683,120 @@ export function NewReportDialog({
               thumbPages.map((n, idx) => {
                 const prev = thumbPages[idx - 1];
                 const showGap = prev != null && n - prev > 1;
+                // Thumbnail sheet size (fits nav column)
+                const thumbW = orientation === "portrait" ? 72 : 108;
+                const thumbH = orientation === "portrait" ? 102 : 76;
+                // Scale full A4 page into the thumb
+                const scale = thumbW / pageW;
+                const offsetY = -(n - 1) * contentH;
+                const isLast = n === totalPages;
+                const remaining =
+                  contentHeight > 0
+                    ? Math.max(contentHeight - (n - 1) * contentH, 0)
+                    : contentH;
+                const sliceH = isLast
+                  ? Math.min(contentH, Math.max(remaining, 80))
+                  : contentH;
+
                 return (
-                  <React.Fragment key={n}>
+                  <React.Fragment key={`thumb-${n}-${orientation}`}>
                     {showGap && (
                       <span style={{ fontSize: 10, color: "#6b7280" }}>···</span>
                     )}
                     <button
                       type="button"
                       onClick={() => goToPage(n)}
+                      title={`Go to page ${n}`}
                       style={{
-                        width: orientation === "portrait" ? 72 : 96,
-                        height: orientation === "portrait" ? 96 : 68,
+                        width: thumbW,
+                        height: thumbH,
                         border:
                           page === n ? "2px solid #3b82f6" : "1px solid #4b5563",
                         borderRadius: 4,
                         overflow: "hidden",
-                        background: "#fff",
+                        background: "#ffffff",
                         padding: 0,
                         cursor: "pointer",
                         position: "relative",
                         flexShrink: 0,
+                        boxShadow:
+                          page === n
+                            ? "0 0 0 1px rgba(59,130,246,0.4)"
+                            : "none",
                       }}
                     >
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          background: "#f8fafc",
-                          display: "flex",
-                          flexDirection: "column",
-                          padding: 5,
-                          boxSizing: "border-box",
-                        }}
-                      >
+                      {/* Mini report preview: same HTML, clipped to this page, scaled down */}
+                      {preparedHtml && !loading ? (
                         <div
                           style={{
-                            height: 4,
-                            background: "#e2e8f0",
-                            borderRadius: 1,
-                            marginBottom: 3,
-                            width: "65%",
+                            width: pageW,
+                            height: pageH,
+                            transform: `scale(${scale})`,
+                            transformOrigin: "top left",
+                            pointerEvents: "none",
+                            overflow: "hidden",
+                            background: "#fff",
                           }}
-                        />
+                        >
+                          <div
+                            style={{
+                              width: pageW,
+                              height: Math.min(pageH, sliceH + PAGE_MARGIN_PX * 2),
+                              overflow: "hidden",
+                              boxSizing: "border-box",
+                              padding: PAGE_MARGIN_PX,
+                              background: "#fff",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: contentW,
+                                height: sliceH,
+                                overflow: "hidden",
+                                position: "relative",
+                              }}
+                            >
+                              <iframe
+                                title={`thumb-page-${n}`}
+                                srcDoc={preparedHtml}
+                                tabIndex={-1}
+                                style={{
+                                  width: contentW,
+                                  height: Math.max(contentHeight, contentH),
+                                  border: "none",
+                                  display: "block",
+                                  background: "#fff",
+                                  transform: `translateY(${offsetY}px)`,
+                                  pointerEvents: "none",
+                                }}
+                                sandbox="allow-same-origin"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
                         <div
                           style={{
-                            height: 3,
-                            background: "#e2e8f0",
-                            borderRadius: 1,
-                            marginBottom: 4,
                             width: "100%",
+                            height: "100%",
+                            background: "#f8fafc",
                           }}
                         />
-                        <div
-                          style={{
-                            flex: 1,
-                            background: "#f1f5f9",
-                            borderRadius: 1,
-                          }}
-                        />
-                      </div>
+                      )}
                       <span
                         style={{
                           position: "absolute",
-                          bottom: 3,
+                          bottom: 2,
                           left: "50%",
                           transform: "translateX(-50%)",
                           fontSize: 10,
-                          fontWeight: 600,
-                          color: page === n ? "#3b82f6" : "#94a3b8",
+                          fontWeight: 700,
+                          color: page === n ? "#3b82f6" : "#0f172a",
+                          background: "rgba(255,255,255,0.9)",
+                          padding: "0 5px",
+                          borderRadius: 3,
+                          lineHeight: "16px",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
                         }}
                       >
                         {n}
