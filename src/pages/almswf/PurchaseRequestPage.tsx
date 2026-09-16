@@ -1,4 +1,3 @@
-
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
@@ -95,7 +94,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
 
   const activeCode3 = TAB_CODE3[activeTab];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
-  // Edit is only allowed in the Pending tab
   const isPendingTab = activeCode3 === "PENDING";
 
   const prQuery = useQuery({
@@ -236,8 +234,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
       title: `${actionType === "edit" ? "Edit" : "View"} PR - ${row.REQUEST_NUMBER}`,
       data: {
         existingData: row,
-        // IMPORTANT: If action is "edit", force edit mode and disable view mode.
-        // This ensures the form is fully editable regardless of PR status.
         isEditMode: actionType === "edit",
         isViewMode: actionType === "view",
         flowCode: flowCode,
@@ -246,18 +242,24 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     });
   };
 
-  // Stable callback — prevents child re-mounts / stale closures
+  // ✅ FIX: Dialog turant close, phir active tab ki query refetch (non-blocking)
   const closePopup = useCallback((refresh?: boolean) => {
+    // 1. Dialog turant close
     setTaskPopup((prev) => ({ ...prev, open: false }));
+
+    // 2. Background mein sirf active tab refetch — data aa jayega apne aap
     if (refresh) {
-      queryClient.invalidateQueries({ queryKey: ["purchase-request-page", loginid, companyCode] });
+      const queryKey = isPoGeneratedTab
+        ? ["purchase-request-page", loginid, companyCode, activeCode3, "po"]
+        : ["purchase-request-page", loginid, companyCode, activeCode3, "pr"];
+
+      queryClient.refetchQueries({ queryKey, type: "active" });
     }
-  }, [queryClient, loginid, companyCode]);
+  }, [queryClient, loginid, companyCode, activeCode3, isPoGeneratedTab]);
 
 
   const handleSavedDraft = useCallback((savedRequestNumber: string) => {
     setTaskPopup((prev) => {
-      // Only update if it's a "new" popup that just got a number
       if (!prev.data.existingData && savedRequestNumber) {
         const syntheticRow = {
           REQUEST_NUMBER: savedRequestNumber,
@@ -388,7 +390,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         header: "Actions",
         enableSorting: false,
         cell: ({ row }) => {
-          // Same rule as AddPRRequestPage: only disable when FINAL_APPROVED = Y
           const isFinalApproved = String((row.original as any).FINAL_APPROVED || "").toUpperCase() === "Y";
           return (
             <div className="flex items-center gap-1">
@@ -400,7 +401,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
               >
                 <Eye size={15} />
               </Button>
-              {/* Edit button only visible in Pending tab and not final approved */}
               {isPendingTab && (
                 <Button
                   size="icon"
@@ -513,7 +513,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
       <div className="min-h-[650px]">
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
-          key={activeCode3}
           data={filteredRows}
           title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
           subtitle={isPoGeneratedTab ? "Generated PO List" : "Purchase Request List"}
