@@ -1,14 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { openVisaExpiryReport } from "../../../api/transactions";
+import {
+  getVisaExpiryReportHtml,
+  getVisaExpiryReportExcelDownload,
+} from "../../../api/transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +22,19 @@ interface LookupOption {
 }
 
 type EmployeeFilter = "A" | "ALL";
+
+interface Params {
+  division: string;
+  department: string;
+  section: string;
+  grade: string;
+  designation: string;
+  employee: string;
+  sponsor: string;
+  employeeFilter: EmployeeFilter;
+  visaExpiryFrom: string;
+  visaExpiryTo: string;
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -36,7 +53,7 @@ const getNextMonth = (): string => {
   ).padStart(2, "0")}`;
 };
 
-// ─── Field wrapper (same style as Freight) ────────────────────────────────────
+// ─── Field wrapper (same style as Freight/DN Summary) ─────────────────────────
 
 function Field({
   label,
@@ -157,9 +174,20 @@ export default function VisaExpiryListingPage() {
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [generating, setGenerating] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
   const [message, setMessage] = useState("Select filters and run the report.");
+
+  const lastParamsRef = React.useRef<Params | null>(null);
+
+  // ── Inline preview dialog state (no new window) ─────────────────────────
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+
+  const dateRangeValid =
+    !visaExpiryFrom || !visaExpiryTo || visaExpiryFrom <= visaExpiryTo;
 
   // ── Fetch all lookups on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -226,6 +254,71 @@ export default function VisaExpiryListingPage() {
     load();
   }, [loginId, companyCode]);
 
+  // ── Fetch report HTML → inline blob URL for the dialog iframe ───────────
+  const fetchReport = useCallback(
+    async (p: Params) => {
+      setLoading(true);
+      setError("");
+      setMessage("");
+      lastParamsRef.current = p;
+
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl("");
+      setReportHtml(null);
+      setPreviewOpen(true);
+
+      try {
+        const html = await getVisaExpiryReportHtml({
+          parameter: "Hr_Report_VISA_EXPIRY_REPORT",
+          loginid: loginId,
+          code1: companyCode,
+          code2: p.division,
+          code3: p.department,
+          code4: p.section,
+          code5: p.grade,
+          code6: p.designation,
+          code7: p.employee,
+          code8: p.sponsor,
+          code9: p.employeeFilter,
+          date1: p.visaExpiryFrom,
+          date2: p.visaExpiryTo,
+        });
+
+        setReportHtml(html);
+        setMessage("Report generated successfully.");
+      } catch (err: any) {
+        const msg = err?.message ?? "Failed to load report. Please try again.";
+        setError(msg);
+        setMessage(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loginId, companyCode, previewUrl]
+  );
+
+  // ── Keep blob URL in sync with reportHtml ───────────────────────────────
+  useEffect(() => {
+    if (!previewOpen) return;
+    if (loading) return;
+    if (reportHtml === null || reportHtml === undefined) return;
+
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    setPreviewUrl((prev) => {
+      if (prev) window.URL.revokeObjectURL(prev);
+      return url;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewOpen, reportHtml, loading]);
+
+  // ── Cleanup on unmount ──────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   // ── Clear All ─────────────────────────────────────────────────────────────
   const handleClearAll = () => {
     setDivision("");
@@ -238,46 +331,66 @@ export default function VisaExpiryListingPage() {
     setVisaExpiryFrom(getToday());
     setVisaExpiryTo(getNextMonth());
     setEmployeeFilter("A");
-    setReportError(null);
+    setError("");
     setMessage("Select filters and run the report.");
   };
 
   // ── Generate ──────────────────────────────────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!visaExpiryFrom || !visaExpiryTo) {
-      setReportError("Please select both Visa Expiry From and To dates.");
+      setError("Please select both Visa Expiry From and To dates.");
       return;
     }
+    if (!dateRangeValid) return;
 
-    setReportError(null);
-    setMessage("");
-    setGenerating(true);
+    fetchReport({
+      division,
+      department,
+      section,
+      grade,
+      designation,
+      employee,
+      sponsor,
+      employeeFilter,
+      visaExpiryFrom,
+      visaExpiryTo,
+    });
+  };
 
+  // Excel — only used by ReportPreviewDialog's internal Excel button
+  const handleExcel = async () => {
+    if (!lastParamsRef.current) return;
+    const p = lastParamsRef.current;
+    setExporting(true);
     try {
-      await openVisaExpiryReport({
+      await getVisaExpiryReportExcelDownload({
         parameter: "Hr_Report_VISA_EXPIRY_REPORT",
         loginid: loginId,
         code1: companyCode,
-        code2: division,
-        code3: department,
-        code4: section,
-        code5: grade,
-        code6: designation,
-        code7: employee,
-        code8: sponsor,
-        code9: employeeFilter,
-        date1: visaExpiryFrom,
-        date2: visaExpiryTo,
+        code2: p.division,
+        code3: p.department,
+        code4: p.section,
+        code5: p.grade,
+        code6: p.designation,
+        code7: p.employee,
+        code8: p.sponsor,
+        code9: p.employeeFilter,
+        date1: p.visaExpiryFrom,
+        date2: p.visaExpiryTo,
       });
-      setMessage("Report generated successfully.");
-    } catch (err: any) {
-      const msg = err?.message ?? "Failed to generate report. Please try again.";
-      setReportError(msg);
-      setMessage(msg);
-      console.error(err);
+    } catch (err) {
+      console.error("Excel export error:", err);
+      setError("Excel export failed. Please try again.");
     } finally {
-      setGenerating(false);
+      setExporting(false);
     }
+  };
+
+  const closePreview = () => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewOpen(false);
+    setPreviewUrl("");
+    setReportHtml(null);
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -431,20 +544,27 @@ export default function VisaExpiryListingPage() {
           </Field>
         </div>
 
+        {/* ── Date validation warning ───────────────────────────────────── */}
+        {!dateRangeValid && (
+          <p className="px-3 pb-2 text-xs text-destructive">
+            Visa Expiry From must be on or before Visa Expiry To.
+          </p>
+        )}
+
         {/* ── Actions bar (only Generate Report) ────────────────────────── */}
         <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2">
           <Button
             type="button"
             size="sm"
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={loading || !dateRangeValid}
           >
-            {generating ? (
+            {loading ? (
               <Loader2 size={15} className="animate-spin" />
             ) : (
               <Search size={15} />
             )}{" "}
-            {generating ? "Generating..." : "Generate Report"}
+            {loading ? "Generating..." : "Generate Report"}
           </Button>
         </div>
 
@@ -452,10 +572,24 @@ export default function VisaExpiryListingPage() {
         {message ? (
           <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p>
         ) : null}
-        {reportError ? (
-          <p className="px-3 pb-3 text-sm text-destructive">{reportError}</p>
+        {error && !previewOpen ? (
+          <p className="px-3 pb-3 text-sm text-destructive">{error}</p>
         ) : null}
       </div>
+
+      {/* ── Inline preview dialog (Print/Excel inside dialog only) ────── */}
+      {previewOpen && (
+        <ReportPreviewDialog
+          title="Visa Expiry Report"
+          pdfUrl={previewUrl}
+          error={error || undefined}
+          exporting={exporting}
+          onExcel={handleExcel}
+          onClose={closePreview}
+          onDownload={() => {}}
+          downloadName="visa_expiry_report.html"
+        />
+      )}
     </section>
   );
 }
