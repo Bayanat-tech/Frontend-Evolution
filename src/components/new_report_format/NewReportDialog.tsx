@@ -34,6 +34,7 @@ const PAGE_MARGIN_PX = 30;
  * - Portrait / Landscape dropdown
  * - Real page breaks based on HTML content height
  * - Toolbar page indicator + left thumbnails driven by page count
+ * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
  */
 export function NewReportDialog({
   open,
@@ -47,6 +48,7 @@ export function NewReportDialog({
   exportingExcel = false,
   onOpenInNewWindow,
   onDownloadPdf,
+  headerSlot,
 }: NewReportDialogProps) {
   const measureRef = useRef<HTMLIFrameElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -197,6 +199,16 @@ export function NewReportDialog({
     }
   }, [open]);
 
+  // When htmlContent changes (e.g. drill-down navigation), reset page + remeasure
+  useEffect(() => {
+    if (!open || !htmlContent) return;
+    setPage(1);
+    setMeasuring(true);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [htmlContent, open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -238,6 +250,21 @@ export function NewReportDialog({
         iframe.style.height = "10px";
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (doc?.body) {
+          // Suppress window.print() from report HTML while measuring (same as IframeReportRenderer)
+          const win = iframe.contentWindow as Window & { print?: () => void };
+          if (win && typeof win.print === "function") {
+            const originalPrint = win.print.bind(win);
+            win.print = () => {};
+            // Restore after a tick so accidental auto-print is blocked only on load
+            setTimeout(() => {
+              try {
+                win.print = originalPrint;
+              } catch {
+                /* ignore */
+              }
+            }, 500);
+          }
+
           const h = Math.max(
             doc.body.scrollHeight,
             (doc.querySelector(".sheet") as HTMLElement | null)?.scrollHeight ?? 0
@@ -486,6 +513,19 @@ export function NewReportDialog({
             </button>
           </div>
         </div>
+
+        {/* Optional slot: drill breadcrumbs, loading/error banners — does not affect page measure/print */}
+        {headerSlot != null && headerSlot !== false && (
+          <div
+            style={{
+              flexShrink: 0,
+              borderBottom: "1px solid #e5e7eb",
+              background: "#fff",
+            }}
+          >
+            {headerSlot}
+          </div>
+        )}
 
         {/* Dark toolbar */}
         <div
@@ -774,8 +814,8 @@ export function NewReportDialog({
                 {/*
                   One continuous report, split visually into A4 sheets.
                   Each sheet clips a slice of the same content via translateY.
-                  A single source iframe is measured; page sheets reuse srcDoc
-                  only for the visible slice count (capped).
+                  Measure iframe runs report scripts (drill postMessage) with
+                  sandbox allow-scripts allow-same-origin so DRILL_DOWN works.
                 */}
                 <iframe
                   ref={measureRef}
@@ -811,7 +851,7 @@ export function NewReportDialog({
 
                   return (
                     <div
-                      key={pageNum}
+                      key={`${pageNum}-${htmlContent?.slice(0, 32) ?? ""}`}
                       ref={(el) => {
                         pageSheetRefs.current[i] = el;
                       }}
@@ -857,6 +897,8 @@ export function NewReportDialog({
                               display: "block",
                               background: "#fff",
                               transform: `translateY(${offsetY}px)`,
+                              // pointer-events needed so drill links/buttons inside report work
+                              pointerEvents: "auto",
                             }}
                             sandbox="allow-same-origin allow-scripts"
                           />
