@@ -336,28 +336,17 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  <td className="finance-amount-cell px-2 py-1">
-                    <Input
-                      className="finance-money-input"
-                      disabled={headerAndLineDisabled}
-                      type="number"
-                      style={{ textAlign: "right" }}
-                      step="0.001"
-                      value={row.uppp}
-                      onChange={(event) => {
-                        const newUppp = Number(event.target.value || 0);
-                        const patch: Partial<PurchaseOrderLineRow> = {
-                          uppp: Number(newUppp),
-                          quantity: computeQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
-                        };
-
-                        const amount = amountBeforeDiscPrice({ ...row, ...patch });
-                        patch.disc_price = amount * (numberOrZero(row.disc_percent) / 100);
-
-                        updateRow(row.id, patch);
-                      }}
-                    />
-                  </td>
+                 <td className="finance-amount-cell px-2 py-1">
+                                        <Input
+                                            className="finance-money-input"
+                                            disabled
+                                            readOnly
+                                            type="number"
+                                            style={{ textAlign: "right" }}
+                                            step="0.001"
+                                            value={row.uppp}
+                                        />
+                                    </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
