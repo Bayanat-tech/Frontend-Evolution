@@ -13,6 +13,7 @@ import {
 import { api } from "../../../api/client";
 import { openPsReport } from "../../../components/purchase-sales/reports/psReportPreviewStore";
 import { MultiSelectField } from "../../../components/ui/MultiSelectField";
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -467,19 +468,17 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="field-row" style={row2}>
               <FloatLabel label="Date From" bgColor={BG} required>
-                <input
-                  type="date"
+                <BiscDatePicker
                   value={pending.dateFrom}
-                  onChange={(e) => setPendingField("dateFrom", e.target.value)}
-                  style={inputBaseStyle}
+                  onChange={(v) => setPendingField("dateFrom", v)}
+                  placeholder="DD / MM / YYYY"
                 />
               </FloatLabel>
               <FloatLabel label="Date To" bgColor={BG} required>
-                <input
-                  type="date"
+                <BiscDatePicker
                   value={pending.dateTo}
-                  onChange={(e) => setPendingField("dateTo", e.target.value)}
-                  style={inputBaseStyle}
+                  onChange={(v) => setPendingField("dateTo", v)}
+                  placeholder="DD / MM / YYYY"
                 />
               </FloatLabel>
             </div>

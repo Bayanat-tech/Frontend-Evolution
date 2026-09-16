@@ -6,6 +6,8 @@ import { api } from "../../../api/client";
 import { getBalanceSheetReportHtml, getBalanceSheetReportExcelDownload } from "../../../api/transactions";
 import { getDynamicLookup } from "../../../api/lookups";
 import { closeFinanceReportPreview, openFinanceReport } from "../../../components/finance/reports/financeReportPreviewStore";
+// TODO: adjust this import path to match where BiscDatePicker actually lives in your project
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -477,7 +479,11 @@ export default function BalanceSheetPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: BG, borderRadius: 8, padding: "10px 12px" }}>
                 <FloatLabel label="As On Date" required>
-                  <input type="date" value={asOnDate} onChange={(e) => setAsOnDate(e.target.value)} style={inputBaseStyle} />
+                  <BiscDatePicker
+                    value={asOnDate}
+                    onChange={setAsOnDate}
+                    placeholder="DD / MM / YYYY"
+                  />
                 </FloatLabel>
                 <FloatLabel label="Division">
                   <select value={divisionCode} onChange={(e) => setDivisionCode(e.target.value)} disabled={divisionsLoading} style={{ ...inputBaseStyle, cursor: "pointer", opacity: divisionsLoading ? 0.6 : 1 }}>
