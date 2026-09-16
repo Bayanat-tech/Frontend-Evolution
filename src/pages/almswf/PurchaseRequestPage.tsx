@@ -56,7 +56,7 @@ type TaskPopupData = {
   docNo?: string;
 };
 
-const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
+const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
@@ -638,4 +638,4 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   );
 };
 
-export default Purchase_Request_page;
+export default PurchaseRequestpage;
