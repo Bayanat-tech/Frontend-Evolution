@@ -11,6 +11,46 @@ type ApiResponse<T> = {
 
 export type VendorRow = Record<string, unknown>;
 
+export type WaybillBillingSettings = {
+  non_standard_base: "PER_WAYBILL" | "ONCE_PER_TRUCK_DAY" | null;
+  rate_city: "FARTHEST_WELL" | "HIGHEST_NON_STANDARD_RATE" | null;
+  non_standard_kms: "PAIR_ONLY" | "DIVERSION_PLUS_PAIR" | null;
+  duqm_local_charge: number | null;
+  duqm_frequency: "PER_WAYBILL" | "ONCE_PER_TRUCK_DAY" | null;
+};
+export type WaybillRevenueRow = {
+  waybill_id: number; waybill_load_number: string; destination_name: string;
+  scheduled_vehicle: string; pickup_date: string; vendor_name: string; rig_id: string;
+  city: string | null; pickup_day: string | null; group_key: string; drop_count: number;
+  trip_type: "STANDARD" | "NON_STANDARD" | "UNCLASSIFIED";
+  base_revenue: number | null; kms_revenue: number | null; kms_chargeable: number | null;
+  local_trip_revenue: number | null; total_revenue: number | null;
+  status: "READY" | "NEEDS_REVIEW" | "VERIFIED" | "MANUAL_VERIFIED";
+  source_hash: string; issues: string[]; calculation: string[];
+  processed: boolean; stale: boolean;
+  review_token?: string;
+  reviewed_by?: string; reviewed_at?: string; review_note?: string;
+};
+export async function getWaybillBilling() {
+  const { data } = await api.get<ApiResponse<{ settings: WaybillBillingSettings; rows: WaybillRevenueRow[] }>>("/api/vms/waybill-revenue");
+  assertSuccess(data, "Unable to load revenue verification");
+  if (!data.data) throw new Error("Revenue data was not returned.");
+  return data.data;
+}
+export async function processWaybillBilling() {
+  const { data } = await api.post<ApiResponse<{ count: number; updated: number }>>("/api/vms/waybill-revenue/process");
+  assertSuccess(data, "Unable to process revenue");
+  return data.data;
+}
+export async function saveWaybillBillingSettings(settings: WaybillBillingSettings) {
+  const { data } = await api.put<ApiResponse<unknown>>("/api/vms/waybill-revenue/settings", settings);
+  assertSuccess(data, "Unable to save billing settings");
+}
+export async function reviewWaybillRevenue(id: number, payload: Record<string, string>) {
+  const { data } = await api.put<ApiResponse<unknown>>(`/api/vms/waybill-revenue/${id}/review`, payload);
+  assertSuccess(data, "Unable to save revenue review");
+}
+
 export type WaybillMasterKind = "rates" | "wells" | "distances";
 export type WaybillMasterRow = Record<string, string | number | null> & { id: number };
 

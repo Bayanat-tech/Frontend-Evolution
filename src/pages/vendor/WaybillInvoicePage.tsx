@@ -16,6 +16,7 @@ import { getWaybillRequests, saveWaybillRequest, type WaybillRequest } from "../
 import { VendorPageHeader } from "./components";
 import type { Notice } from "./vendorTypes";
 import { WaybillMastersPage } from "./WaybillMastersPage";
+import { WaybillRevenuePage } from "./WaybillRevenuePage";
 
 const emptyWaybill: WaybillRequest = {
   waybill_load_number: "",
@@ -164,6 +165,7 @@ export function WaybillInvoicePage() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [progress, setProgress] = useState("");
   const [showMasters, setShowMasters] = useState(false);
+  const [showRevenue, setShowRevenue] = useState(false);
 
   const loadRows = async () => {
     setLoading(true);
@@ -235,6 +237,11 @@ export function WaybillInvoicePage() {
     }
   };
 
+  if (showRevenue) return <section className="grid gap-4">
+    <div><Button variant="outline" onClick={() => setShowRevenue(false)}>Back to waybill reader</Button></div>
+    <WaybillRevenuePage />
+  </section>;
+
   if (showMasters) return <section className="grid gap-4">
     <div><Button variant="outline" onClick={() => setShowMasters(false)}>Back to waybill reader</Button></div>
     <WaybillMastersPage />
@@ -245,7 +252,7 @@ export function WaybillInvoicePage() {
       <VendorPageHeader
         title="Waybill invoice reader"
         description="Upload a Cuetrans waybill PDF, extract the standard fields with OCR, verify them, and save the raw billing record."
-        actions={<><Button variant="outline" disabled={loading} onClick={() => setShowMasters(true)}>Manage masters</Button><Button onClick={() => inputRef.current?.click()} disabled={loading}><UploadCloud size={15} /> Read waybill PDF</Button></>}
+        actions={<><Button variant="outline" disabled={loading} onClick={() => setShowMasters(true)}>Manage masters</Button><Button variant="outline" disabled={loading} onClick={() => setShowRevenue(true)}>Revenue verification</Button><Button onClick={() => inputRef.current?.click()} disabled={loading}><UploadCloud size={15} /> Read waybill PDF</Button></>}
       />
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
       <input ref={inputRef} hidden type="file" accept="application/pdf" onChange={(event) => void handleFile(event.target.files?.[0])} />
