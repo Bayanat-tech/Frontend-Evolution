@@ -70,6 +70,11 @@ export async function saveWaybillMaster(kind: WaybillMasterKind, payload: Record
   assertSuccess(data, "Unable to save waybill master data");
 }
 
+export async function deleteWaybillMaster(kind: WaybillMasterKind, id: number) {
+  const { data } = await api.delete<ApiResponse<unknown>>(`/api/vms/waybill-masters/${kind}/${id}`);
+  assertSuccess(data, "Unable to delete waybill master entry");
+}
+
 export type WaybillRequest = {
   id?: number;
   waybill_load_number: string;

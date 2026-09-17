@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { getWaybillMaster, saveWaybillMaster, type WaybillMasterKind, type WaybillMasterRow } from "../../api/vendor";
+import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { deleteWaybillMaster, getWaybillMaster, saveWaybillMaster, type WaybillMasterKind, type WaybillMasterRow } from "../../api/vendor";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent } from "../../components/ui/Card";
-import { DataTable } from "../../components/ui/DataTable";
+import { Dialog } from "../../components/ui/Dialog";
+import { WmsDataTable } from "../../components/ui/WmsDataTable";
 import { Input } from "../../components/ui/Input";
-import { VendorPageHeader } from "./components";
 import type { Notice } from "./vendorTypes";
 
 type MasterField = { key: string; label: string; numeric?: boolean; lookup?: "city" | "well_id" };
@@ -38,15 +38,30 @@ function MasterEditor({ kind }: { kind: WaybillMasterKind }) {
   const [editingId, setEditingId] = useState<number>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<WaybillMasterRow | null>(null);
+  const [query, setQuery] = useState("");
+  const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  const fetchData = () => Promise.all([
+    getWaybillMaster(kind),
+    kind === "rates" ? Promise.resolve([]) : getWaybillMaster(kind === "wells" ? "rates" : "wells"),
+  ]);
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const [data, options] = await fetchData();
+      setRows(data); setLookups(options); setLoaded(true);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load masters." });
+    } finally { setLoading(false); }
+  };
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      getWaybillMaster(kind),
-      kind === "rates" ? Promise.resolve([]) : getWaybillMaster(kind === "wells" ? "rates" : "wells"),
-    ]).then(([data, options]) => {
-      if (active) { setRows(data); setLookups(options); }
+    fetchData().then(([data, options]) => {
+      if (active) { setRows(data); setLookups(options); setLoaded(true); }
     }).catch((error: unknown) => {
       if (active) setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load masters." });
     }).finally(() => { if (active) setLoading(false); });
@@ -61,6 +76,7 @@ function MasterEditor({ kind }: { kind: WaybillMasterKind }) {
     try {
       await saveWaybillMaster(kind, form, editingId);
       reset();
+      setFormOpen(false);
       setNotice({ type: "success", message: "Master entry saved." });
       try { setRows(await getWaybillMaster(kind)); }
       catch { setNotice({ type: "error", message: "Entry saved, but the list could not refresh. Reopen this master screen to reload it." }); }
@@ -69,12 +85,52 @@ function MasterEditor({ kind }: { kind: WaybillMasterKind }) {
     } finally { setSaving(false); }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget || saving) return;
+    setSaving(true); setNotice(null);
+    try {
+      await deleteWaybillMaster(kind, deleteTarget.id);
+      setRows((current) => current.filter((row) => row.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setNotice({ type: "success", message: "Master entry deleted." });
+      try { setRows(await getWaybillMaster(kind)); }
+      catch { setNotice({ type: "error", message: "Entry deleted, but the list could not refresh. Use Refresh to reload it." }); }
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete master entry." });
+    } finally { setSaving(false); }
+  };
+
   return <div className="grid gap-4">
     <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-    <Card><CardContent className="pt-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{definition.title}</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" disabled={loading || saving} onClick={() => void refresh()}><RefreshCw size={15} /></Button>
+        <Button title={`Add ${definition.title}`} disabled={loading || saving || !loaded} onClick={() => { reset(); setNotice(null); setFormOpen(true); }}><Plus size={15} /> Add</Button>
+      </div>
+    </div>
+    <WmsDataTable<WaybillMasterRow, unknown>
+      columns={[
+        ...definition.fields.map((field) => ({ accessorKey: field.key, header: field.label, size: 180 })),
+        ...(kind === "wells" ? [{ accessorKey: "base_kms", header: "Base Kms" }, { accessorKey: "diversion_kms", header: "Diversion Kms" }] : []),
+        { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex items-center justify-center gap-1">
+          <Button size="icon" variant="ghost" title={`Edit ${definition.title}`} aria-label={`Edit ${definition.title}`} disabled={saving || loading} onClick={() => {
+            setEditingId(row.original.id);
+            setForm(Object.fromEntries(definition.fields.map((field) => [field.key, String(row.original[field.key] ?? "")])));
+            setNotice(null); setFormOpen(true);
+          }}><Edit2 size={14} /></Button>
+          <Button size="icon" variant="ghost" title={`Delete ${definition.title}`} aria-label={`Delete ${definition.title}`} disabled={saving || loading} onClick={() => { setNotice(null); setDeleteTarget(row.original); }}><Trash2 size={14} /></Button>
+        </div> },
+      ]}
+      data={rows} loading={loading} height={620} minWidth={Math.max(900, definition.fields.length * 180 + 90)} density="grid"
+      title={`${rows.length} Records`} subtitle={`${definition.title} List`}
+      searchValue={query} onSearchChange={setQuery} searchPlaceholder={`Search ${definition.title.toLowerCase()}...`}
+      getRowId={(row) => String(row.id)} enablePagination pageSize={100}
+      emptyText="No master entries yet" enableExport exportFilename={`waybill-${kind}.csv`}
+    />
+    <Dialog open={formOpen} title={`${editingId ? "Edit" : "Add"} ${definition.title}`} description="Master details" compact wide onClose={() => { if (!saving) setFormOpen(false); }}>
       <form onSubmit={(event) => void submit(event)} className="grid gap-4">
-        <div className="text-sm font-semibold">{editingId ? "Edit master entry" : "Add master entry"}</div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2">
           {definition.fields.map((field) => <label key={field.key} className="grid gap-1 text-sm">
             <span>{field.label} *</span>
             {field.lookup ? <select
@@ -96,35 +152,21 @@ function MasterEditor({ kind }: { kind: WaybillMasterKind }) {
         {kind === "wells" && <p className="text-xs text-muted-foreground">Use the destination name shown on the waybill as the Well ID. Diversion Kms = Actual Kms − city Base Kms − 15; this value is calculated automatically.</p>}
         {kind !== "rates" && !loading && lookups.length === 0 && <p className="text-sm">Create {kind === "wells" ? "city rates" : "well destinations"} first.</p>}
         <div className="flex justify-end gap-2">
-          {editingId && <Button type="button" variant="outline" onClick={reset} disabled={saving}>Cancel edit</Button>}
-          <Button type="submit" disabled={saving || loading || (kind !== "rates" && lookups.length === 0)}>{saving ? "Saving..." : editingId ? "Save changes" : "Add entry"}</Button>
+          <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={saving}><X size={15} /> Cancel</Button>
+          <Button type="submit" disabled={saving || loading || (kind !== "rates" && lookups.length === 0)}><Save size={15} />{saving ? "Saving..." : "Save"}</Button>
         </div>
       </form>
-    </CardContent></Card>
-    <DataTable<WaybillMasterRow, unknown>
-      columns={[
-        ...definition.fields.map((field) => ({ accessorKey: field.key, header: field.label })),
-        ...(kind === "wells" ? [{ accessorKey: "base_kms", header: "Base Kms" }, { accessorKey: "diversion_kms", header: "Diversion Kms" }] : []),
-        { id: "actions", header: "Actions", cell: ({ row }) => <Button variant="outline" disabled={saving || loading} onClick={() => {
-          setEditingId(row.original.id);
-          setForm(Object.fromEntries(definition.fields.map((field) => [field.key, String(row.original[field.key] ?? "")])));
-          setNotice(null);
-        }}>Edit</Button> },
-      ]}
-      data={rows} loading={loading} height={360} minWidth={900}
-      emptyText="No master entries yet" enableExport exportFilename={`waybill-${kind}.csv`}
-    />
+    </Dialog>
+    <Dialog open={Boolean(deleteTarget)} title={`Delete ${definition.title}`} description={deleteTarget ? `Delete ${definition.fields.filter((field) => !field.numeric).map((field) => deleteTarget[field.key]).join(" / ")}?` : undefined}
+      compact tone="danger" onClose={() => { if (!saving) setDeleteTarget(null); }}
+      footer={<><Button variant="outline" disabled={saving} onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="destructive" disabled={saving} onClick={() => void confirmDelete()}>{saving ? "Deleting..." : "Delete"}</Button></>}>
+      <p className="m-0 text-sm text-muted-foreground">This action cannot be undone. Entries referenced by another master cannot be deleted.</p>
+    </Dialog>
   </div>;
 }
 
 export function WaybillMastersPage({ kind }: { kind: WaybillMasterKind }) {
-  const descriptions: Record<WaybillMasterKind, string> = {
-    wells: "Map well destinations to cities and maintain actual kilometres. Diversion kilometres are calculated from the city base kilometres.",
-    rates: "Maintain base kilometres, standard and non-standard revenue, and kilometre charges for each city.",
-    distances: "Maintain the distance between two well destinations for non-standard trips.",
-  };
   return <section className="grid gap-4">
-    <VendorPageHeader title={definitions[kind].title} description={descriptions[kind]} />
     <MasterEditor key={kind} kind={kind} />
   </section>;
 }
