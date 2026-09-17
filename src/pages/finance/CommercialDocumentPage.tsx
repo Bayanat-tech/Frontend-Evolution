@@ -34,6 +34,7 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { openPsReport } from "../../components/purchase-sales/reports/psReportPreviewStore";
 import { useAuth } from "../../state/AuthContext";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
@@ -130,7 +131,33 @@ const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 
 const commercialInvoiceSign = (docType: CommercialType): 1 | -1 =>
   docType === "PI" || docType === "PO" ? -1 : 1;
 
+async function openCommercialInvoicePreview(docType: CommercialType, docNo: string) {
+  const preview = openPsReport("Tax Purchase Invoice");
+  const normalizedDocNo = String(docNo ?? "").trim();
+
+  if (!normalizedDocNo) {
+    preview.fail(new Error("Document number is missing."));
+    return;
+  }
+
+  try {
+    const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(normalizedDocNo)}`, {
+      responseType: "text",
+      headers: { Accept: "text/html" },
+    });
+
+    preview.ready({
+      html: typeof response.data === "string" ? response.data : String(response.data),
+      filename: `${docType}_${normalizedDocNo}`,
+      orientation: "portrait",
+    });
+  } catch (error) {
+    preview.fail(error);
+  }
+}
+
 export function CommercialDocumentPage({ docType }: { docType: CommercialType }) {
+  const { user } = useAuth();
   const meta = META[docType];
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
@@ -226,7 +253,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
-          <Button size="icon" variant="ghost" onClick={() => void openDocumentReport(row.original.doc_type || docType, row.original.doc_no)} title="Print / PDF">
+          <Button size="icon" variant="ghost" onClick={() => void openCommercialInvoicePreview((row.original.doc_type || docType) as CommercialType, row.original.doc_no)} title="Print / PDF">
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
@@ -613,7 +640,7 @@ const withTax = {
             {form.canceled === "Y" && <span className="rounded-full border border-primary-foreground/35 px-2.5 py-1 text-xs font-semibold text-primary-foreground">Cancelled</span>}
             {form.doc_no && form.doc_no !== "0" && (
               <>
-                <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
+                <Button type="button" variant="secondary" onClick={() => void openCommercialInvoicePreview(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
