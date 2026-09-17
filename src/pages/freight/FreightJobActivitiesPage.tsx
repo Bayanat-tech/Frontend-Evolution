@@ -323,7 +323,8 @@ export function FreightJobActivitiesPage({
       </div>
     );
     return () => onEmbeddedActionsChange(null);
-  }, [dirty, header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, populating, saving, view]);
+  // }, [dirty, header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, populating, saving, view]);
+  }, [dirty, header, isClosed, isLineLocked, lines, notice, onEmbeddedActionsChange, onEmbeddedList, populating, saving, view]);
 
   if (view === "list") {
     return (
@@ -429,7 +430,21 @@ export function FreightJobActivitiesPage({
               <div key={`${line.srno}-${index}`} className="freight-job-table-row flex flex-col transition-colors hover:bg-slate-50/70">
                 <div className="freight-activity-primary-row grid grid-cols-[42px_155px_minmax(230px,1fr)_70px_95px_105px_100px_110px_105px_120px_110px_40px] items-center gap-1.5 px-3 py-1.5">
                   <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
-                  <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
+                  {/* <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} /> */}
+                  <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => {
+  const newBillRate = lookupText(row || undefined, "bill");
+  const newCost = lookupText(row || undefined, "cost");
+  updateLine(index, recalc({
+    ...line,
+    act_code: value,
+    activity: lookupText(row || undefined, "activity"),
+    other_services: lookupText(row || undefined, "activity") || line.other_services,
+    bill_rate: newBillRate !== "" ? newBillRate : line.bill_rate,
+    actual_cost: newCost !== "" ? newCost : line.actual_cost,
+    div_code: line.div_code || lookupText(header, "div_code"),
+    tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code"),
+  }));
+}} />
                   <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
                   <MoneyInput value={line.quantity} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
                   <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
@@ -598,7 +613,9 @@ function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCod
       compact
       valueField="ACT_CODE"
       displayFields={["ACT_CODE", "ACTIVITY"]}
-      columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }, { field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }]}
+      columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }
+        // ,{ field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }
+      ]}
       loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
       onChange={onChange}
       disabled={disabled}
