@@ -657,7 +657,7 @@ export function FreightJobPage({
               className="freight-job-journey-panel lg:col-span-6"
               icon={MapPinned}
               title="Journey & Routing"
-              meta={`${job.port_code || "Origin"} → ${job.destination_port || "Destination"}`}
+              meta={`${job.port_code || "Origin"} ${job.destination_port || "Destination"}`}
             >
               <div className="grid gap-2 sm:grid-cols-2">
                 <Lookup
@@ -677,6 +677,7 @@ export function FreightJobPage({
                   }
                   required
                 />
+               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
                 <Lookup
                   label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"}
                   value={job.destination_port}
@@ -694,7 +695,6 @@ export function FreightJobPage({
                   }
                   required
                 />
-                <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
                 <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)} />
               </div>
             </SectionPanel>

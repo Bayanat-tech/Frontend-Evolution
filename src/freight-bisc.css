@@ -1615,19 +1615,19 @@ input[tabindex="-1"].opacity-0,
 }
 
 /* BISC-style PDF viewer shared by freight reports and document printing. */
-.freight-report-preview-backdrop { position: fixed; inset: 0; z-index: 12000; padding: 24px; display: grid; place-items: center; background: rgb(15 23 42 / .6); backdrop-filter: blur(2px); font-family: Inter, sans-serif; }
+.freight-report-preview-backdrop { position: fixed; inset: 0; z-index: 12000; padding: 24px; display: grid; place-items: center; background: rgb(15 23 42 / .6); backdrop-filter: blur(2px); font-family: var(--app-font-family); font-size: 12px; -webkit-font-smoothing: antialiased; }
 .freight-report-preview { display: flex; flex-direction: column; width: min(1440px, 100%); height: min(94dvh, 1100px); overflow: hidden; border-radius: 12px; border: 1px solid #cbd5e1; background: #fff; color: #172033; box-shadow: 0 24px 80px rgb(0 0 0 / .25); outline: none; }
-.freight-report-preview header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #dbe2ec; background: #f8fafc; }
-.freight-report-preview header span { color: #64748b; letter-spacing: .1em; font-size: 10px; font-weight: 600; }
-.freight-report-preview h2 { margin: 4px 0 0; font-size: 17px; font-weight: 600; }
+.freight-report-preview header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; border-bottom: 1px solid #dbe2ec; background: #f8fafc; }
+.freight-report-preview header span { color: #64748b; letter-spacing: .08em; font-size: 10px; font-weight: 600; }
+.freight-report-preview h2 { margin: 3px 0 0; font-size: 15px; font-weight: 600; }
 .freight-report-preview-body { flex: 1; min-height: 0; display: flex; background: #e7ecf2; }
 .freight-report-preview-body iframe { border: 0; width: 100%; height: 100%; background: #e7ecf2; }
 .freight-report-preview-message { margin: auto; display: grid; justify-items: center; padding: 32px; gap: 8px; font-size: 13px; text-align: center; }
 .freight-report-preview-message p { margin: 0; }
-.freight-report-preview footer { padding: 12px 20px; border-top: 1px solid #dbe2ec; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; }
+.freight-report-preview footer { padding: 10px 18px; border-top: 1px solid #dbe2ec; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; }
 .freight-report-preview footer > span { color: #64748b; font-size: 11px; }
 .freight-report-preview footer > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.freight-report-preview :is(button,a) { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #172033; text-decoration: none; cursor: pointer; font: 500 12px Inter, sans-serif; }
+.freight-report-preview :is(button,a) { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 6px 11px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #172033; text-decoration: none; cursor: pointer; font: 500 12px var(--app-font-family); }
 .freight-report-preview .primary { background: #00378c; color: #fff; border-color: #00378c; }
 .freight-report-preview button:disabled { opacity: .45; cursor: not-allowed; }
 .freight-report-preview :is(button,a):focus-visible { outline: 2px solid #00378c; outline-offset: 2px; }

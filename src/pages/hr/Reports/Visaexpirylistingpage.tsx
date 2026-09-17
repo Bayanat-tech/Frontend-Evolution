@@ -1,14 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { openVisaExpiryReport } from "../../../api/transactions";
+import {
+  getVisaExpiryReportHtml,
+  getVisaExpiryReportExcelDownload,
+} from "../../../api/transactions";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +23,19 @@ interface LookupOption {
 }
 
 type EmployeeFilter = "A" | "ALL";
+
+interface Params {
+  division: string;
+  department: string;
+  section: string;
+  grade: string;
+  designation: string;
+  employee: string;
+  sponsor: string;
+  employeeFilter: EmployeeFilter;
+  visaExpiryFrom: string;
+  visaExpiryTo: string;
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -36,7 +54,13 @@ const getNextMonth = (): string => {
   ).padStart(2, "0")}`;
 };
 
-// ─── Field wrapper (same style as Freight) ────────────────────────────────────
+const toDisplayDate = (isoDate: string): string => {
+  if (!isoDate) return "All";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
+};
+
+// ─── Field wrapper (same style as Freight/DN Summary) ─────────────────────────
 
 function Field({
   label,
@@ -157,9 +181,19 @@ export default function VisaExpiryListingPage() {
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [generating, setGenerating] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
   const [message, setMessage] = useState("Select filters and run the report.");
+
+  const lastParamsRef = useRef<Params | null>(null);
+
+  // ── Inline preview dialog state (no new window) ─────────────────────────
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+
+  const dateRangeValid =
+    !visaExpiryFrom || !visaExpiryTo || visaExpiryFrom <= visaExpiryTo;
 
   // ── Fetch all lookups on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -226,6 +260,47 @@ export default function VisaExpiryListingPage() {
     load();
   }, [loginId, companyCode]);
 
+  // ── Fetch report HTML → fed straight into NewReportDialog ───────────────
+  const fetchReport = useCallback(
+    async (p: Params) => {
+      setLoading(true);
+      setError("");
+      setMessage("");
+      lastParamsRef.current = p;
+
+      setReportHtml(null);
+      setPreviewOpen(true);
+
+      try {
+        const html = await getVisaExpiryReportHtml({
+          parameter: "Hr_Report_VISA_EXPIRY_REPORT",
+          loginid: loginId,
+          code1: companyCode,
+          code2: p.division,
+          code3: p.department,
+          code4: p.section,
+          code5: p.grade,
+          code6: p.designation,
+          code7: p.employee,
+          code8: p.sponsor,
+          code9: p.employeeFilter,
+          date1: p.visaExpiryFrom,
+          date2: p.visaExpiryTo,
+        });
+
+        setReportHtml(html);
+        setMessage("Report generated successfully.");
+      } catch (err: any) {
+        const msg = err?.message ?? "Failed to load report. Please try again.";
+        setError(msg);
+        setMessage(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loginId, companyCode]
+  );
+
   // ── Clear All ─────────────────────────────────────────────────────────────
   const handleClearAll = () => {
     setDivision("");
@@ -238,46 +313,116 @@ export default function VisaExpiryListingPage() {
     setVisaExpiryFrom(getToday());
     setVisaExpiryTo(getNextMonth());
     setEmployeeFilter("A");
-    setReportError(null);
+    setError("");
     setMessage("Select filters and run the report.");
   };
 
   // ── Generate ──────────────────────────────────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!visaExpiryFrom || !visaExpiryTo) {
-      setReportError("Please select both Visa Expiry From and To dates.");
+      setError("Please select both Visa Expiry From and To dates.");
       return;
     }
+    if (!dateRangeValid) return;
 
-    setReportError(null);
-    setMessage("");
-    setGenerating(true);
+    fetchReport({
+      division,
+      department,
+      section,
+      grade,
+      designation,
+      employee,
+      sponsor,
+      employeeFilter,
+      visaExpiryFrom,
+      visaExpiryTo,
+    });
+  };
 
+  // Excel export — wired to NewReportDialog's onExportExcel
+  const handleExcel = async () => {
+    if (!lastParamsRef.current) return;
+    const p = lastParamsRef.current;
+    setExporting(true);
     try {
-      await openVisaExpiryReport({
+      await getVisaExpiryReportExcelDownload({
         parameter: "Hr_Report_VISA_EXPIRY_REPORT",
         loginid: loginId,
         code1: companyCode,
-        code2: division,
-        code3: department,
-        code4: section,
-        code5: grade,
-        code6: designation,
-        code7: employee,
-        code8: sponsor,
-        code9: employeeFilter,
-        date1: visaExpiryFrom,
-        date2: visaExpiryTo,
+        code2: p.division,
+        code3: p.department,
+        code4: p.section,
+        code5: p.grade,
+        code6: p.designation,
+        code7: p.employee,
+        code8: p.sponsor,
+        code9: p.employeeFilter,
+        date1: p.visaExpiryFrom,
+        date2: p.visaExpiryTo,
       });
-      setMessage("Report generated successfully.");
-    } catch (err: any) {
-      const msg = err?.message ?? "Failed to generate report. Please try again.";
-      setReportError(msg);
-      setMessage(msg);
-      console.error(err);
+    } catch (err) {
+      console.error("Excel export error:", err);
+      setError("Excel export failed. Please try again.");
     } finally {
-      setGenerating(false);
+      setExporting(false);
     }
+  };
+
+  // Open report in a new browser tab
+  const handleOpenInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger browser print dialog (Save as PDF) for the current report
+  const handleDownloadPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "visa-expiry-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setReportHtml(null);
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -431,20 +576,27 @@ export default function VisaExpiryListingPage() {
           </Field>
         </div>
 
+        {/* ── Date validation warning ───────────────────────────────────── */}
+        {!dateRangeValid && (
+          <p className="px-3 pb-2 text-xs text-destructive">
+            Visa Expiry From must be on or before Visa Expiry To.
+          </p>
+        )}
+
         {/* ── Actions bar (only Generate Report) ────────────────────────── */}
         <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2">
           <Button
             type="button"
             size="sm"
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={loading || !dateRangeValid}
           >
-            {generating ? (
+            {loading ? (
               <Loader2 size={15} className="animate-spin" />
             ) : (
               <Search size={15} />
             )}{" "}
-            {generating ? "Generating..." : "Generate Report"}
+            {loading ? "Generating..." : "Generate Report"}
           </Button>
         </div>
 
@@ -452,10 +604,31 @@ export default function VisaExpiryListingPage() {
         {message ? (
           <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p>
         ) : null}
-        {reportError ? (
-          <p className="px-3 pb-3 text-sm text-destructive">{reportError}</p>
+        {error && !previewOpen ? (
+          <p className="px-3 pb-3 text-sm text-destructive">{error}</p>
         ) : null}
       </div>
+
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closePreview}
+        title="Visa Expiry Report"
+        htmlContent={reportHtml}
+        loading={loading}
+        error={error || null}
+        meta={{
+          companyName: companyCode,
+          user: loginId,
+          period: `${toDisplayDate(visaExpiryFrom)} - ${toDisplayDate(visaExpiryTo)}`,
+          status: employeeFilter === "A" ? "Active Employees" : "All Employees",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={handleExcel}
+        exportingExcel={exporting}
+        onOpenInNewWindow={handleOpenInNewWindow}
+        onDownloadPdf={handleDownloadPdf}
+      />
     </section>
   );
 }
