@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
@@ -115,23 +115,22 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const [employeeName, setEmployeeName] = useState("");
   const [currentActorName, setCurrentActorName] = useState("");
   const [loading, setLoading] = useState(false);
-
   const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
   const isFinal = flowLevel >= 6;
   const isCurrentActionUser = userFlowLevel === 0 && !isEmployee && !isFinal;
   const appraiserReadOnly = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly = !isEmployee || isFinal;
-
-  // "myLevel" identifies / saves the CURRENT logged-in user's own appraiser
-  // comment. Must NEVER be hardcoded to 0 -- that previously caused every
-  // approver's comment to be saved under FLOW_LEVEL = 0, so the next
-  // approver's box got pre-filled with the previous approver's text.
-  const myLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
-
-  // effectiveLevel is used ONLY for the single-level "show previous level"
-  // block below (showPrevLevel), which is skipped entirely when
-  // showAllComments is true.
+  const actingLevelRef = useRef<number | null>(null);
+  if (actingLevelRef.current === null && flowLevel !== undefined) {
+    actingLevelRef.current = userFlowLevel === 0 ? flowLevel : userFlowLevel;
+  }
+  const myLevel = actingLevelRef.current ?? (userFlowLevel === 0 ? flowLevel : userFlowLevel);
   const effectiveLevel = showAllComments ? 0 : myLevel;
+
+
+  useEffect(() => {
+    actingLevelRef.current = null;
+  }, [docNo, employeeCode]);
 
   useEffect(() => {
     if (!docNo) return;
@@ -151,8 +150,10 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         const ac = text(myAppraiserRow?.COMMENT_TEXT);
         const apc = text(appraiseeRow?.COMMENT_TEXT);
 
-        setAppraiserComment(ac);
-        setAppraiseeComment(apc);
+        // FIX: Agar user ne already kuch type kiya hai to usse overwrite mat karo
+        setAppraiserComment(prev => (prev && prev.trim() !== "" ? prev : ac));
+        setAppraiseeComment(prev => (prev && prev.trim() !== "" ? prev : apc));
+
         onAppraiserCommentChange?.(ac, myLevel);
         onAppraiseeCommentChange?.(apc, 0);
 
@@ -162,9 +163,6 @@ const AppraiserCommentsTab: React.FC<Props> = ({
               const row = res[0] as Row;
               setEmployeeName(text(row.EMPLOYEE_NAME));
               if (flowLevel === 0) {
-                // Level 0 = nobody has appraised yet. Show the name of
-                // whoever will act next (immediate supervisor / level-1
-                // approver) as a preview.
                 setCurrentActorName(
                   text(row.APPRAISER_NAME1) ||
                   text(row.IMMEDIATE_SUPERVISOR_NAME) ||
@@ -188,7 +186,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [docNo, loginid, flowLevel, userFlowLevel, myLevel]);
+  }, [docNo, loginid]);
 
   const prevLevelNum = effectiveLevel - 1;
   const prevLevelRow = commentLog.find(
@@ -205,13 +203,23 @@ const AppraiserCommentsTab: React.FC<Props> = ({
     (r) => String(r.FLOW_LEVEL) === "0" && r.COMMENT_TYPE === "APPRAISEE"
   );
 
-  const allAppraiserComments = commentLog
+  const allAppraiserComments = useMemo(() => {
+  const map = new Map<string, CommentLogRow>();
+  commentLog
     .filter(r => r.COMMENT_TYPE === "APPRAISER")
+    .forEach(r => {
+      const key = String(r.FLOW_LEVEL);
+      const existing = map.get(key);
+      if (!existing || (r.COMMENT_DATE && r.COMMENT_DATE > existing.COMMENT_DATE)) {
+        map.set(key, r);
+      }
+    });
+  return Array.from(map.values())
+    .filter(r => String(r.FLOW_LEVEL) !== String(myLevel))  // current user hata do
     .sort((a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL));
+}, [commentLog, myLevel]);
 
-  // At flow level 0 (employee self-rating stage), no appraiser has acted
-  // yet. Show the upcoming reviewer's name with an empty, disabled box
-  // instead of showing nothing at all.
+
   const showNextReviewerPreview =
     flowLevel === 0 &&
     !myAppraiserRow &&
@@ -254,20 +262,20 @@ const AppraiserCommentsTab: React.FC<Props> = ({
           {showAllComments ? (
             <div style={S.allCommentsContainer}>
               {allAppraiserComments.length > 0 && (
-    <>
-      {allAppraiserComments.map((row, idx) => (
-        <div key={idx} style={S.prevBlock}>
-          <div style={S.prevName}>
-            {row.COMMENT_BY_NAME || `Level ${row.FLOW_LEVEL}`}
-          </div>
-          <div style={S.prevComment}>{row.COMMENT_TEXT || "No comment"}</div>
-          {row.COMMENT_DATE && (
-            <div style={S.meta}>Saved: {row.COMMENT_DATE}</div>
-          )}
-        </div>
-      ))}
-    </>
-  )}
+                <>
+                  {allAppraiserComments.map((row, idx) => (
+                    <div key={idx} style={S.prevBlock}>
+                      <div style={S.prevName}>
+                        {row.COMMENT_BY_NAME || `Level ${row.FLOW_LEVEL}`}
+                      </div>
+                      <div style={S.prevComment}>{row.COMMENT_TEXT || "No comment"}</div>
+                      {row.COMMENT_DATE && (
+                        <div style={S.meta}>Saved: {row.COMMENT_DATE}</div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
 
               {/* Level 0 preview -- next reviewer's name, empty & non-editable */}
               {showNextReviewerPreview && (
@@ -289,7 +297,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
               {!appraiserReadOnly && (
                 <>
                   <div style={{ ...S.nameBox, marginTop: "12px" }}>
-                    {currentActorName || "You"} 
+                    {currentActorName || "You"}
                   </div>
                   <textarea
                     style={S.textarea(appraiserReadOnly)}
