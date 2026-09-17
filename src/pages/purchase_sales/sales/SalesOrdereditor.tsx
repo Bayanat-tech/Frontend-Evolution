@@ -331,7 +331,7 @@ export function SalesOrderEditor({
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-      tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -414,19 +414,40 @@ export function SalesOrderEditor({
     }, "Purchase Quotation saved as draft");
   };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+
     setShowSubmitConfirm(true);
   };
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
-        if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
-          return setError("Line item discount cannot exceed line item amount");
-        }
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+      return setError("Line item discount cannot exceed line item amount");
+    }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
@@ -604,7 +625,7 @@ export function SalesOrderEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 rows={rows}
-               calculateDiscount={applyDiscountCalculation}
+                calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable
@@ -695,7 +716,7 @@ export function SalesOrderEditor({
           exporting={reportPreviewExporting}
           onExcel={handleExportExcel}
           onClose={closeReportPreview}
-          onDownload={() => {}}
+          onDownload={() => { }}
           downloadName={`SO_${form.doc_no || "report"}.html`}
         />
       )}

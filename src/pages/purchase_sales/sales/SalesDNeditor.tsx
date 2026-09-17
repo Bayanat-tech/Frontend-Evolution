@@ -26,6 +26,7 @@ import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSDN, PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import {
+  computeQuantity,
   emptyForm,
   emptyLineRow,
   fetchSalesOrderDetail,
@@ -342,12 +343,27 @@ export function SalesDNEditor({
   //       : "Sales Delivery Note created successfully",
   //   );
   // };
+  // const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
 
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => computeQuantity(row) <= 0);
+    if (invalidRow) {
+      return setError("Delivered Quantity must be greater than 0 for all line items");
+    }
+
     setShowSubmitConfirm(true);
   };
 
@@ -488,8 +504,8 @@ export function SalesDNEditor({
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled
-            ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
-            : "grid-rows-[auto_minmax(0,1fr)_auto]"
+          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
+          : "grid-rows-[auto_minmax(0,1fr)_auto]"
           }`}
         onSubmit={(event) => {
           event.preventDefault();
