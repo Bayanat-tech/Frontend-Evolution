@@ -238,7 +238,8 @@ export function PurchaseInvoiceEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+ const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -365,15 +366,37 @@ export function PurchaseInvoiceEditor({
     }, "Purchase Quotation saved as draft");
   };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (!form.inv_no) return setError("Invoice Number is required");
+  //   if (!form.inv_date) return setError("Invoice Date is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
   const handleSubmitClick = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    if (!form.inv_no) return setError("Invoice Number is required");
-    if (!form.inv_date) return setError("Invoice Date is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
-    setShowSubmitConfirm(true);
-  };
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (!form.inv_no) return setError("Invoice Number is required");
+  if (!form.inv_date) return setError("Invoice Date is required");
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+  const invalidRow = rows.find((row) => {
+    const qtyPuom = numberOrZero(row.qty_puom);
+    const uppp = numberOrZero(row.uppp);
+    const qtyLuom = numberOrZero(row.qty_luom);
+    const unitPrice = numberOrZero(row.unit_price);
+    const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+    return !(total > 0);
+  });
+  if (invalidRow) {
+   return setError("Please enter a valid quantity and unit price for all line items — total amount must be greater than 0");
+  }
+
+  setShowSubmitConfirm(true);
+};
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
