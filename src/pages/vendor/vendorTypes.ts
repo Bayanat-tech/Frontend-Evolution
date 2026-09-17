@@ -9,7 +9,10 @@ export type VendorView =
   | "outstanding"
   | "status"
   | "statement"
-  | "waybillInvoices";
+  | "waybillInvoices"
+  | "wellIdsMaster"
+  | "revenueTableMaster"
+  | "nonStandardKmsMaster";
 
 export type VendorPageProps = {
   routePath?: string;

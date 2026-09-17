@@ -8,6 +8,7 @@ import { VendorRequestsPage } from "./VendorRequestsPage";
 import { VendorSentBackPage } from "./VendorSentBackPage";
 import { getVendorViewFromPath } from "./vendorRoutes";
 import { WaybillInvoicePage } from "./WaybillInvoicePage";
+import { WaybillMastersPage } from "./WaybillMastersPage";
 
 export function VendorWorkspacePage({ routePath = "" }: { routePath?: string }) {
   const view = getVendorViewFromPath(routePath || window.location.pathname);
@@ -25,6 +26,9 @@ export function VendorWorkspacePage({ routePath = "" }: { routePath?: string }) 
       view === "status" ? <VendorInquiryPage mode="status" /> :
       view === "statement" ? <VendorInquiryPage mode="statement" /> :
       view === "waybillInvoices" ? <WaybillInvoicePage /> :
+      view === "wellIdsMaster" ? <WaybillMastersPage kind="wells" /> :
+      view === "revenueTableMaster" ? <WaybillMastersPage kind="rates" /> :
+      view === "nonStandardKmsMaster" ? <WaybillMastersPage kind="distances" /> :
       <VendorRequestsPage />}
     </div>
   );

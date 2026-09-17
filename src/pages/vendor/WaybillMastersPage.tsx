@@ -63,7 +63,7 @@ function MasterEditor({ kind }: { kind: WaybillMasterKind }) {
       reset();
       setNotice({ type: "success", message: "Master entry saved." });
       try { setRows(await getWaybillMaster(kind)); }
-      catch { setNotice({ type: "error", message: "Entry saved, but the list could not refresh. Reopen this tab to reload it." }); }
+      catch { setNotice({ type: "error", message: "Entry saved, but the list could not refresh. Reopen this master screen to reload it." }); }
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save master entry." });
     } finally { setSaving(false); }
@@ -117,13 +117,14 @@ function MasterEditor({ kind }: { kind: WaybillMasterKind }) {
   </div>;
 }
 
-export function WaybillMastersPage() {
-  const [kind, setKind] = useState<WaybillMasterKind>("rates");
+export function WaybillMastersPage({ kind }: { kind: WaybillMasterKind }) {
+  const descriptions: Record<WaybillMasterKind, string> = {
+    wells: "Map well destinations to cities and maintain actual kilometres. Diversion kilometres are calculated from the city base kilometres.",
+    rates: "Maintain base kilometres, standard and non-standard revenue, and kilometre charges for each city.",
+    distances: "Maintain the distance between two well destinations for non-standard trips.",
+  };
   return <section className="grid gap-4">
-    <VendorPageHeader title="Waybill masters" description="Set up city rates, map well destinations to cities, and record distances between drop points." />
-    <div className="flex flex-wrap gap-2">
-      {(Object.keys(definitions) as WaybillMasterKind[]).map((key) => <Button key={key} variant={key === kind ? "default" : "outline"} onClick={() => setKind(key)}>{definitions[key].title}</Button>)}
-    </div>
+    <VendorPageHeader title={definitions[kind].title} description={descriptions[kind]} />
     <MasterEditor key={kind} kind={kind} />
   </section>;
 }

@@ -1,6 +1,16 @@
 import type { VendorView } from "./vendorTypes";
 
+function getWaybillMasterView(routeText: string): VendorView | undefined {
+  const compact = routeText.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (compact.includes("vmsmasterswellids")) return "wellIdsMaster";
+  if (compact.includes("vmsmastersrevenuetable")) return "revenueTableMaster";
+  if (compact.includes("vmsmastersnonstandardkms")) return "nonStandardKmsMaster";
+  return undefined;
+}
+
 export function getVendorViewFromPath(routePath = ""): VendorView {
+  const masterView = getWaybillMasterView(routePath);
+  if (masterView) return masterView;
   const text = routePath.toLowerCase();
   const compact = text.replace(/[^a-z0-9]/g, "");
 
@@ -22,6 +32,7 @@ export function isVendorRouteText(routeText = "") {
   const text = routeText.toLowerCase();
   const compact = text.replace(/[^a-z0-9]/g, "");
   return (
+    Boolean(getWaybillMasterView(routeText)) ||
     text.includes("/vendor") ||
     compact.includes("vendorsystem") ||
     compact.includes("invoiceentry") ||
