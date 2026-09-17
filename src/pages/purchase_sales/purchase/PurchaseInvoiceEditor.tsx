@@ -19,7 +19,9 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  amountBeforeDiscPrice,
   DiscAmountPercentage,
+  DiscPrice,
   emptyForm,
   emptyLineRow,
   fetchPurchaseOrderDetail,
@@ -79,14 +81,16 @@ export function PurchaseInvoiceEditor({
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
-    const [printOpen, setPrintOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   // const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [sendBackUserLevel, setSendBackUserLevel] = useState<number>(0);
   const [sendBackReason, setSendBackReason] = useState("");
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -102,27 +106,31 @@ export function PurchaseInvoiceEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
-  // FIX: previously this effect stamped every row's tx_compnt_1_expmt / tx_compnt_perc_1
-  // from the header form, clobbering the per-line values already loaded from the
-  // GRN detail lookup (e.g. porder_tx_compnt_1_expmt / tx_compnt_perc_1 from the API).
-  // Now a row keeps its own tax values if it already has an tx_compnt_1_expmt set,
-  // and only falls back to the header-derived value when the row has none.
+
   useEffect(() => {
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
-    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
-    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
     setRows((current) =>
-      current.map((row) => ({
-        ...row,
-        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-        tx_cat_code: `${form.tx_cat_code || ""}`,
-        disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: pct > 0 ? pct : row.disc_percent,
-        tx_compnt_1_expmt: row.tx_compnt_1_expmt || form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: row.tx_compnt_1_expmt ? row.tx_compnt_perc_1 : taxPerc,
-      }))
+      current.map((row) => {
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxPerc,
+        };
+
+        return updatedRow;
+      })
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -183,7 +191,15 @@ export function PurchaseInvoiceEditor({
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
+          discount_scoope:
+            headerRaw.discount_scoope === "PO" ||
+              headerRaw.discount_scoope === "ITEM"
+              ? headerRaw.discount_scoope
+              : current.discount_scoope || "ITEM",
+          pinvoice_total_amount: numberOrZero(headerRaw.pinvoice_total_amount),
+
         }));
+
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
@@ -222,7 +238,8 @@ export function PurchaseInvoiceEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+ const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -233,10 +250,74 @@ export function PurchaseInvoiceEditor({
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
-  const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => ({ ...current, [field]: value }));
+  const updateField = (
+    field: keyof PurchaseOrderForm,
+    value: string | number
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   };
 
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
@@ -251,7 +332,7 @@ export function PurchaseInvoiceEditor({
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0
+                tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -275,21 +356,57 @@ export function PurchaseInvoiceEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
   };
 
-  const handleSubmit = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (!form.inv_no) return setError("Invoice Number is required");
+  //   if (!form.inv_date) return setError("Invoice Date is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+  const handleSubmitClick = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (!form.inv_no) return setError("Invoice Number is required");
+  if (!form.inv_date) return setError("Invoice Date is required");
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+  const invalidRow = rows.find((row) => {
+    const qtyPuom = numberOrZero(row.qty_puom);
+    const uppp = numberOrZero(row.uppp);
+    const qtyLuom = numberOrZero(row.qty_luom);
+    const unitPrice = numberOrZero(row.unit_price);
+    const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+    return !(total > 0);
+  });
+  if (invalidRow) {
+   return setError("Please enter a valid quantity and unit price for all line items — total amount must be greater than 0");
+  }
+
+  setShowSubmitConfirm(true);
+};
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+     if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+          return setError("Line item discount cannot exceed line item amount");
+        }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
+    }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
   };
-
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -382,7 +499,7 @@ export function PurchaseInvoiceEditor({
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -417,14 +534,14 @@ export function PurchaseInvoiceEditor({
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
-  <>
-    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
-      <Printer size={15} /> Print
-    </Button>
-    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-  </>
-)}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <>
+                  <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                    <Printer size={15} /> Print
+                  </Button>
+                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                </>
+              )}
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
@@ -460,6 +577,9 @@ export function PurchaseInvoiceEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                calculateDiscount={applyDiscountCalculation}
+                rows={rows}
+
               />
 
               <PurchaseInvoiceLinesTable
@@ -488,10 +608,23 @@ export function PurchaseInvoiceEditor({
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-              {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+            {isPendingTab && (
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Purchase Invoice?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -510,10 +643,10 @@ export function PurchaseInvoiceEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-           <Button aria-label="Print" type="button" variant="outline" size="icon"
-  disabled={actionDisabled} onClick={() => setPrintOpen(true)}>
-  <Printer size={15} />
-</Button>
+            <Button aria-label="Print" type="button" variant="outline" size="icon"
+              disabled={actionDisabled} onClick={() => setPrintOpen(true)}>
+              <Printer size={15} />
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
@@ -562,13 +695,13 @@ export function PurchaseInvoiceEditor({
         flowLevel={effectiveFlowLevel}
       />
 
-        <PurchaseInvoicePrintDialog
-  open={printOpen}
-  onClose={() => setPrintOpen(false)}
-  form={form}
-  companyCode={user?.company_code || ""}
-  docType={PO_DOC_TYPE.PIN}
-/>
+      <PurchaseInvoicePrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        form={form}
+        companyCode={user?.company_code || ""}
+        docType={PO_DOC_TYPE.PIN}
+      />
 
 
     </>

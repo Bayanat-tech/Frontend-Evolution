@@ -202,10 +202,12 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+import EmployeeDetailsPage from "../pages/hr/Employee Details/Employeedetailspage";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
+import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 
 
  type WorkspaceRouteContext = {
@@ -384,6 +386,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Employee Master",
     match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
     element: () => <EmployeeMasterPage />
+  },
+  {
+    name: "Employee Details",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
+    element: () => <EmployeeDetailsPage />
   },
 
   {
@@ -779,7 +786,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Freight Job Sheet",
     match: (context) => isFreightJobSheetRoute(context),
-    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="jobsheet" />,
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="job" />,
   },
   {
     name: "Freight Pack List",
@@ -1331,6 +1338,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isHrEmpDependantsRoute(pathname),
     element: () => <HrEmpDependantsPage/>
   },
+  {
+    name : "Vacation Settlement",
+    match: ({pathname}) => isVacationSettlementRoute(pathname),
+    element: () => <VacationSettlementPage/>
+  },
   
   {
     name: "HR Master",
@@ -1438,6 +1450,13 @@ function isHrEmpDependantsRoute(pathname: string) {
 
 
 
+function isVacationSettlementRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/transactions/vacation_settlement") ||
+    normalized.includes("/hcm/hcm/transactions/vacation%20settlement")
+  );
+}
 
 
 function isHrHolidayCalendarRoute(pathname: string) {

@@ -7,8 +7,7 @@ import { useAuth } from "../../../state/AuthContext";
 import { api } from "../../../api/client";
 import { getDynamicLookup } from "../../../api/lookups";
 import ReportDialogPage from "../../../components/ReportDialogPage";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { NewReportDialog } from "../../../components/new_report_format";
 
 type AnyRow = Record<string, unknown>;
 
@@ -140,57 +139,6 @@ interface DrillEntry {
   payload: Record<string, unknown>;
 }
 
-// ─── Iframe renderer — used for ALL report HTML (main + drill) ────────────────
-// Scripts injected into HTML only execute inside a real iframe, not via
-// dangerouslySetInnerHTML. Using a single renderer for everything ensures
-// postMessage drill-down clicks always work correctly.
-
-function IframeReportRenderer({
-  required_values,
-}: {
-  required_values: { html: string };
-}) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    const win = iframe.contentWindow as any;
-
-    // The report HTML itself calls window.print() (built for standalone
-    // print pages). Suppress that call while we load the content in, so
-    // printing only happens when the user clicks the dialog's Print button.
-    let originalPrint: (() => void) | undefined;
-    if (win) {
-      originalPrint = win.print;
-      win.print = () => {};
-    }
-
-    doc.open();
-    doc.write(required_values.html);
-    doc.close();
-
-    const restorePrint = () => {
-      if (win && originalPrint) win.print = originalPrint;
-    };
-    if (doc.readyState === "complete") {
-      restorePrint();
-    } else {
-      iframe.addEventListener("load", restorePrint, { once: true });
-    }
-  }, [required_values.html]);
-
-  return (
-    <iframe
-      ref={iframeRef}
-      style={{ width: "100%", minHeight: "70vh", border: "none" }}
-      title="report"
-    />
-  );
-}
 // ─── Reusable checkbox selector ───────────────────────────────────────────────
 
 interface CheckboxSelectorProps {
@@ -284,8 +232,9 @@ interface DrillBreadcrumbProps {
 
 function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
   return (
-    <div className="flex items-center gap-1 flex-wrap px-1 py-1.5 text-[10px]">
+    <div className="flex items-center gap-1 flex-wrap px-3 py-1.5 text-[10px]">
       <button
+        type="button"
         onClick={() => onNavigate(-1)}
         className="flex items-center gap-1 text-primary/80 hover:text-primary font-medium"
       >
@@ -295,6 +244,7 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
         <span key={entry.id} className="flex items-center gap-1">
           <span className="text-muted-foreground">/</span>
           <button
+            type="button"
             onClick={() => onNavigate(i)}
             className={[
               "font-medium",
@@ -356,6 +306,7 @@ export default function TrialBalancePage() {
   const drillIdCounter                  = useRef(0);
 
   // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
+  // Works with NewReportDialog page iframes (sandbox: allow-scripts allow-same-origin)
   useEffect(() => {
     const handler = async (ev: MessageEvent) => {
       if (!ev.data || ev.data.type !== "DRILL_DOWN") return;
@@ -657,9 +608,12 @@ export default function TrialBalancePage() {
     }
   };
 
-  // ── Derive what to show inside ReportDialogPage ────────────────────────────
+  // ── Derive what to show inside NewReportDialog ─────────────────────────────
   const topDrill  = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
   const pageTitle = `Trial Balance – ${config.label}`;
+  const dialogTitle = topDrill ? topDrill.label : pageTitle;
+  const dialogHtml = topDrill ? topDrill.html : reportHtml;
+  const dialogOpen = reportHtml !== null;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -874,17 +828,18 @@ export default function TrialBalancePage() {
 
       </section>
 
-      {/* ── Report Dialog ── */}
-      {reportHtml !== null && (
-        <ReportDialogPage
-          title={topDrill ? topDrill.label : pageTitle}
-          Report={IframeReportRenderer}
-          required_values={{ html: topDrill ? topDrill.html : reportHtml }}
-          excel={topDrill ? handleDrillExcel : handleExcel}
-          onClose={handleCloseReport}
-          headerSlot={
+      {/* ── New Report Dialog (with drill support via headerSlot) ── */}
+      <NewReportDialog
+        open={dialogOpen}
+        onClose={handleCloseReport}
+        title={dialogTitle}
+        htmlContent={dialogHtml}
+        loading={reportLoading || drillLoading}
+        error={drillError ?? (reportError && !reportHtml ? reportError : null)}
+        onExportExcel={topDrill ? handleDrillExcel : handleExcel}
+        headerSlot={
+          (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">
-              {/* Drill loading indicator */}
               {drillLoading && (
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-border text-[10px] text-primary">
                   <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -895,26 +850,24 @@ export default function TrialBalancePage() {
                 </div>
               )}
 
-              {/* Drill error */}
               {drillError && (
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive">
                   <span className="font-semibold">Drill-down error:</span> {drillError}
-                  <button onClick={() => setDrillError(null)} className="ml-auto">
+                  <button type="button" onClick={() => setDrillError(null)} className="ml-auto">
                     <X size={11} />
                   </button>
                 </div>
               )}
 
-              {/* Breadcrumb — only visible when drilled in */}
               {drillStack.length > 0 && (
                 <div className="border-b border-border bg-muted/20">
                   <DrillBreadcrumb stack={drillStack} onNavigate={handleDrillNavigate} />
                 </div>
               )}
             </div>
-          }
-        />
-      )}
+          ) : undefined
+        }
+      />
     </>
   );
 }

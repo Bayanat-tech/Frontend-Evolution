@@ -1,13 +1,12 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-    Printer,
-    RotateCcw,
     BarChart2,
-    Download,
-    Eye,
 } from "lucide-react";
+import { openWmsReport } from "../../../components/wms/reports/wmsReportPreviewStore";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
 import { MultiSelectField } from "../../../components/ui/MultiSelectField";
 
@@ -172,12 +171,7 @@ const SelectField: React.FC<{
 export default function StockSummaryReport() {
     // ── State
     const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
     const [error, setError] = useState<string>("");
-    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
-
-    const reportWindowRef = useRef<Window | null>(null);
 
     // ── Parameter options
     const [prinOptions, setPrinOptions] = useState<Option[]>([]);
@@ -299,20 +293,11 @@ export default function StockSummaryReport() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cascadeKey]);
 
-    // ── Fetch the report HTML from the API and open it in a new browser tab
+    // ── Fetch the report HTML and publish it to the shared WMS preview
     const fetchReport = useCallback(async (p: Params) => {
         setLoading(true);
         setError("");
-
-        const newTab = window.open("", "_blank");
-        if (!newTab) {
-            setLoading(false);
-            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-            return;
-        }
-        newTab.document.write(
-            "<title>Stock Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>"
-        );
+        const preview = openWmsReport("Stock Summary Report");
 
         try {
             const res = await api.post(
@@ -326,63 +311,26 @@ export default function StockSummaryReport() {
                 },
                 { responseType: "text" },
             );
-
-            newTab.document.open();
-            newTab.document.write(res.data);
-            newTab.document.close();
-
-            reportWindowRef.current = newTab;
-            setHasGeneratedReport(true);
-            setLastGeneratedAt(new Date());
+            preview.ready({
+                html: res.data,
+                filename: "stock_summary_report",
+                excelEndpoint: "/api/wms/reports/stocksummary/excel",
+                excelPayload: {
+                    prin_code: codesFromSelection(p.prin_code),
+                    prod_code: codesFromSelection(p.prod_code),
+                    site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
+                    location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
+                    group_by: p.group_by || null,
+                },
+            });
         } catch (e: any) {
-            newTab.document.open();
-            newTab.document.write(
-                "<title>Stock Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>"
-            );
-            newTab.document.close();
-            setError(e?.response?.data?.message ?? "Failed to load report. Please try again.");
+            const message = e?.response?.data?.message ?? "Failed to load report. Please try again.";
+            preview.fail(message);
+            setError(message);
         } finally {
             setLoading(false);
         }
     }, []);
-
-    // ── Print (targets the most recently opened report tab)
-    const handlePrint = () => {
-        if (reportWindowRef.current && !reportWindowRef.current.closed) {
-            reportWindowRef.current.focus();
-            reportWindowRef.current.print();
-        } else {
-            setError("No open report tab to print. Generate the report again.");
-        }
-    };
-
-    // ── Excel export
-    const handleExcel = async () => {
-        setExporting(true);
-        try {
-            const res = await api.post(
-                "/api/wms/reports/stocksummary/excel",
-                {
-                    prin_code: codesFromSelection(params.prin_code),
-                    prod_code: codesFromSelection(params.prod_code),
-                    site_code: params.site_code.includes("All") ? ["All"] : params.site_code,
-                    location_code: params.location_code.includes("All") ? ["All"] : params.location_code,
-                    group_by: params.group_by || null,
-                },
-                { responseType: "blob" },
-            );
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `stock_summary_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (e: any) {
-            alert("Excel export failed. Please try again.");
-        } finally {
-            setExporting(false);
-        }
-    };
 
     // ── Generate report
     // NOTE: Principal is now a multi-select with an "All" default (same as
@@ -403,9 +351,7 @@ export default function StockSummaryReport() {
             location_code: ["All"],
             group_by: "",
         });
-        setHasGeneratedReport(false);
         setError("");
-        setLastGeneratedAt(null);
     };
 
     const groupByOptions: Option[] = [
@@ -434,19 +380,9 @@ export default function StockSummaryReport() {
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                         <BarChart2 size={17} color="#185FA5" />
                         <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Stock Summary Report</span>
-                        {hasGeneratedReport && (
-                            <span style={{
-                                fontSize: 10,
-                                background: "#d1fae5",
-                                color: "#065f46",
-                                padding: "2px 10px",
-                                borderRadius: 12,
-                                fontWeight: 500,
-                            }}>
-                                Report Generated
-                            </span>
-                        )}
                     </div>
+
+                    <ReportFilterHeader onClear={handleReset} label="Stock Summary Filters" />
 
                     {/* Error display */}
                     {error && (
@@ -556,158 +492,16 @@ export default function StockSummaryReport() {
                         </div>
                     </div>
 
-                    {/* Status bar when report is generated */}
-                    {hasGeneratedReport && (
-                        <div style={{
-                            marginTop: 10,
-                            padding: "8px 14px",
-                            background: "#f0fdf4",
-                            border: "1px solid #bbf7d0",
-                            borderRadius: 6,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 12,
-                        }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>✅</span>
-                                <span style={{ fontSize: 12, color: "#065f46" }}>
-                                    Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (reportWindowRef.current && !reportWindowRef.current.closed) {
-                                        reportWindowRef.current.focus();
-                                    } else {
-                                        setError("Report tab is closed. Please generate again.");
-                                    }
-                                }}
-                                style={{
-                                    padding: "4px 12px",
-                                    background: "#185FA5",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: 4,
-                                    fontSize: 11,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                }}
-                            >
-                                <Eye size={12} /> Open Report
-                            </button>
-                        </div>
-                    )}
-
                     {/* Action bar */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button
-                            className="action-btn-excel"
-                            onClick={handleReset}
-                            disabled={loading}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #d1d5db",
-                                background: "#fff",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#374151",
-                                opacity: loading ? 0.6 : 1,
-                            }}
-                        >
-                            <RotateCcw size={13} /> Reset
-                        </button>
-
-                        <button
-                            className="action-btn-excel"
-                            onClick={handlePrint}
-                            disabled={!hasGeneratedReport || loading}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #d1d5db",
-                                background: "#fff",
-                                cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#374151",
-                                opacity: (!hasGeneratedReport || loading) ? 0.5 : 1,
-                            }}
-                        >
-                            <Printer size={13} /> Print
-                        </button>
-
-                        <button
-                            className="action-btn-excel"
-                            onClick={handleExcel}
-                            disabled={!hasGeneratedReport || loading || exporting}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #d1d5db",
-                                background: "#fff",
-                                cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#374151",
-                                opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1,
-                            }}
-                        >
-                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
-                        </button>
-
-                        <button
+                        <Button
                             className="action-btn-primary"
+                            size="sm"
                             onClick={handleGenerateReport}
                             disabled={loading}
-                            style={{
-                                padding: "7px 16px",
-                                border: "0.5px solid #185FA5",
-                                background: loading ? "#94a3b8" : "#185FA5",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                color: "#fff",
-                                transition: "background 0.2s",
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!loading) e.currentTarget.style.background = "#1e40af";
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!loading) e.currentTarget.style.background = "#185FA5";
-                            }}
                         >
-                            {loading ? (
-                                <>
-                                    <span style={{
-                                        width: 12,
-                                        height: 12,
-                                        border: "2px solid rgba(255,255,255,0.3)",
-                                        borderTop: "2px solid #fff",
-                                        borderRadius: "50%",
-                                        animation: "spin 0.8s linear infinite",
-                                    }} />
-                                    Generating...
-                                </>
-                            ) : (
-                                <>
-                                    <Printer size={13} /> Generate Report
-                                </>
-                            )}
-                        </button>
+                            {loading ? "Generating..." : "Generate Report"}
+                        </Button>
                     </div>
 
                 </div>

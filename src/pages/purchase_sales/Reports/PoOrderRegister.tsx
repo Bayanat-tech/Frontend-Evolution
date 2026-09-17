@@ -1,12 +1,15 @@
-// PoOrderRegister.tsx
 "use client";
 
-import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Printer, RotateCcw, FileText, Download, Eye } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
+import { Input } from "../../../components/ui/Input";
+import { Button } from "../../../components/ui/Button";
+import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import {
     getPoOrderRegisterReportHtml,
     getPoOrderRegisterReportExcel,
@@ -27,52 +30,27 @@ interface PoOrderRegisterParams {
 
 const text = (v: any) => (v === null || v === undefined ? "" : String(v));
 
-// ─── Shared styles ─────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-    width: "100%",
-    fontSize: 12,
-    padding: "8px 10px",
-    border: "1px solid #d1d5db",
-    borderRadius: 7,
-    background: "#fff",
-    color: "#111827",
-    boxSizing: "border-box",
-    outline: "none",
-};
-
-function FloatLabel({ label, required, children, bgColor = "#fff" }: {
-    label: string;
-    required?: boolean;
-    children: React.ReactNode;
-    bgColor?: string;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div style={{ position: "relative", marginTop: 6 }}>
-            <span style={{
-                position: "absolute", top: -8, left: 10, fontSize: 11, color: "#6b7280",
-                background: bgColor, padding: "0 4px", zIndex: 1, textTransform: "uppercase",
-                letterSpacing: "0.05em", fontWeight: 500,
-            }}>
-                {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
-            </span>
+        <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+            {label}
             {children}
-        </div>
+        </label>
     );
 }
 
-const DateField: React.FC<{
-    value: string; onChange: (v: string) => void; max?: string; min?: string;
-}> = ({ value, onChange, max, min }) => (
-    <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        min={min}
-        max={max}
-        style={{ ...inputStyle, color: value ? "#111827" : "#9ca3af", cursor: "pointer" }}
-    />
-);
+function DateField({ value, onChange, max, min }: { value: string; onChange: (v: string) => void; max?: string; min?: string }) {
+    return (
+        <input
+            type="date"
+            className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+            value={value}
+            min={min}
+            max={max}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    );
+}
 
 // ─── Product Multi-Select (checkbox list, self-contained) ──────────────────
 
@@ -106,7 +84,7 @@ function ProductMultiSelectField({
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const selectAllRef = useRef<HTMLInputElement | null>(null);
 
-    const selectedValues = useMemo(
+    const selectedValues = React.useMemo(
         () => value.split(",").map((v) => v.trim()).filter(Boolean),
         [value]
     );
@@ -115,7 +93,7 @@ function ProductMultiSelectField({
     const getText = (row: LookupRowLike) =>
         displayFields.map((f) => row?.[f]).filter(Boolean).join(" - ");
 
-    const filteredRows = useMemo(() => {
+    const filteredRows = React.useMemo(() => {
         const term = query.trim().toLowerCase();
         if (!term) return rows;
         return rows.filter((row) =>
@@ -123,7 +101,7 @@ function ProductMultiSelectField({
         );
     }, [query, rows]);
 
-    const allLoadedValues = useMemo(() => rows.map(getVal).filter(Boolean), [rows]);
+    const allLoadedValues = React.useMemo(() => rows.map(getVal).filter(Boolean), [rows]);
     const allSelected = allLoadedValues.length > 0 && allLoadedValues.every((v) => selectedValues.includes(v));
     const someSelected = allLoadedValues.some((v) => selectedValues.includes(v));
 
@@ -135,7 +113,6 @@ function ProductMultiSelectField({
 
     useEffect(() => {
         if (!open) return;
-
         const place = () => {
             const trigger = triggerRef.current;
             if (!trigger) return;
@@ -153,7 +130,6 @@ function ProductMultiSelectField({
                 : Math.min(rect.bottom + 6, vh - maxHeight - 10);
             setPopoverStyle({ position: "fixed", left, top, width, maxHeight, zIndex: 9999 });
         };
-
         const close = () => setOpen(false);
         const onDown = (e: MouseEvent) => {
             const t = e.target as Node;
@@ -161,7 +137,6 @@ function ProductMultiSelectField({
             close();
         };
         const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-
         place();
         window.addEventListener("resize", place);
         window.addEventListener("scroll", place, true);
@@ -209,27 +184,18 @@ function ProductMultiSelectField({
         .join(", ");
 
     return (
-        <div style={{ position: "relative" }}>
-            <FloatLabel label={label} bgColor="#EEF5FD">
+        <div className="freight-report-multi-select" style={{ position: "relative" }}>
+            <Field label={label}>
                 <div
                     ref={triggerRef}
                     onClick={openPopover}
+                    className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
                     style={{
-                        width: "100%",
-                        fontSize: 12,
-                        padding: "8px 10px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 7,
-                        background: "#fff",
-                        boxSizing: "border-box",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        cursor: disabled ? "not-allowed" : "pointer",
-                        opacity: disabled ? 0.6 : 1,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1,
                     }}
                 >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: displayText ? "#111827" : "#9ca3af" }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: displayText ? "inherit" : "#9ca3af" }}>
                         {displayText || "All"}
                     </span>
                     {selectedValues.length > 0 && (
@@ -238,14 +204,14 @@ function ProductMultiSelectField({
                         </span>
                     )}
                 </div>
-            </FloatLabel>
+            </Field>
+            <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 4 }}>Click to select multiple</div>
 
             {open && createPortal(
                 <div
                     ref={popoverRef}
                     style={{ ...popoverStyle, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}
                 >
-                    {/* Header */}
                     <div style={{ borderBottom: "1px solid #e5e7eb", background: "#f8fbff", padding: "10px 12px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                             <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b7280", fontWeight: 600 }}>
@@ -258,44 +224,28 @@ function ProductMultiSelectField({
                                 <span style={{ fontSize: 11, background: "#dbeafe", color: "#1d4ed8", padding: "3px 10px", borderRadius: 10, fontWeight: 600 }}>
                                     {rows.length} total
                                 </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setOpen(false)}
-                                    style={{ border: "none", background: "none", cursor: "pointer", color: "#6b7280", fontSize: 14, lineHeight: 1, padding: 2 }}
-                                >
-                                    ✕
-                                </button>
+                                <button type="button" onClick={() => setOpen(false)} style={{ border: "none", background: "none", cursor: "pointer", color: "#6b7280", fontSize: 14, lineHeight: 1, padding: 2 }}>✕</button>
                             </div>
                         </div>
                         <input
-                            type="text"
-                            autoFocus
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
+                            type="text" autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search products..."
                             style={{ width: "100%", fontSize: 12, padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
                         />
                     </div>
-
-                    {/* Table */}
                     <div style={{ overflow: "auto", flex: 1 }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                             <thead style={{ position: "sticky", top: 0, background: "#1e3a8a", color: "#fff", zIndex: 1 }}>
                                 <tr>
                                     <th style={{ width: 34, padding: "8px 10px", textAlign: "center" }}>
                                         <input
-                                            ref={selectAllRef}
-                                            type="checkbox"
-                                            checked={allSelected}
-                                            onChange={toggleSelectAll}
+                                            ref={selectAllRef} type="checkbox" checked={allSelected} onChange={toggleSelectAll}
                                             disabled={loading || allLoadedValues.length === 0}
                                             style={{ width: 14, height: 14, cursor: "pointer" }}
                                         />
                                     </th>
                                     {columns.map((c) => (
-                                        <th key={c.field} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600 }}>
-                                            {c.header}
-                                        </th>
+                                        <th key={c.field} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600 }}>{c.header}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -309,23 +259,12 @@ function ProductMultiSelectField({
                                         const v = getVal(row);
                                         const isSelected = selectedValues.includes(v);
                                         return (
-                                            <tr
-                                                key={v || idx}
-                                                onClick={() => toggleRow(row)}
-                                                style={{ cursor: "pointer", background: isSelected ? "#eff6ff" : idx % 2 ? "#fafafa" : "#fff" }}
-                                            >
+                                            <tr key={v || idx} onClick={() => toggleRow(row)} style={{ cursor: "pointer", background: isSelected ? "#eff6ff" : idx % 2 ? "#fafafa" : "#fff" }}>
                                                 <td style={{ padding: "6px 10px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => toggleRow(row)}
-                                                        style={{ width: 14, height: 14, cursor: "pointer" }}
-                                                    />
+                                                    <input type="checkbox" checked={isSelected} onChange={() => toggleRow(row)} style={{ width: 14, height: 14, cursor: "pointer" }} />
                                                 </td>
                                                 {columns.map((c) => (
-                                                    <td key={c.field} style={{ padding: "6px 10px", color: isSelected ? "#1d4ed8" : "#374151" }}>
-                                                        {row?.[c.field] ?? ""}
-                                                    </td>
+                                                    <td key={c.field} style={{ padding: "6px 10px", color: isSelected ? "#1d4ed8" : "#374151" }}>{row?.[c.field] ?? ""}</td>
                                                 ))}
                                             </tr>
                                         );
@@ -345,33 +284,26 @@ function ProductMultiSelectField({
 
 export default function PoOrderRegisterPage() {
     const { user } = useAuth();
-    const companyCode = user?.company_code ?? "";
-    const loginId = user?.loginid ?? user?.username ?? "ADMIN";
-
-    const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
-    const [error, setError] = useState("");
-    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
-    const reportWindowRef = useRef<Window | null>(null);
+    const userRecord = (user || {}) as Record<string, unknown>;
+    const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "");
+    const loginId = String(userRecord.loginid || userRecord.username || "ADMIN");
 
     const [fromDateIso, setFromDateIso] = useState("");
     const [toDateIso, setToDateIso] = useState("");
-
-    // Supplier (A/c code)
     const [acCode, setAcCode] = useState("");
     const [acName, setAcName] = useState("");
-
-    // PO Number (manual)
     const [poNumber, setPoNumber] = useState("");
-
-    // Product (multi-select, comma-separated codes)
     const [prodCodeFrom, setProdCodeFrom] = useState("");
-
-    // Report Criteria
     const [reportCriteria, setReportCriteria] = useState<"SO_REF_ONLY" | "ALL">("ALL");
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState("Select filters and run the report.");
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
+
+    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+    const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+    const [reportPreviewError, setReportPreviewError] = useState("");
+    const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
@@ -387,361 +319,179 @@ export default function PoOrderRegisterPage() {
         with_so_ref: reportCriteria === "SO_REF_ONLY" ? "Y" : "N",
     });
 
-    const fetchReport = useCallback(async (params: PoOrderRegisterParams) => {
-        setLoading(true);
-        setError("");
+    useEffect(() => {
+        return () => {
+            if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+        };
+    }, [reportPreviewUrl]);
+
+    const runReport = useCallback(async () => {
+        if (!dateRangeValid) return;
+        const params = buildRequestParams();
         lastRequestRef.current = params;
 
-        const newTab = window.open("", "_blank");
-        if (!newTab) {
-            setLoading(false);
-            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-            return;
-        }
-        newTab.document.write("<title>PO Order Register</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
+        if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+        setReportPreviewUrl("");
+        setReportPreviewError("");
+        setReportPreviewOpen(true);
+        setLoading(true);
+        setMessage("");
 
         try {
             const html = await getPoOrderRegisterReportHtml(params);
-            newTab.document.open();
-            newTab.document.write(html);
-            newTab.document.close();
-            reportWindowRef.current = newTab;
-            setHasGeneratedReport(true);
-            setLastGeneratedAt(new Date());
+            const blob = new Blob([html], { type: "text/html" });
+            const url = window.URL.createObjectURL(blob);
+            setReportPreviewUrl(url);
+            setMessage("Report generated.");
         } catch (err: any) {
-            newTab.document.open();
-            newTab.document.write("<title>PO Order Register</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
-            newTab.document.close();
-            setError(err?.message ?? "Failed to load report. Please try again.");
+            const errorMessage = err?.response?.data?.details || err?.message || "Failed to load report. Please try again.";
+            setReportPreviewError(errorMessage);
+            setMessage(errorMessage);
         } finally {
             setLoading(false);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
 
-    const handleGenerateReport = () => {
-        if (!dateRangeValid) return;
-        fetchReport(buildRequestParams());
+    const closeReportPreview = () => {
+        if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
+        setReportPreviewOpen(false);
+        setReportPreviewUrl("");
+        setReportPreviewError("");
     };
 
-    const handleReset = () => {
+    const handleReportPreviewExcel = async () => {
+        if (!lastRequestRef.current) return;
+        setReportPreviewExporting(true);
+        try {
+            await getPoOrderRegisterReportExcel(lastRequestRef.current);
+        } catch (exportError: any) {
+            setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
+        } finally {
+            setReportPreviewExporting(false);
+        }
+    };
+
+    function resetFilters() {
         setFromDateIso(""); setToDateIso("");
         setAcCode(""); setAcName("");
         setPoNumber("");
         setProdCodeFrom("");
         setReportCriteria("ALL");
-        setError(""); setHasGeneratedReport(false); setLastGeneratedAt(null);
-    };
+        setMessage("Select filters and run the report.");
+    }
 
-    const handlePrint = () => {
-        if (reportWindowRef.current && !reportWindowRef.current.closed) {
-            reportWindowRef.current.focus();
-            reportWindowRef.current.print();
-        } else {
-            setError("No open report tab to print. Generate the report again.");
-        }
-    };
-
-    const handleExcel = async () => {
-        if (!lastRequestRef.current) {
-            setError("Generate the report at least once before exporting to Excel.");
-            return;
-        }
-        setExporting(true);
-        try {
-            await getPoOrderRegisterReportExcel(lastRequestRef.current);
-        } catch (err) {
-            console.error("Excel export error:", err);
-            alert("Excel export failed. Please try again.");
-        } finally {
-            setExporting(false);
-        }
-    };
-
-    const BG = "#EEF5FD";
     return (
-        <div style={{ background: "#f3f4f6", padding: "33px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
-            <style>{`
-                .action-btn-primary:hover { background: #1e40af !important; }
-                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
-
-            <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
-
-                    {/* Header */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                        <FileText size={17} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>PO Order Register</span>
-                        {hasGeneratedReport && (
-                            <span style={{ fontSize: 10, background: "#d1fae5", color: "#065f46", padding: "2px 10px", borderRadius: 12, fontWeight: 500 }}>
-                                Report Generated
-                            </span>
-                        )}
-                    </div>
-
-                    {error && (
-                        <div style={{ marginBottom: 10, padding: "8px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, color: "#dc2626", fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                            <span>⚠️</span>{error}
-                            <button onClick={() => setError("")} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}>✕</button>
-                        </div>
-                    )}
-
-                    {!dateRangeValid && (
-                        <div style={{ marginBottom: 10, padding: "8px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, color: "#92400e", fontSize: 12 }}>
-                            From date must be on or before To date.
-                        </div>
-                    )}
-
-                    {/* ── Filter fields ── */}
-                    <div
-                        className="field-row"
-                        style={{
-                            background: "#EEF5FD",
-                            borderRadius: 8,
-                            padding: "10px 12px",
-                        }}
-                    >
-                        {/* ───────────── First Row ───────────── */}
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                                gap: 10,
-                                alignItems: "end",
-                            }}
-                        >
-                            <div style={{ minWidth: 0 }}>
-                                <FloatLabel label="Date From" bgColor={BG}>
-                                    <DateField
-                                        value={fromDateIso}
-                                        onChange={setFromDateIso}
-                                        max={toDateIso || undefined}
-                                    />
-                                </FloatLabel>
-                            </div>
-
-                            <div style={{ minWidth: 0 }}>
-                                <FloatLabel label="Date To" bgColor={BG}>
-                                    <DateField
-                                        value={toDateIso}
-                                        onChange={setToDateIso}
-                                        min={fromDateIso || undefined}
-                                    />
-                                </FloatLabel>
-                            </div>
-
-                            <div style={{ minWidth: 0 }}>
-                                <LookupField
-                                    label="Supplier"
-                                    value={acCode}
-                                    displayValue={acName ? `${acCode} - ${acName}` : acCode}
-                                    columns={[
-                                        { field: "ac_code", header: "Code" },
-                                        { field: "ac_name", header: "Name" },
-                                        { field: "address", header: "Address" },
-                                        { field: "tel", header: "Tel" },
-                                        { field: "fax", header: "Fax" },
-                                    ]}
-                                    valueField="ac_code"
-                                    displayFields={["ac_code", "ac_name"]}
-                                    loadOptions={() =>
-                                        getDynamicLookup({
-                                            parameter: "Account_AC_CODE_Serach_HDR",
-                                            code1: companyCode,
-                                            loginid: loginId,
-                                        })
-                                    }
-                                    disabled={false}
-                                    onChange={(value: string, row: any) => {
-                                        setAcCode(value);
-                                        setAcName(text(getLookupValue(row || {}, "ac_name")));
-                                        setPoNumber("");
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ minWidth: 0 }}>
-                                <LookupField
-                                    label="PO Number"
-                                    value={poNumber}
-                                    displayValue={poNumber}
-                                    columns={[
-                                        { field: "doc_no", header: "PO No" },
-                                        { field: "doc_date", header: "Date" },
-                                        { field: "ac_name", header: "Supplier" },
-                                    ]}
-                                    valueField="doc_no"
-                                    displayFields={["doc_no"]}
-                                    loadOptions={() =>
-                                        getDynamicLookup({
-                                            parameter: "Account_PORPT_DOCNO_BY_SUPPLIER",
-                                            code1: companyCode,
-                                            code2: acCode,
-                                        })
-                                    }
-                                    disabled={!acCode}
-                                    onChange={(value: string) => setPoNumber(value)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* ───────────── Second Row : Product (Multi-select checkboxes) ───────────── */}
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr",
-                                gap: 10,
-                                marginTop: 12,
-                                maxWidth: "50%",
-                                alignItems: "end",
-                            }}
-                        >
-                            <div style={{ minWidth: 0 }}>
-                                <ProductMultiSelectField
-                                    label="Product"
-                                    value={prodCodeFrom}
-                                    onChange={setProdCodeFrom}
-                                    valueField="prod_code"
-                                    displayFields={["prod_code", "prod_name"]}
-                                    columns={[
-                                        { field: "prod_code", header: "Code" },
-                                        { field: "prod_name", header: "Name" },
-                                        { field: "p_uom", header: "P Uom" },
-                                        { field: "unit_price", header: "Unit Price" },
-                                    ]}
-                                    loadOptions={() =>
-                                        getDynamicLookup({
-                                            parameter: "PS_POORDER_ENTRY_PRODUCT_LIST",
-                                            code1: companyCode,
-                                            loginid: loginId,
-                                        })
-                                    }
-                                    disabled={false}
-                                />
-                            </div>
-                        </div>
-
-                        {/* ───────────── Report Criteria ───────────── */}
-                        <div
-                            style={{
-                                marginTop: 14,
-                                width: "50%",
-                                boxSizing: "border-box",
-                                border: "1px solid #d1d5db",
-                                borderRadius: 4,
-                                background: "#fff",
-                                padding: "15px 12px 10px",
-                                position: "relative",
-                            }}
-                        >
-                            <span
-                                style={{
-                                    position: "absolute",
-                                    top: -8,
-                                    left: 10,
-                                    background: BG,
-                                    padding: "0 5px",
-                                    fontSize: 11,
-                                    color: "#6b7280",
-                                    fontWeight: 500,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.05em",
-                                }}
-                            >
-                                Report Criteria
-                            </span>
-
-                            <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
-                                <label
-                                    style={{
-                                        display: "flex", alignItems: "center", gap: 7,
-                                        fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap",
-                                    }}
-                                >
-                                    <input
-                                        type="radio"
-                                        name="reportCriteria"
-                                        value="SO_REF_ONLY"
-                                        checked={reportCriteria === "SO_REF_ONLY"}
-                                        onChange={() => setReportCriteria("SO_REF_ONLY")}
-                                        style={{ width: 16, height: 16, margin: 0, accentColor: "#185FA5", cursor: "pointer" }}
-                                    />
-                                    With SO Ref. Only
-                                </label>
-
-                                <label
-                                    style={{
-                                        display: "flex", alignItems: "center", gap: 7,
-                                        fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap",
-                                    }}
-                                >
-                                    <input
-                                        type="radio"
-                                        name="reportCriteria"
-                                        value="ALL"
-                                        checked={reportCriteria === "ALL"}
-                                        onChange={() => setReportCriteria("ALL")}
-                                        style={{ width: 16, height: 16, margin: 0, accentColor: "#185FA5", cursor: "pointer" }}
-                                    />
-                                    All
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginLeft: 4 }}>
-                        Leave a field on "All" to include every value for that filter.
-                    </div>
-
-                    {/* Status bar */}
-                    {hasGeneratedReport && (
-                        <div style={{ marginTop: 10, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>✅</span>
-                                <span style={{ fontSize: 12, color: "#065f46" }}>Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}</span>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (reportWindowRef.current && !reportWindowRef.current.closed) reportWindowRef.current.focus();
-                                    else setError("Report tab is closed. Please generate again.");
-                                }}
-                                style={{ padding: "4px 12px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-                            >
-                                <Eye size={12} /> Open Report
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Action bar */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button className="action-btn-excel" onClick={handleReset} disabled={loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: loading ? 0.6 : 1 }}>
-                            <RotateCcw size={13} /> Reset
-                        </button>
-                        <button className="action-btn-excel" onClick={handlePrint} disabled={!hasGeneratedReport || loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading) ? 0.5 : 1 }}>
-                            <Printer size={13} /> Print
-                        </button>
-                        <button className="action-btn-excel" onClick={handleExcel} disabled={!hasGeneratedReport || loading || exporting}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1 }}>
-                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
-                        </button>
-                        <button className="action-btn-primary" onClick={handleGenerateReport} disabled={loading || !dateRangeValid}
-                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5", cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
-                            {loading ? (
-                                <>
-                                    <span style={{ width: 12, height: 12, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                                    Generating...
-                                </>
-                            ) : (
-                                <><Eye size={13} /> Generate Report</>
-                            )}
-                        </button>
-                    </div>
+        <section className="freight-ui-standard freight-report-screen">
+            <div className="freight-report-card">
+                <div className="freight-report-titlebar">
+                    <h1>PO Order Register</h1>
+                    <span className="freight-report-title-dot" aria-hidden="true" />
                 </div>
+
+                <ReportFilterHeader onClear={resetFilters} />
+
+<div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <Field label="Date From">
+        <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
+    </Field>
+
+    <Field label="Date To">
+        <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
+    </Field>
+
+    <Field label="Supplier">
+        <LookupField
+            label=""
+            value={acCode}
+            displayValue={acName ? `${acCode} - ${acName}` : acCode}
+            columns={[
+                { field: "ac_code", header: "Code" },
+                { field: "ac_name", header: "Name" },
+                { field: "address", header: "Address" },
+                { field: "tel", header: "Tel" },
+                { field: "fax", header: "Fax" },
+            ]}
+            valueField="ac_code"
+            displayFields={["ac_code", "ac_name"]}
+            loadOptions={() =>
+                getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginId })
+            }
+            disabled={false}
+            onChange={(value, row) => {
+                setAcCode(value);
+                setAcName(text(getLookupValue(row || {}, "ac_name")));
+            }}
+        />
+    </Field>
+
+    <Field label="PO Number">
+        <Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="number" />
+    </Field>
+
+    <ProductMultiSelectField
+        label="Product"
+        value={prodCodeFrom}
+        onChange={setProdCodeFrom}
+        valueField="prod_code"
+        displayFields={["prod_code", "prod_name"]}
+        columns={[
+            { field: "prod_code", header: "Code" },
+            { field: "prod_name", header: "Name" },
+            { field: "p_uom", header: "P Uom" },
+            { field: "unit_price", header: "Unit Price" },
+        ]}
+        loadOptions={() =>
+            getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })
+        }
+        disabled={false}
+    />
+
+    <div>
+        <Field label="Report Criteria">
+            <div className="flex items-center gap-2 h-8">
+                {[
+                    { value: "SO_REF_ONLY", label: "With SO Ref." },
+                    { value: "ALL", label: "All" },
+                ].map((opt) => (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
+                        className={`h-8 flex-1 rounded-md border px-2 text-xs font-medium normal-case transition-colors ${
+                            reportCriteria === opt.value
+                                ? "border-blue-600 bg-blue-50 text-blue-700"
+                                : "border-border bg-background text-foreground hover:bg-muted"
+                        }`}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
             </div>
-        </div>
+        </Field>
+    </div>
+</div>
+
+                <div className="freight-report-actions">
+                    <Button type="button" size="sm" onClick={runReport} disabled={loading || !dateRangeValid}>
+                        {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
+                    </Button>
+                </div>
+                {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
+            </div>
+
+            {reportPreviewOpen && (
+                <ReportPreviewDialog
+                    title="PO Order Register"
+                    pdfUrl={reportPreviewUrl}
+                    error={reportPreviewError}
+                    exporting={reportPreviewExporting}
+                    onExcel={handleReportPreviewExcel}
+                    onClose={closeReportPreview}
+                    onDownload={() => { }}
+                    downloadName="PO_Order_Register_Report.html"
+                />
+            )}
+        </section>
     );
 }

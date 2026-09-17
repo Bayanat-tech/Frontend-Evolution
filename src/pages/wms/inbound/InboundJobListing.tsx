@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, Eye, Plus, RefreshCw, Save, X } from "lucide-react";
+import { Ban, Eye, Plus, RefreshCw } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, patchWmsInbound, postWmsInbound } from "../../../api/wms";
@@ -9,8 +9,7 @@ import { Dialog } from "../../../components/ui/Dialog";
 import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
-import { InboundFormFrame } from "./InboundFormFrame";
-import { InboundJobCreateForm } from "./InboundJobCreateForm";
+import { InboundJobForm } from "./InboundJobForm";
 import { useRawSqlDropdown } from "../../../hooks/useRawSqlDropdown";
 import { listingTabs, inboundJobsPath } from "../../../config/staticData";
 import {
@@ -172,7 +171,7 @@ export function InboundJobListing() {
         bcf_code: "", request_category: "", load_point: "",
         updated_by:   user?.loginid || "Admin",
         created_by:   user?.loginid || "Admin",
-        created_at:   now,
+        created_at:   String(form.schedule_date || today),
         prin_code:    String(form.prin_code || ""),
         schedule_date: String(form.schedule_date || today),
       });
@@ -204,6 +203,20 @@ export function InboundJobListing() {
       toast.error(error instanceof Error ? error.message : "Unable to cancel inbound job");
     } finally { setSaving(false); }
   };
+
+  // Page-style form replaces the listing entirely while adding a job — no more Dialog.
+  if (formOpen) {
+    return (
+      <InboundJobForm
+        form={form}
+        setForm={setForm}
+        companyCode={companyCode}
+        saving={saving}
+        onSubmit={saveJob}
+        onClose={() => setFormOpen(false)}
+      />
+    );
+  }
 
   return (
     <section className="grid gap-4">
@@ -248,31 +261,7 @@ export function InboundJobListing() {
         }
       />
 
-      {/* Add Job Modal */}
-      <InboundFormFrame
-        open={formOpen}
-        title="Add Inbound Job"
-        onClose={() => setFormOpen(false)}
-        footer={
-          <>
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button disabled={saving} form="inbound-job-form" type="submit">
-              <Save size={15} /> {saving ? "Saving..." : "Save Job"}
-            </Button>
-          </>
-        }
-      >
-        <InboundJobCreateForm
-          form={form}
-          setForm={setForm}
-          companyCode={companyCode}
-          onSubmit={saveJob}
-        />
-      </InboundFormFrame>
-
-      {/* Cancel Job Dialog */}
+      {/* Cancel Job Dialog — stays a lightweight confirmation dialog, not part of this change */}
       <Dialog
         open={Boolean(cancelTarget)}
         title={`Cancel Job ${cancelTarget ? value(cancelTarget, "job_no") : ""}`}

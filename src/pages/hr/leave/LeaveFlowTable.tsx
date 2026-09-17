@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle2, Eye, FileDown, Pencil, RefreshCw, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FileDown, Pencil, Search, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getHrLeaveFlow } from "../../../api/hr";
@@ -58,8 +58,6 @@ export function LeaveFlowTable({
   const [notice, setNotice] = useState<ToastNotice>(null);
 
   const loginId = String (user?.LOGINID1 || user?.loginid1  || user?.loginid || user?.LOGINID || user?.username || "");
-
-  console.log('leaveflowtable loginId',loginId);
 
   const loadRows = async (clearNotice = true) => {
     if (clearNotice) setNotice(null);
@@ -136,22 +134,21 @@ export function LeaveFlowTable({
   }, [rows, onEditRow, config.key]);
 
   return (
-    <section className="leave-flow-page">
-      <div className="leave-flow-header">
-        <div className="min-w-0">
-          <p className="leave-flow-eyebrow">{config.eyebrow}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1>{config.title}</h1>
-            <span className={`leave-flow-status ${toneClasses[config.statusTone]}`}>{config.statusLabel}</span>
-            <Badge variant="outline">{rows.length.toLocaleString()} requests</Badge>
-          </div>
-          <p>{config.description}</p>
+    <section className="leave-flow-page grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            {config.title}
+          </h2>
+          <span className={`inline-flex items-center rounded border px-2 py-0 text-[10.5px] leading-tight font-medium ${toneClasses[config.statusTone]}`}>
+            {config.statusLabel}
+          </span>
         </div>
-        <div className="leave-flow-actions">
+        <div className="flex flex-wrap items-center gap-2">
           {headerActions}
-          <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
         </div>
       </div>
 
