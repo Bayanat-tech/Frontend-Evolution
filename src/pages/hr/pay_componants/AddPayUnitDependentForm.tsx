@@ -245,6 +245,8 @@ const AddPayUnitDependentForm = ({ onClose, isEdit, isViewMode = false, pay_comp
         pay_comp_id: values.pay_comp_id.trim(),
         pay_comp_id_depend: headerDetails[0]?.depend_pay_comp_type?.trim() ?? '',
         nationality: d.nationality || d.country_code || '',
+        // nationality: d.nationality || d.country_code || '',
+         nationality: ( d.nationality).substring(0, 3), //ADDED
         age: Number(d.age) || 0,
         status: d.status || 'A',
         remarks: d.remarks || undefined,

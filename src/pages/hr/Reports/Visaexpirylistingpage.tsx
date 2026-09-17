@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import {
   getVisaExpiryReportHtml,
   getVisaExpiryReportExcelDownload,
 } from "../../../api/transactions";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,12 @@ const getNextMonth = (): string => {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(
     n.getDate()
   ).padStart(2, "0")}`;
+};
+
+const toDisplayDate = (isoDate: string): string => {
+  if (!isoDate) return "All";
+  const [y, m, d] = isoDate.split("-");
+  return `${d}/${m}/${y}`;
 };
 
 // ─── Field wrapper (same style as Freight/DN Summary) ─────────────────────────
@@ -179,11 +186,10 @@ export default function VisaExpiryListingPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Select filters and run the report.");
 
-  const lastParamsRef = React.useRef<Params | null>(null);
+  const lastParamsRef = useRef<Params | null>(null);
 
   // ── Inline preview dialog state (no new window) ─────────────────────────
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("");
   const [reportHtml, setReportHtml] = useState<string | null>(null);
 
   const dateRangeValid =
@@ -254,7 +260,7 @@ export default function VisaExpiryListingPage() {
     load();
   }, [loginId, companyCode]);
 
-  // ── Fetch report HTML → inline blob URL for the dialog iframe ───────────
+  // ── Fetch report HTML → fed straight into NewReportDialog ───────────────
   const fetchReport = useCallback(
     async (p: Params) => {
       setLoading(true);
@@ -262,8 +268,6 @@ export default function VisaExpiryListingPage() {
       setMessage("");
       lastParamsRef.current = p;
 
-      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-      setPreviewUrl("");
       setReportHtml(null);
       setPreviewOpen(true);
 
@@ -294,30 +298,8 @@ export default function VisaExpiryListingPage() {
         setLoading(false);
       }
     },
-    [loginId, companyCode, previewUrl]
+    [loginId, companyCode]
   );
-
-  // ── Keep blob URL in sync with reportHtml ───────────────────────────────
-  useEffect(() => {
-    if (!previewOpen) return;
-    if (loading) return;
-    if (reportHtml === null || reportHtml === undefined) return;
-
-    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    setPreviewUrl((prev) => {
-      if (prev) window.URL.revokeObjectURL(prev);
-      return url;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewOpen, reportHtml, loading]);
-
-  // ── Cleanup on unmount ──────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   // ── Clear All ─────────────────────────────────────────────────────────────
   const handleClearAll = () => {
@@ -357,7 +339,7 @@ export default function VisaExpiryListingPage() {
     });
   };
 
-  // Excel — only used by ReportPreviewDialog's internal Excel button
+  // Excel export — wired to NewReportDialog's onExportExcel
   const handleExcel = async () => {
     if (!lastParamsRef.current) return;
     const p = lastParamsRef.current;
@@ -386,10 +368,60 @@ export default function VisaExpiryListingPage() {
     }
   };
 
+  // Open report in a new browser tab
+  const handleOpenInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger browser print dialog (Save as PDF) for the current report
+  const handleDownloadPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "visa-expiry-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
   const closePreview = () => {
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewOpen(false);
-    setPreviewUrl("");
     setReportHtml(null);
   };
 
@@ -577,19 +609,26 @@ export default function VisaExpiryListingPage() {
         ) : null}
       </div>
 
-      {/* ── Inline preview dialog (Print/Excel inside dialog only) ────── */}
-      {previewOpen && (
-        <ReportPreviewDialog
-          title="Visa Expiry Report"
-          pdfUrl={previewUrl}
-          error={error || undefined}
-          exporting={exporting}
-          onExcel={handleExcel}
-          onClose={closePreview}
-          onDownload={() => {}}
-          downloadName="visa_expiry_report.html"
-        />
-      )}
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closePreview}
+        title="Visa Expiry Report"
+        htmlContent={reportHtml}
+        loading={loading}
+        error={error || null}
+        meta={{
+          companyName: companyCode,
+          user: loginId,
+          period: `${toDisplayDate(visaExpiryFrom)} - ${toDisplayDate(visaExpiryTo)}`,
+          status: employeeFilter === "A" ? "Active Employees" : "All Employees",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={handleExcel}
+        exportingExcel={exporting}
+        onOpenInNewWindow={handleOpenInNewWindow}
+        onDownloadPdf={handleDownloadPdf}
+      />
     </section>
   );
 }

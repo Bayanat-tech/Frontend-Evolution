@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Eye, FileText, Filter, RotateCcw, UserRound } from "lucide-react";
+import { CalendarDays, Eye, FileText, Filter, UserRound } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount, LookupRow } from "../../../api/lookups";
 import { getPLSummaryReportExcel, getPLSummaryReportHtml } from "../../../api/transactions";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { Button } from "../../../components/ui/Button";
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
-import { Input } from "../../../components/ui/Input";
 import { MultiSelectField, type MultiSelectOption } from "../../../components/ui/MultiSelectField";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 export type ReportMode =
   | "invoicewise"
@@ -92,10 +92,6 @@ function firstValue(values: string[]) {
   return values[0] || "";
 }
 
-function setFilter<T extends Record<string, any>>(setter: React.Dispatch<React.SetStateAction<T>>, key: keyof T, value: string) {
-  setter((current) => ({ ...current, [key]: value }));
-}
-
 function optionLabel(options: { label: string; value: string }[], value: string) {
   return options.find((x) => x.value === value)?.label || "All";
 }
@@ -122,10 +118,6 @@ function firstExisting(row: LookupRow, key: string) {
   return row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
 }
 
-function formatText(value: unknown) {
-  return value === null || value === undefined ? "" : String(value);
-}
-
 function buildTotals(rows: LookupRow[]) {
   const fields = ["REVENUE", "EXPENSE", "PROFIT"];
   return fields
@@ -134,18 +126,6 @@ function buildTotals(rows: LookupRow[]) {
       value: rows.reduce((sum, row) => sum + Number(firstExisting(row, field) || 0), 0),
     }))
     .filter((x) => x.value !== 0);
-}
-
-async function loadLookup(parameter: string, companyCode: string) {
-  const rows = await getDynamicLookupaccount({
-    parameter,
-    loginid: "ADMIN",
-    code1: companyCode,
-    code2: "", code3: "", code4: "",
-    number1: 0, number2: 0, number3: 0, number4: 0,
-    date1: null, date2: null, date3: null, date4: null,
-  });
-  return Array.isArray(rows) ? rows : [];
 }
 
 function usePLLookup(parameter: string, companyCode: string, valueField: string, nameField: string, loginId: string) {
@@ -196,11 +176,13 @@ export default function PLSummaryPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Select filters and run the report.");
   const [rows, setRows] = useState<LookupRow[]>([]);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewError, setPreviewError] = useState("");
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
+
+  // ── Inline preview dialog state (no new window) ─────────────────────────
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState("");
 
   const invoiceLookup = usePLLookup(LOOKUP_PARAMS.docno, companyCode, "doc_no", "inv_no", loginId);
   const salesmanLookup = usePLLookup(LOOKUP_PARAMS.salesman, companyCode, "salesman_code", "salesman_name", loginId);
@@ -209,10 +191,6 @@ export default function PLSummaryPage() {
   const totals = useMemo(() => buildTotals(rows), [rows]);
   const invoiceDisplay = invoiceLookup.options.find((x) => x.value === invoiceNo)?.label || "All invoices";
   const salesmanDisplay = salesmanLookup.options.find((x) => x.value === salesman)?.label || "All sales persons";
-
-  useEffect(() => () => {
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
 
   const buildRequestParams = useCallback((): PLSummaryReportParams => ({
     parameter: "PL_SUMMARY_REPORT",
@@ -231,20 +209,20 @@ export default function PLSummaryPage() {
     cust: toApiCodeString(selections.customer),
   }), [companyCode, fromDate, invoiceNo, loginId, mode, salesman, selections, toDate]);
 
+  // ── Fetch report HTML → fed straight into NewReportDialog ───────────────
   const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
     setLoading(true);
     setError("");
     setMessage("");
     lastRequestRef.current = params;
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-    setPreviewUrl("");
+
+    setReportHtml(null);
     setPreviewError("");
     setPreviewOpen(true);
 
     try {
       const html = await getPLSummaryReportHtml(params);
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      setPreviewUrl(window.URL.createObjectURL(blob));
+      setReportHtml(html);
       setRows([]);
       setHasGeneratedReport(true);
       setMessage("Report generated successfully.");
@@ -256,7 +234,7 @@ export default function PLSummaryPage() {
     } finally {
       setLoading(false);
     }
-  }, [previewUrl]);
+  }, []);
 
   function handleGenerate() {
     if (!dateRangeValid) return;
@@ -277,12 +255,12 @@ export default function PLSummaryPage() {
   }
 
   function closePreview() {
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewOpen(false);
-    setPreviewUrl("");
+    setReportHtml(null);
     setPreviewError("");
   }
 
+  // Excel export — wired to NewReportDialog's onExportExcel
   async function handleExcel() {
     if (!lastRequestRef.current) {
       setError("Generate the report at least once before exporting to Excel.");
@@ -295,6 +273,58 @@ export default function PLSummaryPage() {
       setPreviewError("Excel export failed. Please try again.");
     } finally {
       setExporting(false);
+    }
+  }
+
+  // Open report in a new browser tab
+  function handleOpenInNewWindow() {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  }
+
+  // Trigger browser print dialog (Save as PDF) for the current report
+  function handleDownloadPdf() {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "pl-summary-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
     }
   }
 
@@ -312,8 +342,12 @@ export default function PLSummaryPage() {
 
         <ReportFilterHeader onClear={handleReset} />
 
-        {error && <div className="mx-3 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠️ {error}</div>}
-        {!dateRangeValid && <div className="mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">From date must be on or before To date.</div>}
+        {error && !previewOpen && (
+          <div className="mx-3 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠️ {error}</div>
+        )}
+        {!dateRangeValid && (
+          <div className="mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">From date must be on or before To date.</div>
+        )}
 
         <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(fromDate) || "Start"} – ${toDisplayDate(toDate) || "Today"}`} />
@@ -377,18 +411,27 @@ export default function PLSummaryPage() {
         {hasGeneratedReport && <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p>}
       </div>
 
-      {previewOpen && (
-        <ReportPreviewDialog
-          title="P&L Summary Report"
-          pdfUrl={previewUrl}
-          error={previewError}
-          exporting={exporting}
-          onExcel={handleExcel}
-          onClose={closePreview}
-          onDownload={() => {}}
-          downloadName="PL_Summary_Report.html"
-        />
-      )}
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closePreview}
+        title="P&L Summary Report"
+        htmlContent={reportHtml}
+        loading={loading}
+        error={previewError || null}
+        meta={{
+          companyName: companyCode,
+          user: loginId,
+          recordCount: rows.length,
+          period: `${toDisplayDate(fromDate) || "Start"} - ${toDisplayDate(toDate) || "Today"}`,
+          status: optionLabel(MODE_OPTIONS, mode),
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={handleExcel}
+        exportingExcel={exporting}
+        onOpenInNewWindow={handleOpenInNewWindow}
+        onDownloadPdf={handleDownloadPdf}
+      />
     </section>
   );
 }
