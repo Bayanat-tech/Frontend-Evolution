@@ -8,7 +8,7 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Input } from "../../../components/ui/Input";
 import { Button } from "../../../components/ui/Button";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { NewReportDialog } from "../../../components/new_report_format";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import {
     getPoOrderRegisterReportHtml,
@@ -184,27 +184,30 @@ function ProductMultiSelectField({
         .join(", ");
 
     return (
-        <div className="freight-report-multi-select" style={{ position: "relative" }}>
-            <Field label={label}>
-                <div
-                    ref={triggerRef}
-                    onClick={openPopover}
-                    className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-                    style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1,
-                    }}
-                >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: displayText ? "inherit" : "#9ca3af" }}>
-                        {displayText || "All"}
+
+        <div className="freight-product-select" style={{ position: "relative" }}>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-muted-foreground">
+                {label}
+            </label>
+            <div
+                ref={triggerRef}
+                onClick={openPopover}
+                className="h-8 rounded-md px-2 text-sm font-medium text-foreground shadow-sm"
+                style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1,
+                    border: "1px solid #aebdce", background: "#f4f7fb",
+                }}
+            >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: displayText ? "inherit" : "#9ca3af" }}>
+                    {displayText || "All"}
+                </span>
+                {selectedValues.length > 0 && (
+                    <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "2px 8px", borderRadius: 10, fontWeight: 600, marginLeft: 6, flexShrink: 0 }}>
+                        {selectedValues.length}
                     </span>
-                    {selectedValues.length > 0 && (
-                        <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "2px 8px", borderRadius: 10, fontWeight: 600, marginLeft: 6, flexShrink: 0 }}>
-                            {selectedValues.length}
-                        </span>
-                    )}
-                </div>
-            </Field>
+                )}
+            </div>
             <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 4 }}>Click to select multiple</div>
 
             {open && createPortal(
@@ -300,8 +303,9 @@ export default function PoOrderRegisterPage() {
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
 
+    // ── Report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
     const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-    const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+    const [reportHtml, setReportHtml] = useState<string | null>(null);
     const [reportPreviewError, setReportPreviewError] = useState("");
     const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
@@ -319,19 +323,12 @@ export default function PoOrderRegisterPage() {
         with_so_ref: reportCriteria === "SO_REF_ONLY" ? "Y" : "N",
     });
 
-    useEffect(() => {
-        return () => {
-            if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-        };
-    }, [reportPreviewUrl]);
-
     const runReport = useCallback(async () => {
         if (!dateRangeValid) return;
         const params = buildRequestParams();
         lastRequestRef.current = params;
 
-        if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-        setReportPreviewUrl("");
+        setReportHtml(null);
         setReportPreviewError("");
         setReportPreviewOpen(true);
         setLoading(true);
@@ -339,9 +336,7 @@ export default function PoOrderRegisterPage() {
 
         try {
             const html = await getPoOrderRegisterReportHtml(params);
-            const blob = new Blob([html], { type: "text/html" });
-            const url = window.URL.createObjectURL(blob);
-            setReportPreviewUrl(url);
+            setReportHtml(html);
             setMessage("Report generated.");
         } catch (err: any) {
             const errorMessage = err?.response?.data?.details || err?.message || "Failed to load report. Please try again.";
@@ -354,9 +349,8 @@ export default function PoOrderRegisterPage() {
     }, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
 
     const closeReportPreview = () => {
-        if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
         setReportPreviewOpen(false);
-        setReportPreviewUrl("");
+        setReportHtml(null);
         setReportPreviewError("");
     };
 
@@ -391,86 +385,98 @@ export default function PoOrderRegisterPage() {
 
                 <ReportFilterHeader onClear={resetFilters} />
 
-<div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-    <Field label="Date From">
-        <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
-    </Field>
+                <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <Field label="Date From">
+                        <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
+                    </Field>
 
-    <Field label="Date To">
-        <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
-    </Field>
+                    <Field label="Date To">
+                        <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
+                    </Field>
 
-    <Field label="Supplier">
-        <LookupField
-            label=""
-            value={acCode}
-            displayValue={acName ? `${acCode} - ${acName}` : acCode}
-            columns={[
-                { field: "ac_code", header: "Code" },
-                { field: "ac_name", header: "Name" },
-                { field: "address", header: "Address" },
-                { field: "tel", header: "Tel" },
-                { field: "fax", header: "Fax" },
-            ]}
-            valueField="ac_code"
-            displayFields={["ac_code", "ac_name"]}
-            loadOptions={() =>
-                getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginId })
-            }
-            disabled={false}
-            onChange={(value, row) => {
-                setAcCode(value);
-                setAcName(text(getLookupValue(row || {}, "ac_name")));
-            }}
-        />
-    </Field>
+                    <Field label="Supplier">
+                        <LookupField
+                            label=""
+                            value={acCode}
+                            displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                            columns={[
+                                { field: "ac_code", header: "Code" },
+                                { field: "ac_name", header: "Name" },
+                                { field: "address", header: "Address" },
+                                { field: "tel", header: "Tel" },
+                                { field: "fax", header: "Fax" },
+                            ]}
+                            valueField="ac_code"
+                            displayFields={["ac_code", "ac_name"]}
+                            loadOptions={() =>
+                                getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginId })
+                            }
+                            disabled={false}
+                            onChange={(value, row) => {
+                                setAcCode(value);
+                                setAcName(text(getLookupValue(row || {}, "ac_name")));
+                            }}
+                        />
+                    </Field>
 
-    <Field label="PO Number">
-        <Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="number" />
-    </Field>
+                    <Field label="PO Number">
+                        <Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="number" />
+                    </Field>
 
-    <ProductMultiSelectField
-        label="Product"
-        value={prodCodeFrom}
-        onChange={setProdCodeFrom}
-        valueField="prod_code"
-        displayFields={["prod_code", "prod_name"]}
-        columns={[
-            { field: "prod_code", header: "Code" },
-            { field: "prod_name", header: "Name" },
-            { field: "p_uom", header: "P Uom" },
-            { field: "unit_price", header: "Unit Price" },
-        ]}
-        loadOptions={() =>
-            getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })
-        }
-        disabled={false}
-    />
+                    <ProductMultiSelectField
+                        label="Product"
+                        value={prodCodeFrom}
+                        onChange={setProdCodeFrom}
+                        valueField="prod_code"
+                        displayFields={["prod_code", "prod_name"]}
+                        columns={[
+                            { field: "prod_code", header: "Code" },
+                            { field: "prod_name", header: "Name" },
+                            { field: "p_uom", header: "P Uom" },
+                            { field: "unit_price", header: "Unit Price" },
+                        ]}
+                        loadOptions={() =>
+                            getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })
+                        }
+                        disabled={false}
+                    />
 
-    <div>
-        <Field label="Report Criteria">
-            <div className="flex items-center gap-2 h-8">
-                {[
-                    { value: "SO_REF_ONLY", label: "With SO Ref." },
-                    { value: "ALL", label: "All" },
-                ].map((opt) => (
-                    <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
-                        className={`h-8 flex-1 rounded-md border px-2 text-xs font-medium normal-case transition-colors ${
-                            reportCriteria === opt.value
-                                ? "border-blue-600 bg-blue-50 text-blue-700"
-                                : "border-border bg-background text-foreground hover:bg-muted"
-                        }`}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
-            </div>
-        </Field>
-    </div>
-</div>
+                    <div>
+                        <Field label="Report Criteria">
+                            <div
+                                className="flex min-h-[36px] flex-wrap items-center gap-x-7 gap-y-1 rounded-md px-3 py-1.5 shadow-sm"
+                                style={{ border: "1px solid #aebdce", background: "#f4f7fb" }}
+                            >
+                                {[
+                                    { value: "SO_REF_ONLY", label: "With SO Ref." },
+                                    { value: "ALL", label: "All" },
+                                ].map((opt) => (
+                                    <label
+                                        key={opt.value}
+                                        className="inline-flex items-center gap-2 cursor-pointer select-none normal-case whitespace-nowrap"
+                                    >
+                                        <span
+                                            onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
+                                            className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${reportCriteria === opt.value ? "border-blue-600" : "border-gray-300"
+                                                }`}
+                                        >
+                                            {reportCriteria === opt.value && (
+                                                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                                            )}
+                                        </span>
+                                        <span
+                                            onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
+                                            className={`text-sm font-normal ${reportCriteria === opt.value ? "text-blue-700" : "text-foreground"
+                                                }`}
+                                        >
+                                            {opt.label}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </Field>
+                    </div>
+                </div>
 
                 <div className="freight-report-actions">
                     <Button type="button" size="sm" onClick={runReport} disabled={loading || !dateRangeValid}>
@@ -480,18 +486,16 @@ export default function PoOrderRegisterPage() {
                 {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
             </div>
 
-            {reportPreviewOpen && (
-                <ReportPreviewDialog
-                    title="PO Order Register"
-                    pdfUrl={reportPreviewUrl}
-                    error={reportPreviewError}
-                    exporting={reportPreviewExporting}
-                    onExcel={handleReportPreviewExcel}
-                    onClose={closeReportPreview}
-                    onDownload={() => { }}
-                    downloadName="PO_Order_Register_Report.html"
-                />
-            )}
+            <NewReportDialog
+                open={reportPreviewOpen}
+                onClose={closeReportPreview}
+                title="PO Order Register"
+                htmlContent={reportHtml}
+                loading={loading}
+                error={reportPreviewError || null}
+                onExportExcel={handleReportPreviewExcel}
+                exportingExcel={reportPreviewExporting}
+            />
         </section>
     );
 }

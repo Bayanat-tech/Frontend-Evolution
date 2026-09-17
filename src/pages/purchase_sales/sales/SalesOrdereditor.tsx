@@ -7,7 +7,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 import {
   ActionKey,
@@ -88,12 +88,11 @@ export function SalesOrderEditor({
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
-  // ── Report preview dialog state ──────────────────────────────────────────
-  // reportPreviewUrl is a local blob: URL built from the HTML string the
-  // backend returns — ReportPreviewDialog just treats it like any pdfUrl.
+  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
 
@@ -229,13 +228,6 @@ export function SalesOrderEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
-  // Revoke the blob URL whenever it changes or the component unmounts.
-  useEffect(() => {
-    return () => {
-      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    };
-  }, [reportPreviewUrl]);
-
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
@@ -351,17 +343,17 @@ export function SalesOrderEditor({
     }
   };
 
-  // ── Print now opens the in-app ReportPreviewDialog instead of a new tab ──
+  // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
     if (!form.doc_no) {
       setError("Save the Sales Order before printing");
       return;
     }
 
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl("");
+    setReportHtml(null);
     setReportPreviewError("");
     setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
 
     try {
       const html = await getSOrderReportHtml({
@@ -369,18 +361,18 @@ export function SalesOrderEditor({
         doc_type: SO_DOC_TYPE.SO,
         doc_no: form.doc_no,
       });
-      const blob = new Blob([html], { type: "text/html" });
-      setReportPreviewUrl(window.URL.createObjectURL(blob));
+      setReportHtml(html);
     } catch (printError) {
       setReportPreviewError(printError instanceof Error ? printError.message : "Unable to load report");
+    } finally {
+      setReportPreviewLoading(false);
     }
   };
 
   const closeReportPreview = () => {
     if (actionLoading) return; // don't close mid-action, mirrors other dialogs
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
     setReportPreviewOpen(false);
-    setReportPreviewUrl("");
+    setReportHtml(null);
     setReportPreviewError("");
   };
 
@@ -708,18 +700,16 @@ export function SalesOrderEditor({
         </div>
       </form>
 
-      {reportPreviewOpen && (
-        <ReportPreviewDialog
-          title={`Sales Order ${form.doc_no || ""}`.trim()}
-          pdfUrl={reportPreviewUrl}
-          error={reportPreviewError}
-          exporting={reportPreviewExporting}
-          onExcel={handleExportExcel}
-          onClose={closeReportPreview}
-          onDownload={() => { }}
-          downloadName={`SO_${form.doc_no || "report"}.html`}
-        />
-      )}
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Sales Order ${form.doc_no || ""}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        onExportExcel={handleExportExcel}
+        exportingExcel={reportPreviewExporting}
+      />
 
       <SendBackDialog
         open={sendBackDialogOpen}
