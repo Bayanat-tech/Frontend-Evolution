@@ -2077,14 +2077,14 @@ const AddPRRequestPage = ({
                         <colgroup>
                           <col style={{ width: "30px" }} />
                           <col style={{ width: "270px" }} />
-                          <col style={{ width: "55px" }} />
                           <col style={{ width: "60px" }} />
-                          <col style={{ width: "55px" }} />
+                          <col style={{ width: "60px" }} />
+                          <col style={{ width: "60px" }} />
                           <col style={{ width: "60px" }} />
                           <col style={{ width: "60px" }} />
                           <col style={{ width: "70px" }} />
                           <col style={{ width: "60px" }} />
-                          <col style={{ width: "55px" }} />
+                          <col style={{ width: "60px" }} />
                           <col style={{ width: "60px" }} />
                           <col style={{ width: "60px" }} />
                           <col style={{ width: "70px" }} />
