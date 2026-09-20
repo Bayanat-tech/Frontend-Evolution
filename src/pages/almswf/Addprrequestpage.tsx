@@ -387,7 +387,20 @@ const AddPRRequestPage = ({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [requestNumber, setRequestNumber] = useState<string | undefined>(existingData?.request_number);
-  const [header, setHeader] = useState<Partial<TPRHeader>>({});
+  
+  // 🔥 DEFAULT HEADER VALUES ADDED HERE
+  const [header, setHeader] = useState<Partial<TPRHeader>>({
+    CURR_CODE: "OMR",
+    CURR_NAME: "OMANI RIAL",
+    CURRENCY_RATE: 1,
+    TX_CAT_CODE: "01",
+    TX_CAT_NAME: "LOCAL PURCHASE - SRV",
+    TX_COMPNTCAT_CODE_1: "10100",
+    TX_COMPNTCAT_NAME: "LOCAL PURCHASE - SRV",
+    TAX_TYPE: "No VAT",
+    PDO_TYPE: "N"
+  });
+
   const [items, setItems] = useState<TPRItem[]>([]);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -633,18 +646,19 @@ const AddPRRequestPage = ({
 
     if (hdrList.length > 0) {
       const headerData = hdrList[0];
-      setHeader({
+      setHeader(prev => ({
+        ...prev,
         ...headerData,
-        DIV_CODE: (headerData as any).DIV_CODE || "",
-        DIV_NAME: (headerData as any).DIV_NAME || "",
+        DIV_CODE: (headerData as any).DIV_CODE || prev.DIV_CODE || "",
+        DIV_NAME: (headerData as any).DIV_NAME || prev.DIV_NAME || "",
         DEPT_CODE_FLOW: (headerData as any).DEPT_CODE_FLOW || "",
         DEPT_NAME: (headerData as any).DEPT_NAME || "",
-        FLOW_CODE: (headerData as any).FLOW_CODE || flowCode || headerData.FLOW_CODE || "",
-        FLOW_DESCRIPTION: (headerData as any).FLOW_DESCRIPTION || flowDescription || headerData.FLOW_DESCRIPTION || "",
-        CURR_NAME: (headerData as any).CURR_NAME || "",
-        TX_CAT_NAME: (headerData as any).TX_CAT_NAME || "",
-        TX_COMPNTCAT_NAME: (headerData as any).TX_COMPNTCAT_NAME || "",
-      });
+        FLOW_CODE: (headerData as any).FLOW_CODE || flowCode || prev.FLOW_CODE || "",
+        FLOW_DESCRIPTION: (headerData as any).FLOW_DESCRIPTION || flowDescription || prev.FLOW_DESCRIPTION || "",
+        CURR_NAME: (headerData as any).CURR_NAME || prev.CURR_NAME || "",
+        TX_CAT_NAME: (headerData as any).TX_CAT_NAME || prev.TX_CAT_NAME || "",
+        TX_COMPNTCAT_NAME: (headerData as any).TX_COMPNTCAT_NAME || prev.TX_COMPNTCAT_NAME || "",
+      }));
       setLoading(false);
     } else if (!loading) {
       setLoading(false);
@@ -1573,11 +1587,11 @@ const AddPRRequestPage = ({
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
           ) : (
-            <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
               <div className="flex-none rounded-md border bg-card">
-                <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+                <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-0.5">
                   <div>
                     <p className="eyebrow m-0">Header</p>
                     <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
@@ -1592,423 +1606,438 @@ const AddPRRequestPage = ({
                 </div>
 
                 {headerExpanded ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 p-3 items-start">
-                    <div className="space-y-3">
-                      <div className="rounded-md border">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 items-stretch">
+
+                    {/* ══════════ LEFT: Description & Remarks on top, Discount + Document below ══════════ */}
+                    <div className="lg:col-span-8 flex flex-col gap-3">
+
+                      <div className="rounded-md border w-full">
                         <div className="border-b bg-muted/40 px-3 py-0.5">
-                          <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Document</p>
+                          <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
                         </div>
-                        <div className="grid grid-cols-3 gap-3 p-3">
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>Doc No</span>
-                              <Input disabled value={requestNumber || "New"} className="bg-muted/30 w-full" />
-                            </label>
-                          </div>
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>POD Type *</span>
-                              <Select
-                                disabled={disabled}
-                                value={header.PDO_TYPE || "N"}
-                                onChange={(e) => setHdr("PDO_TYPE", e.target.value)}
-                                className="w-full"
-                              >
-                                <option value="P">PDO-OTO</option>
-                                <option value="Q">PDO-NON-OTO</option>
-                                <option value="N">NON-PDO</option>
-                              </Select>
-                            </label>
-                          </div>
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>Request Date</span>
-                              <Input disabled type="text" placeholder="dd/mm/yyyy" value={displayDate} className="w-full" />
-                            </label>
-                          </div>
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>Flow Code</span>
-                              <Input disabled value={String(header.FLOW_CODE || "")} placeholder="Flow Code" className="w-full bg-muted/50" />
-                            </label>
-                          </div>
-                          <div className="col-span-2 grid grid-cols-3 gap-3">
-                            <div className="col-span-3">
-                              <label className="field">
-                                <span>Division</span>
-                                <Input
-                                  disabled
-                                  value={
-                                    header.DIV_CODE && header.DIV_NAME
-                                      ? `${header.DIV_CODE} - ${header.DIV_NAME}`
-                                      : header.DIV_CODE || "—"
-                                  }
-                                  className="w-full bg-muted/50 text-blue-700 font-medium"
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-md border">
-                        <div className="border-b bg-muted/40 px-3 py-0.5">
-                          <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Discount</p>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 p-2">
-                          <div className="flex items-center gap-4 border-b border-gray-100 pb-2">
-                            <span className="text-[9px] font-semibold text-foreground/75">Discount Applied To:</span>
-                            <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
-                              <input
-                                type="radio" name="discount_scope" value="PO"
-                                checked={discountScope === "PO"}
-                                disabled={disabled || items.length === 0}
-                                onChange={() => {
-                                  setDiscountScope("PO");
-                                  setItems(prev => prev.map(item => {
-                                    const updated = { ...item, DISCOUNT_AMOUNT: 0 };
-                                    const exRate = num(updated.CURRENCY_RATE) || 1;
-                                    return userApprovalLevel >= 2
-                                      ? recalcItemOnApprovedQty(updated, exRate)
-                                      : recalcItem(updated, exRate);
-                                  }));
-                                  setHdr("DISCOUNT_AMOUNT", 0);
-                                  setHdr("DISC_AMOUNT", 0);
-                                }}
-                              />
-                              Entire PR
-                            </label>
-                            <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
-                              <input
-                                type="radio" name="discount_scope" value="ITEM"
-                                checked={discountScope === "ITEM"}
-                                disabled={disabled || items.length === 0}
-                                onChange={() => {
-                                  setDiscountScope("ITEM");
-                                  setHdr("DISCOUNT_AMOUNT", 0);
-                                  setHdr("DISC_AMOUNT", 0);
-                                }}
-                              />
-                              Individual Items
-                            </label>
-                          </div>
-
-                          <div className="grid grid-cols-4 gap-2">
-                            <div className="col-span-1">
-                              <label className="field">
-                                <span>Disc Amt</span>
-                                <Input
-                                  className="text-right" type="number" step="0.01"
-                                  disabled={disabled || items.length === 0 || discountScope === "ITEM"}
-                                  value={discountScope === "ITEM" ? totalDiscAmount.toFixed(3) : num(header.DISC_AMOUNT).toFixed(3)}
-                                  onChange={(e) => {
-                                    const discAmount = Number(e.target.value) || 0;
-                                    setHdr("DISC_AMOUNT", discAmount);
-                                    if (discAmount > 0 && discountScope === "PO") {
-                                      setHdr("DISCOUNT_AMOUNT", 0);
-                                      const updatedItems = distributeDiscountFromAmount(items, discAmount, userApprovalLevel);
-                                      setItems(updatedItems);
-                                      const totalUnitPrice = calculateTotalUnitPrice(items);
-                                      if (totalUnitPrice > 0) {
-                                        const discPercent = (discAmount / totalUnitPrice) * 100;
-                                        setHdr("DISCOUNT_AMOUNT", discPercent);
-                                      }
-                                    } else if (discAmount === 0 && discountScope === "PO") {
-                                      setItems(prev => prev.map(item => {
-                                        const updated = { ...item, DISCOUNT_AMOUNT: 0 };
-                                        const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return userApprovalLevel >= 2
-                                          ? recalcItemOnApprovedQty(updated, exRate)
-                                          : recalcItem(updated, exRate);
-                                      }));
-                                      setHdr("DISCOUNT_AMOUNT", 0);
-                                    }
-                                  }}
-                                  placeholder={items.length === 0 ? "Add items first" : ""}
-                                />
-                              </label>
-                            </div>
-                            <div className="col-span-1">
-                              <label className="field">
-                                <span>Disc %</span>
-                                <Input
-                                  className="text-right" type="number" step="0.001"
-                                  disabled={disabled || items.length === 0 || discountScope === "ITEM"}
-                                  value={
-                                    discountScope === "ITEM"
-                                      ? items.reduce((sum, item) => sum + num(item.DISCOUNT_AMOUNT), 0) > 0
-                                        ? (totalDiscAmount / calculateTotalUnitPrice(items) * 100).toFixed(3)
-                                        : "0.000"
-                                      : num(header.DISCOUNT_AMOUNT).toFixed(3)
-                                  }
-                                  onChange={(e) => {
-                                    const discPercent = Number(e.target.value) || 0;
-                                    setHdr("DISCOUNT_AMOUNT", discPercent);
-                                    if (discPercent > 0 && discountScope === "PO") {
-                                      setHdr("DISC_AMOUNT", 0);
-                                      const updatedItems = distributeDiscountToItems(items, discPercent, userApprovalLevel);
-                                      setItems(updatedItems);
-                                      const totalUnitPrice = calculateTotalUnitPrice(items);
-                                      if (totalUnitPrice > 0) {
-                                        const discAmount = (discPercent / 100) * totalUnitPrice;
-                                        setHdr("DISC_AMOUNT", discAmount);
-                                      }
-                                    } else if (discPercent === 0 && discountScope === "PO") {
-                                      setItems(prev => prev.map(item => {
-                                        const updated = { ...item, DISCOUNT_AMOUNT: 0 };
-                                        const exRate = num(updated.CURRENCY_RATE) || 1;
-                                        return userApprovalLevel >= 2
-                                          ? recalcItemOnApprovedQty(updated, exRate)
-                                          : recalcItem(updated, exRate);
-                                      }));
-                                      setHdr("DISC_AMOUNT", 0);
-                                    }
-                                  }}
-                                  placeholder={items.length === 0 ? "Add items first" : ""}
-                                />
-                              </label>
-                            </div>
-                            <div className="col-span-2 flex items-end gap-2">
-                              {discountScope === "PO" && (
-                                <>
-                                  {Number(header.DISC_AMOUNT) > 0 ? (
-                                    <Button type="button" size="sm" variant="outline"
-                                      onClick={() => calculateDiscountFromAmount("amount")}
-                                      disabled={disabled || items.length === 0} className="h-9">
-                                      Calculate From Amount
-                                    </Button>
-                                  ) : Number(header.DISCOUNT_AMOUNT) > 0 ? (
-                                    <Button type="button" size="sm" variant="outline"
-                                      onClick={() => calculateDiscountFromAmount("percent")}
-                                      disabled={disabled || items.length === 0} className="h-9">
-                                      Calculate From %
-                                    </Button>
-                                  ) : null}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-md border">
-                      <div className="border-b bg-muted/40 px-3 py-1.5">
-                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Currency &amp; Tax</p>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3 p-3">
-                        <div className="col-span-2">
+                        <div className="flex flex-col gap-1 p-2">
                           <label className="field">
-                            <span>Currency *</span>
-                            <div className="w-full">
-                              <LookupField
-                                label="" compact placeholder="Search Currency"
-                                value={header.CURR_CODE || ""}
-                                displayValue={
-                                  header.CURR_CODE && header.CURR_NAME
-                                    ? `${header.CURR_CODE} - ${header.CURR_NAME}`
-                                    : header.CURR_CODE || ""
-                                }
-                                columns={currencyColumns}
-                                valueField="CURR_CODE"
-                                displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
-                                loadOptions={() => almsCommonSelect({
-                                  parameter: "PS_PREQUEST_ENTRY_CURRENCY",
-                                  loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
-                                })}
-                                onChange={(value, row) => {
-                                  const currName = String(row?.CURR_NAME || row?.curr_name || "");
-                                  const exRate = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
-                                  setHdr("CURR_CODE", value);
-                                  setHdr("CURR_NAME", currName);
-                                  setHdr("CURRENCY_RATE", exRate);
-                                  updateAllItemsWithHeader({
-                                    CURR_CODE: value, CURR_NAME: currName, CURRENCY_RATE: exRate,
-                                  });
-                                }}
-                                disabled={disabled}
-                              />
-                            </div>
-                          </label>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Exchange Rate</span>
-                            <Input
-                              disabled={disabled} type="number" step="0.0001"
-                              value={header.CURRENCY_RATE ?? ""}
+                            <span>Description / Reason *</span> 
+                            <textarea
+                              disabled={disabled}
+                              value={String(header.DESCRIPTION || "")}
                               onChange={(e) => {
-                                const rate = Number(e.target.value);
-                                setHdr("CURRENCY_RATE", rate);
-                                updateAllItemsWithHeader({ CURRENCY_RATE: rate });
+                                setHdr("DESCRIPTION", e.target.value);
+                                const target = e.target;
+                                target.style.height = 'auto';
+                                target.style.height = target.scrollHeight + 'px';
                               }}
-                              className="w-full"
+                              className="w-full rounded-md border bg-background px-3 py-1 text-sm resize-none overflow-hidden min-h-[10px]"
+                              placeholder="Enter description or reason..."
+                              rows={1}
+                              style={{ height: 'auto' }}
+                              onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = 'auto';
+                                target.style.height = target.scrollHeight + 'px';
+                              }}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Remarks *</span>
+                            <textarea
+                              disabled={disabled}
+                              value={String(header.REMARKS || "")}
+                              onChange={(e) => {
+                                setHdr("REMARKS", e.target.value);
+                                const target = e.target;
+                                target.style.height = 'auto';
+                                target.style.height = target.scrollHeight + 'px';
+                              }}
+                              className="w-full rounded-md border bg-background px-3 py-1 text-sm resize-none overflow-hidden min-h-[1px]"
+                              placeholder="Enter remarks..."
+                              rows={1}
+                              style={{ height: 'auto' }}
+                              onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = 'auto';
+                                target.style.height = target.scrollHeight + 'px';
+                              }}
                             />
                           </label>
                         </div>
+                      </div>
 
-                        <div className="col-span-2">
-                          <label className="field">
-                            <span>Tax Category</span>
-                            <div className="w-full">
-                              <LookupField
-                                label="" compact placeholder="Search Tax Category"
-                                value={header.TX_CAT_CODE || ""}
-                                displayValue={
-                                  header.TX_CAT_CODE && header.TX_CAT_NAME
-                                    ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}`
-                                    : header.TX_CAT_CODE || ""
-                                }
-                                columns={taxCategoryColumns}
-                                valueField="TX_CAT_CODE"
-                                displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
-                                loadOptions={() => almsCommonSelect({
-                                  parameter: "PS_PREQUEST_ENTRY_TAX",
-                                  loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
-                                })}
-                                onChange={(val, row) => {
-                                  if (row) {
-                                    const taxCode = String(row.TX_COMPNTCAT_CODE_1 || "");
-                                    const taxPercent = Number(row.TX_COMPNT_PERC_1) || 0;
-                                    const taxName = String(row.TX_CAT_NAME || "");
-                                    setHdr("TX_CAT_CODE", val);
-                                    setHdr("TX_CAT_NAME", taxName);
-                                    setHdr("TX_COMPNTCAT_CODE_1", taxCode);
-                                    setHdr("TX_COMPNT_PERC_1", taxPercent);
-                                    updateAllItemsWithHeader({
-                                      TX_CAT_CODE: val, TX_CAT_NAME: taxName,
-                                      TX_COMPNTCAT_CODE_1: taxCode, TX_COMPNT_PERC_1: taxPercent,
-                                    });
-                                  }
-                                }}
-                                disabled={disabled}
-                              />
+                      <div className="grid grid-cols-1 sm:grid-cols-[320px_1fr] gap-3">
+
+                        {/* ---- Discount ---- */}
+                        <div className="rounded-md border">
+                          <div className="border-b bg-muted/40 px-3 py-0">
+                            <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Discount</p>
+                          </div>
+                          <div className="grid grid-cols-1 gap-2 p-2">
+                            <div className="flex items-center gap-4 border-b border-gray-100 pb-1">
+                              <span className="text-[9px] font-semibold text-foreground/75">Discount Applied To:</span>
+                              <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
+                                <input
+                                  type="radio" name="discount_scope" value="PO"
+                                  checked={discountScope === "PO"}
+                                  disabled={disabled || items.length === 0}
+                                  onChange={() => {
+                                    setDiscountScope("PO");
+                                    setItems(prev => prev.map(item => {
+                                      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                      const exRate = num(updated.CURRENCY_RATE) || 1;
+                                      return userApprovalLevel >= 2
+                                        ? recalcItemOnApprovedQty(updated, exRate)
+                                        : recalcItem(updated, exRate);
+                                    }));
+                                    setHdr("DISCOUNT_AMOUNT", 0);
+                                    setHdr("DISC_AMOUNT", 0);
+                                  }}
+                                />
+                                Entire PR
+                              </label>
+                              <label className="flex items-center gap-1 text-[10px] font-medium cursor-pointer">
+                                <input
+                                  type="radio" name="discount_scope" value="ITEM"
+                                  checked={discountScope === "ITEM"}
+                                  disabled={disabled || items.length === 0}
+                                  onChange={() => {
+                                    setDiscountScope("ITEM");
+                                    setHdr("DISCOUNT_AMOUNT", 0);
+                                    setHdr("DISC_AMOUNT", 0);
+                                  }}
+                                />
+                                Individual Items
+                              </label>
                             </div>
-                          </label>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Tax Type</span>
-                            <Select
-                              value={String(header.TAX_TYPE || "N")}
-                              disabled={disabled}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                const perc = v === "S" ? 5 : 0;
-                                setHdr("TAX_TYPE", v);
-                                setItems((prev) =>
-                                  prev.map((item) => {
-                                    const merged: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
-                                    const exRate = num(merged.CURRENCY_RATE) || 1;
-                                    if (userApprovalLevel >= 2) {
-                                      return recalcItemOnApprovedQty(merged, exRate);
+
+                            <div className="grid grid-cols-4 gap-2">
+                              <div className="col-span-2">
+                                <label className="field">
+                                  <span>Disc Amt</span>
+                                  <Input
+                                    className="text-right" type="number" step="0.01"
+                                    disabled={disabled || items.length === 0 || discountScope === "ITEM"}
+                                    value={discountScope === "ITEM" ? totalDiscAmount.toFixed(3) : num(header.DISC_AMOUNT).toFixed(3)}
+                                    onChange={(e) => {
+                                      const discAmount = Number(e.target.value) || 0;
+                                      setHdr("DISC_AMOUNT", discAmount);
+                                      if (discAmount > 0 && discountScope === "PO") {
+                                        setHdr("DISCOUNT_AMOUNT", 0);
+                                        const updatedItems = distributeDiscountFromAmount(items, discAmount, userApprovalLevel);
+                                        setItems(updatedItems);
+                                        const totalUnitPrice = calculateTotalUnitPrice(items);
+                                        if (totalUnitPrice > 0) {
+                                          const discPercent = (discAmount / totalUnitPrice) * 100;
+                                          setHdr("DISCOUNT_AMOUNT", discPercent);
+                                        }
+                                      } else if (discAmount === 0 && discountScope === "PO") {
+                                        setItems(prev => prev.map(item => {
+                                          const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                          const exRate = num(updated.CURRENCY_RATE) || 1;
+                                          return userApprovalLevel >= 2
+                                            ? recalcItemOnApprovedQty(updated, exRate)
+                                            : recalcItem(updated, exRate);
+                                        }));
+                                        setHdr("DISCOUNT_AMOUNT", 0);
+                                      }
+                                    }}
+                                    placeholder={items.length === 0 ? "Add items first" : ""}
+                                  />
+                                </label>
+                              </div>
+                              <div className="col-span-2">
+                                <label className="field">
+                                  <span>Disc %</span>
+                                  <Input
+                                    className="text-right" type="number" step="0.001"
+                                    disabled={disabled || items.length === 0 || discountScope === "ITEM"}
+                                    value={
+                                      discountScope === "ITEM"
+                                        ? items.reduce((sum, item) => sum + num(item.DISCOUNT_AMOUNT), 0) > 0
+                                          ? (totalDiscAmount / calculateTotalUnitPrice(items) * 100).toFixed(3)
+                                          : "0.000"
+                                        : num(header.DISCOUNT_AMOUNT).toFixed(3)
                                     }
-                                    return recalcItem(merged, exRate);
-                                  })
-                                );
-                              }}
-                              className="w-full"
-                            >
-                              <option value="S">YES</option>
-                              <option value="N">No</option>
-                            </Select>
-                          </label>
-                        </div>
-                        <div className="col-span-2">
-                          <label className="field">
-                            <span>Tax Code</span>
-                            <div className="w-full">
-                              <LookupField
-                                label="" compact placeholder="Search Tax Component"
-                                value={header.TX_COMPNTCAT_CODE_1 || ""}
-                                displayValue={
-                                  header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME
-                                    ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}`
-                                    : header.TX_COMPNTCAT_CODE_1 || ""
-                                }
-                                columns={taxComponentColumns}
-                                valueField="TX_COMPNTCAT_CODE"
-                                displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
-                                loadOptions={() => almsCommonSelect({
-                                  parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
-                                  loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
-                                })}
-                                onChange={(val, row) => {
-                                  if (row && typeof row === 'object') {
-                                    const taxComponentName = String(row.TX_COMPNTCAT_NAME || '');
-                                    const taxPercent = Number(row.TX_PERCNT) || 0;
-                                    setHdr("TX_COMPNTCAT_CODE_1", val);
-                                    setHdr("TX_COMPNTCAT_NAME", taxComponentName);
-                                    setHdr("TX_COMPNT_PERC_1", taxPercent);
-                                    updateAllItemsWithHeader({
-                                      TX_COMPNTCAT_CODE_1: val,
-                                      TX_COMPNTCAT_NAME: taxComponentName,
-                                      TX_COMPNT_PERC_1: taxPercent,
-                                    });
-                                  } else {
-                                    setHdr("TX_COMPNTCAT_CODE_1", val);
-                                    updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
-                                  }
-                                }}
-                                disabled={disabled}
-                              />
+                                    onChange={(e) => {
+                                      const discPercent = Number(e.target.value) || 0;
+                                      setHdr("DISCOUNT_AMOUNT", discPercent);
+                                      if (discPercent > 0 && discountScope === "PO") {
+                                        setHdr("DISC_AMOUNT", 0);
+                                        const updatedItems = distributeDiscountToItems(items, discPercent, userApprovalLevel);
+                                        setItems(updatedItems);
+                                        const totalUnitPrice = calculateTotalUnitPrice(items);
+                                        if (totalUnitPrice > 0) {
+                                          const discAmount = (discPercent / 100) * totalUnitPrice;
+                                          setHdr("DISC_AMOUNT", discAmount);
+                                        }
+                                      } else if (discPercent === 0 && discountScope === "PO") {
+                                        setItems(prev => prev.map(item => {
+                                          const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                          const exRate = num(updated.CURRENCY_RATE) || 1;
+                                          return userApprovalLevel >= 2
+                                            ? recalcItemOnApprovedQty(updated, exRate)
+                                            : recalcItem(updated, exRate);
+                                        }));
+                                        setHdr("DISC_AMOUNT", 0);
+                                      }
+                                    }}
+                                    placeholder={items.length === 0 ? "Add items first" : ""}
+                                  />
+                                </label>
+                              </div>
+                              <div className="col-span-2 flex items-end gap-2">
+                                {discountScope === "PO" && (
+                                  <>
+                                    {Number(header.DISC_AMOUNT) > 0 ? (
+                                      <Button type="button" size="sm" variant="outline"
+                                        onClick={() => calculateDiscountFromAmount("amount")}
+                                        disabled={disabled || items.length === 0} className="h-9">
+                                        Calculate From Amount
+                                      </Button>
+                                    ) : Number(header.DISCOUNT_AMOUNT) > 0 ? (
+                                      <Button type="button" size="sm" variant="outline"
+                                        onClick={() => calculateDiscountFromAmount("percent")}
+                                        disabled={disabled || items.length === 0} className="h-9">
+                                        Calculate From %
+                                      </Button>
+                                    ) : null}
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </label>
+                          </div>
+                        </div>
+
+                        {/* ---- Document ---- */}
+                        <div className="rounded-md border">
+                          <div className="border-b bg-muted/40 px-3 py-0.5">
+                            <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Document</p>
+                          </div>
+                          <div className="grid grid-cols-4 gap-3 p-3">
+                            <div className="col-span-1">
+                              <label className="field">
+                                <span>Doc No</span>
+                                <Input disabled value={requestNumber || "New"} className="bg-muted/30 w-full" />
+                              </label>
+                            </div>
+                            <div className="col-span-1">
+                              <label className="field">
+                                <span>POD Type *</span>
+                                <Select
+                                  disabled={disabled}
+                                  value={header.PDO_TYPE || "N"}
+                                  onChange={(e) => setHdr("PDO_TYPE", e.target.value)}
+                                  className="w-full"
+                                >
+                                  <option value="P">PDO-OTO</option>
+                                  <option value="Q">PDO-NON-OTO</option>
+                                  <option value="N">NON-PDO</option>
+                                </Select>
+                              </label>
+                            </div>
+                            <div className="col-span-1">
+                              <label className="field">
+                                <span>Request Date</span>
+                                <Input disabled type="text" placeholder="dd/mm/yyyy" value={displayDate} className="w-full" />
+                              </label>
+                            </div>
+                            <div className="col-span-1">
+                              <label className="field">
+                                <span>Flow Code</span>
+                                <Input disabled value={String(header.FLOW_CODE || "")} placeholder="Flow Code" className="w-full bg-muted/50" />
+                              </label>
+                            </div>
+                            {/* <div className="col-span-2 grid grid-cols-3 gap-3">
+                              <div className="col-span-3">
+                                <label className="field">
+                                  <span>Division</span>
+                                  <Input
+                                    disabled
+                                    value={
+                                      header.DIV_CODE && header.DIV_NAME
+                                        ? `${header.DIV_CODE} - ${header.DIV_NAME}`
+                                        : header.DIV_CODE || "—"
+                                    }
+                                    className="w-full bg-muted/50 text-blue-700 font-medium"
+                                  />
+                                </label>
+                              </div>
+                            </div> */}
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* ══════════ RIGHT: Currency & Tax fills remaining space ══════════ */}
+                    <div className="lg:col-span-4">
+                      <div className="rounded-md border h-full">
+                        <div className="border-b bg-muted/40 px-3 py-0.5">
+                          <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Currency &amp; Tax</p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 p-3">
+                          <div className="col-span-2">
+                            <label className="field">
+                              <span>Currency *</span>
+                              <div className="w-full">
+                                <LookupField
+                                  label="" compact placeholder="Search Currency"
+                                  value={header.CURR_CODE || ""}
+                                  displayValue={
+                                    header.CURR_CODE && header.CURR_NAME
+                                      ? `${header.CURR_CODE} - ${header.CURR_NAME}`
+                                      : header.CURR_CODE || ""
+                                  }
+                                  columns={currencyColumns}
+                                  valueField="CURR_CODE"
+                                  displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
+                                  loadOptions={() => almsCommonSelect({
+                                    parameter: "PS_PREQUEST_ENTRY_CURRENCY",
+                                    loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
+                                  })}
+                                  onChange={(value, row) => {
+                                    const currName = String(row?.CURR_NAME || row?.curr_name || "");
+                                    const exRate = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
+                                    setHdr("CURR_CODE", value);
+                                    setHdr("CURR_NAME", currName);
+                                    setHdr("CURRENCY_RATE", exRate);
+                                    updateAllItemsWithHeader({
+                                      CURR_CODE: value, CURR_NAME: currName, CURRENCY_RATE: exRate,
+                                    });
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </div>
+                            </label>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Exchange Rate</span>
+                              <Input
+                                disabled={disabled} type="number" step="0.0001"
+                                value={header.CURRENCY_RATE ?? ""}
+                                onChange={(e) => {
+                                  const rate = Number(e.target.value);
+                                  setHdr("CURRENCY_RATE", rate);
+                                  updateAllItemsWithHeader({ CURRENCY_RATE: rate });
+                                }}
+                                className="w-full"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="col-span-2">
+                            <label className="field">
+                              <span>Tax Category</span>
+                              <div className="w-full">
+                                <LookupField
+                                  label="" compact placeholder="Search Tax Category"
+                                  value={header.TX_CAT_CODE || ""}
+                                  displayValue={
+                                    header.TX_CAT_CODE && header.TX_CAT_NAME
+                                      ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}`
+                                      : header.TX_CAT_CODE || ""
+                                  }
+                                  columns={taxCategoryColumns}
+                                  valueField="TX_CAT_CODE"
+                                  displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                                  loadOptions={() => almsCommonSelect({
+                                    parameter: "PS_PREQUEST_ENTRY_TAX",
+                                    loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
+                                  })}
+                                  onChange={(val, row) => {
+                                    if (row) {
+                                      const taxCode = String(row.TX_COMPNTCAT_CODE_1 || "");
+                                      const taxPercent = Number(row.TX_COMPNT_PERC_1) || 0;
+                                      const taxName = String(row.TX_CAT_NAME || "");
+                                      setHdr("TX_CAT_CODE", val);
+                                      setHdr("TX_CAT_NAME", taxName);
+                                      setHdr("TX_COMPNTCAT_CODE_1", taxCode);
+                                      setHdr("TX_COMPNT_PERC_1", taxPercent);
+                                      updateAllItemsWithHeader({
+                                        TX_CAT_CODE: val, TX_CAT_NAME: taxName,
+                                        TX_COMPNTCAT_CODE_1: taxCode, TX_COMPNT_PERC_1: taxPercent,
+                                      });
+                                    }
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </div>
+                            </label>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Tax Type</span>
+                              <Select
+                                value={String(header.TAX_TYPE || "No VAT")}
+                                disabled={disabled}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  const perc = v === "Std." ? 5 : 0;
+                                  setHdr("TAX_TYPE", v);
+                                  setItems((prev) =>
+                                    prev.map((item) => {
+                                      const merged: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
+                                      const exRate = num(merged.CURRENCY_RATE) || 1;
+                                      if (userApprovalLevel >= 2) {
+                                        return recalcItemOnApprovedQty(merged, exRate);
+                                      }
+                                      return recalcItem(merged, exRate);
+                                    })
+                                  );
+                                }}
+                                className="w-full"
+                              >
+                                <option value="Std.">Std.</option>
+                                <option value="Zero">Zero</option>
+                                <option value="Exempt">Exempt</option>
+                                <option value="No VAT">No VAT</option>
+                              </Select>
+                            </label>
+                          </div>
+                          <div className="col-span-3">
+                            <label className="field">
+                              <span>Tax Code</span>
+                              <div className="w-full">
+                                <LookupField
+                                  label="" compact placeholder="Search Tax Component"
+                                  value={header.TX_COMPNTCAT_CODE_1 || ""}
+                                  displayValue={
+                                    header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME
+                                      ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}`
+                                      : header.TX_COMPNTCAT_CODE_1 || ""
+                                  }
+                                  columns={taxComponentColumns}
+                                  valueField="TX_COMPNTCAT_CODE"
+                                  displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                                  loadOptions={() => almsCommonSelect({
+                                    parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
+                                    loginid, code1: companyCode, code2: loginid, code3: "", code4: ""
+                                  })}
+                                  onChange={(val, row) => {
+                                    if (row && typeof row === 'object') {
+                                      const taxComponentName = String(row.TX_COMPNTCAT_NAME || '');
+                                      const taxPercent = Number(row.TX_PERCNT) || 0;
+                                      setHdr("TX_COMPNTCAT_CODE_1", val);
+                                      setHdr("TX_COMPNTCAT_NAME", taxComponentName);
+                                      setHdr("TX_COMPNT_PERC_1", taxPercent);
+                                      updateAllItemsWithHeader({
+                                        TX_COMPNTCAT_CODE_1: val,
+                                        TX_COMPNTCAT_NAME: taxComponentName,
+                                        TX_COMPNT_PERC_1: taxPercent,
+                                      });
+                                    } else {
+                                      setHdr("TX_COMPNTCAT_CODE_1", val);
+                                      updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
+                                    }
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </div>
+                            </label>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-md border w-full lg:col-span-2">
-                      <div className="border-b bg-muted/40 px-3 py-1.5">
-                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
-                      </div>
-                      <div className="flex flex-col gap-2.5 p-3">
-                        <label className="field">
-                          <span>Description / Reason *</span>
-                          <textarea
-                            disabled={disabled}
-                            value={String(header.DESCRIPTION || "")}
-                            onChange={(e) => {
-                              setHdr("DESCRIPTION", e.target.value);
-                              const target = e.target;
-                              target.style.height = 'auto';
-                              target.style.height = target.scrollHeight + 'px';
-                            }}
-                            className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
-                            placeholder="Enter description or reason..."
-                            rows={1}
-                            style={{ height: 'auto' }}
-                            onInput={(e) => {
-                              const target = e.target as HTMLTextAreaElement;
-                              target.style.height = 'auto';
-                              target.style.height = target.scrollHeight + 'px';
-                            }}
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Remarks *</span>
-                          <textarea
-                            disabled={disabled}
-                            value={String(header.REMARKS || "")}
-                            onChange={(e) => {
-                              setHdr("REMARKS", e.target.value);
-                              const target = e.target;
-                              target.style.height = 'auto';
-                              target.style.height = target.scrollHeight + 'px';
-                            }}
-                            className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
-                            placeholder="Enter remarks..."
-                            rows={1}
-                            style={{ height: 'auto' }}
-                            onInput={(e) => {
-                              const target = e.target as HTMLTextAreaElement;
-                              target.style.height = 'auto';
-                              target.style.height = target.scrollHeight + 'px';
-                            }}
-                          />
-                        </label>
-                      </div>
-                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-sm text-muted-foreground">
@@ -2398,14 +2427,14 @@ const AddPRRequestPage = ({
                                 <td className="px-1 py-1 border-r border-border">
                                   <Select
                                     className="h-7 w-full text-[10px] px-1"
-                                    value={item.TAX_TYPE || "N"}
+                                    value={item.TAX_TYPE || "Std."}
                                     onChange={(e) => updateItemField(itemId, "TAX_TYPE", e.target.value)}
                                     disabled={disabled}
                                   >
-                                    <option value="N">No Tax</option>
-                                    <option value="S">Std Tax</option>
-                                    <option value="Z">Zero</option>
-                                    <option value="E">Exempt</option>
+                                    <option value="Std.">Std.</option>
+                                    <option value="Zero">Zero</option>
+                                    <option value="Exempt">Exempt</option>
+                                    <option value="No VAT">No VAT</option>
                                   </Select>
                                 </td>
                                 <td className="px-1 py-1 border-r border-border">
