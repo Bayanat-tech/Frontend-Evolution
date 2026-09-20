@@ -21,7 +21,6 @@ import {
   getLpoDetail,
   getPurchaseHeader,
   downloadDocumentReportExcel,
-  openDocumentReport,
   upsertBulkAccountEntryApi,
   openDocumentReportv1
 } from "../../api/transactions";
