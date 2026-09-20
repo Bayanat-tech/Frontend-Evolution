@@ -86,6 +86,7 @@ export function VendorRequestDialog({
   const [error, setError] = useState("");
   const [previewFile, setPreviewFile] = useState<VendorRow | null>(null);
   const [savedDocNo, setSavedDocNo] = useState("");
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -163,6 +164,7 @@ export function VendorRequestDialog({
   const save = async (event: FormEvent | undefined, action: VendorRequestSaveAction) => {
     event?.preventDefault();
     setError("");
+    if (!formRef.current?.reportValidity()) return;
     const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
     if (!form.REF_DOC_NO && !isEdit) return setError("Ref Doc No is required.");
     if (!form.INVOICE_NUMBER) return setError("Invoice No is required.");
@@ -243,7 +245,8 @@ export function VendorRequestDialog({
         </div>
       }
     >
-      <form className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
+      {/* <form className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}> */}
+      <form ref={formRef} className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
         {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
 
         <div className="flex border-b">
@@ -259,7 +262,7 @@ export function VendorRequestDialog({
     <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={readOnly} />
     <label className="grid gap-1 text-sm">
       <span className="font-medium text-muted-foreground">Ref Doc No</span>
-      <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit}>
+      <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit} required>
         <option value="">Select Ref Doc</option>
         {/* {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)} */}
         {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
@@ -822,8 +825,13 @@ function TabButton({ active, children, onClick }: { active: boolean; children: s
 function FormInput({ label, value, onChange, type = "text", readOnly, required, className }: { label: string; value: string; onChange?: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string }) {
   return (
     <label className={cn("grid gap-1 text-sm", className)}>
-      <span className="font-medium text-muted-foreground">{required ? `*${label}` : label}</span>
-      <Input value={value} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)} />
+      {/* <span className="font-medium text-muted-foreground">{required ? `*${label}` : label}</span> */}
+       <span className="font-medium text-muted-foreground">
+         {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
+       </span>
+      <Input value={value} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")} />
     </label>
   );
 }
