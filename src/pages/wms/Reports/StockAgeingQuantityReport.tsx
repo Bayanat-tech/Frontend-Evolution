@@ -1,19 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Boxes, Clock, Filter, Layers3, Loader2, Search, UserRound } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
-import { Select } from "../../../components/ui/Select";
-import { MultiSelectField } from "../../../components/ui/MultiSelectField";
-import { Button } from "../../../components/ui/Button";
-import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { openWmsReport } from "../../../components/wms/reports/wmsReportPreviewStore";
-
+import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
+import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Option {
-    value: string;
-    label: string;
-}
 
 interface LookupRow {
     [key: string]: any;
@@ -51,9 +42,9 @@ const getField = (row: LookupRow, ...keys: string[]): string => {
 // because the same code can legitimately appear on multiple distinct rows
 // with different names. Use codeFromOptionValue/codesFromSelection below to
 // recover the actual code(s) whenever building a SQL filter or API payload.
-const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] => {
+const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): ReportOption[] => {
     const seen = new Set<string>();
-    const options: Option[] = [];
+    const options: ReportOption[] = [];
     rows.forEach((r) => {
         const code = getField(r, codeKey);
         const name = getField(r, nameKey);
@@ -75,7 +66,7 @@ const codesFromSelection = (values: string[]): string[] => {
     return Array.from(codes);
 };
 
-const mapSingleColumnOptions = (rows: LookupRow[], codeKey: string): Option[] =>
+const mapSingleColumnOptions = (rows: LookupRow[], codeKey: string): ReportOption[] =>
     rows
         .map((r) => getField(r, codeKey))
         .filter((v) => !!v)
@@ -111,48 +102,7 @@ const validateAgeBuckets = (p: Params): Partial<Record<AgeKey, string>> => {
     return errors;
 };
 
-const summaryText = (values: string[], options: Option[]): string => {
-    if (!values.length || values.includes("All")) return "All";
-    const map = new Map(options.map((o) => [o.value, o.label]));
-    const labels = values.map((v) => map.get(v) || v);
-    return labels.length ? labels.join(", ") : "All";
-};
-
-// ─── Small presentational helpers (mirroring the Freight report layout) ──
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-            {label}
-            {children}
-        </label>
-    );
-}
-
-function SummaryBadge({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-    return (
-        <div className={`rounded-md border px-3 py-1.5 ${strong ? "border-primary/20 bg-primary/10 text-primary" : "bg-muted/40 text-foreground"}`}>
-            <div className="text-[9px] font-semibold uppercase text-muted-foreground">{label}</div>
-            <div className="text-sm font-semibold">{value}</div>
-        </div>
-    );
-}
-
-function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
-    return (
-        <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-                <Icon size={16} />
-            </span>
-            <div className="min-w-0 leading-tight">
-                <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
-                <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>
-                    {value}
-                </div>
-            </div>
-        </div>
-    );
-}
+// ─── Age bucket field (bespoke to this report, rendered as children) ──────────
 
 const numberInputClass =
     "h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm";
@@ -162,17 +112,20 @@ const AgeRangeField: React.FC<{
     value: string;
     onChange: (v: string) => void;
     error?: string;
-}> = ({ label, value, onChange, error }) => (
-    <Field label={label}>
+    disabled?: boolean;
+}> = ({ label, value, onChange, error, disabled }) => (
+    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+        {label}
         <input
             type="number"
             min={1}
+            disabled={disabled}
             className={`${numberInputClass} ${error ? "border-red-400" : ""}`}
             value={value}
             onChange={(e) => onChange(e.target.value)}
         />
-        {error && <div className="text-[10px] leading-snug text-red-600">{error}</div>}
-    </Field>
+        {error && <div className="text-[10px] leading-snug text-red-600 normal-case">{error}</div>}
+    </label>
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -187,11 +140,10 @@ export default function StockAgeingQuantityReport() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>("");
     const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [message, setMessage] = useState("Select filters and generate the report.");
 
-    const [prinOptions, setPrinOptions] = useState<Option[]>([]);
-    const [prodOptions, setProdOptions] = useState<Option[]>([]);
-    const [deptOptions, setDeptOptions] = useState<Option[]>([]);
+    const [prinOptions, setPrinOptions] = useState<ReportOption[]>([]);
+    const [prodOptions, setProdOptions] = useState<ReportOption[]>([]);
+    const [deptOptions, setDeptOptions] = useState<ReportOption[]>([]);
     const [optLoading, setOptLoading] = useState(false);
     const [optError, setOptError] = useState<string>("");
 
@@ -245,7 +197,7 @@ export default function StockAgeingQuantityReport() {
             setDeptOptions(nextDept);
 
             setParams((prev) => {
-                const reset = (current: string[], validOptions: Option[]): string[] => {
+                const reset = (current: string[], validOptions: ReportOption[]): string[] => {
                     if (current.includes("All")) return current;
                     const validValues = new Set(validOptions.map((o) => o.value));
                     const stillValid = current.filter((v) => validValues.has(v));
@@ -294,7 +246,7 @@ export default function StockAgeingQuantityReport() {
         group_by: p.group_by || "product_group",
     });
 
-    const groupByOptions: Option[] = [
+    const groupByOptions: ReportOption[] = [
         { value: "product_group", label: "Stock Ageing (Quantity) Detail" },
         { value: "principal", label: "Stock Ageing (Quantity) Summary" },
     ];
@@ -306,7 +258,6 @@ export default function StockAgeingQuantityReport() {
         }
         setLoading(true);
         setError("");
-        setMessage("");
         const preview = openWmsReport("Stock Ageing (Quantity) Report");
         const payload = buildPayload(params);
 
@@ -324,139 +275,117 @@ export default function StockAgeingQuantityReport() {
                 excelPayload: payload,
             });
             setHasGeneratedReport(true);
-            setMessage("Report generated successfully.");
         } catch (e: any) {
             const failure = e?.response?.data?.message ?? "Failed to load report. Please try again.";
             setError(failure);
-            setMessage(failure);
             preview.fail(failure);
         } finally {
             setLoading(false);
         }
     };
 
-    const setParam = <K extends keyof Params>(key: K, val: Params[K]) =>
+    const setParam = (key: string, val: any) =>
         setParams((prev) => ({ ...prev, [key]: val }));
 
     const handleReset = () => {
         setParams(DEFAULT_PARAMS);
         setHasGeneratedReport(false);
         setError("");
-        setMessage("Select filters and generate the report.");
+        setOptError("");
     };
 
+    const fields: ReportFieldConfig[] = [
+        {
+            key: "prin_code",
+            label: "Principal",
+            type: "multiselect",
+            options: prinOptions,
+            loading: optLoading,
+        },
+        {
+            key: "prod_code",
+            label: "Product Code",
+            type: "multiselect",
+            options: prodOptions,
+            loading: optLoading,
+        },
+        {
+            key: "dept_code",
+            label: "Department Code",
+            type: "multiselect",
+            options: deptOptions,
+            loading: optLoading,
+        },
+        {
+            key: "group_by",
+            label: "Group By",
+            type: "select",
+            options: groupByOptions,
+            loading: optLoading,
+            placeholder: groupByOptions[0].label,
+        },
+    ];
+
     return (
-        <section className="stock-ageing-report-screen">
-            <div className="rounded-xl border bg-white shadow-sm">
-
-                {/* Title bar */}
-                <div className="flex items-center gap-2 border-b px-3 py-2.5">
-                    <Clock size={17} color="#185FA5" />
-                    <h1 className="text-sm font-semibold text-slate-900">Stock Ageing (Quantity) Report</h1>
-                    <span style={{ width: 6, height: 6, borderRadius: 9999, background: "#cbd5e1" }} aria-hidden="true" />
-                    {hasGeneratedReport && <SummaryBadge label="Status" value="Generated" strong />}
-                </div>
-
-                {(error || optError) && (
-                    <div className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3.5 py-2 text-xs text-red-600">
-                        <span>⚠️</span>
-                        <span>{error || optError}</span>
-                        {error && (
-                            <button onClick={() => setError("")} className="ml-auto text-red-600">
-                                ✕
-                            </button>
-                        )}
+        <NewReportPage
+            title="Stock Ageing (Quantity) Report"
+            fields={fields}
+            values={params}
+            onChange={setParam}
+            onClearAll={handleReset}
+            onGenerate={handleGenerateReport}
+            loading={loading}
+            optionsLoading={optLoading}
+            error={error || optError || null}
+            onClearError={() => {
+                setError("");
+                setOptError("");
+            }}
+            fieldsPerRow={4}
+        >
+            {/* Age bucket boundaries — bespoke to this report, no matching NewReportPage field type */}
+            <div style={{ marginTop: 8 }}>
+                <fieldset className="rounded-md border p-3">
+                    <legend className="px-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                        Age Bucket Boundaries (days)
+                    </legend>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                        <AgeRangeField label="Bucket 1 Cutoff" value={params.age1} onChange={(v) => setParam("age1", v)} error={ageErrors.age1} disabled={loading} />
+                        <AgeRangeField label="Bucket 2 Cutoff" value={params.age2} onChange={(v) => setParam("age2", v)} error={ageErrors.age2} disabled={loading} />
+                        <AgeRangeField label="Bucket 3 Cutoff" value={params.age3} onChange={(v) => setParam("age3", v)} error={ageErrors.age3} disabled={loading} />
+                        <AgeRangeField label="Bucket 4 Cutoff" value={params.age4} onChange={(v) => setParam("age4", v)} error={ageErrors.age4} disabled={loading} />
+                        <AgeRangeField label="Bucket 5 Cutoff" value={params.age5} onChange={(v) => setParam("age5", v)} error={ageErrors.age5} disabled={loading} />
                     </div>
-                )}
-
-                <ReportFilterHeader onClear={handleReset} />
-
-                {/* Summary strip */}
-                <div className="grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
-                    <SummaryStripItem icon={UserRound} label="Principal" value={summaryText(params.prin_code, prinOptions)} />
-                    <SummaryStripItem icon={Boxes} label="Product" value={summaryText(params.prod_code, prodOptions)} />
-                    <SummaryStripItem icon={Filter} label="Department" value={summaryText(params.dept_code, deptOptions)} />
-                    <SummaryStripItem
-                        icon={Layers3}
-                        label="Group By"
-                        value={groupByOptions.find((g) => g.value === params.group_by)?.label || "Detail"}
-                    />
-                </div>
-
-                {/* Fields */}
-                <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
-                    <MultiSelectField
-                        label="Principal"
-                        options={prinOptions}
-                        value={params.prin_code}
-                        onChange={(v: string[]) => setParam("prin_code", v)}
-                        loading={optLoading}
-                    />
-                    <MultiSelectField
-                        label="Product Code"
-                        options={prodOptions}
-                        value={params.prod_code}
-                        onChange={(v: string[]) => setParam("prod_code", v)}
-                        loading={optLoading}
-                    />
-                    <MultiSelectField
-                        label="Department Code"
-                        options={deptOptions}
-                        value={params.dept_code}
-                        onChange={(v: string[]) => setParam("dept_code", v)}
-                        loading={optLoading}
-                    />
-                    <Field label="Group By">
-                        <Select
-                            value={params.group_by}
-                            onChange={(e) => setParam("group_by", e.target.value || "product_group")}
-                            disabled={optLoading}
-                            style={{ fontSize: 12 }}
-                        >
-                            {groupByOptions.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
-                </div>
-
-                {/* Age bucket boundaries — bespoke to this report, no Freight equivalent */}
-                <div className="border-t bg-muted/10 p-3">
-                    <fieldset className="rounded-md border p-3">
-                        <legend className="px-1 text-[11px] font-semibold uppercase text-muted-foreground">
-                            Age Bucket Boundaries (days)
-                        </legend>
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                            <AgeRangeField label="Bucket 1 Cutoff" value={params.age1} onChange={(v) => setParam("age1", v)} error={ageErrors.age1} />
-                            <AgeRangeField label="Bucket 2 Cutoff" value={params.age2} onChange={(v) => setParam("age2", v)} error={ageErrors.age2} />
-                            <AgeRangeField label="Bucket 3 Cutoff" value={params.age3} onChange={(v) => setParam("age3", v)} error={ageErrors.age3} />
-                            <AgeRangeField label="Bucket 4 Cutoff" value={params.age4} onChange={(v) => setParam("age4", v)} error={ageErrors.age4} />
-                            <AgeRangeField label="Bucket 5 Cutoff" value={params.age5} onChange={(v) => setParam("age5", v)} error={ageErrors.age5} />
-                        </div>
-                        <div className={`mt-2 text-[10px] ${hasAgeErrors ? "text-red-600" : "text-muted-foreground"}`}>
-                            {hasAgeErrors
-                                ? "Each bucket cutoff must be a positive number greater than the previous bucket's cutoff."
-                                : `Produces buckets: Below ${params.age1 || 30}, ${params.age1 || 30}-${params.age2 || 60}, ${params.age2 || 60}-${params.age3 || 90}, ${params.age3 || 90}-${params.age4 || 120}, ${params.age4 || 120}-${params.age5 || 150}, Above ${params.age5 || 150}`}
-                        </div>
-                    </fieldset>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-2 border-t px-3 py-3">
-                    <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleGenerateReport}
-                        disabled={loading || hasAgeErrors}
-                        title={hasAgeErrors ? "Fix age bucket cutoffs before generating the report" : undefined}
-                    >
-                        {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
-                    </Button>
-                </div>
-                {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
+                    <div className={`mt-2 text-[10px] ${hasAgeErrors ? "text-red-600" : "text-muted-foreground"}`}>
+                        {hasAgeErrors
+                            ? "Each bucket cutoff must be a positive number greater than the previous bucket's cutoff."
+                            : `Produces buckets: Below ${params.age1 || 30}, ${params.age1 || 30}-${params.age2 || 60}, ${params.age2 || 60}-${params.age3 || 90}, ${params.age3 || 90}-${params.age4 || 120}, ${params.age4 || 120}-${params.age5 || 150}, Above ${params.age5 || 150}`}
+                    </div>
+                </fieldset>
             </div>
-        </section>
+
+            {hasAgeErrors && !error && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#b91c1c" }}>
+                    Fix the age bucket cutoffs before generating the report.
+                </div>
+            )}
+
+            {hasGeneratedReport && (
+                <div style={{ marginTop: 8 }}>
+                    <span
+                        style={{
+                            fontSize: 12,
+                            color: "#065f46",
+                            background: "#d1fae5",
+                            padding: "3px 10px",
+                            borderRadius: 12,
+                            fontWeight: 500,
+                        }}
+                    >
+                        Report generated successfully
+                    </span>
+                </div>
+            )}
+        </NewReportPage>
     );
 }

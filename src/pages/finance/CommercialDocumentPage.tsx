@@ -34,8 +34,9 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
-import { openPsReport } from "../../components/purchase-sales/reports/psReportPreviewStore";
+import { NewReportDialog } from "../../components/new_report_format/NewReportDialog";
 import { useAuth } from "../../state/AuthContext";
+import { openPsReport } from "../../components/purchase-sales/reports/psReportPreviewStore";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
 
@@ -131,30 +132,66 @@ const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 
 const commercialInvoiceSign = (docType: CommercialType): 1 | -1 =>
   docType === "PI" || docType === "PO" ? -1 : 1;
 
-async function openCommercialInvoicePreview(docType: CommercialType, docNo: string) {
-  const preview = openPsReport("Tax Purchase Invoice");
-  const normalizedDocNo = String(docNo ?? "").trim();
+/**
+ * Owns the Tax Purchase Invoice print-preview dialog state and renders
+ * <NewReportDialog> directly — no psReportPreviewStore/openPsReport
+ * involved. Each component that needs a preview (the list page and the
+ * editor) creates its own instance via this hook.
+ */
+const PREVIEW_TITLE: Record<CommercialType, string> = {
+  PO: "LPO",
+  PI: "Purchase Invoice",
+  SI: "Sales Invoice",
+  SV: "Service Invoice",
+};
 
-  if (!normalizedDocNo) {
-    preview.fail(new Error("Document number is missing."));
-    return;
-  }
+/**
+ * Same preview path as Pending PO / other new-format reports:
+ * openPsReport → shared NewReportDialog shell.
+ */
+function useCommercialInvoicePreview() {
+  const openPreview = async (docType: CommercialType, docNo: string) => {
+    const normalizedDocNo = String(docNo ?? "").trim();
+    const title = normalizedDocNo
+      ? `${PREVIEW_TITLE[docType]} · ${normalizedDocNo}`
+      : PREVIEW_TITLE[docType];
 
-  try {
-    const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(normalizedDocNo)}`, {
-      responseType: "text",
-      headers: { Accept: "text/html" },
-    });
+    const preview = openPsReport(title);
 
-    preview.ready({
-      html: typeof response.data === "string" ? response.data : String(response.data),
-      filename: `${docType}_${normalizedDocNo}`,
-      orientation: "portrait",
-    });
-  } catch (error) {
-    preview.fail(error);
-  }
+    if (!normalizedDocNo) {
+      preview.fail("Document number is missing.");
+      return;
+    }
+
+    try {
+      const response = await api.get(
+        `/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(normalizedDocNo)}`,
+        { responseType: "text", headers: { Accept: "text/html" } }
+      );
+      const html =
+        typeof response.data === "string" ? response.data : String(response.data);
+
+      preview.ready({
+        html,
+        filename: `${docType}_${normalizedDocNo}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait", // invoices usually portrait; change to "landscape" if you prefer
+      });
+    } catch (err) {
+      preview.fail(err instanceof Error ? err.message : "Unable to load report");
+    }
+  };
+
+  // No local <NewReportDialog /> — openPsReport owns the dialog (same as Pending PO)
+  return { openPreview, dialog: null as React.ReactNode };
 }
+/* ───────────────────────────────────────────────────────────
+ * Report-page-style shell for the document list, matching
+ * NewReportPage's visual language: light page background,
+ * white rounded/bordered card, title bar with a blue dot,
+ * Inter font stack, and the same button treatments.
+ * ─────────────────────────────────────────────────────────── */
+const REPORT_FONT =
+  'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 export function CommercialDocumentPage({ docType }: { docType: CommercialType }) {
   const { user } = useAuth();
@@ -172,6 +209,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
+  const { openPreview, dialog: invoicePreviewDialog } = useCommercialInvoicePreview();
 
   const loadLookups = async () => {
     const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
@@ -253,7 +291,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
-          <Button size="icon" variant="ghost" onClick={() => void openCommercialInvoicePreview((row.original.doc_type || docType) as CommercialType, row.original.doc_no)} title="Print / PDF">
+          <Button size="icon" variant="ghost" onClick={() => void openPreview((row.original.doc_type || docType) as CommercialType, row.original.doc_no)} title="Print / PDF">
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
@@ -267,123 +305,231 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         </div>
       ),
     },
-  ], []);
+  ], [docType, openPreview]);
 
   return (
-    <section className="finance-list-page grid gap-4">
-      <div className="finance-list-heading">
-        <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
-        </div>
-        <div className="finance-list-actions">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        </div>
-      </div>
+    <div
+      style={{
+        background: "#f1f5f9",
+        minHeight: "100%",
+        padding: "16px 20px 32px",
+        fontFamily: REPORT_FONT,
+        boxSizing: "border-box",
+      }}
+    >
+      <section className="finance-list-page grid gap-4" style={{ width: "100%" }}>
+        <div
+          style={{
+            width: "100%",
+            background: "#ffffff",
+            borderRadius: 10,
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+            overflow: "visible",
+          }}
+        >
+          {/* Title bar — matches NewReportPage: title left, blue dot right */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "14px 20px 12px",
+              borderBottom: "1px solid #f1f5f9",
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#0f172a",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {meta.title}
+            </h1>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#2563eb",
+                flexShrink: 0,
+              }}
+            />
+          </div>
 
-      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-        subtitle={`${meta.title} List`}
-        searchValue={query}
-        onSearchChange={(value) => {
-          setQuery(value);
-          setPageIndex(0);
-        }}
-        searchPlaceholder="Search document, party, reference..."
-        loading={loading}
-        height={620}
-        minWidth={980}
-        density="grid"
-        enablePagination
-        manualPagination
-        toolbar={
-          <div className="finance-list-controls">
-            <label className="finance-period-control">
-              <span>FY</span>
+          {/* Toolbar row — FY period + Refresh + Add, same spacing/typography as Report Filters row */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10,
+              padding: "10px 20px 6px",
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                color: "#64748b",
+              }}
+            >
+              FY
               <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-              {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
+                {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
               </Select>
             </label>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => void loadRows()}
+                title="Refresh"
+                aria-label="Refresh"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "#64748b",
+                  background: "transparent",
+                  border: "1px solid #e2e8f0",
+                  cursor: "pointer",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                }}
+              >
+                <RefreshCw size={13} strokeWidth={2} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDivisionPicker(true)}
+                title={meta.addLabel}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 18px",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "#ffffff",
+                  background: "#1e3a8a",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(30, 58, 138, 0.2)",
+                }}
+              >
+                <Plus size={14} strokeWidth={2.25} />
+                Add
+              </button>
+            </div>
           </div>
-        }
-        enableExport
-        exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
-        initialSorting={[{ id: "doc_date", desc: true }]}
-        pageIndex={pageIndex}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPageIndex(0);
-        }}
-      />
 
-      {editor && (
-        <div className="fixed inset-0 z-50 bg-background">
-          <CommercialEditor
-            docType={docType}
-            editor={editor}
-            onClose={() => setEditor(null)}
-            onSaved={async (message) => {
-              setEditor(null);
-              setNotice({ type: "success", message });
-              await loadRows();
-            }}
-          />
-        </div>
-      )}
+          <div style={{ padding: "4px 20px 16px" }}>
+            <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <Dialog
-        open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the document form."
-        onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => {
-                setDivisionPicker(false);
-                setEditor({ mode: "create", div: division });
+            <DataTable
+              columns={columns}
+              data={rows}
+              title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
+              subtitle={`${meta.title} List`}
+              searchValue={query}
+              onSearchChange={(value) => {
+                setQuery(value);
+                setPageIndex(0);
               }}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
+              searchPlaceholder="Search document, party, reference..."
+              loading={loading}
+              height={620}
+              minWidth={980}
+              density="grid"
+              enablePagination
+              manualPagination
+              enableExport
+              exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
+              initialSorting={[{ id: "doc_date", desc: true }]}
+              pageIndex={pageIndex}
+              pageSize={pageSize}
+              totalRows={totalRows}
+              onPageChange={setPageIndex}
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize);
+                setPageIndex(0);
+              }}
+            />
+          </div>
         </div>
-      </Dialog>
 
-      <Dialog
-        open={Boolean(cancelTarget)}
-        title="Cancel Document"
-        description={`Cancel ${cancelTarget?.doc_no || "this document"}?`}
-        onClose={() => setCancelTarget(null)}
-        footer={(
-          <>
-            <Button variant="outline" onClick={() => setCancelTarget(null)}>Close</Button>
-            <Button variant="destructive" onClick={() => void confirmCancel()}><Ban size={15} /> Cancel Document</Button>
-          </>
+        {editor && (
+          <div className="fixed inset-0 z-50 bg-background">
+            <CommercialEditor
+              docType={docType}
+              editor={editor}
+              onClose={() => setEditor(null)}
+              onSaved={async (message) => {
+                setEditor(null);
+                setNotice({ type: "success", message });
+                await loadRows();
+              }}
+            />
+          </div>
         )}
-      >
-        <p className="m-0 text-sm text-muted-foreground">
-          This will mark the document as cancelled using the finance cancellation API.
-        </p>
-      </Dialog>
-    </section>
+
+        <Dialog
+          open={divisionPicker}
+          title="Select Division"
+          description="Choose the division before opening the document form."
+          onClose={() => setDivisionPicker(false)}
+          footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
+        >
+          <div className="grid max-h-[420px] gap-2 overflow-auto">
+            {divisions.map((division) => (
+              <button
+                key={division.div_code}
+                className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
+                onClick={() => {
+                  setDivisionPicker(false);
+                  setEditor({ mode: "create", div: division });
+                }}
+                type="button"
+              >
+                <span className="font-medium">{division.div_name}</span>
+                <span className="text-muted-foreground">{division.div_code}</span>
+              </button>
+            ))}
+          </div>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(cancelTarget)}
+          title="Cancel Document"
+          description={`Cancel ${cancelTarget?.doc_no || "this document"}?`}
+          onClose={() => setCancelTarget(null)}
+          footer={(
+            <>
+              <Button variant="outline" onClick={() => setCancelTarget(null)}>Close</Button>
+              <Button variant="destructive" onClick={() => void confirmCancel()}><Ban size={15} /> Cancel Document</Button>
+            </>
+          )}
+        >
+          <p className="m-0 text-sm text-muted-foreground">
+            This will mark the document as cancelled using the finance cancellation API.
+          </p>
+        </Dialog>
+
+        {invoicePreviewDialog}
+      </section>
+    </div>
   );
 }
 
@@ -409,6 +555,7 @@ function CommercialEditor({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const { openPreview, dialog: invoicePreviewDialog } = useCommercialInvoicePreview();
 
   const cancelCurrentDocument = async () => {
     if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
@@ -640,7 +787,7 @@ const withTax = {
             {form.canceled === "Y" && <span className="rounded-full border border-primary-foreground/35 px-2.5 py-1 text-xs font-semibold text-primary-foreground">Cancelled</span>}
             {form.doc_no && form.doc_no !== "0" && (
               <>
-                <Button type="button" variant="secondary" onClick={() => void openCommercialInvoicePreview(form.doc_type, form.doc_no || "")}>
+                <Button type="button" variant="secondary" onClick={() => void openPreview(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
@@ -1514,6 +1661,8 @@ const withTax = {
           This will mark the document as cancelled using the finance cancellation API.
         </p>
       </Dialog>
+
+      {invoicePreviewDialog}
     </form>
   );
 }
