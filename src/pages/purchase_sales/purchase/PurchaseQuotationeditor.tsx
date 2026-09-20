@@ -238,7 +238,8 @@ export function PurchaseQuotationEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -336,7 +337,7 @@ export function PurchaseQuotationEditor({
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-         tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -364,20 +365,40 @@ export function PurchaseQuotationEditor({
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
   };
+  // const handleSubmitClick = () => {
+
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
   const handleSubmitClick = () => {
-    
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+
     setShowSubmitConfirm(true);
   };
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
-        if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
-          return setError("Line item discount cannot exceed line item amount");
-        }
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+      return setError("Line item discount cannot exceed line item amount");
+    }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
