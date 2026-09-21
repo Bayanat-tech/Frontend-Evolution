@@ -184,7 +184,7 @@ export function SalesInvoiceLinesTable({
           <tbody>
             {rows.length === 0 ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-            ) : rows.map((row: SalesOrderLineRow , index: number) => {
+            ) : rows.map((row: SalesOrderLineRow, index: number) => {
               const qtyPuomNum = numberOrZero(row.qty_puom);
               const qtyLuomNum = numberOrZero(row.qty_luom);
               const upppNum = numberOrZero(row.uppp);
@@ -315,7 +315,7 @@ export function SalesInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  <td className="finance-amount-cell px-2 py-1">
+                  {/* <td className="finance-amount-cell px-2 py-1">
                     <Input
                       className="finance-money-input"
                       disabled={headerAndLineDisabled}
@@ -330,6 +330,18 @@ export function SalesInvoiceLinesTable({
                           quantity: computeQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
                         });
                       }}
+                    />
+                  </td> */}
+
+                  <td className="finance-amount-cell px-2 py-1">
+                    <Input
+                      className="finance-money-input"
+                      disabled
+                      readOnly
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.uppp}
                     />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">

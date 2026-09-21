@@ -257,7 +257,7 @@ export function PurchaseGrnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="finance-amount-cell px-2 py-1">
+                                    {/* <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
                                             disabled={headerAndLineDisabled}
@@ -272,6 +272,18 @@ export function PurchaseGrnDetailsTable({
                                                     po_quantity: computePoQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
                                                 });
                                             }}
+                                        />
+                                    </td> */}
+
+                                    <td className="finance-amount-cell px-2 py-1">
+                                        <Input
+                                            className="finance-money-input"
+                                            disabled
+                                            readOnly
+                                            type="number"
+                                            style={{ textAlign: "right" }}
+                                            step="0.001"
+                                            value={row.uppp}
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-28 px-2 py-1">

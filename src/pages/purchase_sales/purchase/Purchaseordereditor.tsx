@@ -46,7 +46,12 @@ import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getPoOrderReportHtml } from "../../../api/transactions";
+import {
+  getPoOrderReportHtml,
+  getPoOrderReportExcel,
+} from "../../../api/transactions";
+
+import { NewReportDialog } from "../../../components/new_report_format";
 
 
 export type { PurchaseOrderEditorState };
@@ -90,6 +95,14 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+
+
+  // ---- Report Preview state ----
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
@@ -228,7 +241,8 @@ export function PurchaseOrderEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
   console.log("ROWS DEBUG:", rows.map(r => ({
@@ -370,34 +384,57 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handlePrint = () => {
+  // ---- Report Preview ----
+  const handlePrint = async () => {
     if (!form.doc_no) return;
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Popup blocked — please allow popups to print.");
-      return;
-    }
-    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
 
-    getPoOrderReportHtml({
-      company_code: user?.company_code,
-      doc_type: PO_DOC_TYPE.LPO,
-      doc_no: form.doc_no,
-    })
-      .then((html) => {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-      })
-      .catch((printError) => {
-        printWindow.document.open();
-        printWindow.document.write(
-          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
-          }</p>`
-        );
-        printWindow.document.close();
+    try {
+      const html = await getPoOrderReportHtml({
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.LPO,
+        doc_no: form.doc_no,
       });
+
+      setReportHtml(html);
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Unable to load report"
+      );
+    } finally {
+      setReportPreviewLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+  };
+
+  const handleReportPreviewExcel = async () => {
+    if (!form.doc_no) return;
+
+    setReportPreviewExporting(true);
+    setReportPreviewError("");
+
+    try {
+      await getPoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.LPO,
+        doc_no: form.doc_no,
+      });
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Unable to export report"
+      );
+    } finally {
+      setReportPreviewExporting(false);
+    }
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
@@ -409,11 +446,32 @@ export function PurchaseOrderEditor({
     }, "Purchase Quotation saved as draft");
   };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+
     setShowSubmitConfirm(true);
   };
 
@@ -560,7 +618,17 @@ export function PurchaseOrderEditor({
                   <Button type="button" variant="secondary" onClick={handlePrint}>
                     <Printer size={15} /> Print
                   </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button
+                    aria-label="Excel"
+                    title="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => void handleReportPreviewExcel()}
+                    disabled={reportPreviewExporting}
+                  >
+                    <Download size={15} />
+                  </Button>
                 </>
               )}
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -715,6 +783,18 @@ export function PurchaseOrderEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+      />
+
+
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Purchase Order ${form.doc_no}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        onExportExcel={handleReportPreviewExcel}
+        exportingExcel={reportPreviewExporting}
       />
     </>
   );

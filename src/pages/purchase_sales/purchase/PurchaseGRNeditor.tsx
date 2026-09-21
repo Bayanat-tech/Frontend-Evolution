@@ -20,6 +20,7 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  computeQuantity,
   emptyForm,
   emptyLineRow,
   fetchPurchaseOrderDetail,
@@ -217,7 +218,8 @@ export function PurchaseGRNEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -263,10 +265,23 @@ export function PurchaseGRNEditor({
     }, "Purchase Quotation saved as draft");
   };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => computeQuantity(row) <= 0);
+    if (invalidRow) {
+      return setError("Received Quantity must be greater than 0 for all line items");
+    }
+
     setShowSubmitConfirm(true);
   };
 

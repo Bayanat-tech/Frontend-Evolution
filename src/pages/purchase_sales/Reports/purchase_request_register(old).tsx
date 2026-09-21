@@ -2,10 +2,11 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
-import { Printer, RotateCcw, FileText, Download, Eye } from "lucide-react";
+import { Printer, RotateCcw, FileText, Loader2 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
+import { NewReportDialog } from "../../../components/new_report_format";
 import {
     getPrRegisterOldSummaryReportHtml,
     getPrRegisterOldSummaryReportExcel,
@@ -35,16 +36,19 @@ const STATUS_OPTIONS: { displayValue: string; dataValue: string }[] = [
     { displayValue: "REJECTED", dataValue: "REJECTED" },
 ];
 
-// ─── Shared styles ─────────────────────────────────────────────────────────
+// ─── Shared styles (BISC blue theme — same palette as PO Order Register) ──
+
+const BORDER = "#aebdce";
+const FIELD_BG = "#f4f7fb";
 
 const inputStyle: React.CSSProperties = {
     width: "100%",
     fontSize: 12,
     padding: "8px 10px",
-    border: "1px solid #d1d5db",
+    border: `1px solid ${BORDER}`,
     borderRadius: 7,
-    background: "#fff",
-    color: "#111827",
+    background: FIELD_BG,
+    color: "#172033",
     boxSizing: "border-box",
     outline: "none",
 };
@@ -58,9 +62,9 @@ function FloatLabel({ label, required, children, bgColor = "#fff" }: {
     return (
         <div style={{ position: "relative", marginTop: 6 }}>
             <span style={{
-                position: "absolute", top: -8, left: 10, fontSize: 11, color: "#6b7280",
+                position: "absolute", top: -8, left: 10, fontSize: 11, color: "#61748d",
                 background: bgColor, padding: "0 4px", zIndex: 1, textTransform: "uppercase",
-                letterSpacing: "0.05em", fontWeight: 500,
+                letterSpacing: "0.05em", fontWeight: 600,
             }}>
                 {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
             </span>
@@ -78,7 +82,7 @@ const DateField: React.FC<{
         onChange={(e) => onChange(e.target.value)}
         min={min}
         max={max}
-        style={{ ...inputStyle, color: value ? "#111827" : "#9ca3af", cursor: "pointer" }}
+        style={{ ...inputStyle, color: value ? "#172033" : "#9ca3af", cursor: "pointer" }}
     />
 );
 
@@ -102,7 +106,7 @@ const SelectField: React.FC<{
     <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ ...inputStyle, cursor: "pointer", color: value ? "#111827" : "#9ca3af" }}
+        style={{ ...inputStyle, cursor: "pointer", color: value ? "#172033" : "#9ca3af" }}
     >
         {options.map((opt) => (
             <option key={opt.dataValue} value={opt.dataValue}>
@@ -119,12 +123,7 @@ export default function PrRegisterOldPage() {
     const companyCode = user?.company_code ?? "";
     const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
     const [error, setError] = useState("");
-    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
-    const reportWindowRef = useRef<Window | null>(null);
 
     const [fromDateIso, setFromDateIso] = useState("");
     const [toDateIso, setToDateIso] = useState("");
@@ -144,6 +143,13 @@ export default function PrRegisterOldPage() {
 
     const lastRequestRef = useRef<PrRegisterOldParams | null>(null);
     const lastReportTypeRef = useRef<"SUMMARY" | "DETAILS">("SUMMARY");
+
+    // ── Report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
+    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+    const [reportHtml, setReportHtml] = useState<string | null>(null);
+    const [reportPreviewError, setReportPreviewError] = useState("");
+    const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+    const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
@@ -165,42 +171,48 @@ export default function PrRegisterOldPage() {
     const getReportExcelFn = (type: "SUMMARY" | "DETAILS") =>
         type === "DETAILS" ? getPrRegisterOldDetailReportExcel : getPrRegisterOldSummaryReportExcel;
 
-    const fetchReport = useCallback(async (params: PrRegisterOldParams, type: "SUMMARY" | "DETAILS") => {
-        setLoading(true);
-        setError("");
-        lastRequestRef.current = params;
-        lastReportTypeRef.current = type;
+    const handleGenerateReport = useCallback(async () => {
+        if (!dateRangeValid) return;
 
-        const newTab = window.open("", "_blank");
-        if (!newTab) {
-            setLoading(false);
-            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
-            return;
-        }
-        newTab.document.write("<title>Purchase Request Register</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
+        const params = buildRequestParams();
+        lastRequestRef.current = params;
+        lastReportTypeRef.current = reportType;
+
+        setReportHtml(null);
+        setReportPreviewError("");
+        setReportPreviewOpen(true);
+        setReportPreviewLoading(true);
+        setError("");
 
         try {
-            const fetchHtml = getReportHtmlFn(type);
+            const fetchHtml = getReportHtmlFn(reportType);
             const html = await fetchHtml(params);
-            newTab.document.open();
-            newTab.document.write(html);
-            newTab.document.close();
-            reportWindowRef.current = newTab;
-            setHasGeneratedReport(true);
-            setLastGeneratedAt(new Date());
+            setReportHtml(html);
         } catch (err: any) {
-            newTab.document.open();
-            newTab.document.write("<title>Purchase Request Register</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
-            newTab.document.close();
-            setError(err?.message ?? "Failed to load report. Please try again.");
+            setReportPreviewError(err?.message ?? "Failed to load report. Please try again.");
         } finally {
-            setLoading(false);
+            setReportPreviewLoading(false);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRangeValid, fromDateIso, toDateIso, userId, searchText, status, reportType, companyCode, loginId]);
 
-    const handleGenerateReport = () => {
-        if (!dateRangeValid) return;
-        fetchReport(buildRequestParams(), reportType);
+    const closeReportPreview = () => {
+        setReportPreviewOpen(false);
+        setReportHtml(null);
+        setReportPreviewError("");
+    };
+
+    const handleReportPreviewExcel = async () => {
+        if (!lastRequestRef.current) return;
+        setReportPreviewExporting(true);
+        try {
+            const fetchExcel = getReportExcelFn(lastReportTypeRef.current);
+            await fetchExcel(lastRequestRef.current);
+        } catch (exportError: any) {
+            setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
+        } finally {
+            setReportPreviewExporting(false);
+        }
     };
 
     const handleReset = () => {
@@ -209,57 +221,26 @@ export default function PrRegisterOldPage() {
         setSearchText("");
         setStatus(STATUS_OPTIONS[0].dataValue);
         setReportType("SUMMARY");
-        setError(""); setHasGeneratedReport(false); setLastGeneratedAt(null);
+        setError("");
     };
 
-    const handlePrint = () => {
-        if (reportWindowRef.current && !reportWindowRef.current.closed) {
-            reportWindowRef.current.focus();
-            reportWindowRef.current.print();
-        } else {
-            setError("No open report tab to print. Generate the report again.");
-        }
-    };
-
-    const handleExcel = async () => {
-        if (!lastRequestRef.current) {
-            setError("Generate the report at least once before exporting to Excel.");
-            return;
-        }
-        setExporting(true);
-        try {
-            const fetchExcel = getReportExcelFn(lastReportTypeRef.current);
-            await fetchExcel(lastRequestRef.current);
-        } catch (err) {
-            console.error("Excel export error:", err);
-            alert("Excel export failed. Please try again.");
-        } finally {
-            setExporting(false);
-        }
-    };
-
-    const BG = "#EEF5FD";
+    const BG = FIELD_BG;
     return (
         <div style={{ background: "#f3f4f6", padding: "33px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
             <style>{`
-                .action-btn-primary:hover { background: #1e40af !important; }
-                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
+                .action-btn-primary:hover { background: #002e76 !important; }
+                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #00449b !important; color: #00449b !important; }
+                .field-row { background: ${FIELD_BG}; border-radius: 8px; padding: 10px 12px; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             `}</style>
 
             <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
+                <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "8px 12px", boxShadow: "0 2px 5px rgba(15, 23, 42, 0.08)" }}>
 
                     {/* Header */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                        <FileText size={17} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Purchase Request Register (Old)</span>
-                        {hasGeneratedReport && (
-                            <span style={{ fontSize: 10, background: "#d1fae5", color: "#065f46", padding: "2px 10px", borderRadius: 12, fontWeight: 500 }}>
-                                Report Generated
-                            </span>
-                        )}
+                        <FileText size={17} color="#00449b" />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#172033" }}>Purchase Request Register (Old)</span>
                     </div>
 
                     {error && (
@@ -276,7 +257,7 @@ export default function PrRegisterOldPage() {
                     )}
 
                     {/* ── Filter fields ── */}
-                    <div className="field-row" style={{ background: "#EEF5FD", borderRadius: 8, padding: "10px 12px" }}>
+                    <div className="field-row" style={{ background: FIELD_BG, borderRadius: 8, padding: "10px 12px" }}>
 
                         {/* ───────────── First Row: Date From, Date To, User ID ───────────── */}
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, alignItems: "end" }}>
@@ -312,7 +293,7 @@ export default function PrRegisterOldPage() {
                                     displayFields={["userid"]}
                                     loadOptions={() =>
                                         getDynamicLookup({
-                                            parameter: "PR_REGISTER_OLD_USER_ID_19082026", 
+                                            parameter: "PR_REGISTER_OLD_USER_ID_19082026",
                                             loginid: loginId,
                                         })
                                     }
@@ -353,9 +334,9 @@ export default function PrRegisterOldPage() {
                             <div
                                 style={{
                                     boxSizing: "border-box",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: 4,
-                                    background: "#fff",
+                                    border: `1px solid ${BORDER}`,
+                                    borderRadius: 7,
+                                    background: FIELD_BG,
                                     padding: "15px 12px 10px",
                                     position: "relative",
                                 }}
@@ -365,11 +346,11 @@ export default function PrRegisterOldPage() {
                                         position: "absolute",
                                         top: -8,
                                         left: 10,
-                                        background: "#fff",
+                                        background: BG,
                                         padding: "0 5px",
                                         fontSize: 11,
-                                        color: "#6b7280",
-                                        fontWeight: 500,
+                                        color: "#61748d",
+                                        fontWeight: 600,
                                         textTransform: "uppercase",
                                         letterSpacing: "0.05em",
                                     }}
@@ -377,30 +358,37 @@ export default function PrRegisterOldPage() {
                                     Report Type
                                 </span>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
-                                    <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                        <input
-                                            type="radio"
-                                            name="reportType"
-                                            value="SUMMARY"
-                                            checked={reportType === "SUMMARY"}
-                                            onChange={() => setReportType("SUMMARY")}
-                                            style={{ width: 16, height: 16, margin: 0, accentColor: "#185FA5", cursor: "pointer" }}
-                                        />
-                                        Summary
-                                    </label>
-
-                                    <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                        <input
-                                            type="radio"
-                                            name="reportType"
-                                            value="DETAILS"
-                                            checked={reportType === "DETAILS"}
-                                            onChange={() => setReportType("DETAILS")}
-                                            style={{ width: 16, height: 16, margin: 0, accentColor: "#185FA5", cursor: "pointer" }}
-                                        />
-                                        Details
-                                    </label>
+                                <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+                                    {[
+                                        { value: "SUMMARY" as const, label: "Summary" },
+                                        { value: "DETAILS" as const, label: "Details" },
+                                    ].map((opt) => (
+                                        <label
+                                            key={opt.value}
+                                            onClick={() => setReportType(opt.value)}
+                                            style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 500, color: "#172033", cursor: "pointer", whiteSpace: "nowrap" }}
+                                        >
+                                            <span
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    width: 16,
+                                                    height: 16,
+                                                    borderRadius: "999px",
+                                                    border: `2px solid ${reportType === opt.value ? "#1d4ed8" : "#9ca3af"}`,
+                                                    transition: "border-color 0.15s ease",
+                                                }}
+                                            >
+                                                {reportType === opt.value && (
+                                                    <span style={{ width: 8, height: 8, borderRadius: "999px", background: "#1d4ed8" }} />
+                                                )}
+                                            </span>
+                                            <span style={{ color: reportType === opt.value ? "#1d4ed8" : "#172033" }}>
+                                                {opt.label}
+                                            </span>
+                                        </label>
+                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -410,53 +398,37 @@ export default function PrRegisterOldPage() {
                         Leave a field on "All" to include every value for that filter.
                     </div>
 
-                    {/* Status bar */}
-                    {hasGeneratedReport && (
-                        <div style={{ marginTop: 10, padding: "8px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>✅</span>
-                                <span style={{ fontSize: 12, color: "#065f46" }}>Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}</span>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (reportWindowRef.current && !reportWindowRef.current.closed) reportWindowRef.current.focus();
-                                    else setError("Report tab is closed. Please generate again.");
-                                }}
-                                style={{ padding: "4px 12px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-                            >
-                                <Eye size={12} /> Open Report
-                            </button>
-                        </div>
-                    )}
-
                     {/* Action bar */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <button className="action-btn-excel" onClick={handleReset} disabled={loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: loading ? 0.6 : 1 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
+                        <button className="action-btn-excel" onClick={handleReset} disabled={reportPreviewLoading}
+                            style={{ padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff", cursor: reportPreviewLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: reportPreviewLoading ? 0.6 : 1 }}>
                             <RotateCcw size={13} /> Reset
                         </button>
-                        <button className="action-btn-excel" onClick={handlePrint} disabled={!hasGeneratedReport || loading}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading) ? 0.5 : 1 }}>
-                            <Printer size={13} /> Print
-                        </button>
-                        <button className="action-btn-excel" onClick={handleExcel} disabled={!hasGeneratedReport || loading || exporting}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1 }}>
-                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
-                        </button>
-                        <button className="action-btn-primary" onClick={handleGenerateReport} disabled={loading || !dateRangeValid}
-                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5", cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
-                            {loading ? (
+                        <button className="action-btn-primary" onClick={handleGenerateReport} disabled={reportPreviewLoading || !dateRangeValid}
+                            style={{ padding: "7px 16px", border: "1px solid #00449b", background: (reportPreviewLoading || !dateRangeValid) ? "#94a3b8" : "#00449b", cursor: (reportPreviewLoading || !dateRangeValid) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", transition: "background 0.2s" }}>
+                            {reportPreviewLoading ? (
                                 <>
-                                    <span style={{ width: 12, height: 12, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                                    <Loader2 size={13} className="animate-spin" />
                                     Generating...
                                 </>
                             ) : (
-                                <><Eye size={13} /> Generate Report</>
+                                <><Printer size={13} /> Generate Report</>
                             )}
                         </button>
                     </div>
                 </div>
             </div>
+
+            <NewReportDialog
+                open={reportPreviewOpen}
+                onClose={closeReportPreview}
+                title="Purchase Request Register (Old)"
+                htmlContent={reportHtml}
+                loading={reportPreviewLoading}
+                error={reportPreviewError || null}
+                onExportExcel={handleReportPreviewExcel}
+                exportingExcel={reportPreviewExporting}
+            />
         </div>
     );
 }

@@ -7,6 +7,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 import {
   ActionKey,
@@ -39,7 +40,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSOrderReportHtml } from "../../../api/transactions";
+import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -86,6 +87,13 @@ export function SalesOrderEditor({
   const [rejectError, setRejectError] = useState("");
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+
+  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
 
 
@@ -224,7 +232,8 @@ export function SalesOrderEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -314,7 +323,7 @@ export function SalesOrderEditor({
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-      tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -334,36 +343,58 @@ export function SalesOrderEditor({
     }
   };
 
-
-
-  const handlePrint = () => {
-    if (!form.doc_no) return;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Popup blocked — please allow popups to print.");
+  // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
+  const openReport = async () => {
+    if (!form.doc_no) {
+      setError("Save the Sales Order before printing");
       return;
     }
-    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
 
-    getSOrderReportHtml({
-      company_code: user?.company_code,
-      doc_type: SO_DOC_TYPE.SO,
-      doc_no: form.doc_no,
-    })
-      .then((html) => {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-      })
-      .catch((printError) => {
-        printWindow.document.open();
-        printWindow.document.write(
-          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
-          }</p>`
-        );
-        printWindow.document.close();
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
+
+    try {
+      const html = await getSOrderReportHtml({
+        company_code: user?.company_code,
+        doc_type: SO_DOC_TYPE.SO,
+        doc_no: form.doc_no,
       });
+      setReportHtml(html);
+    } catch (printError) {
+      setReportPreviewError(printError instanceof Error ? printError.message : "Unable to load report");
+    } finally {
+      setReportPreviewLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+  };
+
+  const handleExportExcel = async () => {
+    if (!form.doc_no) {
+      setError("Save the Sales Order before exporting to Excel");
+      return;
+    }
+    setReportPreviewExporting(true);
+    try {
+      await getSoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: SO_DOC_TYPE.SO,
+        doc_no: form.doc_no,
+      });
+    } catch (exportError) {
+      const message = exportError instanceof Error ? exportError.message : "Error while exporting to Excel";
+      if (reportPreviewOpen) setReportPreviewError(message);
+      else setError(message);
+    } finally {
+      setReportPreviewExporting(false);
+    }
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
@@ -375,19 +406,40 @@ export function SalesOrderEditor({
     }, "Purchase Quotation saved as draft");
   };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+
     setShowSubmitConfirm(true);
   };
 
   const confirmSubmit = () => {
     setShowSubmitConfirm(false);
-        if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
-          return setError("Line item discount cannot exceed line item amount");
-        }
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+      return setError("Line item discount cannot exceed line item amount");
+    }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
@@ -514,10 +566,19 @@ export function SalesOrderEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary" onClick={handlePrint}>
+                  <Button type="button" variant="secondary" onClick={() => void openReport()}>
                     <Printer size={15} /> Print
                   </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button
+                    aria-label="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => void handleExportExcel()}
+                    disabled={reportPreviewExporting}
+                  >
+                    {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  </Button>
                 </>
               )}
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -556,7 +617,7 @@ export function SalesOrderEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 rows={rows}
-               calculateDiscount={applyDiscountCalculation}
+                calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable
@@ -620,15 +681,35 @@ export function SalesOrderEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrint} disabled={!form.doc_no}>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={() => void openReport()} disabled={!form.doc_no}>
               <Printer size={15} />
             </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
+            <Button
+              aria-label="Download"
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={!form.doc_no || reportPreviewExporting}
+              onClick={() => void handleExportExcel()}
+            >
+              {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            </Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>
       </form>
+
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Sales Order ${form.doc_no || ""}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        onExportExcel={handleExportExcel}
+        exportingExcel={reportPreviewExporting}
+      />
 
       <SendBackDialog
         open={sendBackDialogOpen}
