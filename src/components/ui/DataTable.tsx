@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Filter, Loader2, Search, X } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, Filter, Loader2, Search } from "lucide-react";
 import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
@@ -24,7 +24,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { BiscDatePicker } from "./BiscDatePicker";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
-
 export type DataTableLoaderType = "skeleton" | "circle";
 
 export type DataTableProps<TData, TValue> = {
@@ -37,7 +36,7 @@ export type DataTableProps<TData, TValue> = {
   searchPlaceholder?: string;
   toolbar?: ReactNode;
   loading?: boolean;
-  loaderType?: DataTableLoaderType; 
+  loaderType?: DataTableLoaderType;
   emptyText?: string;
   height?: number | string;
   minWidth?: number | string;
@@ -59,41 +58,17 @@ export type DataTableProps<TData, TValue> = {
   rowClassName?: (row: TData) => string;
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
-  /** Called whenever row selection changes; receives array of selected row originals */
-   onRowSelectionChange?: (selectedRows: TData[]) => void;
+  onRowSelectionChange?: (selectedRows: TData[]) => void;
   initialSorting?: SortingState;
-  /**
-   * STANDARD WIDE-TABLE PATTERN — on by default for every table using this
-   * component. Pins the first column (row identity) while scrolling
-   * horizontally. Set false only if the table has no natural identity
-   * column, or is narrow enough to never scroll.
-   */
   stickyFirstColumn?: boolean;
-  /**
-   * Pins the last column (typically Actions) while scrolling horizontally,
-   * so view/edit/delete controls never require scrolling back. On by
-   * default — set false only for tables with no action column.
-   */
   stickyLastColumn?: boolean;
-  /**
-   * Shows a soft edge shadow on whichever side still has more columns to
-   * scroll to, fading out at each end. This is the only reliable "there's
-   * more here" signal until the user is already dragging the scrollbar.
-   * On by default.
-   */
   enableScrollShadow?: boolean;
-  /**
-   * STANDARD WIDE-TABLE PATTERN — truncates body cell content to a single
-   * line with an ellipsis instead of letting long values wrap the row
-   * taller. The full value is still available on hover via a native title
-   * tooltip. Column headers are never truncated — a header is always
-   * short, fixed text, so the column simply widens to fit it. On by
-   * default; set false for tables that genuinely need wrapped text (e.g.
-   * multi-line notes columns).
-   */
   truncateCellText?: boolean;
 };
 
+// Density presets — "grid" is the most compact (used everywhere in WMS).
+// Header text is intentionally LARGER and bolder than body text so column
+// titles read clearly while data stays dense.
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
   grid: { row: "h-7", cell: "px-2 py-0.5 text-[11px] leading-tight" },
   compact: { row: "h-8", cell: "px-2 py-1 text-xs leading-tight" },
@@ -101,30 +76,12 @@ const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = 
   large: { row: "h-14", cell: "py-3.5" },
 };
 
-// STANDARD WIDE-TABLE PATTERN — sticky column dividers.
-// Plain box-shadow (not a border color) so it reads correctly in both
-// light/dark and doesn't fight the table's existing border tokens.
 const STICKY_LEFT_SHADOW = "6px 0 6px -6px rgba(0,0,0,0.10)";
 const STICKY_RIGHT_SHADOW = "-6px 0 6px -6px rgba(0,0,0,0.10)";
-// Sticky cells need an opaque background or the scrolling columns behind
-// them show through. bg-white matches the convention already used
-// elsewhere in this file (data-table-scroll, data-table-header, etc).
-// NOTE: this means a sticky cell will NOT pick up row hover / [data-state
-// =selected] styling from Table.tsx if that styling relies on the row's
-// own background showing through cells — flag this to whoever owns
-// Table.tsx if that's needed; not fixed here since Table.tsx wasn't in
-// scope for this change.
 const STICKY_CELL_BG = "bg-white";
 
-// STANDARD WIDE-TABLE PATTERN — every border in this component (shell
-// outline, header rule, row rule, column dividers, pagination rule) comes
-// from these two literal, fully-written-out class strings. IMPORTANT: keep
-// them as plain literals, not built with template-literal interpolation
-// (e.g. `border-[${SOME_VAR}]`) — Tailwind's compiler finds classes by
-// statically scanning the raw source text, so an interpolated arbitrary
-// value never gets its CSS generated and silently renders as nothing.
-const GRID_OUTLINE = "border-[#878787]"; // shell's outer border — a touch stronger, it's the table's boundary
-const GRID_LINE = "border-[#ecf0f5]"; // internal rules — header/row/column dividers
+const GRID_OUTLINE = "border-[#878787]";
+const GRID_LINE = "border-[#ecf0f5]";
 const CELL_DIVIDER = `border-r ${GRID_LINE} last:border-r-0`;
 
 const includesText: FilterFn<unknown> = (row, columnId, filterValue) => {
@@ -197,13 +154,12 @@ export function DataTable<TData, TValue>({
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
   const [scrollContentWidth, setScrollContentWidth] = useState(0);
-  // STANDARD WIDE-TABLE PATTERN — scroll-shadow state, driven off the same
-  // horizontal scroll position already tracked for the synced top scrollbar.
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const globalFilter = searchValue ?? internalSearch;
   const columnFilters = controlledColumnFilters ?? internalColumnFilters;
   const rowStyle = densityClasses[density];
+
   const enhancedColumns = useMemo(
     () => columns.map((column) => {
       const id = "id" in column && column.id ? column.id : "accessorKey" in column ? String(column.accessorKey) : "";
@@ -259,14 +215,27 @@ export function DataTable<TData, TValue>({
     pageCount: manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : undefined,
   });
 
-  const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
-  const exportRows = (manualPagination || manualFiltering ? table.getCoreRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
+  const visibleRows = manualFiltering
+    ? table.getCoreRowModel().rows
+    : manualPagination
+      ? table.getSortedRowModel().rows
+      : enablePagination
+        ? table.getRowModel().rows
+        : table.getFilteredRowModel().rows;
+
+  const exportRows = (manualPagination || manualFiltering
+    ? table.getCoreRowModel().rows
+    : table.getFilteredRowModel().rows
+  ).map((row) => row.original);
+
   const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const responsiveMinWidth = minWidth ?? (enhancedColumns.length > 14 ? Math.max(760, enhancedColumns.length * 110) : "100%");
   const minWidthValue = typeof responsiveMinWidth === "number" ? `${responsiveMinWidth}px` : responsiveMinWidth;
-  const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
+  const pageCount = manualPagination
+    ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1)))
+    : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
   const effectiveTotalRows = totalRows ?? (manualPagination ? data.length : table.getFilteredRowModel().rows.length);
   const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * pageSize + 1;
@@ -274,6 +243,7 @@ export function DataTable<TData, TValue>({
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
   const totalPages = Math.max(pageCount, 1);
+
   const pageNumbers = useMemo(() => {
     const pages: number[] = [];
     if (totalPages <= 5) {
@@ -287,6 +257,7 @@ export function DataTable<TData, TValue>({
     }
     return pages;
   }, [currentPageIndex, totalPages]);
+
   const goToPage = (nextPageIndex: number) => {
     const boundedPageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(pageCount - 1, 0));
     if (manualPagination) {
@@ -295,6 +266,7 @@ export function DataTable<TData, TValue>({
       table.setPageIndex(boundedPageIndex);
     }
   };
+
   const changePageSize = (nextPageSize: number) => {
     if (manualPagination) {
       onPageSizeChange?.(nextPageSize);
@@ -302,16 +274,11 @@ export function DataTable<TData, TValue>({
       table.setPageSize(nextPageSize);
     }
   };
-  // STANDARD WIDE-TABLE PATTERN — condensed page-number list (1 2 3 … 42)
-  // instead of only first/prev/next/last controls, so pagination reads the
-  // same regardless of how many pages there are.
-  // const pageNumbers = useMemo(() => getPaginationRange(currentPageIndex, pageCount), [currentPageIndex, pageCount]);
 
   useEffect(() => {
     if (!manualPagination) table.setPageSize(pageSize);
   }, [manualPagination, pageSize, table]);
 
-  // notify parent of selection changes
   useEffect(() => {
     if (!onRowSelectionChange) return;
     const selected = table.getSelectedRowModel().rows.map((r) => r.original as TData);
@@ -319,8 +286,6 @@ export function DataTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection]);
 
-  // STANDARD WIDE-TABLE PATTERN — recompute shadow visibility from the
-  // scroll container's current scrollLeft/scrollWidth/clientWidth.
   const updateScrollShadows = () => {
     if (!enableScrollShadow) return;
     const el = tableScrollRef.current;
@@ -482,9 +447,6 @@ export function DataTable<TData, TValue>({
         <div style={{ width: scrollContentWidth ? `${scrollContentWidth}px` : minWidthValue, height: 1 }} />
       </div>
 
-      {/* STANDARD WIDE-TABLE PATTERN — relative wrapper so the scroll-shadow
-          overlays below can sit absolutely positioned against the actual
-          scrolling viewport, not the whole table shell. */}
       <div className="relative">
         {enableScrollShadow && (
           <>
@@ -514,9 +476,7 @@ export function DataTable<TData, TValue>({
           onScroll={syncTopScroll}
         >
           <Table style={{ minWidth: minWidthValue === "100%" ? undefined : minWidthValue, width: "100%" }}>
-            {/* STANDARD WIDE-TABLE PATTERN — sticky header stays visible on
-                vertical scroll. z-20 so it sits above sticky body columns
-                (z-10) at the header/body seam. */}
+            {/* Sticky header — larger, bolder text than body cells */}
             <TableHeader className={cn("sticky top-0 z-20 border-b bg-white", GRID_LINE)}>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="border-b border-[#8e97a8]">
@@ -524,7 +484,6 @@ export function DataTable<TData, TValue>({
                     const isFirst = colIndex === 0;
                     const isLast = colIndex === headerGroup.headers.length - 1;
                     const stickLeft = stickyFirstColumn && isFirst;
-                    // Guard against a 1-column table trying to stick both sides at once.
                     const stickRight = stickyLastColumn && isLast && headerGroup.headers.length > 1;
                     const isFilterActive = hasFilterValue(header.column.getFilterValue());
 
@@ -547,9 +506,10 @@ export function DataTable<TData, TValue>({
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <div className="flex min-h-7 items-center justify-between gap-1">
+                          {/* Header: capitalize (First letter big, rest small), bold, bigger than body */}
                           <span className={cn(
-                            "flex min-w-0 items-center gap-1 truncate transition-colors text-[11px] uppercase tracking-wider font-semibold",
-                            isFilterActive ? "text-[#00378C] font-bold" : "text-[#64748b]"
+                            "flex min-w-0 items-center gap-1 truncate capitalize text-[13px] font-bold tracking-wide",
+                            isFilterActive ? "text-[#00378C]" : "text-[#334155]"
                           )}>
                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                             {header.column.getCanSort() && (
@@ -571,81 +531,79 @@ export function DataTable<TData, TValue>({
               ))}
             </TableHeader>
             <TableBody>
-    {loading ? (
-      loaderType === "circle" ? (
-        <TableRow>
-          <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
-            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-              <Loader2 className="animate-spin text-primary" size={22} />
-              <span className="text-xs font-medium">Loading...</span>
-            </div>
-          </TableCell>
-        </TableRow>
-      ) : (
-        skeletonRows.map((_, index) => (
-          <TableRow className={cn(rowStyle.row, "border-b", GRID_LINE)} key={index}>
-            <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
-          </TableRow>
-        ))
-      )
-    ) : visibleRows.length ? (
-              visibleRows.map((row) => (
-                <TableRow
-                  className={cn(rowStyle.row, "border-b", GRID_LINE, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
-                  data-state={row.getIsSelected() && "selected"}
-                  key={row.id}
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell, colIndex) => {
-                    const cells = row.getVisibleCells();
-                    const rawCellValue = cell.getValue();
-                    const cellTitle =
-                      typeof rawCellValue === "string" || typeof rawCellValue === "number"
-                        ? String(rawCellValue)
-                        : undefined;
-                    const isFirst = colIndex === 0;
-                    const isLast = colIndex === cells.length - 1;
-                    const stickLeft = stickyFirstColumn && isFirst;
-                    const stickRight = stickyLastColumn && isLast && cells.length > 1;
-                    // Actions-style columns (buttons/icons) render their own
-                    // layout — truncating those would clip controls rather
-                    // than text, so they're left alone.
-                    const skipTruncate = cell.column.id === "actions";
-                    return (
-                      <TableCell
-                        className={cn(
-                          rowStyle.cell,
-                          CELL_DIVIDER,
-                          (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
-                          stickLeft && "left-0",
-                          stickRight && "right-0",
-                        )}
-                        style={{
-                          boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
-                        }}
-                        key={cell.id}
-                        title={cellTitle}
-                      >
-                        {truncateCellText && !skipTruncate ? (
-                          <div className="truncate" title={getCellTitle(cell)}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </div>
-                        ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
-                        )}
-                      </TableCell>
-                    );
-                  })}
+              {loading ? (
+                loaderType === "circle" ? (
+                  <TableRow>
+                    <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
+                      <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+                        <Loader2 className="animate-spin text-primary" size={22} />
+                        <span className="text-xs font-medium">Loading...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  skeletonRows.map((_, index) => (
+                    <TableRow className={cn(rowStyle.row, "border-b", GRID_LINE)} key={index}>
+                      <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
+                    </TableRow>
+                  ))
+                )
+              ) : visibleRows.length ? (
+                visibleRows.map((row) => (
+                  <TableRow
+                    className={cn(rowStyle.row, "border-b", GRID_LINE, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
+                    data-state={row.getIsSelected() && "selected"}
+                    key={row.id}
+                    onClick={() => onRowClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell, colIndex) => {
+                      const cells = row.getVisibleCells();
+                      const rawCellValue = cell.getValue();
+                      const cellTitle =
+                        typeof rawCellValue === "string" || typeof rawCellValue === "number"
+                          ? String(rawCellValue)
+                          : undefined;
+                      const isFirst = colIndex === 0;
+                      const isLast = colIndex === cells.length - 1;
+                      const stickLeft = stickyFirstColumn && isFirst;
+                      const stickRight = stickyLastColumn && isLast && cells.length > 1;
+                      const skipTruncate = cell.column.id === "actions";
+                      return (
+                        <TableCell
+                          className={cn(
+                            rowStyle.cell,
+                            "overflow-hidden",
+                            CELL_DIVIDER,
+                            (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
+                            stickLeft && "left-0",
+                            stickRight && "right-0",
+                          )}
+                          style={{
+                            boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
+                          }}
+                          key={cell.id}
+                          title={cellTitle}
+                        >
+                          {truncateCellText && !skipTruncate ? (
+                            <div className="truncate" title={getCellTitle(cell)}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </div>
+                          ) : (
+                            flexRender(cell.column.columnDef.cell, cell.getContext())
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
+                    {emptyText}
+                  </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
-                  {emptyText}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
+              )}
+            </TableBody>
           </Table>
         </div>
       </div>
@@ -740,31 +698,6 @@ function slugifyFilename(value: string) {
     .replace(/^-+|-+$/g, "") || "table";
 }
 
-// STANDARD WIDE-TABLE PATTERN — condensed pagination range, e.g.
-// [0, "ellipsis", 4, 5, 6, "ellipsis", 41] for page 5 of 42. Always keeps
-// the first page, the last page, and one page on either side of current.
-function getPaginationRange(currentPageIndex: number, pageCount: number): (number | "ellipsis")[] {
-  const totalPages = Math.max(pageCount, 1);
-  const keep = new Set<number>();
-  keep.add(0);
-  keep.add(totalPages - 1);
-  for (let page = currentPageIndex - 1; page <= currentPageIndex + 1; page++) {
-    if (page >= 0 && page < totalPages) keep.add(page);
-  }
-  const sorted = Array.from(keep).sort((a, b) => a - b);
-  const range: (number | "ellipsis")[] = [];
-  let previous = -2;
-  for (const page of sorted) {
-    if (page - previous > 1) range.push("ellipsis");
-    range.push(page);
-    previous = page;
-  }
-  return range;
-}
-
-// STANDARD WIDE-TABLE PATTERN — best-effort tooltip text for a truncated
-// cell. Columns without an accessor (id-only custom cells) don't have a
-// getValue() to call, so this fails safe rather than throwing.
 function getCellTitle(cell: { getValue: () => unknown }): string | undefined {
   try {
     const value = cell.getValue();
@@ -788,6 +721,7 @@ function ColumnFilterButton<TData, TValue>({
   const rawValue = column.getFilterValue();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState({ left: 12, top: 12 });
+
   const updatePosition = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -903,22 +837,12 @@ function ColumnFilterPopup({
       {isDate ? (
         <div className="space-y-2.5">
           <div className="space-y-1">
-            <label className="text-[12px] font-medium text-slate-500">
-              From
-            </label>
-            <BiscDatePicker
-              value={tempFrom}
-              onChange={setTempFrom}
-            />
+            <label className="text-[12px] font-medium text-slate-500">From</label>
+            <BiscDatePicker value={tempFrom} onChange={setTempFrom} />
           </div>
           <div className="space-y-1">
-            <label className="text-[12px] font-medium text-slate-500">
-              To
-            </label>
-            <BiscDatePicker
-              value={tempTo}
-              onChange={setTempTo}
-            />
+            <label className="text-[12px] font-medium text-slate-500">To</label>
+            <BiscDatePicker value={tempTo} onChange={setTempTo} />
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
@@ -939,13 +863,9 @@ function ColumnFilterPopup({
               className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
               onClick={() => {
                 let nextValue: { from?: string; to?: string } | undefined;
-                if (tempFrom && tempTo) {
-                  nextValue = { from: tempFrom, to: tempTo };
-                } else if (tempFrom) {
-                  nextValue = { from: tempFrom };
-                } else if (tempTo) {
-                  nextValue = { to: tempTo };
-                }
+                if (tempFrom && tempTo) nextValue = { from: tempFrom, to: tempTo };
+                else if (tempFrom) nextValue = { from: tempFrom };
+                else if (tempTo) nextValue = { to: tempTo };
                 onChange(nextValue);
                 onClose();
               }}
@@ -957,9 +877,7 @@ function ColumnFilterPopup({
       ) : (
         <div className="space-y-2.5">
           <div className="space-y-1">
-            <label className="text-[12px] font-medium text-slate-500">
-              Search
-            </label>
+            <label className="text-[12px] font-medium text-slate-500">Search</label>
             <Input
               autoFocus
               className="w-full h-8 px-2.5 rounded-lg border border-border bg-slate-100 text-foreground text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary transition-all"
