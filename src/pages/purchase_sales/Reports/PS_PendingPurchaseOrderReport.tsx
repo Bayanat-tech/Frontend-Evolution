@@ -1,18 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  RotateCcw,
-  Check,
-  BarChart2,
-  Eye,
-} from "lucide-react";
+import { Loader2, Search, Check, Eye } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import {
   getDynamicLookupaccount,
   type DynamicQueryParams,
 } from "../../../api/lookups";
 import { api } from "../../../api/client";
-import { openPsReport } from "../../../components/purchase-sales/reports/psReportPreviewStore";
+import { Button } from "../../../components/ui/Button";
+import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -82,57 +79,38 @@ const buildDefaultFilters = (): Filters => ({
   cancelledPO: false,
 });
 
-const BG = "#EEF5FD";
+function uppercaseKeys<T>(row: Record<string, any>): T {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(row)) out[k.toUpperCase()] = row[k];
+  return out as T;
+}
 
-const inputBaseStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "7px 10px",
-  fontSize: 12,
-  color: "#111827",
-  border: "1px solid #d1d5db",
-  borderRadius: 6,
-  outline: "none",
-  background: "#fff",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-};
+// ─── Field wrapper (same as PoOrderRegisterPage) ───────────────────────────
 
-function FloatLabel({
-  label,
-  required,
-  children,
-  bgColor = "#fff",
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-  bgColor?: string;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ position: "relative", marginTop: 6 }}>
-      <span
-        style={{
-          position: "absolute",
-          top: -8,
-          left: 10,
-          fontSize: 11,
-          color: "#6b7280",
-          background: bgColor,
-          padding: "0 4px",
-          zIndex: 1,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          fontWeight: 500,
-        }}
-      >
-        {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
-      </span>
+    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+      {label}
       {children}
-    </div>
+    </label>
   );
 }
 
-// Generic Search Field component
+function DateField({ value, onChange, max, min }: { value: string; onChange: (v: string) => void; max?: string; min?: string }) {
+  return (
+    <input
+      type="date"
+      className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+      value={value}
+      min={min}
+      max={max}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+// ─── Generic Search Field (autocomplete), styled like the BISC inputs ──────
+
 const SearchField: React.FC<{
   options: Array<{ code: string; name: string; extra?: string }>;
   code: string;
@@ -193,10 +171,14 @@ const SearchField: React.FC<{
           setQuery("");
         }}
         onChange={(e) => setQuery(e.target.value)}
+        className="h-8 w-full rounded-md px-2 text-sm font-medium text-foreground shadow-sm"
         style={{
-          ...inputBaseStyle,
+          border: "1px solid #aebdce",
+          background: "#f4f7fb",
           opacity: loading ? 0.6 : 1,
           cursor: loading ? "not-allowed" : "text",
+          outline: "none",
+          boxSizing: "border-box",
         }}
       />
       {open && !loading && (
@@ -208,9 +190,9 @@ const SearchField: React.FC<{
             right: 0,
             marginTop: 4,
             background: "#fff",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+            border: "1px solid #aebdce",
+            borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
             zIndex: 50,
             maxHeight: 220,
             overflowY: "auto",
@@ -231,8 +213,8 @@ const SearchField: React.FC<{
               borderRadius: 4,
               cursor: "pointer",
               fontWeight: 600,
-              color: "#185FA5",
-              background: !code ? "#EEF5FD" : "transparent",
+              color: "#00449b",
+              background: !code ? "#f4f7fb" : "transparent",
             }}
           >
             {!code && <Check size={12} />} All
@@ -253,10 +235,10 @@ const SearchField: React.FC<{
                 borderRadius: 4,
                 cursor: "pointer",
                 color: "#374151",
-                background: code === s.code ? "#EEF5FD" : "transparent",
+                background: code === s.code ? "#f4f7fb" : "transparent",
               }}
             >
-              {code === s.code && <Check size={12} color="#185FA5" />}
+              {code === s.code && <Check size={12} color="#00449b" />}
               {getDisplayText(s)}
             </div>
           ))}
@@ -266,11 +248,7 @@ const SearchField: React.FC<{
   );
 };
 
-function uppercaseKeys<T>(row: Record<string, any>): T {
-  const out: Record<string, any> = {};
-  for (const k of Object.keys(row)) out[k.toUpperCase()] = row[k];
-  return out as T;
-}
+// ─── Main Component ─────────────────────────────────────────────────────────
 
 const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   const { user } = useAuth();
@@ -278,15 +256,21 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   const companyCode: string =
     ((user as any)?.company_code as string)?.trim() || "All";
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [hasGenerated, setHasGenerated] = useState(false);
-  const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
   const [pending, setPending] = useState<Filters>(buildDefaultFilters());
   const [applied, setApplied] = useState<Filters>(buildDefaultFilters());
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("Select filters and run the report.");
+
+  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
   const setPendingField = <K extends keyof Filters>(key: K, val: Filters[K]) =>
     setPending((prev) => ({ ...prev, [key]: val }));
+
+  const dateRangeValid = !pending.dateFrom || !pending.dateTo || pending.dateFrom <= pending.dateTo;
 
   // Suppliers lookup using stored procedure
   const { data: supplierRows = [], isLoading: isSupplierLoading } = useQuery<SupplierRow[]>({
@@ -373,12 +357,14 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     };
   };
 
-  // Fetch the report HTML and hand it to the shared preview dialog.
+  // Fetch the report HTML and show it in the local NewReportDialog popup.
   const handleGenerate = async () => {
-    setError("");
+    if (!dateRangeValid) return;
     setLoading(true);
-
-    const preview = openPsReport("Pending Purchase Order Report");
+    setMessage("");
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
 
     try {
       const body = buildBody(pending);
@@ -390,41 +376,55 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
       });
 
       const htmlContent = typeof res.data === "string" ? res.data : String(res.data);
-
-      preview.ready({
-        html: htmlContent,
-        filename: `pending_po_${body.report_type}_${new Date().toISOString().slice(0, 10)}`,
-        orientation: "landscape",
-        excelEndpoint: "/api/purchase-sales/reports/pending-po/excel",
-        excelPayload: body,
-      });
-      setHasGenerated(true);
-      setLastGeneratedAt(new Date());
+      setReportHtml(htmlContent);
+      setMessage("Report generated.");
     } catch (e: any) {
       const failure = e?.response?.data?.message || e?.message || "Failed to generate report";
-      setError(failure);
-      preview.fail(failure);
-      setHasGenerated(false);
+      setReportPreviewError(failure);
+      setMessage(failure);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleReset = () => {
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+  };
+
+  // ── Excel export for the currently generated report ──
+  const handleReportPreviewExcel = async () => {
+    setReportPreviewExporting(true);
+    try {
+      const body = buildBody(applied);
+      const res = await api.post("/api/purchase-sales/reports/pending-po/excel", body, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pending_po_${body.report_type}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setReportPreviewError(e?.response?.data?.message || e?.message || "Unable to export report");
+    } finally {
+      setReportPreviewExporting(false);
+    }
+  };
+
+  function resetFilters() {
     const d = buildDefaultFilters();
     setPending(d);
     setApplied(d);
-    setHasGenerated(false);
-    setLastGeneratedAt(null);
-    setError("");
-  };
-
-  // ── Print (targets the most recently opened report tab)
-  const row2: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-  };
+    setMessage("Select filters and run the report.");
+  }
 
   // Format for document number display
   const formatDocDisplay = (item: { code: string; name: string; extra?: string }) => {
@@ -432,323 +432,150 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   };
 
   return (
-    <div
-      style={{
-        background: "#f3f4f6",
-        padding: "6px 10px",
-        fontFamily: "system-ui, sans-serif",
-        minHeight: "100vh",
-      }}
-    >
-      <style>{`
-        .action-btn-primary:hover { background: #1e40af !important; }
-        .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-        .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
-      `}</style>
+    <section className="freight-ui-standard freight-report-screen">
+      <div className="freight-report-card">
+        <div className="freight-report-titlebar">
+          <h1>Pending Purchase Order Report</h1>
+          <span className="freight-report-title-dot" aria-hidden="true" />
+        </div>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        {/* Parameters */}
-        <div
-          style={{
-            background: "#fff",
-            border: "0.5px solid #e5e7eb",
-            borderRadius: 12,
-            padding: "8px 12px",
-            marginBottom: 12,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <BarChart2 size={17} color="#185FA5" />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
-                Pending Purchase Order Report
-              </span>
-              {hasGenerated && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    background: "#d1fae5",
-                    color: "#065f46",
-                    padding: "2px 10px",
-                    borderRadius: 12,
-                    fontWeight: 500,
-                  }}
-                >
-                  Report Generated
-                </span>
-              )}
-            </div>
+        <ReportFilterHeader onClear={resetFilters} />
 
-            {/* Company logo preview, pulled via PENDING_PURCHASE_ORDER_LOGO */}
-            {logoUrl && (
-              <img
-                src={logoUrl}
-                alt="Company Logo"
-                style={{
-                  height: 32,
-                  maxWidth: 160,
-                  objectFit: "contain",
-                }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            )}
-          </div>
+        <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <Field label="Date From">
+            <DateField
+              value={pending.dateFrom}
+              onChange={(v) => setPendingField("dateFrom", v)}
+              max={pending.dateTo || undefined}
+            />
+          </Field>
 
-          {error && (
-            <div
-              style={{
-                marginBottom: 10,
-                padding: "8px 14px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: 6,
-                color: "#dc2626",
-                fontSize: 12,
+          <Field label="Date To">
+            <DateField
+              value={pending.dateTo}
+              onChange={(v) => setPendingField("dateTo", v)}
+              min={pending.dateFrom || undefined}
+            />
+          </Field>
+
+          <Field label="Document No">
+            <SearchField
+              options={docRows.map((d) => ({
+                code: d.DOC_NO,
+                name: d.DOC_NO,
+                extra: d.DOC_TYPE,
+              }))}
+              code={pending.docNo}
+              name={pending.docNoName}
+              loading={isDocLoading}
+              onChange={(code, name) => {
+                setPendingField("docNo", code);
+                setPendingField("docNoName", name);
               }}
+              placeholder="All"
+              displayFormat={formatDocDisplay}
+            />
+          </Field>
+
+          <Field label="Supplier">
+            <SearchField
+              options={supplierRows.map((s) => ({ code: s.AC_CODE, name: s.AC_NAME }))}
+              code={pending.supplierCode}
+              name={pending.supplierName}
+              loading={isSupplierLoading}
+              onChange={(code, name) => {
+                setPendingField("supplierCode", code);
+                setPendingField("supplierName", name);
+              }}
+            />
+          </Field>
+
+          <Field label="Product From">
+            <SearchField
+              options={productRows.map((p) => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
+              code={pending.productFrom}
+              name={pending.productFromName}
+              loading={isProductLoading}
+              onChange={(code, name) => {
+                setPendingField("productFrom", code);
+                setPendingField("productFromName", name);
+              }}
+              placeholder="All"
+            />
+          </Field>
+
+          <Field label="Product To">
+            <SearchField
+              options={productRows.map((p) => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
+              code={pending.productTo}
+              name={pending.productToName}
+              loading={isProductLoading}
+              onChange={(code, name) => {
+                setPendingField("productTo", code);
+                setPendingField("productToName", name);
+              }}
+              placeholder="All"
+            />
+          </Field>
+
+          <Field label="Report Criteria">
+            <select
+              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+              value={pending.reportType}
+              onChange={(e) => setPendingField("reportType", e.target.value as ReportCriteria)}
             >
-              {error}
-            </div>
-          )}
+              <option value="Summary">Summary</option>
+              <option value="Detail">Detail</option>
+            </select>
+          </Field>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div className="field-row" style={row2}>
-              <FloatLabel label="Date From" bgColor={BG} required>
-                <input
-                  type="date"
-                  value={pending.dateFrom}
-                  onChange={(e) => setPendingField("dateFrom", e.target.value)}
-                  style={inputBaseStyle}
-                />
-              </FloatLabel>
-              <FloatLabel label="Date To" bgColor={BG} required>
-                <input
-                  type="date"
-                  value={pending.dateTo}
-                  onChange={(e) => setPendingField("dateTo", e.target.value)}
-                  style={inputBaseStyle}
-                />
-              </FloatLabel>
-            </div>
-
-            <div className="field-row" style={row2}>
-              <FloatLabel label="Document No" bgColor={BG}>
-                <SearchField
-                  options={docRows.map(d => ({
-                    code: d.DOC_NO,
-                    name: d.DOC_NO,
-                    extra: d.DOC_TYPE
-                  }))}
-                  code={pending.docNo}
-                  name={pending.docNoName}
-                  loading={isDocLoading}
-                  onChange={(code, name) => {
-                    setPendingField("docNo", code);
-                    setPendingField("docNoName", name);
-                  }}
-                  placeholder="All"
-                  displayFormat={formatDocDisplay}
-                />
-              </FloatLabel>
-              <FloatLabel label="Supplier" bgColor={BG}>
-                <SearchField
-                  options={supplierRows.map(s => ({ code: s.AC_CODE, name: s.AC_NAME }))}
-                  code={pending.supplierCode}
-                  name={pending.supplierName}
-                  loading={isSupplierLoading}
-                  onChange={(code, name) => {
-                    setPendingField("supplierCode", code);
-                    setPendingField("supplierName", name);
-                  }}
-                />
-              </FloatLabel>
-            </div>
-
-            <div className="field-row" style={row2}>
-              <FloatLabel label="Product From" bgColor={BG}>
-                <SearchField
-                  options={productRows.map(p => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
-                  code={pending.productFrom}
-                  name={pending.productFromName}
-                  loading={isProductLoading}
-                  onChange={(code, name) => {
-                    setPendingField("productFrom", code);
-                    setPendingField("productFromName", name);
-                  }}
-                  placeholder="All"
-                />
-              </FloatLabel>
-              <FloatLabel label="Product To" bgColor={BG}>
-                <SearchField
-                  options={productRows.map(p => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
-                  code={pending.productTo}
-                  name={pending.productToName}
-                  loading={isProductLoading}
-                  onChange={(code, name) => {
-                    setPendingField("productTo", code);
-                    setPendingField("productToName", name);
-                  }}
-                  placeholder="All"
-                />
-              </FloatLabel>
-            </div>
-
-            <div className="field-row" style={row2}>
-              <FloatLabel label="Report Criteria" bgColor={BG} required>
-                <select
-                  value={pending.reportType}
-                  onChange={(e) =>
-                    setPendingField(
-                      "reportType",
-                      e.target.value as ReportCriteria
-                    )
-                  }
-                  style={{ ...inputBaseStyle, cursor: "pointer" }}
-                >
-                  <option value="Summary">Summary</option>
-                  <option value="Detail">Detail</option>
-                </select>
-              </FloatLabel>
+          <div>
+            <Field label="Cancelled PO">
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  paddingTop: 8,
-                }}
+                className="flex min-h-[36px] items-center gap-2 rounded-md px-3 py-1.5 shadow-sm"
+                style={{ border: "1px solid #aebdce", background: "#f4f7fb" }}
               >
                 <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12.5,
-                    cursor: "pointer",
-                  }}
+                  onClick={() => setPendingField("cancelledPO", !pending.cancelledPO)}
+                  className="inline-flex items-center gap-2 cursor-pointer select-none normal-case whitespace-nowrap"
                 >
-                  <input
-                    type="checkbox"
-                    checked={pending.cancelledPO}
-                    onChange={(e) =>
-                      setPendingField("cancelledPO", e.target.checked)
-                    }
-                    style={{ accentColor: "#185FA5" }}
-                  />
-                  Cancelled PO
+                  <span
+                    className="flex h-4 w-4 items-center justify-center rounded transition-colors"
+                    style={{
+                      border: `2px solid ${pending.cancelledPO ? "#1d4ed8" : "#9ca3af"}`,
+                      background: pending.cancelledPO ? "#1d4ed8" : "transparent",
+                    }}
+                  >
+                    {pending.cancelledPO && <Check size={10} color="#fff" strokeWidth={3} />}
+                  </span>
+                  <span className={`text-sm font-normal ${pending.cancelledPO ? "text-blue-700" : "text-foreground"}`}>
+                    Include Cancelled PO
+                  </span>
                 </label>
               </div>
-            </div>
-          </div>
-
-          {/* Status bar when report is generated */}
-          {hasGenerated && (
-            <div
-              style={{
-                marginTop: 10,
-                padding: "8px 14px",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                borderRadius: 6,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 16 }}>✅</span>
-                <span style={{ fontSize: 12, color: "#065f46" }}>
-                  Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setError("The report is available in the preview dialog.");
-                }}
-                style={{
-                  padding: "4px 12px",
-                  background: "#185FA5",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 4,
-                  fontSize: 11,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <Eye size={12} /> Open Report
-              </button>
-            </div>
-          )}
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 8,
-              marginTop: 10,
-              paddingTop: 8,
-              borderTop: "0.5px solid #e5e7eb",
-            }}
-          >
-            <button
-              className="action-btn-excel"
-              onClick={handleReset}
-              disabled={loading}
-              style={{
-                padding: "7px 16px",
-                border: "0.5px solid #d1d5db",
-                background: "#fff",
-                cursor: loading ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                borderRadius: 6,
-              }}
-            >
-              <RotateCcw size={13} /> Reset
-            </button>
-
-            <button
-              className="action-btn-primary"
-              onClick={handleGenerate}
-              disabled={loading}
-              style={{
-                padding: "7px 16px",
-                border: "0.5px solid #185FA5",
-                background: loading ? "#94a3b8" : "#185FA5",
-                cursor: loading ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                borderRadius: 6,
-                color: "#fff",
-              }}
-            >
-              {loading ? (
-                "Generating..."
-              ) : (
-                <>
-                  <Eye size={13} /> Generate Report
-                </>
-              )}
-            </button>
+            </Field>
           </div>
         </div>
+
+        <div className="freight-report-actions">
+          <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
+          </Button>
+        </div>
+        {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
       </div>
-    </div>
+
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title="Pending Purchase Order Report"
+        htmlContent={reportHtml}
+        loading={loading}
+        error={reportPreviewError || null}
+        onExportExcel={handleReportPreviewExcel}
+        exportingExcel={reportPreviewExporting}
+      />
+    </section>
   );
 };
 

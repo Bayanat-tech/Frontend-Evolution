@@ -230,7 +230,7 @@ const PayUnitDependDetailForm = ({ formik, disabled = false }: TProps) => {
           row.original.country_code ? (
             <span title={`Nationality: ${row.original.nationality || 'N/A'}`}>
               {row.original.country_code} - {row.original.country_name}
-              {row.original.nationality}
+              
             </span>
           ) : (
             ''

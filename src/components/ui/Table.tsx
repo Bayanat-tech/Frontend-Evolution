@@ -32,7 +32,15 @@ TableRow.displayName = "TableRow";
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-<th ref={ref} className={cn("h-6 border-b border-[#d7e1f1] px-2 text-left align-middle text-[10px] font-bold uppercase tracking-wide", className)} {...props} />
+    <th
+      ref={ref}
+      className={cn(
+        // Header = LARGE, BOLD, dark so it reads as the column title
+        "h-7 border-b border-[#d7e1f1] px-2 text-left align-middle text-[13px] font-bold text-slate-700",
+        className
+      )}
+      {...props}
+    />
   ),
 );
 TableHead.displayName = "TableHead";
@@ -41,7 +49,14 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
   ({ className, ...props }, ref) => (
     <td
       ref={ref}
-      className={cn("border-b px-2 align-middle overflow-hidden text-[11px]", className)}
+      className={cn(
+        // Data = SMALL, NORMAL, muted so it stays behind the header visually
+        "border-b px-2 align-middle overflow-hidden text-[11px] font-normal text-slate-700",
+        className
+      )}
+      // Kept from QA main: keeps raw <Table> usages compact. NOTE: `{...props}`
+      // comes after, so any `style` passed in (DataTable does) replaces this
+      // whole object — that's the existing QA behaviour, left as-is on purpose.
       style={{ padding: "1px 8px", lineHeight: "1" }}
       {...props}
     />

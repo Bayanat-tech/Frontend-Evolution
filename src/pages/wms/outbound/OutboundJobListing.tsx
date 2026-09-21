@@ -10,7 +10,6 @@ import { Dialog } from "../../../components/ui/Dialog";
 import { Input } from "../../../components/ui/Input";
 import { NoticeToast } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
-// import type { WmsRow } from "./OutboundTypes";
 import { listingTabs, jobFields } from "./Outboundtypes";
 import {
   normalizeRow,
@@ -30,8 +29,7 @@ import {
   flagBadge,
   outboundJobDetailPath,
 } from "./OutboundHelpers";
-import { JobClassPill, DialogActions } from "./OutboundFormFields";
-import { OutboundFormFrame } from "./OutboundFormFields";
+import { JobClassPill } from "./OutboundFormFields";
 import { OutboundJobCreateForm } from "./OutboundJobCreateform";
 
 export type WmsRow = Record<string, unknown>;
@@ -43,7 +41,9 @@ export function OutboundJobListing() {
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("in_progress");
   const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
+  
+  // Changed from formOpen boolean to view state
+  const [view, setView] = useState<"list" | "editor">("list");
   const [editingJobNo, setEditingJobNo] = useState("");
   const [form, setForm] = useState<WmsRow>(makeEmptyJob(user?.company_code));
   const [saving, setSaving] = useState(false);
@@ -89,7 +89,12 @@ export function OutboundJobListing() {
     } catch {
       setForm(makeOutboundJobForm(row, user?.company_code));
     }
-    setFormOpen(true);
+    setView("editor");
+  };
+
+  const handleCloseForm = () => {
+    setView("list");
+    setEditingJobNo("");
   };
 
   const filteredRows = useMemo(
@@ -237,7 +242,7 @@ export function OutboundJobListing() {
       } else {
         await postWmsInbound("inboundjob", payload);
       }
-      setFormOpen(false);
+      setView("list");
       setEditingJobNo("");
       setNotice({
         type: "success",
@@ -325,6 +330,22 @@ export function OutboundJobListing() {
     }
   };
 
+  // ── RENDER EDITOR (FULL PAGE) ──
+  if (view === "editor") {
+    return (
+      <OutboundJobCreateForm
+        form={form}
+        setForm={setForm}
+        companyCode={user?.company_code || ""}
+        onSubmit={saveJob}
+        onClose={handleCloseForm}
+        saving={saving}
+        isEditing={!!editingJobNo}
+      />
+    );
+  }
+
+  // ── RENDER LIST ──
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -345,7 +366,7 @@ export function OutboundJobListing() {
             onClick={() => {
               setEditingJobNo("");
               setForm(makeEmptyJob(user?.company_code));
-              setFormOpen(true);
+              setView("editor");
             }}
           >
             <Plus size={15} /> Add Job
@@ -390,33 +411,6 @@ export function OutboundJobListing() {
               : "bg-blue-50/50"
         }
       />
-
-      <OutboundFormFrame
-        open={formOpen}
-        title={editingJobNo ? `Edit Outbound Job ${editingJobNo}` : "Add Outbound Job"}
-        onClose={() => {
-          setFormOpen(false);
-          setEditingJobNo("");
-        }}
-        footer={
-          <DialogActions
-            formId="outbound-job-form"
-            saving={saving}
-            onCancel={() => {
-              setFormOpen(false);
-              setEditingJobNo("");
-            }}
-            submitText={editingJobNo ? "Update Job" : "Save Job"}
-          />
-        }
-      >
-        <OutboundJobCreateForm
-          form={form}
-          setForm={setForm}
-          companyCode={user?.company_code || ""}
-          onSubmit={saveJob}
-        />
-      </OutboundFormFrame>
 
       <Dialog
         open={Boolean(cancelTarget)}
