@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowRight, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowRight, Ban, Bell, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -13,8 +13,9 @@ import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
+import { FreightJobTrackingTab } from "./FreightJobTrackingTab";
 
-type JobTab = "job" | "packlist" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
+type JobTab = "job" | "packlist" | "documents" | "activities" | "tracking" | "alerts" | "instructions" | "deposits";
 type WorkspaceMode = "list" | "steps";
 
 const modeLabel = {
@@ -50,11 +51,9 @@ const modeIcon = {
 const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
   { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
-  { key: "alerts", label: "Alerts", icon: Bell, ready: true },
-  { key: "instructions", label: "Instructions", icon: Info, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
-  // { key: "deposits", label: "Deposits", icon: WalletCards, ready: true },
   { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
+  { key: "tracking", label: "Live Milestones & Tracking", icon: ShieldCheck, ready: true },
 ];
 
 const listingTabs = [
@@ -308,6 +307,15 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
       {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
       {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "tracking" && (
+        <FreightJobTrackingTab
+          target={target}
+          initialJob={selectedJob}
+          readOnly={selectedJobReadOnly}
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={returnToList}
+        />
+      )}
 
     </section>
   );
