@@ -26,7 +26,6 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
-  openDocumentReport,
   downloadDocumentReportExcel,
 } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
