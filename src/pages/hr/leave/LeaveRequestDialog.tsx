@@ -17,10 +17,12 @@ import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToas
 import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
+import { toApiDateInput } from "../../../hooks/apiDate";
 
 type LeaveRequestDialogProps = {
   open: boolean;
   initialRow?: Record<string, unknown> | null;
+  isEditMode?: boolean;
   readOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -76,7 +78,9 @@ const initialForm: LeaveForm = {
   hod: "",
 };
 
-export function LeaveRequestDialog({ open, initialRow, readOnly = false, onClose, onSaved }: LeaveRequestDialogProps) {
+export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = false, onClose, onSaved }: LeaveRequestDialogProps) {
+ 
+  console.log('leaveprops ', { open, initialRow, isEditMode, readOnly, onClose, onSaved });
   const { user } = useAuth();
   const [form, setForm] = useState<LeaveForm>(initialForm);
   const [employees, setEmployees] = useState<HrEmployee[]>([]);
@@ -161,6 +165,8 @@ export function LeaveRequestDialog({ open, initialRow, readOnly = false, onClose
       setValidationText("");
     }
   };
+
+  console.log('initialRow',initialRow);
 
   const handleEmployeeChange = (employeeCode: string, sourceEmployees = employees) => {
     const employee = sourceEmployees.find((item) => getEmployeeCode(item) === employeeCode);
@@ -256,7 +262,7 @@ export function LeaveRequestDialog({ open, initialRow, readOnly = false, onClose
         ACTUAL_RESUME_DATE: "",
         DUTY_RESUME_DATE: "",
         UUID: getUuid(),
-      });
+      },user?.tenantName);
 
       console.log('save',save);
 
@@ -633,13 +639,13 @@ function calculateInclusiveDays(startValue: string, endValue: string) {
 
 function formFromRow(row: Record<string, unknown>): LeaveForm {
   return {
-    requestDate: getDateInputValue(getRowString(row, "REQUEST_DATE", "requestDate")) || today(),
+    requestDate: toApiDateInput(getRowString(row, "REQUEST_DATE", "requestDate")) || today(),
     employeeCode: getRowString(row, "EMPLOYEE_CODE", "EMPLOYEE_ID", "employeeCode", "employeeId"),
     employeeName: getRowString(row, "EMPLOYEE_NAME", "EMPLOYEE_NAME_DISPLAY", "RPT_NAME", "employeeName"),
     leaveType: getRowString(row, "LEAVE_TYPE", "leaveType"),
     leaveTypeDesc: getRowString(row, "LEAVE_TYPE_DESC", "leaveTypeDesc"),
-    leaveStartDate: getDateInputValue(getRowString(row, "LEAVE_START_DATE", "leaveStartDate")),
-    leaveEndDate: getDateInputValue(getRowString(row, "LEAVE_END_DATE", "leaveEndDate")),
+    leaveStartDate: toApiDateInput(getRowString(row, "LEAVE_START_DATE", "leaveStartDate")),
+    leaveEndDate: toApiDateInput(getRowString(row, "LEAVE_END_DATE", "leaveEndDate")),
     leaveDays: getRowString(row, "LEAVE_DAYS", "leaveDays"),
     remarks: getRowString(row, "REMARKS", "REASON", "remarks"),
     halfDay: getRowString(row, "HALF_DAY", "halfDay").toUpperCase() === "Y" ? "Y" : "N",
@@ -648,8 +654,8 @@ function formFromRow(row: Record<string, unknown>): LeaveForm {
     causeType: getRowString(row, "CAUSE_TYPE", "causeType"),
     airTicket: getYesNoValue(getRowString(row, "AIR_TICKET", "airTicket")),
     airRoute: getRowString(row, "AIR_ROUTE", "airRoute"),
-    travelDate: getDateInputValue(getRowString(row, "TRAVEL_DATE", "travelDate")),
-    travelEndDate: getDateInputValue(getRowString(row, "TRAVEL_END_DATE", "travelEndDate")),
+    travelDate: toApiDateInput(getRowString(row, "TRAVEL_DATE", "travelDate")),
+    travelEndDate: toApiDateInput(getRowString(row, "TRAVEL_END_DATE", "travelEndDate")),
     replacementName: getRowString(row, "NAME_OF_REPLACEMENT", "replacementName"),
     contactDuringLeave: getRowString(row, "CONTACT_DETAILS_DURING_LEAVE", "contactDuringLeave"),
     supervisor: getRowString(row, "IMMEDIATE_SUPERVISOR", "SUPERVISOR_EMPID", "immediateSupervisor"),
