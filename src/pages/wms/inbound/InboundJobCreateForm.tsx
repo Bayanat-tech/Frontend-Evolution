@@ -19,10 +19,10 @@ type Props = {
   setForm:     (updater: (cur: WmsRow) => WmsRow) => void;
   companyCode: string;
   onSubmit:    (e: FormEvent) => void;
-  onClose:     () => void; // Added to handle the back/cancel action
+  // onClose:     () => void; // Added to handle the back/cancel action
 };
 
-export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit, onClose }: Props) {
+export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: Props) {
   const set = (name: string, val: unknown) =>
     setForm((cur) => ({ ...cur, [name]: val }));
 
