@@ -211,6 +211,7 @@ import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
+import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 
 
  type WorkspaceRouteContext = {
@@ -236,6 +237,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name : 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
     element: () => <ConsolidatePayUnitPage />,
+  },
+  {
+    name: "Salary Advance Recovery",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/advance/deduction_letter"),
+    element: () => <SalaryAdvanceRecoveryPage />,
   },
 
   // {

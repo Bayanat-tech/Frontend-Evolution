@@ -9,7 +9,6 @@ import { exportGrnPrintReportExcel, getGrnPrintReportPreviewUrl } from "../../..
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
-
 import {
   ActionKey,
   PO_DOC_TYPE,
@@ -21,6 +20,7 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  computeQuantity,
   emptyForm,
   emptyLineRow,
   fetchPurchaseOrderDetail,
@@ -43,10 +43,27 @@ import { RejectDialog } from "./Rejectdialog";
 import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
 import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 
 export type { PurchaseOrderEditorState };
+
+/**
+ * getGrnPrintReportPreviewUrl returns a blob: URL. NewReportDialog needs the
+ * raw HTML string, so read the blob back as text and release the URL at once.
+ */
+async function fetchHtmlFromPreviewUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url);
+    return await res.text();
+  } finally {
+    try {
+      window.URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 export function PurchaseGRNEditor({
   config,
@@ -70,13 +87,14 @@ export function PurchaseGRNEditor({
   const [error, setError] = useState("");
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   const [printing, setPrinting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
-  // ── Report preview dialog state ──────────────────────────────────────────
+  // ── Report preview dialog state (HTML fed straight into NewReportDialog) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
 
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
@@ -153,7 +171,7 @@ export function PurchaseGRNEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
-          // --- PO-reference fields, missing until now ---
+          // --- PO-reference fields ---
           po_doc_no: text(headerRaw.po_doc_no || current.po_doc_no),
           po_doc_date: toDateInputValue(headerRaw.po_doc_date) || current.po_doc_date,
           po_div_code: text(headerRaw.po_div_code || current.po_div_code),
@@ -196,19 +214,12 @@ export function PurchaseGRNEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
-  // Revoke the blob URL whenever it changes or the component unmounts, so we
-  // don't leak memory across repeated print actions.
-  useEffect(() => {
-    return () => {
-      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    };
-  }, [reportPreviewUrl]);
-
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -247,39 +258,54 @@ export function PurchaseGRNEditor({
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
 
-const handleSaveAsDraft = () => {
-  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
-  return runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Purchase Quotation saved as draft");
-};
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Purchase Quotation saved as draft");
+  };
 
-const handleSubmit = () => {
-  if (!form.div_code) return setError("Division is required");
-  if (!form.ac_code) return setError("A/c Code is required");
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
 
-  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
-  return runAction("submit", async () => {
-    await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
-};
+  const handleSubmitClick = () => {
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => computeQuantity(row) <= 0);
+    if (invalidRow) {
+      return setError("Received Quantity must be greater than 0 for all line items");
+    }
+
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
+  };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase GRN cancelled");
 
-  // ── Print now opens the in-app preview dialog instead of a new window ────
+  // ── Print opens the in-app NewReportDialog preview ───────────────────────
   const handlePrintGrn = async () => {
     if (!form.doc_no) {
       setError("Save the GRN before printing");
       return;
     }
 
-    // Reset previous preview state and open the dialog immediately so the
-    // user sees the loading spinner inside ReportPreviewDialog right away.
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl("");
+    // Open the dialog immediately so its spinner shows while we fetch.
+    setReportHtml(null);
     setReportPreviewError("");
     setReportPreviewOpen(true);
 
@@ -293,7 +319,8 @@ const handleSubmit = () => {
         doc_type: PO_DOC_TYPE.GRN,
         doc_no: form.doc_no,
       } as any);
-      setReportPreviewUrl(url);
+      const html = await fetchHtmlFromPreviewUrl(url);
+      setReportHtml(html);
     } catch (printError) {
       setReportPreviewError(printError instanceof Error ? printError.message : "Error while generating report");
     } finally {
@@ -303,9 +330,8 @@ const handleSubmit = () => {
 
   const closeReportPreview = () => {
     if (actionLoading) return; // don't close mid-action, mirrors other dialogs
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
     setReportPreviewOpen(false);
-    setReportPreviewUrl("");
+    setReportHtml(null);
     setReportPreviewError("");
   };
 
@@ -328,6 +354,58 @@ const handleSubmit = () => {
       setError(exportError instanceof Error ? exportError.message : "Error while exporting to Excel");
     } finally {
       setExportingExcel(false);
+    }
+  };
+
+  // Open the report HTML in a new browser tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger the browser print dialog (Save as PDF) for the current report
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "grn-editor-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
     }
   };
 
@@ -415,7 +493,7 @@ const handleSubmit = () => {
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -517,7 +595,6 @@ const handleSubmit = () => {
           )}
         </CardContent>
 
-
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
             {isPendingTab && (
@@ -526,10 +603,24 @@ const handleSubmit = () => {
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-              {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+
+            {isPendingTab && (
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Purchase Grn?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -568,18 +659,25 @@ const handleSubmit = () => {
         </div>
       </form>
 
-      {reportPreviewOpen && (
-        <ReportPreviewDialog
-          title={`Purchase GRN ${form.doc_no || ""}`.trim()}
-          pdfUrl={reportPreviewUrl}
-          error={reportPreviewError}
-          exporting={exportingExcel}
-          onExcel={handleExportGrnExcel}
-          onClose={closeReportPreview}
-          onDownload={() => {}}
-          downloadName={`GRN_${form.doc_no || "report"}.html`}
-        />
-      )}
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Purchase GRN ${form.doc_no || ""}`.trim()}
+        htmlContent={reportHtml}
+        loading={printing}
+        error={reportPreviewError || null}
+        meta={{
+          companyName: user?.company_code || "",
+          user: user?.loginid || user?.username || "ADMIN",
+          status: form.canceled === "Y" ? "Cancelled" : "Active",
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={handleExportGrnExcel}
+        exportingExcel={exportingExcel}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
 
       <SendBackDialog
         open={sendBackDialogOpen}

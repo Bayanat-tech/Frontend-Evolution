@@ -59,12 +59,27 @@ const ProductPurchaseSales = () => {
 
       // Unit of Measurement fields
       { name: "uom_count", label: "No. of UOMs", section: "Unit of Measurement" },
-      { name: "p_uom", label: "Primary UOM", section: "Unit of Measurement" },
-      { name: "l_uom", label: "Lower UOM", section: "Unit of Measurement" },
+      { name: "p_uom", label: "Primary UOM", section: "Unit of Measurement",
+        dropdownParam: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
+        dropdownDisplayFields: ["uom_code", "uom_name"],
+        dropdownDisplaySeparator: " - ",
+        dropdownValueKey: "uom_code",
+       },
+      { name: "l_uom", label: "Lower UOM", section: "Unit of Measurement",
+        dropdownParam: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
+        dropdownDisplayFields: ["uom_code", "uom_name"],
+        dropdownDisplaySeparator: " - ",
+        dropdownValueKey: "uom_code",
+       },
       { name: "uppp", label: "UPPP", section: "Unit of Measurement" },
 
       // Division fields
-      { name: "div_code", label: "Division Code", section: "Division" },
+      { name: "div_code", label: "Division Code", section: "Division",
+        dropdownParam: "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION",
+        dropdownDisplayFields: ["div_code", "div_name"],
+        dropdownDisplaySeparator: " - ",
+        dropdownValueKey: "div_code",
+      },
       { name: "color_code", label: "Color Code", section: "Division" },
 
       // Weight and Dimensions fields

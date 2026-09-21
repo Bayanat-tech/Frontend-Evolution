@@ -2053,7 +2053,7 @@ function buildFreightPrintHtml(header: QuotationHeader, details: QuotationDetail
         <style>
           @page { margin: 14mm; }
           * { box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; font-size: 11px; color: #1f2937; margin: 0; }
+          body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; color: #1f2937; margin: 0; }
 
           .doc-header {
             display: flex; justify-content: space-between; align-items: flex-end;

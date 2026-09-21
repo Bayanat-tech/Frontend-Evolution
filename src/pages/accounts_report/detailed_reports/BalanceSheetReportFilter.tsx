@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, Play, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 
-import { Button } from "../../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
 import { useAuth } from "../../../state/AuthContext";
 import { api } from "../../../api/client";
 import { getBalanceSheetReportHtml, getBalanceSheetReportExcelDownload } from "../../../api/transactions";
 import { getDynamicLookup } from "../../../api/lookups";
-import ReportDialogPage from "../../../components/ReportDialogPage";
+import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
+import { NewReportDialog } from "../../../components/new_report_format";
+import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,11 @@ interface DrillEntry {
   payload: Record<string, unknown>;
 }
 
+interface Params {
+  as_on_date:    string;
+  division_code: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getToday = (): string => {
@@ -45,56 +50,12 @@ const getToday = (): string => {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 };
 
-// ─── Iframe renderer ──────────────────────────────────────────────────────────
-// Used for the main report AND every drill-down level. Scripts injected into
-// HTML only execute inside a real iframe (not via dangerouslySetInnerHTML),
-// so a single renderer keeps postMessage drill-down clicks working everywhere.
+const DEFAULT_PARAMS: Params = {
+  as_on_date:    getToday(),
+  division_code: "",
+};
 
-function IframeReportRenderer({
-  required_values,
-}: {
-  required_values: { html: string };
-}) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    const win = iframe.contentWindow as any;
-
-    let originalPrint: (() => void) | undefined;
-    if (win) {
-      originalPrint = win.print;
-      win.print = () => {};
-    }
-
-    doc.open();
-    doc.write(required_values.html);
-    doc.close();
-
-    const restorePrint = () => {
-      if (win && originalPrint) win.print = originalPrint;
-    };
-    if (doc.readyState === "complete") {
-      restorePrint();
-    } else {
-      iframe.addEventListener("load", restorePrint, { once: true });
-    }
-  }, [required_values.html]);
-
-  return (
-    <iframe
-      ref={iframeRef}
-      style={{ width: "100%", minHeight: "70vh", border: "none" }}
-      title="report"
-    />
-  );
-}
-
-// ─── Drill breadcrumb bar ─────────────────────────────────────────────────────
+// ─── Drill breadcrumb bar (same pattern as TrialBalancePage) ─────────────────
 
 interface DrillBreadcrumbProps {
   stack:      DrillEntry[];
@@ -103,8 +64,9 @@ interface DrillBreadcrumbProps {
 
 function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
   return (
-    <div className="flex items-center gap-1 flex-wrap px-1 py-1.5 text-[10px]">
+    <div className="flex items-center gap-1 flex-wrap px-4 py-1.5 text-[10px]">
       <button
+        type="button"
         onClick={() => onNavigate(-1)}
         className="flex items-center gap-1 text-primary/80 hover:text-primary font-medium"
       >
@@ -114,6 +76,7 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
         <span key={entry.id} className="flex items-center gap-1">
           <span className="text-muted-foreground">/</span>
           <button
+            type="button"
             onClick={() => onNavigate(i)}
             className={[
               "font-medium",
@@ -136,17 +99,17 @@ export default function BalanceSheetPage() {
   const { user } = useAuth();
 
   // ── Form state ─────────────────────────────────────────────────────────────
-  const [asOnDate,      setAsOnDate]      = useState<string>(getToday());
-  const [divisionCode,  setDivisionCode]  = useState<string>("");
+  const [params, setParams] = useState<Params>(DEFAULT_PARAMS);
 
   // ── Division lookup ────────────────────────────────────────────────────────
-  const [divisions,        setDivisions]        = useState<Division[]>([]);
+  const [divisions, setDivisions]               = useState<Division[]>([]);
   const [divisionsLoading, setDivisionsLoading] = useState(false);
 
   // ── Report state ───────────────────────────────────────────────────────────
   const [reportHtml,    setReportHtml]    = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError,   setReportError]   = useState<string | null>(null);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // ── Drill-down state ───────────────────────────────────────────────────────
   const [drillStack, setDrillStack]     = useState<DrillEntry[]>([]);
@@ -155,6 +118,7 @@ export default function BalanceSheetPage() {
   const drillIdCounter                  = useRef(0);
 
   // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
+  // Works with NewReportDialog page iframes (sandbox: allow-scripts allow-same-origin)
   useEffect(() => {
     const handler = async (ev: MessageEvent) => {
       if (!ev.data || ev.data.type !== "DRILL_DOWN") return;
@@ -239,11 +203,18 @@ export default function BalanceSheetPage() {
     fetch();
   }, [user]);
 
+  const divisionOptions: ReportOption[] = divisions.map((d) => ({
+    value: d.div_code,
+    label: `${d.div_code} | ${d.div_name}`,
+  }));
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
+  const setParam = (key: string, val: any) =>
+    setParams((prev) => ({ ...prev, [key]: val }));
+
   const handleReset = () => {
-    setAsOnDate(getToday());
-    setDivisionCode("");
+    setParams(DEFAULT_PARAMS);
     setReportHtml(null);
     setReportError(null);
     setDrillStack([]);
@@ -251,15 +222,15 @@ export default function BalanceSheetPage() {
   };
 
   const buildPayload = useCallback(() => ({
-    parameter:    "Account_Report_BalanceSheet",
-    company_code: user?.company_code ?? "",
-    division_code: divisionCode || "All",
-    as_on_date:   asOnDate,
-    loginid:      user?.loginid ?? "ADMIN",
-  }), [user, divisionCode, asOnDate]);
+    parameter:     "Account_Report_BalanceSheet",
+    company_code:  user?.company_code ?? "",
+    division_code: params.division_code || "All",
+    as_on_date:    params.as_on_date,
+    loginid:       user?.loginid ?? "ADMIN",
+  }), [user, params.division_code, params.as_on_date]);
 
-  const handleGenerate = async () => {
-    if (!asOnDate) {
+  const handleGenerateReport = async () => {
+    if (!params.as_on_date) {
       setReportError("Please select an As On Date before generating.");
       return;
     }
@@ -286,6 +257,7 @@ export default function BalanceSheetPage() {
   };
 
   const handleExcel = async () => {
+    setExportingExcel(true);
     try {
       await getBalanceSheetReportExcelDownload(buildPayload());
     } catch (err: any) {
@@ -295,6 +267,8 @@ export default function BalanceSheetPage() {
         err?.message ||
         "Failed to download Excel";
       setReportError(String(msg));
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -303,6 +277,7 @@ export default function BalanceSheetPage() {
     const topDrill = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
     if (!topDrill) return;
     const endpoint = DRILL_EXCEL_ENDPOINTS[topDrill.level];
+    setExportingExcel(true);
     try {
       const response = await api.post(endpoint, topDrill.payload, {
         responseType: "arraybuffer",
@@ -325,6 +300,8 @@ export default function BalanceSheetPage() {
         err?.message ||
         "Failed to download Excel";
       setDrillError(String(msg));
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -348,164 +325,78 @@ export default function BalanceSheetPage() {
     setDrillError(null);
   };
 
-  const canGenerate = Boolean(asOnDate);
-  const pageTitle   = "Balance Sheet";
+  const pageTitle = "Balance Sheet";
 
-  // ── Derive what to show inside ReportDialogPage ────────────────────────────
-  const topDrill = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+  const fields: ReportFieldConfig[] = [
+    {
+      key: "as_on_date",
+      label: "As On Date",
+      type: "date",
+      required: true,
+    },
+    {
+      key: "division_code",
+      label: "Division",
+      type: "select",
+      options: divisionOptions,
+      loading: divisionsLoading,
+      placeholder: "All Divisions",
+    },
+  ];
+
+  // ── Derive what to show inside NewReportDialog ─────────────────────────────
+  const topDrill    = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+  const dialogTitle = topDrill ? topDrill.label : pageTitle;
+  const dialogHtml  = topDrill ? topDrill.html : reportHtml;
+  const dialogOpen  = reportHtml !== null;
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
-      <section className="grid gap-4">
-
-        {/* Page Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
-              {pageTitle}
-            </h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
-              <RefreshCw size={15} />
-            </Button>
-
-            <Button disabled={!canGenerate || reportLoading} onClick={handleGenerate}>
-              {reportLoading ? (
-                <>
-                  <svg
-                    className="animate-spin h-3.5 w-3.5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <Play size={15} /> Generate Report
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Error Banner */}
-        {reportError && (
-          <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
-            <span className="font-semibold">Error:</span> {reportError}
-            <button
-              onClick={() => setReportError(null)}
-              className="ml-auto text-destructive/60 hover:text-destructive"
+      <NewReportPage
+        title={pageTitle}
+        fields={fields}
+        values={params}
+        onChange={setParam}
+        onClearAll={handleReset}
+        onGenerate={handleGenerateReport}
+        loading={reportLoading}
+        optionsLoading={divisionsLoading}
+        error={reportError}
+        onClearError={() => setReportError(null)}
+        fieldsPerRow={3}
+      >
+        {reportHtml !== null && (
+          <div style={{ marginTop: 8 }}>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#065f46",
+                background: "#d1fae5",
+                padding: "3px 10px",
+                borderRadius: 12,
+                fontWeight: 500,
+              }}
             >
-              <X size={12} />
-            </button>
+              Report generated successfully
+            </span>
           </div>
         )}
+      </NewReportPage>
 
-        {/* Filters */}
-        <Card className="border-border shadow-sm overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-primary" />
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">
-                  Parameters
-                </p>
-                <h2 className="text-[11px] font-semibold text-foreground leading-tight">
-                  Balance Sheet Filters
-                </h2>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="px-4 py-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-
-              {/* Division */}
-              <label className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-2">
-                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Division
-                </span>
-                <select
-                  value={divisionCode}
-                  onChange={(e) => setDivisionCode(e.target.value)}
-                  disabled={divisionsLoading}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50"
-                >
-                  <option value="">— All Divisions —</option>
-                  {divisions.map((d) => (
-                    <option key={d.div_code} value={d.div_code}>
-                      {d.div_code} – {d.div_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {/* As On Date */}
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  As On Date <strong className="text-destructive">*</strong>
-                </span>
-                <input
-                  type="date"
-                  value={asOnDate}
-                  onChange={(e) => setAsOnDate(e.target.value)}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                />
-              </label>
-
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Empty state placeholder while no report is generated */}
-        {reportHtml === null && !reportLoading && (
-          <Card className="border-border shadow-sm overflow-hidden min-h-[220px]">
-            <div className="flex min-h-[220px] items-center justify-center p-10 text-[13px] text-muted-foreground select-none">
-              Set the parameters above and click&nbsp;
-              <strong className="font-semibold text-foreground ml-1">Generate Report</strong>
-            </div>
-          </Card>
-        )}
-
-        {/* Loading placeholder */}
-        {reportLoading && (
-          <Card className="border-border shadow-sm overflow-hidden min-h-[220px]">
-            <div className="flex min-h-[220px] items-center justify-center gap-2 p-10 text-[13px] text-muted-foreground">
-              <svg
-                className="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              Generating report…
-            </div>
-          </Card>
-        )}
-
-      </section>
-
-      {/* ── Report Dialog ── */}
-      {reportHtml !== null && (
-        <ReportDialogPage
-          title={topDrill ? topDrill.label : pageTitle}
-          Report={IframeReportRenderer}
-          required_values={{ html: topDrill ? topDrill.html : reportHtml }}
-          excel={topDrill ? handleDrillExcel : handleExcel}
-          onClose={handleCloseReport}
-          headerSlot={
+      {/* ── New Report Dialog (with drill support via headerSlot) ── */}
+      <NewReportDialog
+        open={dialogOpen}
+        onClose={handleCloseReport}
+        title={dialogTitle}
+        htmlContent={dialogHtml}
+        loading={drillLoading}
+        error={drillError}
+        onExportExcel={topDrill ? handleDrillExcel : handleExcel}
+        exportingExcel={exportingExcel}
+        headerSlot={
+          (drillLoading || drillError || drillStack.length > 0) ? (
             <div className="flex flex-col gap-0">
-              {/* Drill loading indicator */}
               {drillLoading && (
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-border text-[10px] text-primary">
                   <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -516,26 +407,24 @@ export default function BalanceSheetPage() {
                 </div>
               )}
 
-              {/* Drill error */}
               {drillError && (
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive">
                   <span className="font-semibold">Drill-down error:</span> {drillError}
-                  <button onClick={() => setDrillError(null)} className="ml-auto">
+                  <button type="button" onClick={() => setDrillError(null)} className="ml-auto">
                     <X size={11} />
                   </button>
                 </div>
               )}
 
-              {/* Breadcrumb — only visible when drilled in */}
               {drillStack.length > 0 && (
                 <div className="border-b border-border bg-muted/20">
                   <DrillBreadcrumb stack={drillStack} onNavigate={handleDrillNavigate} />
                 </div>
               )}
             </div>
-          }
-        />
-      )}
+          ) : undefined
+        }
+      />
     </>
   );
 }
