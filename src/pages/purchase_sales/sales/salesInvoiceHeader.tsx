@@ -152,7 +152,8 @@ export function SalesInvoiceHeaderForm({
                                         so_doc_no: text(getLookupValue(row || {}, "so_doc_no")),
                                         ac_code: text(getLookupValue(row || {}, "ac_code")),
                                         ac_name: text(getLookupValue(row || {}, "ac_name")),
-                                        so_dept_code: text(getLookupValue(row || {}, "so_dept_code")),
+                                        dept_code: text(getLookupValue(row || {}, "dept_code")),
+                                        dept_name: text(getLookupValue(row || {}, "dept_name")),
                                         remarks: text(getLookupValue(row || {}, "remarks")),
                                         so_remarks: text(getLookupValue(row || {}, "so_remarks")),
                                         so_ref_no: text(getLookupValue(row || {}, "so_ref_no")),
@@ -177,10 +178,9 @@ export function SalesInvoiceHeaderForm({
                                         so_dlvr_term: text(getLookupValue(row || {}, "so_dlvr_term")),
                                         so_salesman_code: text(getLookupValue(row || {}, "so_salesman_code")),
                                         so_zone_code: text(getLookupValue(row || {}, "so_zone_code")),
-                                        so_tx_compntcat_code_1: text(getLookupValue(row || {}, "so_tx_compntcat_code_1")),
-                                        so_tx_cat_code: `${text(getLookupValue(row || {}, "so_tx_cat_code"))} - ${text(
-                                            getLookupValue(row || {}, "so_tx_cat_name")
-                                        )}`,
+                                        tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
+                                        tx_cat_code: text(getLookupValue(row || {}, "tx_cat_code")),
+                                        tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
                                         SDN_payment_terms: text(getLookupValue(row || {}, "SDN_payment_terms")),
                                         SDN_dlvr_term: text(getLookupValue(row || {}, "SDN_dlvr_term")),
                                         so_project_name: text(getLookupValue(row || {}, "so_project_name")),
@@ -316,11 +316,13 @@ export function SalesInvoiceHeaderForm({
                 <div className="col-span-2">
                     <LookupField
                         label="Department"
-                        value={form.so_dept_code || ""}
+                        value={ form.dept_name
+                                ? `${form.dept_code} - ${form.dept_name}`
+                                : form.dept_code || ""}
                         displayValue={
-                            form.so_dept_name
-                                ? `${form.so_dept_code} - ${form.so_dept_name}`
-                                : form.so_dept_code
+                            form.dept_name
+                                ? `${form.dept_code} - ${form.dept_name}`
+                                : form.dept_code
                         }
                         columns={[
                             { field: "dept_code", header: "Code" },
@@ -340,8 +342,8 @@ export function SalesInvoiceHeaderForm({
                         onChange={(value, row) =>
                             setForm((current) => ({
                                 ...current,
-                                so_dept_code: value,
-                                so_dept_name: text(getLookupValue(row || {}, "dept_name")),
+                                dept_code: value,
+                                dept_name: text(getLookupValue(row || {}, "dept_name")),
                             }))
                         }
                     />
@@ -519,14 +521,16 @@ export function SalesInvoiceHeaderForm({
                         label="Tax Category"
                         compact
                         placeholder="Tax code"
-                        value={form.so_tx_cat_code || ""}
+                        value={form.tx_cat_name
+                            ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+                            : form.tx_cat_code || ""}
                         displayValue={
-                            form.so_tx_cat_name
-                                ? `${form.so_tx_cat_code} - ${form.so_tx_cat_name}`
-                                : form.so_tx_cat_code
+                            form.tx_cat_name
+                                ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+                                : form.tx_cat_code
                         }
                         columns={[
-                            { field: "tx_cat_code_1", header: "Code" },
+                            { field: "tx_cat_code", header: "Code" },
                             { field: "tx_cat_name", header: "Name" }
                         ]}
                         valueField="tx_cat_code"
@@ -542,8 +546,8 @@ export function SalesInvoiceHeaderForm({
                         onChange={(value, row) =>
                             setForm((current) => ({
                                 ...current,
-                                so_tx_cat_code: value,
-                                so_tx_cat_name: text(
+                                tx_cat_code: value,
+                                tx_cat_name: text(
                                     getLookupValue(row || {}, "tx_cat_name")
                                 ),
                             }))
@@ -560,8 +564,8 @@ export function SalesInvoiceHeaderForm({
                         label="Tax Code"
                         compact
                         placeholder="Tax code"
-                        value={form.so_tx_compntcat_code_1 || ""}
-                        displayValue={form.so_tx_compntcat_code_1 || ""}
+                        value={form.tx_compntcat_code_1 || ""}
+                        displayValue={form.tx_compntcat_code_1 || ""}
                         columns={[
                             { field: "tx_compntcat_code", header: "Code" },
                             { field: "tx_compntcat_name", header: "Name" }
@@ -582,7 +586,7 @@ export function SalesInvoiceHeaderForm({
                         onChange={(value) =>
                             setForm((current) => ({
                                 ...current,
-                                so_tx_compntcat_code_1: value
+                                tx_compntcat_code_1: value
                             }))
                         }
                     />

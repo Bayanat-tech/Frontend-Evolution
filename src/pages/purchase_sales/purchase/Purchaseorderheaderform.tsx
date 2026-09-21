@@ -198,6 +198,7 @@ export function PurchaseOrderHeaderForm({
                       salesman_code: text(getLookupValue(row || {}, "salesman_code")),
                       zone_code: text(getLookupValue(row || {}, "zone_code")),
                       tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
+                      tx_compntcat_name_1: text(getLookupValue(row || {}, "tx_compntcat_name_1")),
                       // tx_cat_code: `${text(getLookupValue(row || {}, "tx_cat_code"))} - ${text(
                       //   getLookupValue(row || {}, "tx_cat_name")
                       // )}`,
@@ -533,7 +534,9 @@ export function PurchaseOrderHeaderForm({
 
             <LookupField
               label="Tax Category"
-              value={form.tx_cat_code || ""}
+              value={form.tx_cat_name
+                ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+                : form.tx_cat_code}
               displayValue={
                 form.tx_cat_name
                   ? `${form.tx_cat_code} - ${form.tx_cat_name}`
@@ -557,6 +560,7 @@ export function PurchaseOrderHeaderForm({
                 setForm((current) => ({
                   ...current,
                   tx_cat_code: text(value).split(" - ")[0].trim(),
+                  tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
 
                 }))
               }
@@ -564,8 +568,8 @@ export function PurchaseOrderHeaderForm({
 
             <LookupField
               label="Tax Code"
-              value={form.tx_compntcat_name
-                ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name}`
+              value={form.tx_compntcat_name_1
+                ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name_1}`
                 : form.tx_compntcat_code_1}
               displayValue={
                 form.tx_compntcat_name

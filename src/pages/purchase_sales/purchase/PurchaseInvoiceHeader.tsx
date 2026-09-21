@@ -146,7 +146,8 @@ export function PurchaseInvoiceHeaderForm({
                                         po_doc_no: text(getLookupValue(row || {}, "po_doc_no")),
                                         ac_code: text(getLookupValue(row || {}, "ac_code")),
                                         ac_name: text(getLookupValue(row || {}, "ac_name")),
-                                        po_dept_code: text(getLookupValue(row || {}, "po_dept_code")),
+                                        dept_code: text(getLookupValue(row || {}, "dept_code")),
+                                        dept_name: text(getLookupValue(row || {}, "dept_name")),
                                         remarks: text(getLookupValue(row || {}, "remarks")),
                                         po_remarks: text(getLookupValue(row || {}, "po_remarks")),
                                         po_ref_no: text(getLookupValue(row || {}, "po_ref_no")),
@@ -171,10 +172,8 @@ export function PurchaseInvoiceHeaderForm({
                                         po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
                                         po_salesman_code: text(getLookupValue(row || {}, "po_salesman_code")),
                                         po_zone_code: text(getLookupValue(row || {}, "po_zone_code")),
-                                        po_tx_compntcat_code_1: text(getLookupValue(row || {}, "po_tx_compntcat_code_1")),
-                                        po_tx_cat_code: `${text(getLookupValue(row || {}, "po_tx_cat_code"))} - ${text(
-                                            getLookupValue(row || {}, "po_tx_cat_name")
-                                        )}`,
+                                        tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
+                                        tx_cat_code: text(getLookupValue(row || {}, "tx_cat_code")),
                                         grn_payment_terms: text(getLookupValue(row || {}, "grn_payment_terms")),
                                         grn_dlvr_term: text(getLookupValue(row || {}, "grn_dlvr_term")),
                                         po_project_name: text(getLookupValue(row || {}, "po_project_name")),
@@ -184,6 +183,9 @@ export function PurchaseInvoiceHeaderForm({
                                         inv_no: text(getLookupValue(row || {}, "inv_no")),
                                         inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                         pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
+                                        tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
+                                        tx_compntcat_name_1: text(getLookupValue(row || {}, "tx_compntcat_name_1")),
+                                        tx_compnt_perc_1: numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
                                         discount_scoope:
                                             text(getLookupValue(row || {}, "discount_scoope")) === "PO"
                                                 ? "PO"
@@ -304,11 +306,13 @@ export function PurchaseInvoiceHeaderForm({
                 <div className="col-span-1">
                     <LookupField
                         label="Department"
-                        value={form.po_dept_code || ""}
+                        value={ form.dept_name
+                                ? `${form.dept_code} - ${form.dept_name}`
+                                : form.dept_code || ""}
                         displayValue={
-                            form.po_dept_name
-                                ? `${form.po_dept_code} - ${form.po_dept_name}`
-                                : form.po_dept_code
+                            form.dept_name
+                                ? `${form.dept_code} - ${form.dept_name}`
+                                : form.dept_code
                         }
                         columns={[
                             { field: "dept_code", header: "Code" },
@@ -328,8 +332,8 @@ export function PurchaseInvoiceHeaderForm({
                         onChange={(value, row) =>
                             setForm((current) => ({
                                 ...current,
-                                po_dept_code: value,
-                                po_dept_name: text(getLookupValue(row || {}, "dept_name")),
+                                dept_code: value,
+                                dept_name: text(getLookupValue(row || {}, "dept_name")),
                             }))
                         }
                     />
@@ -527,11 +531,13 @@ export function PurchaseInvoiceHeaderForm({
                         label="Tax Category"
                         compact
                         placeholder="Tax code"
-                        value={form.po_tx_cat_code || ""}
+                        value={ form.tx_cat_name
+                                ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+                                : form.tx_cat_code || ""}
                         displayValue={
-                            form.po_tx_cat_name
-                                ? `${form.po_tx_cat_code} - ${form.po_tx_cat_name}`
-                                : form.po_tx_cat_code
+                            form.tx_cat_name
+                                ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+                                : form.tx_cat_code
                         }
                         columns={[
                             { field: "tx_cat_code", header: "Code" },
@@ -550,8 +556,8 @@ export function PurchaseInvoiceHeaderForm({
                         onChange={(value, row) =>
                             setForm((current) => ({
                                 ...current,
-                                po_tx_cat_code: value,
-                                po_tx_cat_name: text(
+                                tx_cat_code: value,
+                            tx_cat_name: text(
                                     getLookupValue(row || {}, "tx_cat_name")
                                 ),
                             }))
@@ -568,8 +574,8 @@ export function PurchaseInvoiceHeaderForm({
                         label="Tax Code"
                         compact
                         placeholder="Tax code"
-                        value={form.po_tx_compntcat_code_1 || ""}
-                        displayValue={form.po_tx_compntcat_code_1 || ""}
+                        value={form.tx_compntcat_code_1 || ""}
+                        displayValue={form.tx_compntcat_code_1 || ""}
                         columns={[
                             { field: "tx_compntcat_code", header: "Code" },
                             { field: "tx_compntcat_name", header: "Name" }
@@ -590,7 +596,7 @@ export function PurchaseInvoiceHeaderForm({
                         onChange={(value) =>
                             setForm((current) => ({
                                 ...current,
-                                po_tx_compntcat_code_1: value
+                                tx_compntcat_code_1: value
                             }))
                         }
                     />

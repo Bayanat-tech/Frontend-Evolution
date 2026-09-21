@@ -283,6 +283,9 @@ export interface PurchaseOrderForm {
   tx_compnt_1_expmt?: string;
   sinvoice_total_amount?: number;
   discount_scoope: "PO" | "ITEM";
+ tx_compntcat_name_1:string, 
+ tx_cat_name_1:string,
+
 }
 
 export interface SendBackUserOption {

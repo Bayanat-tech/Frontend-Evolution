@@ -38,7 +38,6 @@ export interface PurchaseOrderLineRow {
   quantity: number,
   ex_rate: number,
   tx_cat_code: string,
-  tx_compntcat_code_1: string,
   tx_compnt_perc_1: number,
   tx_compnt_amt_1: number,
   tx_compnt_1_expmt: string,
@@ -74,7 +73,7 @@ export interface PurchaseOrderLineRow {
    porder_disc_percent?: number;
    porder_disc_price?: number;
      porder_tx_cat_code?: string,
-   porder_tx_compntcat_code_1?: string,
+   tx_compntcat_code_1?: string,
    porder_tx_compnt_perc_1?: number,
    porder_tx_compnt_amt_1?: number,
    porder_tx_compnt_1_expmt?: string,
@@ -274,6 +273,8 @@ export interface PurchaseOrderForm {
   tx_compnt_perc_1?: number;
   pinvoice_total_amount?: number;
   discount_scoope: "PO" | "ITEM";
+  tx_compntcat_name_1: string;
+  tx_cat_name_1: string;
 
 }
 

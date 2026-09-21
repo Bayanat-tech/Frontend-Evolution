@@ -443,11 +443,11 @@ export function PurchaseInvoiceLinesTable({
                       label="Tax Category"
                       compact
                       placeholder="Tax code"
-                      value={row.porder_tx_cat_code || ""}
+                      value={row.tx_cat_code || ""}
                       displayValue={
-                        row.porder_tx_cat_name
-                          ? `${row.porder_tx_cat_code} - ${row.porder_tx_cat_name}`
-                          : row.porder_tx_cat_code || ""
+                        row.tx_cat_name
+                          ? `${row.tx_cat_code} - ${row.tx_cat_name}`
+                          : row.tx_cat_code || ""
                       }
                       columns={[
                         { field: "tx_cat_code", header: "Code" },
@@ -463,10 +463,10 @@ export function PurchaseInvoiceLinesTable({
                       }
                       onChange={(value, selectedRow) => {
                         updateRow(row.id, {
-                          porder_tx_cat_code: text(value),
-                          // tx_cat_name: text(
-                          //   getLookupValue(selectedRow || {}, "tx_cat_name")
-                          // ),
+                          tx_cat_code: text(value),
+                          tx_cat_name: text(
+                            getLookupValue(selectedRow || {}, "tx_cat_name")
+                          ),
                         });
                       }}
                     />
@@ -476,11 +476,11 @@ export function PurchaseInvoiceLinesTable({
                       label="Tax Code"
                       compact
                       placeholder="Tax code"
-                      value={row.porder_tx_compntcat_code_1 || ""}
+                      value={row.tx_compntcat_code_1 || ""}
                       displayValue={
                         row.porder_tx_compntcat_name_1
-                          ? `${row.porder_tx_compntcat_code_1} - ${row.porder_tx_compntcat_name_1}`
-                          : row.porder_tx_compntcat_code_1 || ""
+                          ? `${row.tx_compntcat_code_1} - ${row.porder_tx_compntcat_name_1}`
+                          : row.tx_compntcat_code_1 || ""
                       }
                       columns={[
                         { field: "tx_compntcat_code", header: "Code" },
@@ -497,7 +497,7 @@ export function PurchaseInvoiceLinesTable({
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
                         updateRow(row.id, {
-                          porder_tx_compntcat_code_1: text(value),
+                          tx_compntcat_code_1: text(value),
                           // tx_compntcat_name_1: text(
                           //   getLookupValue(selectedRow || {}, "tx_compntcat_name")
                           // ),

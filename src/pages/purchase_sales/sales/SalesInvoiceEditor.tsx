@@ -277,7 +277,10 @@ export function SalesInvoiceEditor({
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
           inv_no: text(headerRaw.inv_no),
           inv_date: toDateInputValue(headerRaw.inv_date),
-
+  tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1),
+          tx_cat_code: text(headerRaw.tx_cat_code),
+            tx_cat_name: text(headerRaw.tx_cat_name),
+             dept_name: text(headerRaw.dept_name),
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),
           sinvoice_total_amount: numberOrZero(headerRaw.sinvoice_total_amount),

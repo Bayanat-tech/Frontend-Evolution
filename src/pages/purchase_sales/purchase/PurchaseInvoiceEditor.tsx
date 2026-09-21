@@ -160,7 +160,7 @@ export function PurchaseInvoiceEditor({
           po_doc_no: text(headerRaw.po_doc_no),
           po_doc_date: toDateInputValue(headerRaw.po_doc_date),
           ac_name: text(headerRaw.ac_name),
-          po_dept_code: text(headerRaw.po_dept_code),
+          dept_code: text(headerRaw.dept_code),
           po_remarks: text(headerRaw.po_remarks),
           po_ref_no: text(headerRaw.po_ref_no),
           po_ref_date: text(headerRaw.po_ref_date),
@@ -178,8 +178,8 @@ export function PurchaseInvoiceEditor({
           po_dlvr_email: text(headerRaw.po_dlvr_email),
           po_dlvr_mobile: text(headerRaw.po_dlvr_mobile),
           po_dlvr_term: text(headerRaw.po_dlvr_term),
-          po_tx_compntcat_code_1: text(headerRaw.po_tx_compntcat_code_1),
-          po_tx_cat_code: text(headerRaw.po_tx_cat_code),
+          tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1),
+          tx_cat_code: text(headerRaw.tx_cat_code),
           po_wo_number: text(headerRaw.po_wo_number),
           po_project_name: text(headerRaw.po_project_name),
           po_pr_no: text(headerRaw.po_pr_no),
@@ -191,6 +191,10 @@ export function PurchaseInvoiceEditor({
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
+          tx_cat_name: text(headerRaw.tx_cat_name),
+          dept_name: text(headerRaw.dept_name),
+          tx_compntcat_name_1: text(headerRaw.tx_compntcat_name_1),
+          tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
