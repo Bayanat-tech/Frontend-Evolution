@@ -43,7 +43,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
     />
   ),
 );
-TableHead.displayName = "TableHead"
+TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
@@ -54,11 +54,14 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
         "border-b px-2 align-middle overflow-hidden text-[11px] font-normal text-slate-700",
         className
       )}
+      // Kept from QA main: keeps raw <Table> usages compact. NOTE: `{...props}`
+      // comes after, so any `style` passed in (DataTable does) replaces this
+      // whole object — that's the existing QA behaviour, left as-is on purpose.
+      style={{ padding: "1px 8px", lineHeight: "1" }}
       {...props}
     />
   ),
 );
 TableCell.displayName = "TableCell";
-
 
 export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow };
