@@ -14,7 +14,6 @@ function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {

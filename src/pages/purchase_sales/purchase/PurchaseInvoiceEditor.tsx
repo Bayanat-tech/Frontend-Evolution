@@ -689,7 +689,7 @@ export function PurchaseInvoiceEditor({
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
         title="Purchase Invoice Attachments"
         module="PI"
-        type="Purchase Invoice"
+        type="Purchase Invoice" 
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}

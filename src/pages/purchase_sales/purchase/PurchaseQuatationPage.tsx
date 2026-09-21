@@ -13,6 +13,7 @@ import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
 import {  PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
 import { PQA_CONFIG } from "./Purchaseordertypes";
+import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -83,6 +84,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
+  const [printTarget, setPrintTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -197,7 +199,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
 >
   {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
 </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => setPrintTarget(row.original as any)}>
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Excel">
@@ -330,6 +332,15 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           ))}
         </div>
       </Dialog>
+          {printTarget && (
+            <PurchaseQuotationPrintDialog
+              open={!!printTarget}
+              onClose={() => setPrintTarget(null)}
+              form={printTarget as any}
+              companyCode={user?.company_code || ""}
+              docType="PQA"
+            />
+          )}
     </section>
   );
 }
