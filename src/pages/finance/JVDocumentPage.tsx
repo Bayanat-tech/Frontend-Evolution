@@ -27,8 +27,8 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
-  openDocumentReport,
   downloadDocumentReportExcel,
+  openDocumentReportv1,
 } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -42,6 +42,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
+import { NewReportDialog } from "../../components/new_report_format";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -82,6 +83,31 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportTitle, setReportTitle] = useState("Document Report");
+
+  const handleOpenReport = async (docType: string, docNo: string, title?: string) => {
+    if (!docNo) return;
+
+    setReportTitle(title || `${docType} ${docNo}`);
+    setReportOpen(true);
+    setReportLoading(true);
+    setReportError(null);
+    setReportHtml(null);
+
+    try {
+      const html = await openDocumentReportv1(docType, docNo);
+      setReportHtml(html);
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : "Unable to load report");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   const loadLookups = async () => {
     const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
@@ -154,7 +180,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" onClick={() => void openDocumentReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
+          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
@@ -307,6 +333,22 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
         onClose={() => setCancelTarget(null)}
         onConfirm={() => void confirmCancel()}
       />
+      <NewReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportHtml(null);
+          setReportError(null);
+        }}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError}
+        // Optional – keep if you still want these actions
+        // onExportExcel={...}
+        // onOpenInNewWindow={...}   // you can remove this if you no longer want a new window
+        // onDownloadPdf={...}
+      />
     </section>
   );
 }
@@ -335,6 +377,31 @@ function JVDocument({
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportTitle, setReportTitle] = useState("Document Report");
+
+  const handleOpenReport = async (docType: string, docNo: string, title?: string) => {
+    if (!docNo) return;
+
+    setReportTitle(title || `${docType} ${docNo}`);
+    setReportOpen(true);
+    setReportLoading(true);
+    setReportError(null);
+    setReportHtml(null);
+
+    try {
+      const html = await openDocumentReportv1(docType, docNo);
+      setReportHtml(html);
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : "Unable to load report");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -724,7 +791,7 @@ function JVDocument({
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
             {form.doc_no && form.doc_no !== "0" && (
               <>
-                <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
+                <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
@@ -1031,6 +1098,22 @@ function JVDocument({
         actionLabel="Cancel Document"
         onClose={() => setCancelConfirmOpen(false)}
         onConfirm={() => void cancelCurrentDocument()}
+      />
+      <NewReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportHtml(null);
+          setReportError(null);
+        }}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError}
+        // Optional – keep if you still want these actions
+        // onExportExcel={...}
+        // onOpenInNewWindow={...}   // you can remove this if you no longer want a new window
+        // onDownloadPdf={...}
       />
     </form>
   );

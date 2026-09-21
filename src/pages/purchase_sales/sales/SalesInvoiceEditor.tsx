@@ -16,6 +16,8 @@ import {
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
+  amountBeforeDiscPrice,
+  DiscPrice,
   formatAmount,
   lineAmount,
   lineDiscPrice,
@@ -80,15 +82,44 @@ export function SalesInvoiceEditor({
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // Reject
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
   // Print
   // const [reportOpen, setReportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  useEffect(() => {
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
+    setRows((current) =>
+      current.map((row) => {
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxPerc,
+        };
+
+        return updatedRow;
+      })
+    );
+
+
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
+
+  ]);
 
   useEffect(() => {
     if (!editor) return;
@@ -98,6 +129,66 @@ export function SalesInvoiceEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
+
 
   useEffect(() => {
     let mounted = true;
@@ -115,7 +206,7 @@ export function SalesInvoiceEditor({
 
         setForm((current) => ({
           ...current,
-         doc_no: text(headerRaw.si_doc_no || docNo),
+          doc_no: text(headerRaw.si_doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           ref_no: text(headerRaw.quotn_no || current.ref_no),
           sdn_doc_no: text(headerRaw.doc_no || current.doc_no),
@@ -183,12 +274,13 @@ export function SalesInvoiceEditor({
           so_scope_of_work: text(headerRaw.so_scope_of_work),
           so_buyer: text(headerRaw.so_buyer),
           total_so_amount: numberOrZero(headerRaw.total_so_amount),
-          tx_compnt_1_expmt:text(headerRaw.tx_compnt_1_expmt),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
           inv_no: text(headerRaw.inv_no),
           inv_date: toDateInputValue(headerRaw.inv_date),
 
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),
+          sinvoice_total_amount: numberOrZero(headerRaw.sinvoice_total_amount),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -239,7 +331,8 @@ export function SalesInvoiceEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -258,7 +351,7 @@ export function SalesInvoiceEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-   const addRow = () =>
+  const addRow = () =>
     setRows((current) => [
       ...current,
       {
@@ -267,7 +360,9 @@ export function SalesInvoiceEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -291,44 +386,67 @@ export function SalesInvoiceEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction(
-      "draft",
-      async () => {
-        await runWorkflow(
-          "SAVEASDRAFT",
-          SO_DOC_TYPE.SIN,
-          form,
-          rows,
-          user?.company_code,
-          user?.loginid || user?.username,
-        );
-      },
-      "Sales Invoice saved as draft",
-    );
-
-  const handleSubmit = () => {
+  const handleSaveAsDraft = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-        if (!form.inv_no) return setError("Invoice Number  is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
     if (!form.inv_date) return setError("Invoice Date is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
     return runAction(
-      "submit",
+      "draft",
       async () => {
-        await runWorkflow(
-          "SUBMITTED",
-          SO_DOC_TYPE.SIN,
-          form,
-          rows,
-          user?.company_code,
-          user?.loginid || user?.username,
-        );
+        await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
       },
-      editMode ? "Sales Invoice updated successfully" : "Sales Invoice created successfully",
+      "Sales Invoice saved as draft",
     );
   };
 
+
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (!form.inv_no) return setError("Invoice Number is required");
+  //   if (!form.inv_date) return setError("Invoice Date is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
+
+  const handleSubmitClick = () => {
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (!form.inv_no) return setError("Invoice Number is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+      return setError("Line item discount cannot exceed line item amount");
+    }
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
+  };
   const handleCancel = () =>
     runAction(
       "cancel",
@@ -467,12 +585,12 @@ export function SalesInvoiceEditor({
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled
-            ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
-            : "grid-rows-[auto_minmax(0,1fr)_auto]"
+          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
+          : "grid-rows-[auto_minmax(0,1fr)_auto]"
           }`}
         onSubmit={(event) => {
           event.preventDefault();
-          void handleSubmit();
+          void handleSubmitClick();
         }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
@@ -512,10 +630,10 @@ export function SalesInvoiceEditor({
                   </strong>
                 </div>
 
-                
+
               )}
-              
-                {form.div_code && (
+
+              {form.div_code && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                   <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
@@ -578,6 +696,7 @@ export function SalesInvoiceEditor({
 
               <SalesInvoiceHeaderForm
                 form={form}
+                rows={rows}
                 docType={config.docType}
                 setForm={setForm}
                 updateField={updateField}
@@ -587,6 +706,7 @@ export function SalesInvoiceEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 setdetails={setRows}
+                calculateDiscount={applyDiscountCalculation}
               />
 
               <SalesInvoiceLinesTable
@@ -625,19 +745,21 @@ export function SalesInvoiceEditor({
               </Button>
             )}
             {isPendingTab && (
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "submit" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Sales Invoice?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
                 )}
-                {actionLoading === "submit" ? "Submitting..." : "Submit"}
-              </Button>
+              </div>
             )}
 
             {isPendingTab && canSendBackOrReject && (

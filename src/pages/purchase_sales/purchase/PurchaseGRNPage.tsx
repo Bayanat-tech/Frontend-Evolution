@@ -1,12 +1,13 @@
-import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
+import { Download, Edit2, Eye, Loader2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions } from "../../../api/transactions";
+import { Division, getDivisions, getGrnPrintReportPreviewUrl, exportGrnPrintReportExcel } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
+
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
@@ -14,6 +15,7 @@ import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "./Purchaseordereditor";
 import { GRN_CONFIG, PO_DOC_TYPE } from "./Purchaseordertypes";
 import { PurchaseGRNEditor } from "./PurchaseGRNeditor";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -56,13 +58,25 @@ export interface PurchaseOrderRow {
   flow_level_running?: number;
   flow_level?: number;
   sentback_reason?: string;
-  reject_reason?: string; // added for reject action
+  reject_reason?: string;
   last_action?: "SENTBACK" | "REJECTED" | "APPROVED" | "CANCELED" | "PENDING" | string;
 }
 
-// TODO: swap for a real API call, e.g. cancelPurchaseOrderApi(docNo)
-async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
-  return;
+/**
+ * getGrnPrintReportPreviewUrl returns a blob: URL. NewReportDialog needs the
+ * raw HTML string, so read the blob back as text and release the URL at once.
+ */
+async function fetchHtmlFromPreviewUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url);
+    return await res.text();
+  } finally {
+    try {
+      window.URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
@@ -79,12 +93,24 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
+  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
+  
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
-  const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  // ── Row-level report preview dialog state ────────────────────────────────
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
+
+  // Track which row's excel export is in flight, so only that row's button spins.
+  const [exportingRowDocNo, setExportingRowDocNo] = useState<string | null>(null);
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -105,7 +131,6 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
     }
   };
 
-  // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
       parameter: "PS_GRN_ENTRY_TAB_List",
@@ -119,10 +144,10 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   };
 
   useEffect(() => {
-  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
-    setTab("PENDING");
-  }
-}, [approvalLevel, tab]);
+    if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+      setTab("PENDING");
+    }
+  }, [approvalLevel, tab]);
 
   useEffect(() => {
     void loadLookups().catch((error) => {
@@ -155,7 +180,130 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
 
   useEffect(() => {
     void loadRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, query, pageIndex, pageSize, columnFilters]);
+
+  const handleExportRowExcel = async (row: PurchaseOrderRow) => {
+    if (!row.doc_no) return;
+    setExportingRowDocNo(row.doc_no);
+    try {
+      await exportGrnPrintReportExcel({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: row.doc_no,
+      } as any);
+    } catch (exportError) {
+      setNotice({ type: "error", message: exportError instanceof Error ? exportError.message : "Error while exporting to Excel" });
+    } finally {
+      setExportingRowDocNo(null);
+    }
+  };
+
+  // ── Row-level print handler → opens NewReportDialog ───────────────────────
+  const handlePrintRow = async (row: PurchaseOrderRow) => {
+    if (!row.doc_no) return;
+
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewDocNo(row.doc_no);
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
+
+    try {
+      const url = await getGrnPrintReportPreviewUrl({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: row.doc_no,
+      } as any);
+      const html = await fetchHtmlFromPreviewUrl(url);
+      setReportHtml(html);
+    } catch (printError) {
+      setReportPreviewError(printError instanceof Error ? printError.message : "Error while generating report");
+    } finally {
+      setReportPreviewLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewDocNo("");
+  };
+
+  const handleReportPreviewExcel = async () => {
+    if (!reportPreviewDocNo) return;
+    setReportPreviewExporting(true);
+    try {
+      await exportGrnPrintReportExcel({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: reportPreviewDocNo,
+      } as any);
+    } catch (exportError) {
+      setReportPreviewError(exportError instanceof Error ? exportError.message : "Error while exporting to Excel");
+    } finally {
+      setReportPreviewExporting(false);
+    }
+  };
+
+  // Open the report HTML in a new browser tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger the browser print dialog (Save as PDF) for the current report
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "grn-list-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
 
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
@@ -173,32 +321,47 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
       header: "Status",
       cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
     },
-     {
-  id: "reason",
-  header: "Reason",
-  accessorFn: (row) =>
-    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
-},
-        { accessorKey: "last_action", header: "Last Action" },
+    {
+      id: "reason",
+      header: "Reason",
+      accessorFn: (row) =>
+        row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+    },
+    { accessorKey: "last_action", header: "Last Action" },
     {
       id: "actions",
       header: "Actions",
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
+          {/* <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
+          </Button> */}
+
+          <Button
+  size="icon"
+  variant="ghost"
+  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+  title={isViewOnlyTab ? "View" : "Edit"}
+>
+  {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+</Button>
+          <Button size="icon" variant="ghost" onClick={() => void handlePrintRow(row.original)} title="Print / PDF">
             <Printer size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Excel">
-            <Download size={15} />
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Excel"
+            disabled={exportingRowDocNo === row.original.doc_no}
+            onClick={() => void handleExportRowExcel(row.original)}
+          >
+            {exportingRowDocNo === row.original.doc_no ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
           </Button>
         </div>
       ),
     },
-  ], []);
+  ],  [isViewOnlyTab, exportingRowDocNo]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -216,34 +379,35 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-            { tab === "PENDING" && (
-          <Button title="Add Purchase Grn" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Purchase Grn" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-     <TabStrip
-  value={tab}
-  onChange={(value) => setTab(value as RequestTab)}
-  tabs={
-    approvalLevel === 0
-      ? [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-        ]
-      : [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-        ]
-  }
-/>
+
+      <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={
+          approvalLevel === 0
+            ? [
+                { label: "Pending", value: "PENDING", icon: "pending" },
+                { label: "Closed", value: "CLOSED", icon: "closed" },
+                { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+              ]
+            : [
+                { label: "Pending", value: "PENDING", icon: "pending" },
+                { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+                { label: "Closed", value: "CLOSED", icon: "closed" },
+                ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+                { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+              ]
+        }
+      />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -300,6 +464,26 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
           />
         </div>
       )}
+
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Purchase GRN ${reportPreviewDocNo}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        meta={{
+          companyName: user?.company_code || "",
+          user: user?.loginid || user?.username || "ADMIN",
+          status: tab,
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={handleReportPreviewExcel}
+        exportingExcel={reportPreviewExporting}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
 
       <Dialog
         open={divisionPicker}

@@ -1,4 +1,4 @@
-import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
+import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 import { Division, getDivisions, getSoOrderReportExcel, getSOrderReportHtml } from "../../../api/transactions";
@@ -7,6 +7,7 @@ import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
@@ -79,14 +80,22 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
+  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [printLoading, setPrintLoading] = useState(false);
-  const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
+
+  // ── Row-level report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
+  const [reportPreviewRow, setReportPreviewRow] = useState<SalesOrderRow | null>(null);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -119,35 +128,52 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     return response as unknown as SalesOrderRow[];
   };
 
-
-
-
+  // ── Row-level print handler ───────────────────────────────────────────────
   const handlePrintSalesOrder = async (row: SalesOrderRow) => {
-    setPrintLoading(true);
-    setPrintReportHtml(null);
+    if (!row.doc_no) return;
+
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewDocNo(row.doc_no);
+    setReportPreviewRow(row);
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
+
     try {
       const html = await getSOrderReportHtml({
         company_code: user?.company_code,
         doc_type: row.doc_type,
         doc_no: row.doc_no,
       });
-      setPrintReportHtml(html);
+      setReportHtml(html);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load report" });
+      setReportPreviewError(error instanceof Error ? error.message : "Unable to load report");
     } finally {
-      setPrintLoading(false);
+      setReportPreviewLoading(false);
     }
   };
 
-  const handleExportSalesOrder = async (row: SalesOrderRow) => {
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewDocNo("");
+    setReportPreviewRow(null);
+  };
+
+  const handleReportPreviewExcel = async () => {
+    if (!reportPreviewRow) return;
+    setReportPreviewExporting(true);
     try {
       await getSoOrderReportExcel({
         company_code: user?.company_code,
-        doc_type: row.doc_type,
-        doc_no: row.doc_no,
+        doc_type: reportPreviewRow.doc_type,
+        doc_no: reportPreviewRow.doc_no,
       });
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+      setReportPreviewError(error instanceof Error ? error.message : "Unable to export report");
+    } finally {
+      setReportPreviewExporting(false);
     }
   };
 
@@ -219,19 +245,34 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
-            <Edit2 size={15} />
+          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title={isViewOnlyTab ? "View" : "Edit"}>
+            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
           </Button>
           <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintSalesOrder(row.original)}>
             <Printer size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportSalesOrder(row.original)}>
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Excel"
+            onClick={async () => {
+              try {
+                await getSoOrderReportExcel({
+                  company_code: user?.company_code,
+                  doc_type: row.original.doc_type,
+                  doc_no: row.original.doc_no,
+                });
+              } catch (error) {
+                setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+              }
+            }}
+          >
             <Download size={15} />
           </Button>
         </div>
       ),
     },
-  ], []);
+  ], [isViewOnlyTab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -334,6 +375,17 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
         </div>
       )}
 
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Sales Order ${reportPreviewDocNo}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        onExportExcel={handleReportPreviewExcel}
+        exportingExcel={reportPreviewExporting}
+      />
+
       <Dialog
         open={divisionPicker}
         title="Select Division"
@@ -355,42 +407,6 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
           ))}
         </div>
       </Dialog>
-
-
-
-      <Dialog
-        open={printLoading || !!printReportHtml}
-        title="Sales Order Print"
-        description="Preview and print the sales order document."
-        onClose={() => setPrintReportHtml(null)}
-        footer={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => {
-                const iframe = document.getElementById("so-print-frame") as HTMLIFrameElement | null;
-                iframe?.contentWindow?.print();
-              }}
-              disabled={!printReportHtml}
-            >
-              Print
-            </Button>
-            <Button variant="outline" onClick={() => setPrintReportHtml(null)}>Close</Button>
-          </>
-        }
-      >
-        {printLoading && <p className="p-4 text-sm text-muted-foreground">Loading report…</p>}
-        {printReportHtml && (
-          <iframe
-            id="so-print-frame"
-            title="Sales Order Report"
-            srcDoc={printReportHtml}
-            className="h-[70vh] w-full rounded-md border"
-          />
-        )}
-      </Dialog>
-
-
     </section>
   );
 }

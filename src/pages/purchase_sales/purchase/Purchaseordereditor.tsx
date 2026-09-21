@@ -38,13 +38,20 @@ import {
   Totalunitprice,
   computeQuantity,
   DiscPrice,
+  amountBeforeDiscPrice,
+  TotalDiscAmount,
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getPoOrderReportHtml } from "../../../api/transactions";
+import {
+  getPoOrderReportHtml,
+  getPoOrderReportExcel,
+} from "../../../api/transactions";
+
+import { NewReportDialog } from "../../../components/new_report_format";
 
 
 export type { PurchaseOrderEditorState };
@@ -71,6 +78,7 @@ export function PurchaseOrderEditor({
   const [error, setError] = useState("");
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   // ---- Send Back dialog state ----
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
@@ -87,7 +95,18 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+
+
+  // ---- Report Preview state ----
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+
+
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);
@@ -96,22 +115,32 @@ export function PurchaseOrderEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+
   useEffect(() => {
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
-    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
-    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    const taxPerc =
+      form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
     setRows((current) =>
-      current.map((row) => ({
-        ...row,
-        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
-        tx_cat_code: `${form.tx_cat_code || ""}`,
-        disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: pct > 0 ? pct : row.disc_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: taxPerc,
-      }))
+      current.map((row) => {
+        const updatedRow = {
+          ...row,
+
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+          tx_compnt_perc_1: taxPerc,
+        };
+
+        return updatedRow;
+      })
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
+  }, [
+    form.tx_compntcat_code_1,
+    form.tx_cat_code,
+    form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
+
+  ]);
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -166,8 +195,14 @@ export function PurchaseOrderEditor({
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           inv_no: text(headerRaw.inv_no),
-          inv_date: text(headerRaw.inv_date)
+          inv_date: text(headerRaw.inv_date),
+          discount_scoope:
+            headerRaw.discount_scoope === "PO" ||
+              headerRaw.discount_scoope === "ITEM"
+              ? headerRaw.discount_scoope
+              : current.discount_scoope || "ITEM",
         }));
+
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
@@ -206,7 +241,8 @@ export function PurchaseOrderEditor({
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
   console.log("ROWS DEBUG:", rows.map(r => ({
@@ -222,31 +258,100 @@ export function PurchaseOrderEditor({
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
-  const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => {
-      let updated = { ...current, [field]: value };
+  // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
+  //   setForm((current) => {
+  //     let updated = { ...current, [field]: value };
 
-      if (field === "disc_hdr_price") {
-        updated.disc_hdr_percent = Number(value) > 0 ? DiscAmountPercentage(updated, rows) : 0;
-      }
+  //     if (field === "disc_hdr_price") {
+  //       updated.disc_hdr_percent = Number(value) > 0 ? DiscAmountPercentage(updated, rows) : 0;
+  //     }
 
-      return updated;
-    });
+  //     return updated;
+  //   });
 
-    if (field === "disc_hdr_price") {
-      const pct = Number(value) > 0 ? DiscAmountPercentage({ ...form, disc_hdr_price: Number(value) }, rows) : 0;
-      setRows((current) => current.map((row) => ({
-        ...row,
-        disc_price: Number(value) || 0,
-        disc_percent: pct
-      })));
+  //   if (field === "disc_hdr_price") {
+  //     const pct = Number(value) > 0 ? DiscAmountPercentage({ ...form, disc_hdr_price: Number(value) }, rows) : 0;
+  //     setRows((current) => current.map((row) => ({
+  //       ...row,
+  //       disc_price: Number(value) || 0,
+  //       disc_percent: pct
+  //     })));
+  //   }
+
+  //   if (field === "disc_hdr_percent") {
+  //     setRows((current) => current.map((row) => ({ ...row, disc_percent: Number(value) || 0 })));
+  //   }
+  // };
+
+
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
     }
 
-    if (field === "disc_hdr_percent") {
-      setRows((current) => current.map((row) => ({ ...row, disc_percent: Number(value) || 0 })));
-    }
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
   };
 
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
+
+  const updateField = (
+    field: keyof PurchaseOrderForm,
+    value: string | number
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
@@ -258,10 +363,8 @@ export function PurchaseOrderEditor({
         ...emptyLineRow(form.div_code),
         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
         tx_cat_code: `${form.tx_cat_code || ""}`,
-        disc_price: form.disc_hdr_price,
-        disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0,
+        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -281,54 +384,106 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handlePrint = () => {
+  // ---- Report Preview ----
+  const handlePrint = async () => {
     if (!form.doc_no) return;
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Popup blocked — please allow popups to print.");
-      return;
-    }
-    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
 
-    getPoOrderReportHtml({
-      company_code: user?.company_code,
-      doc_type: PO_DOC_TYPE.LPO,
-      doc_no: form.doc_no,
-    })
-      .then((html) => {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-      })
-      .catch((printError) => {
-        printWindow.document.open();
-        printWindow.document.write(
-          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
-          }</p>`
-        );
-        printWindow.document.close();
+    try {
+      const html = await getPoOrderReportHtml({
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.LPO,
+        doc_no: form.doc_no,
       });
+
+      setReportHtml(html);
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Unable to load report"
+      );
+    } finally {
+      setReportPreviewLoading(false);
+    }
   };
 
- const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+  };
 
-const handleSaveAsDraft = () => {
-  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
-  return runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Purchase Quotation saved as draft");
-};
+  const handleReportPreviewExcel = async () => {
+    if (!form.doc_no) return;
 
-const handleSubmit = () => {
-  if (!form.div_code) return setError("Division is required");
-  if (!form.ac_code) return setError("A/c Code is required");
-  if (!form.curr_code) return setError("Currency is required");
-  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
-  return runAction("submit", async () => {
-    await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
-};
+    setReportPreviewExporting(true);
+    setReportPreviewError("");
+
+    try {
+      await getPoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.LPO,
+        doc_no: form.doc_no,
+      });
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Unable to export report"
+      );
+    } finally {
+      setReportPreviewExporting(false);
+    }
+  };
+
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Purchase Quotation saved as draft");
+  };
+
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
+
+  const handleSubmitClick = () => {
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+      return setError("Line item discount cannot exceed line item amount");
+    }
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
+  };
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -421,7 +576,7 @@ const handleSubmit = () => {
     <>
       <form
         className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        onSubmit={(event) => { event.preventDefault(); handleSubmitClick(); }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -463,7 +618,17 @@ const handleSubmit = () => {
                   <Button type="button" variant="secondary" onClick={handlePrint}>
                     <Printer size={15} /> Print
                   </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button
+                    aria-label="Excel"
+                    title="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => void handleReportPreviewExcel()}
+                    disabled={reportPreviewExporting}
+                  >
+                    <Download size={15} />
+                  </Button>
                 </>
               )}
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -503,6 +668,7 @@ const handleSubmit = () => {
                 loginid={user?.loginid || user?.username}
                 rows={rows}
                 setdetails={setRows}
+                calculateDiscount={applyDiscountCalculation}
               />
 
               <PurchaseOrderLinesTable
@@ -518,6 +684,7 @@ const handleSubmit = () => {
                 discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+
               />
             </div>
           )}
@@ -531,10 +698,23 @@ const handleSubmit = () => {
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-              {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+            {isPendingTab && (
+              <div className="relative">
+                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                </Button>
+                {showSubmitConfirm && (
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-sm text-gray-700">Submit this Purchase Order?</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -603,6 +783,18 @@ const handleSubmit = () => {
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+      />
+
+
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Purchase Order ${form.doc_no}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        onExportExcel={handleReportPreviewExcel}
+        exportingExcel={reportPreviewExporting}
       />
     </>
   );
