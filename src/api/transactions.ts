@@ -513,6 +513,28 @@ export async function openDocumentReport(docType: TransactionType | string, docN
   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 }
 
+export async function openDocumentReportv1(
+  docType: TransactionType | string,
+  docNo: string
+): Promise<string> {
+  if (!docNo) {
+    throw new Error("Document number is required");
+  }
+  const response = await api.get(
+    `/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}`,
+    {
+      responseType: "text",
+    }
+  );
+  if (typeof response.data === "string") {
+    return response.data;
+  }
+  if (response.data instanceof Blob) {
+    return await response.data.text();
+  }
+  throw new Error("Unexpected report response format");
+}
+
 /**
  * Opens the Cheque Book Monitoring Report in a new tab
  */

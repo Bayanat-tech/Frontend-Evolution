@@ -1,4 +1,4 @@
-import { Save, X, Plus, Trash2 } from "lucide-react";
+import { Save, X, Plus, Trash2, ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import { Button } from "../../../components/ui/Button";
@@ -16,7 +16,6 @@ type PrincipalRow = {
 };
 
 interface StockCountFormProps {
-  open: boolean;
   mode: "add" | "edit";
   editRowData?: Record<string, unknown> | null;
   onClose: (shouldRefetch?: boolean) => void;
@@ -78,10 +77,9 @@ const emptyForm = {
   client_rep_designation: "",
 };
 
-// Shared compact label style used across the form
 const labelCls = "text-[10.5px] font-medium leading-none text-muted-foreground";
 
-export function StockCountForm({ open, mode, editRowData, onClose }: StockCountFormProps) {
+export function StockCountForm({ mode, editRowData, onClose }: StockCountFormProps) {
   const { user } = useAuth();
   const isAddMode = mode === "add";
   const isEditMode = mode === "edit";
@@ -267,307 +265,25 @@ export function StockCountForm({ open, mode, editRowData, onClose }: StockCountF
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[1px]"
-      onMouseDown={() => onClose()}
-    >
-      <div
-        className="grid w-[min(97vw,1320px)] max-h-[94vh] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border bg-card text-card-foreground shadow-2xl"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b bg-card px-4 py-2.5">
-          <div className="flex items-center gap-2.5">
-            <span className="h-6 w-1 rounded-full bg-primary" />
-            <div>
-              <p className="m-0 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Stock Count</p>
-              <h2 className="m-0 text-base font-bold text-foreground">
-                {isEditMode ? `Edit Count: ${countNo}` : isSubmitted ? `Count No: ${countNo}` : "Add Stock Count"}
-              </h2>
-            </div>
-          </div>
+    <section className="grid gap-2">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
           <button
-            aria-label="Close"
-            className="grid h-7 w-7 place-items-center rounded-md border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground"
             onClick={() => onClose()}
+            className="grid h-8 w-8 place-items-center rounded-md border bg-card text-muted-foreground hover:bg-secondary transition-colors cursor-pointer"
           >
-            <X size={14} />
+            <ArrowLeft size={16} />
           </button>
+          <div>
+            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Stock Count</p>
+            <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+              {isEditMode ? `Edit Count: ${countNo}` : isSubmitted ? `Count No: ${countNo}` : "Add Stock Count"}
+            </h1>
+          </div>
         </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 border-b bg-muted/20 px-4 pt-1.5">
-          <button
-            className={`rounded-t-md px-3 py-1.5 text-xs font-medium ${tab === "info" ? "border border-b-0 bg-card text-primary" : "text-muted-foreground"}`}
-            onClick={() => setTab("info")}
-          >
-            Stock Info
-          </button>
-          <button
-            className={`rounded-t-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${tab === "principal" ? "border border-b-0 bg-card text-primary" : "text-muted-foreground"}`}
-            onClick={() => setTab("principal")}
-            disabled={isAddMode && !isSubmitted}
-          >
-            Principal
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto bg-muted/20 p-3">
-          <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-
-          {tab === "info" && (
-            <div className="grid gap-2.5 text-xs">
-              {/* Row 1: Principal + count meta fields all in one row */}
-              <div className="grid grid-cols-6 gap-2 items-end">
-                <div className="col-span-2">
-                  <LookupField
-                    label="Principal"
-                    value={form.prin_code}
-                    valueField="prin_code"
-                    displayFields={["prin_code", "prin_name"]}
-                    columns={[
-                      { field: "prin_code", header: "Principal Code" },
-                      { field: "prin_name", header: "Principal Name" },
-                    ]}
-                    placeholder="Select principal"
-                    loadOptions={principalLoader}
-                    onChange={(selected) => setForm((prev) => ({
-                      ...prev,
-                      prin_code: selected,
-                      group_from: "",
-                      group_to: "",
-                      brand_from: "",
-                      brand_to: "",
-                      product_from: "",
-                      product_to: "",
-                    }))}
-                  />
-                </div>
-                <label className="grid gap-1">
-                  <span className={labelCls}>Master Count No.</span>
-                  <Input className="h-8 text-xs" value={form.master_count_no} onChange={(e) => setField("master_count_no", e.target.value)} />
-                </label>
-                <label className="grid gap-1">
-                  <span className={labelCls}>Parent Count No.</span>
-                  <Input className="h-8 text-xs" value={form.parent_count_no} onChange={(e) => setField("parent_count_no", e.target.value)} />
-                </label>
-                <label className="grid gap-1">
-                  <span className={labelCls}>Count Type</span>
-                  <Input className="h-8 text-xs" value={form.count_type} onChange={(e) => setField("count_type", e.target.value)} />
-                </label>
-                <label className="grid gap-1">
-                  <span className={labelCls}>Child Count</span>
-                  <Input className="h-8 text-xs" value={form.child_count} onChange={(e) => setField("child_count", e.target.value)} />
-                </label>
-              </div>
-
-              {/* Product + Location Preferences side by side */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-md border bg-card p-2.5">
-                  <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Product Preferences</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <LookupField label="Group From" value={form.group_from} valueField="group_code" displayFields={["group_code", "group_name"]}
-                      columns={[{ field: "group_code", header: "Code" }, { field: "group_name", header: "Name" }]}
-                      placeholder={form.prin_code ? undefined : "Select principal first"}
-                      loadOptions={groupLoader} onChange={(v) => setField("group_from", v)} />
-                    <LookupField label="Group To" value={form.group_to} valueField="group_code" displayFields={["group_code", "group_name"]}
-                      columns={[{ field: "group_code", header: "Code" }, { field: "group_name", header: "Name" }]}
-                      placeholder={form.prin_code ? undefined : "Select principal first"}
-                      loadOptions={groupLoader} onChange={(v) => setField("group_to", v)} />
-                    <LookupField label="Brand From" value={form.brand_from} valueField="brand_code" displayFields={["brand_code", "brand_name"]}
-                      columns={[{ field: "brand_code", header: "Code" }, { field: "brand_name", header: "Name" }]}
-                      placeholder={form.prin_code ? undefined : "Select principal first"}
-                      loadOptions={brandLoader} onChange={(v) => setField("brand_from", v)} />
-                    <LookupField label="Brand To" value={form.brand_to} valueField="brand_code" displayFields={["brand_code", "brand_name"]}
-                      columns={[{ field: "brand_code", header: "Code" }, { field: "brand_name", header: "Name" }]}
-                      placeholder={form.prin_code ? undefined : "Select principal first"}
-                      loadOptions={brandLoader} onChange={(v) => setField("brand_to", v)} />
-                    <LookupField label="Product From" value={form.product_from} valueField="prod_code" displayFields={["prod_code", "prod_name"]}
-                      columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }]}
-                      placeholder={form.prin_code ? undefined : "Select principal first"}
-                      loadOptions={productLoader} onChange={(v) => setField("product_from", v)} />
-                    <LookupField label="Product To" value={form.product_to} valueField="prod_code" displayFields={["prod_code", "prod_name"]}
-                      columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }]}
-                      placeholder={form.prin_code ? undefined : "Select principal first"}
-                      loadOptions={productLoader} onChange={(v) => setField("product_to", v)} />
-                  </div>
-                </div>
-
-                <div className="rounded-md border bg-card p-2.5">
-                  <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Location Preferences</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <LookupField label="Site From" value={form.site_from} valueField="site_code" displayFields={["site_code", "site_name"]}
-                      columns={[{ field: "site_code", header: "Code" }, { field: "site_name", header: "Name" }]}
-                      loadOptions={siteLoader} onChange={(v) => setField("site_from", v)} />
-                    <LookupField label="Site To" value={form.site_to} valueField="site_code" displayFields={["site_code", "site_name"]}
-                      columns={[{ field: "site_code", header: "Code" }, { field: "site_name", header: "Name" }]}
-                      loadOptions={siteLoader} onChange={(v) => setField("site_to", v)} />
-                    <LookupField label="Location From" value={form.location_from} valueField="location_code" displayFields={["location_code"]}
-                      columns={[{ field: "location_code", header: "Code" }]}
-                      loadOptions={locationLoader} onChange={(v) => setField("location_from", v)} />
-                    <LookupField label="Location To" value={form.location_to} valueField="location_code" displayFields={["location_code"]}
-                      columns={[{ field: "location_code", header: "Code" }]}
-                      loadOptions={locationLoader} onChange={(v) => setField("location_to", v)} />
-                  </div>
-
-                  {/* Aisle / Column / Height packed 3x2 inside the same card */}
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    <label className="grid gap-1">
-                      <span className={labelCls}>Aisle From</span>
-                      <Input className="h-8 text-xs" value={form.aisle_from} onChange={(e) => setField("aisle_from", e.target.value)} />
-                    </label>
-                    <label className="grid gap-1">
-                      <span className={labelCls}>Aisle To</span>
-                      <Input className="h-8 text-xs" value={form.aisle_to} onChange={(e) => setField("aisle_to", e.target.value)} />
-                    </label>
-                    <label className="grid gap-1">
-                      <span className={labelCls}>Column From</span>
-                      <Input className="h-8 text-xs" value={form.col_from} onChange={(e) => setField("col_from", e.target.value)} />
-                    </label>
-                    <label className="grid gap-1">
-                      <span className={labelCls}>Column To</span>
-                      <Input className="h-8 text-xs" value={form.col_to} onChange={(e) => setField("col_to", e.target.value)} />
-                    </label>
-                    <label className="grid gap-1">
-                      <span className={labelCls}>Height From</span>
-                      <Input className="h-8 text-xs" value={form.height_from} onChange={(e) => setField("height_from", e.target.value)} />
-                    </label>
-                    <label className="grid gap-1">
-                      <span className={labelCls}>Height To</span>
-                      <Input className="h-8 text-xs" value={form.height_to} onChange={(e) => setField("height_to", e.target.value)} />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Reps / remarks — last row, 6 across */}
-              <div className="rounded-md border bg-card p-2.5">
-                <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Additional Details</p>
-                <div className="grid grid-cols-6 gap-2">
-                  <label className="grid gap-1">
-                    <span className={labelCls}>Counted By</span>
-                    <Input className="h-8 text-xs" value={form.counted_by} onChange={(e) => setField("counted_by", e.target.value)} />
-                  </label>
-                  <label className="grid gap-1 col-span-2">
-                    <span className={labelCls}>Remarks</span>
-                    <Input className="h-8 text-xs" value={form.remarks} onChange={(e) => setField("remarks", e.target.value)} />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className={labelCls}>AMLS Rep</span>
-                    <Input className="h-8 text-xs" value={form.amls_rep} onChange={(e) => setField("amls_rep", e.target.value)} />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className={labelCls}>AMLS Rep Designation</span>
-                    <Input className="h-8 text-xs" value={form.amls_rep_designation} onChange={(e) => setField("amls_rep_designation", e.target.value)} />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className={labelCls}>Client Rep</span>
-                    <Input className="h-8 text-xs" value={form.client_rep} onChange={(e) => setField("client_rep", e.target.value)} />
-                  </label>
-                  <label className="grid gap-1 col-span-2">
-                    <span className={labelCls}>Client Rep Designation</span>
-                    <Input className="h-8 text-xs" value={form.client_rep_designation} onChange={(e) => setField("client_rep_designation", e.target.value)} />
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "principal" && (
-            <div className="grid gap-3 mt-1">
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const newIndex = prinData.length;
-                    setPrinData((prev) => [...prev, { prin_code: "", prin_name: "" }]);
-                    setEditIndex(newIndex);
-                  }}
-                >
-                  <Plus size={14} /> Add Row
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={selectedRows.length === 0}
-                  onClick={() => {
-                    setPrinData((prev) => prev.filter((_, idx) => !selectedRows.includes(idx.toString())));
-                    setSelectedRows([]);
-                  }}
-                >
-                  <Trash2 size={14} /> Delete Selected ({selectedRows.length})
-                </Button>
-              </div>
-
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b bg-muted/40">
-                      <th className="w-10 border-r px-2 py-1.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={prinData.length > 0 && selectedRows.length === prinData.length}
-                          onChange={(e) => setSelectedRows(e.target.checked ? prinData.map((_, i) => i.toString()) : [])}
-                        />
-                      </th>
-                      <th className="border-r px-2 py-1.5 text-left">Principal Code</th>
-                      <th className="px-2 py-1.5 text-left">Principal Name</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {prinData.map((item, index) => (
-                      <tr key={index} className={selectedRows.includes(index.toString()) ? "bg-blue-50" : ""}>
-                        <td className="border-r px-2 py-1 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.includes(index.toString())}
-                            onChange={() => {
-                              const idxStr = index.toString();
-                              setSelectedRows((prev) => prev.includes(idxStr) ? prev.filter((i) => i !== idxStr) : [...prev, idxStr]);
-                            }}
-                          />
-                        </td>
-                        <td className="border-r px-2 py-1 cursor-pointer" onClick={() => setEditIndex(index)}>
-                          {editIndex === index ? (
-                            <LookupField
-                              value={item.prin_code}
-                              valueField="prin_code"
-                              displayFields={["prin_code", "prin_name"]}
-                              columns={[
-                                { field: "prin_code", header: "Principal Code" },
-                                { field: "prin_name", header: "Principal Name" },
-                              ]}
-                              loadOptions={principalLoader}
-                              onChange={(selected, selectedRow) => {
-                                const updated = [...prinData];
-                                updated[index] = {
-                                  prin_code: selected,
-                                  prin_name: selectedRow ? String(selectedRow["prin_name"] ?? "") : "",
-                                };
-                                setPrinData(updated);
-                                setEditIndex(null);
-                              }}
-                            />
-                          ) : (
-                            item.prin_code || "Click to select"
-                          )}
-                        </td>
-                        <td className="px-2 py-1">{item.prin_name}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
+        <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onClose(isSubmitted || isEditMode)}>
             <X size={14} /> {isSubmitted || isEditMode ? "Close" : "Cancel"}
           </Button>
@@ -576,7 +292,275 @@ export function StockCountForm({ open, mode, editRowData, onClose }: StockCountF
           </Button>
         </div>
       </div>
-    </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b bg-muted/20 px-4 pt-1.5 rounded-md border">
+        <button
+          className={`rounded-t-md px-3 py-1.5 text-xs font-medium ${tab === "info" ? "border border-b-0 bg-card text-primary" : "text-muted-foreground"}`}
+          onClick={() => setTab("info")}
+        >
+          Stock Info
+        </button>
+        <button
+          className={`rounded-t-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${tab === "principal" ? "border border-b-0 bg-card text-primary" : "text-muted-foreground"}`}
+          onClick={() => setTab("principal")}
+          disabled={isAddMode && !isSubmitted}
+        >
+          Principal
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="overflow-y-auto bg-muted/20 p-3 rounded-md border">
+        <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+
+        {tab === "info" && (
+          <div className="grid gap-2.5 text-xs">
+            {/* Row 1: Principal + count meta fields all in one row */}
+            <div className="grid grid-cols-6 gap-2 items-end">
+              <div className="col-span-2">
+                <LookupField
+                  label="Principal"
+                  value={form.prin_code}
+                  valueField="prin_code"
+                  displayFields={["prin_code", "prin_name"]}
+                  columns={[
+                    { field: "prin_code", header: "Principal Code" },
+                    { field: "prin_name", header: "Principal Name" },
+                  ]}
+                  placeholder="Select principal"
+                  loadOptions={principalLoader}
+                  onChange={(selected) => setForm((prev) => ({
+                    ...prev,
+                    prin_code: selected,
+                    group_from: "",
+                    group_to: "",
+                    brand_from: "",
+                    brand_to: "",
+                    product_from: "",
+                    product_to: "",
+                  }))}
+                />
+              </div>
+              <label className="grid gap-1">
+                <span className={labelCls}>Master Count No.</span>
+                <Input className="h-8 text-xs" value={form.master_count_no} onChange={(e) => setField("master_count_no", e.target.value)} />
+              </label>
+              <label className="grid gap-1">
+                <span className={labelCls}>Parent Count No.</span>
+                <Input className="h-8 text-xs" value={form.parent_count_no} onChange={(e) => setField("parent_count_no", e.target.value)} />
+              </label>
+              <label className="grid gap-1">
+                <span className={labelCls}>Count Type</span>
+                <Input className="h-8 text-xs" value={form.count_type} onChange={(e) => setField("count_type", e.target.value)} />
+              </label>
+              <label className="grid gap-1">
+                <span className={labelCls}>Child Count</span>
+                <Input className="h-8 text-xs" value={form.child_count} onChange={(e) => setField("child_count", e.target.value)} />
+              </label>
+            </div>
+
+            {/* Product + Location Preferences side by side */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md border bg-card p-2.5">
+                <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Product Preferences</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <LookupField label="Group From" value={form.group_from} valueField="group_code" displayFields={["group_code", "group_name"]}
+                    columns={[{ field: "group_code", header: "Code" }, { field: "group_name", header: "Name" }]}
+                    placeholder={form.prin_code ? undefined : "Select principal first"}
+                    loadOptions={groupLoader} onChange={(v) => setField("group_from", v)} />
+                  <LookupField label="Group To" value={form.group_to} valueField="group_code" displayFields={["group_code", "group_name"]}
+                    columns={[{ field: "group_code", header: "Code" }, { field: "group_name", header: "Name" }]}
+                    placeholder={form.prin_code ? undefined : "Select principal first"}
+                    loadOptions={groupLoader} onChange={(v) => setField("group_to", v)} />
+                  <LookupField label="Brand From" value={form.brand_from} valueField="brand_code" displayFields={["brand_code", "brand_name"]}
+                    columns={[{ field: "brand_code", header: "Code" }, { field: "brand_name", header: "Name" }]}
+                    placeholder={form.prin_code ? undefined : "Select principal first"}
+                    loadOptions={brandLoader} onChange={(v) => setField("brand_from", v)} />
+                  <LookupField label="Brand To" value={form.brand_to} valueField="brand_code" displayFields={["brand_code", "brand_name"]}
+                    columns={[{ field: "brand_code", header: "Code" }, { field: "brand_name", header: "Name" }]}
+                    placeholder={form.prin_code ? undefined : "Select principal first"}
+                    loadOptions={brandLoader} onChange={(v) => setField("brand_to", v)} />
+                  <LookupField label="Product From" value={form.product_from} valueField="prod_code" displayFields={["prod_code", "prod_name"]}
+                    columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }]}
+                    placeholder={form.prin_code ? undefined : "Select principal first"}
+                    loadOptions={productLoader} onChange={(v) => setField("product_from", v)} />
+                  <LookupField label="Product To" value={form.product_to} valueField="prod_code" displayFields={["prod_code", "prod_name"]}
+                    columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }]}
+                    placeholder={form.prin_code ? undefined : "Select principal first"}
+                    loadOptions={productLoader} onChange={(v) => setField("product_to", v)} />
+                </div>
+              </div>
+
+              <div className="rounded-md border bg-card p-2.5">
+                <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Location Preferences</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <LookupField label="Site From" value={form.site_from} valueField="site_code" displayFields={["site_code", "site_name"]}
+                    columns={[{ field: "site_code", header: "Code" }, { field: "site_name", header: "Name" }]}
+                    loadOptions={siteLoader} onChange={(v) => setField("site_from", v)} />
+                  <LookupField label="Site To" value={form.site_to} valueField="site_code" displayFields={["site_code", "site_name"]}
+                    columns={[{ field: "site_code", header: "Code" }, { field: "site_name", header: "Name" }]}
+                    loadOptions={siteLoader} onChange={(v) => setField("site_to", v)} />
+                  <LookupField label="Location From" value={form.location_from} valueField="location_code" displayFields={["location_code"]}
+                    columns={[{ field: "location_code", header: "Code" }]}
+                    loadOptions={locationLoader} onChange={(v) => setField("location_from", v)} />
+                  <LookupField label="Location To" value={form.location_to} valueField="location_code" displayFields={["location_code"]}
+                    columns={[{ field: "location_code", header: "Code" }]}
+                    loadOptions={locationLoader} onChange={(v) => setField("location_to", v)} />
+                </div>
+
+                {/* Aisle / Column / Height packed 3x2 inside the same card */}
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <label className="grid gap-1">
+                    <span className={labelCls}>Aisle From</span>
+                    <Input className="h-8 text-xs" value={form.aisle_from} onChange={(e) => setField("aisle_from", e.target.value)} />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className={labelCls}>Aisle To</span>
+                    <Input className="h-8 text-xs" value={form.aisle_to} onChange={(e) => setField("aisle_to", e.target.value)} />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className={labelCls}>Column From</span>
+                    <Input className="h-8 text-xs" value={form.col_from} onChange={(e) => setField("col_from", e.target.value)} />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className={labelCls}>Column To</span>
+                    <Input className="h-8 text-xs" value={form.col_to} onChange={(e) => setField("col_to", e.target.value)} />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className={labelCls}>Height From</span>
+                    <Input className="h-8 text-xs" value={form.height_from} onChange={(e) => setField("height_from", e.target.value)} />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className={labelCls}>Height To</span>
+                    <Input className="h-8 text-xs" value={form.height_to} onChange={(e) => setField("height_to", e.target.value)} />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Reps / remarks — last row, 6 across */}
+            <div className="rounded-md border bg-card p-2.5">
+              <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Additional Details</p>
+              <div className="grid grid-cols-6 gap-2">
+                <label className="grid gap-1">
+                  <span className={labelCls}>Counted By</span>
+                  <Input className="h-8 text-xs" value={form.counted_by} onChange={(e) => setField("counted_by", e.target.value)} />
+                </label>
+                <label className="grid gap-1 col-span-2">
+                  <span className={labelCls}>Remarks</span>
+                  <Input className="h-8 text-xs" value={form.remarks} onChange={(e) => setField("remarks", e.target.value)} />
+                </label>
+                <label className="grid gap-1">
+                  <span className={labelCls}>AMLS Rep</span>
+                  <Input className="h-8 text-xs" value={form.amls_rep} onChange={(e) => setField("amls_rep", e.target.value)} />
+                </label>
+                <label className="grid gap-1">
+                  <span className={labelCls}>AMLS Rep Designation</span>
+                  <Input className="h-8 text-xs" value={form.amls_rep_designation} onChange={(e) => setField("amls_rep_designation", e.target.value)} />
+                </label>
+                <label className="grid gap-1">
+                  <span className={labelCls}>Client Rep</span>
+                  <Input className="h-8 text-xs" value={form.client_rep} onChange={(e) => setField("client_rep", e.target.value)} />
+                </label>
+                <label className="grid gap-1 col-span-2">
+                  <span className={labelCls}>Client Rep Designation</span>
+                  <Input className="h-8 text-xs" value={form.client_rep_designation} onChange={(e) => setField("client_rep_designation", e.target.value)} />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "principal" && (
+          <div className="grid gap-3 mt-1">
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const newIndex = prinData.length;
+                  setPrinData((prev) => [...prev, { prin_code: "", prin_name: "" }]);
+                  setEditIndex(newIndex);
+                }}
+              >
+                <Plus size={14} /> Add Row
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={selectedRows.length === 0}
+                onClick={() => {
+                  setPrinData((prev) => prev.filter((_, idx) => !selectedRows.includes(idx.toString())));
+                  setSelectedRows([]);
+                }}
+              >
+                <Trash2 size={14} /> Delete Selected ({selectedRows.length})
+              </Button>
+            </div>
+
+            <div className="overflow-hidden rounded-md border">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="w-10 border-r px-2 py-1.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={prinData.length > 0 && selectedRows.length === prinData.length}
+                        onChange={(e) => setSelectedRows(e.target.checked ? prinData.map((_, i) => i.toString()) : [])}
+                      />
+                    </th>
+                    <th className="border-r px-2 py-1.5 text-left">Principal Code</th>
+                    <th className="px-2 py-1.5 text-left">Principal Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prinData.map((item, index) => (
+                    <tr key={index} className={selectedRows.includes(index.toString()) ? "bg-blue-50" : ""}>
+                      <td className="border-r px-2 py-1 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(index.toString())}
+                          onChange={() => {
+                            const idxStr = index.toString();
+                            setSelectedRows((prev) => prev.includes(idxStr) ? prev.filter((i) => i !== idxStr) : [...prev, idxStr]);
+                          }}
+                        />
+                      </td>
+                      <td className="border-r px-2 py-1 cursor-pointer" onClick={() => setEditIndex(index)}>
+                        {editIndex === index ? (
+                          <LookupField
+                            value={item.prin_code}
+                            valueField="prin_code"
+                            displayFields={["prin_code", "prin_name"]}
+                            columns={[
+                              { field: "prin_code", header: "Principal Code" },
+                              { field: "prin_name", header: "Principal Name" },
+                            ]}
+                            loadOptions={principalLoader}
+                            onChange={(selected, selectedRow) => {
+                              const updated = [...prinData];
+                              updated[index] = {
+                                prin_code: selected,
+                                prin_name: selectedRow ? String(selectedRow["prin_name"] ?? "") : "",
+                              };
+                              setPrinData(updated);
+                              setEditIndex(null);
+                            }}
+                          />
+                        ) : (
+                          item.prin_code || "Click to select"
+                        )}
+                      </td>
+                      <td className="px-2 py-1">{item.prin_name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

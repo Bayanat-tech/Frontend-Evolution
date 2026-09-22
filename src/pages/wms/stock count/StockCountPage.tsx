@@ -1,16 +1,15 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit, Plus, RefreshCw } from "lucide-react";
+import { Edit, Plus, RefreshCw, ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { NoticeToast } from "../../../components/ui/NoticeToast";
-// NOTE: adjust these two imports/names to whatever you actually export from api/wms
-// (mirroring getAllStockTransfers / createSTN in the transfer module).
 import { procBuildDynamicSqlCommonBase } from "../../../api/wms";
-import StockCountForm from "./AddStockCount";
+import StockCountForm from "./AddStockCount"; // Renamed to match your import, but it's now a page
 import { useAuth } from "../../../state/AuthContext";
 
 type WmsRow = Record<string, unknown>;
+type ViewMode = "list" | "editor";
 
 function val(row: WmsRow, key: string) {
   return String(row[key] ?? row[key.toUpperCase()] ?? "");
@@ -25,22 +24,22 @@ function formatDate(input: string) {
 
 export function StockCountPage() {
   const [query, setQuery] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
+  const [view, setView] = useState<ViewMode>("list");
   const [formMode, setFormMode] = useState<"add" | "edit">("add");
   const [selectedRow, setSelectedRow] = useState<WmsRow | null>(null);
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const { user } = useAuth();
+
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-    //   const data = await getAllStockCounts();
-         const data= await procBuildDynamicSqlCommonBase({
-                parameter: 'STOCKCOUNT_document_page',
-                loginid: user?.loginid || '',
-            });
+      const data = await procBuildDynamicSqlCommonBase({
+        parameter: 'STOCKCOUNT_document_page',
+        loginid: user?.loginid || '',
+      });
       const normalized = [...(data as any[])]
         .sort((a, b) => new Date(b.COUNT_DATE ?? 0).getTime() - new Date(a.COUNT_DATE ?? 0).getTime())
         .map((row) => {
@@ -61,13 +60,21 @@ export function StockCountPage() {
   const openAdd = () => {
     setSelectedRow(null);
     setFormMode("add");
-    setFormOpen(true);
+    setView("editor");
   };
 
   const openEdit = (row: WmsRow) => {
     setSelectedRow(row);
     setFormMode("edit");
-    setFormOpen(true);
+    setView("editor");
+  };
+
+  const handleCloseForm = (shouldRefetch?: boolean) => {
+    setView("list");
+    if (shouldRefetch) {
+      void loadRows(false);
+      setNotice({ type: "success", message: "Stock count saved successfully." });
+    }
   };
 
   const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
@@ -136,6 +143,18 @@ export function StockCountPage() {
     },
   ], []);
 
+  // --- RENDER EDITOR (FULL PAGE) ---
+  if (view === "editor") {
+    return (
+      <StockCountForm
+        mode={formMode}
+        editRowData={selectedRow}
+        onClose={handleCloseForm}
+      />
+    );
+  }
+
+  // --- RENDER LIST ---
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -168,21 +187,6 @@ export function StockCountPage() {
         pageSize={50}
         getRowId={(row, index) => val(row, "count_no") || String(index)}
       />
-
-      {formOpen && (
-        <StockCountForm
-          open={formOpen}
-          mode={formMode}
-          editRowData={selectedRow}
-          onClose={(shouldRefetch) => {
-            setFormOpen(false);
-            if (shouldRefetch) {
-              void loadRows(false);
-              setNotice({ type: "success", message: "Stock count saved successfully." });
-            }
-          }}
-        />
-      )}
     </section>
   );
 }

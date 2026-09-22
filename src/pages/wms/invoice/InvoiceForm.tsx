@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Boxes, Briefcase, LoaderCircle, Printer, Receipt, Save, Sheet } from "lucide-react";
+import {
+  ArrowLeft,
+  Boxes,
+  Briefcase,
+  CalendarRange,
+  CircleDollarSign,
+  FileText,
+  LoaderCircle,
+  Printer,
+  Receipt,
+  Save,
+  Settings2,
+  Sheet,
+  Wallet2,
+} from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -134,9 +148,31 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+function StatusBadge({ isNew, viewMode }: { isNew: boolean; viewMode?: boolean }) {
+  if (viewMode) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+        View only
+      </span>
+    );
+  }
+  if (isNew) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+        Draft
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
+      Saved
+    </span>
+  );
+}
+
 function FieldLabel({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
-    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+    <label className={`grid gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground ${className}`}>
       {label}
       {children}
     </label>
@@ -144,7 +180,7 @@ function FieldLabel({ label, className = "", children }: { label: string; classN
 }
 
 const fieldClassName =
-  "flex h-8 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-8 w-full rounded-md border border-input bg-background px-2 text-[12.5px] text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
 
 function renderField(f: FieldDef, invoice: any, setField: (key: string, value: string) => void, disabled?: boolean) {
   const value = getValue(invoice, f.key) ?? "";
@@ -153,7 +189,7 @@ function renderField(f: FieldDef, invoice: any, setField: (key: string, value: s
   if (f.type === "date") {
     return (
       <FieldLabel key={f.key} label={f.label} className={span}>
-        <Input className="h-8 text-sm" type="date" value={toDateInputValue(value)} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled} />
+        <Input className="h-8 text-[12.5px]" type="date" value={toDateInputValue(value)} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled} />
       </FieldLabel>
     );
   }
@@ -173,13 +209,57 @@ function renderField(f: FieldDef, invoice: any, setField: (key: string, value: s
   }
   return (
     <FieldLabel key={f.key} label={f.label} className={span}>
-      <Input className="h-8 text-sm" value={value} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled} placeholder={f.placeholder} />
+      <Input className="h-8 text-[12.5px]" value={value} onChange={(e) => setField(f.key, e.target.value)} disabled={disabled} placeholder={f.placeholder} />
     </FieldLabel>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Panel header (themed per-section)
+// Section panel (icon + title + meta, matches the freight-module card style)
+// ---------------------------------------------------------------------------
+
+type Accent = "primary" | "amber" | "sky" | "emerald";
+
+const accentClasses: Record<Accent, string> = {
+  primary: "bg-primary/10 text-primary",
+  amber: "bg-amber-500/10 text-amber-600",
+  sky: "bg-sky-500/10 text-sky-600",
+  emerald: "bg-emerald-500/10 text-emerald-600",
+};
+
+function SectionPanel({
+  icon: Icon,
+  title,
+  meta,
+  accent = "primary",
+  children,
+  className = "",
+}: {
+  icon: typeof Receipt;
+  title: string;
+  meta?: string;
+  accent?: Accent;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`overflow-hidden rounded-md border bg-card shadow-sm ${className}`}>
+      <div className="flex items-center gap-2 border-b bg-muted/35 px-3 py-2">
+        <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${accentClasses[accent]}`}>
+          <Icon size={13} />
+        </span>
+        <div className="min-w-0">
+          <h3 className="m-0 truncate text-[11px] font-semibold uppercase tracking-wide text-foreground">{title}</h3>
+          {meta && <p className="m-0 truncate text-[11px] text-muted-foreground">{meta}</p>}
+        </div>
+      </div>
+      <div className="p-3">{children}</div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Billing grid panel header
 // ---------------------------------------------------------------------------
 
 function PanelHeader({
@@ -197,17 +277,18 @@ function PanelHeader({
   selectedCount: number;
   totalCount: number;
 }) {
-  const accentClasses = accent === "primary" ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-600";
+  const accentBar = accent === "primary" ? "bg-primary" : "bg-amber-500";
   return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+    <div className="relative flex shrink-0 items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2 pl-4">
+      <span className={`absolute left-0 top-0 h-full w-1 ${accentBar}`} />
       <div className="flex min-w-0 items-center gap-2">
-        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${accentClasses}`}>{icon}</div>
+        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${accentClasses[accent]}`}>{icon}</div>
         <div className="min-w-0">
           <p className="m-0 text-[13px] font-semibold text-foreground">{title}</p>
           <p className="m-0 truncate text-[11px] text-muted-foreground">{subtitle}</p>
         </div>
       </div>
-      <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${accentClasses}`}>
+      <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${accentClasses[accent]}`}>
         {selectedCount} / {totalCount} selected
       </span>
     </div>
@@ -644,132 +725,204 @@ const invoiceHeader: TInvoice[] = [
   return (
     <div className="grid gap-2.5">
       {/* Header bar */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Button type="button" size="icon" variant="ghost" title="Back" className="h-8 w-8 shrink-0" onClick={() => onClose(false)}>
-            <ArrowLeft size={15} />
-          </Button>
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <Receipt size={15} />
-          </div>
-          <div className="min-w-0 leading-tight">
-            <h1 className="m-0 text-lg  ">
-              {isNew ? "Create Invoice" : invoiceNo || "Invoice"}
-              {viewMode && <span className="ml-2 align-middle text-[11px] font-medium text-muted-foreground">(view only)</span>}
-            </h1>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {hasExistingData && (
-            <>
-              <HeaderChip label="Currency" value={currCode || "-"} />
-              <HeaderChip label="Lines" value={String(lineCount)} />
-              <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("grouped")}>
-                <Printer size={14} /> Grouped
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("activitywise")}>
-                <Sheet size={14} /> Activity-wise
-              </Button>
-            </>
-          )}
-          {notice && (
-            <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-              {notice.text}
-            </span>
-          )}
-          <Button type="button" size="sm" variant="outline" onClick={() => onClose(false)}>
-            Cancel
-          </Button>
-          {!viewMode && (
-            <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
-              {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
-              {saving ? "Saving" : "Save"}
-            </Button>
-          )}
-        </div>
+{/* Header bar — grouped like the WMS Inbound Job header */}
+<div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 shadow-sm">
+  {/* Left: Back + accent bar + title block */}
+  <div className="flex min-w-0 items-center gap-3">
+    <button
+      type="button"
+      onClick={() => onClose(false)}
+      title="Back"
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-md border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+    >
+      <ArrowLeft size={14} />
+    </button>
+
+    {/* Vertical accent line */}
+    <span className="h-8 w-1 shrink-0 rounded-full bg-primary" />
+
+    {/* Title block — icon removed */}
+    <div className="min-w-0 leading-tight">
+      {/* <p className="m-0 text-[10px] font-bold text-primary tracking-[0.18em]">
+        Billing
+      </p> */}
+      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+        <h1 className="m-0 text-[17px] font-semibold leading-none text-primary">
+          {isNew ? "Create Invoice" : invoiceNo || "Edit Invoice"}
+        </h1>
+        {/* <StatusBadge isNew={isNew} viewMode={viewMode} /> */}
       </div>
+    </div>
+  </div>
+
+  {/* Right: meta chips + actions, grouped in two clean rows on narrow widths */}
+  <div className="flex flex-wrap items-center justify-end gap-2">
+    {hasExistingData && (
+      <>
+        <HeaderChip label="Currency" value={currCode || "-"} />
+        <HeaderChip label="Lines" value={String(lineCount)} />
+        <HeaderChip
+          label="Grand Total"
+          value={`${billingTotals.grandTotal.toFixed(3)} ${currCode || ""}`.trim()}
+        />
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
+        <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("grouped")}>
+          <Printer size={14} /> Grouped
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("activitywise")}>
+          <Sheet size={14} /> Activity-wise
+        </Button>
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
+      </>
+    )}
+
+    {notice && (
+      <span
+        className={`rounded-md border px-2.5 py-1 text-[11px] font-medium ${
+          notice.type === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-red-200 bg-red-50 text-red-700"
+        }`}
+      >
+        {notice.text}
+      </span>
+    )}
+
+    <Button type="button" size="sm" variant="outline" onClick={() => onClose(false)}>
+      Cancel
+    </Button>
+
+    {!viewMode && (
+      <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
+        {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
+        {saving ? "Saving" : "Save"}
+      </Button>
+    )}
+  </div>
+</div>
 
       <fieldset disabled={viewMode} className="contents">
-        {/* Identity fields */}
-        <section className="rounded-md border bg-card px-3 py-2.5 shadow-sm">
-          <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-            <FieldLabel label="Principal code">
-              <LookupField
-                compact
-                label="Principal code"
-                required
-                value={prinCode}
-                columns={[
-                  { field: "prin_code", header: "Code" },
-                  { field: "prin_name", header: "Name" },
-                ]}
-                valueField="prin_code"
-                displayFields={["prin_code", "prin_name"]}
-                loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
-                onChange={(value, row) => setInvoice((prev: any) => ({ ...prev, prin_code: value, curr_code: row ? getValue(row, "curr_code") ?? "" : "" }))}
-                disabled={viewMode}
-              />
-            </FieldLabel>
-            {HEADER_FIELDS.map((f) => renderField(f, invoice, setField, viewMode))}
-          </div>
-        </section>
+        {/* Identity + settings, side by side like the freight identity card */}
+        <div className="grid gap-2.5 xl:grid-cols-12">
+          <SectionPanel
+            className="xl:col-span-5"
+            icon={FileText}
+            title="Invoice Identity"
+            meta={prinCode ? `Principal ${prinCode}` : "Select a principal to begin"}
+            accent="primary"
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <FieldLabel label="Principal code" className="sm:col-span-2">
+                <LookupField
+                  compact
+                  label="Principal code"
+                  required
+                  value={prinCode}
+                  columns={[
+                    { field: "prin_code", header: "Code" },
+                    { field: "prin_name", header: "Name" },
+                  ]}
+                  valueField="prin_code"
+                  displayFields={["prin_code", "prin_name"]}
+                  loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
+                  onChange={(value, row) => setInvoice((prev: any) => ({ ...prev, prin_code: value, curr_code: row ? getValue(row, "curr_code") ?? "" : "" }))}
+                  disabled={viewMode}
+                />
+              </FieldLabel>
+              {HEADER_FIELDS.map((f) => renderField(f, invoice, setField, viewMode))}
+            </div>
+          </SectionPanel>
 
-        {/* Details fields */}
-        <section className="rounded-md border bg-card px-3 py-3 shadow-sm">
+          <SectionPanel
+            className="xl:col-span-4"
+            icon={CircleDollarSign}
+            title="Currency & Rate"
+            meta={currCode ? `${currCode} pegged to ${getValue(invoice, "ex_rate") || "auto"}` : "Set once a principal is selected"}
+            accent="sky"
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <FieldLabel label="Currency code">
+                <LookupField
+                  compact
+                  label="Currency code"
+                  value={currCode}
+                  columns={[
+                    { field: "code", header: "Code" },
+                    { field: "name", header: "Name" },
+                  ]}
+                  valueField="code"
+                  displayFields={["code", "name"]}
+                  loadOptions={async () => {
+                    if (currencyOptions.length) return currencyOptions;
+                    try {
+                      const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`);
+                      const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" }));
+                      if (opts.length) setCurrencyOptions(opts);
+                      return opts;
+                    } catch {
+                      return [];
+                    }
+                  }}
+                  onChange={(value) => setInvoice((prev: any) => ({ ...prev, curr_code: value }))}
+                  disabled={viewMode || loadingCurrencies}
+                  placeholder={loadingCurrencies ? "Loading…" : "Select currency"}
+                />
+              </FieldLabel>
+              <FieldLabel label="Exchange rate">
+                <Input className="h-8 text-[12.5px]" value={getValue(invoice, "ex_rate") ?? ""} placeholder="Auto" disabled />
+              </FieldLabel>
+              <FieldLabel label="Credit note no" className="sm:col-span-1">
+                <Input
+                  className="h-8 text-[12.5px]"
+                  value={getValue(invoice, "credit_note_no") ?? ""}
+                  onChange={(e) => setField("credit_note_no", e.target.value)}
+                  disabled={viewMode}
+                  placeholder="Optional"
+                />
+              </FieldLabel>
+              <FieldLabel label="Credit note date" className="sm:col-span-1">
+                <Input
+                  className="h-8 text-[12.5px]"
+                  type="date"
+                  value={toDateInputValue(getValue(invoice, "credit_note_date"))}
+                  onChange={(e) => setField("credit_note_date", e.target.value)}
+                  disabled={viewMode}
+                />
+              </FieldLabel>
+            </div>
+          </SectionPanel>
+
+          <SectionPanel
+            className="xl:col-span-3"
+            icon={CalendarRange}
+            title="Dispatch"
+            meta={getValue(invoice, "despatched") === "Y" ? "Marked as despatched" : "Not despatched yet"}
+            accent="amber"
+          >
+            <div className="grid gap-2">
+              {renderField(DETAIL_FIELDS[0], invoice, setField, viewMode)}
+              {renderField(DETAIL_FIELDS[1], invoice, setField, viewMode)}
+              {renderField(DETAIL_FIELDS[2], invoice, setField, viewMode)}
+            </div>
+          </SectionPanel>
+        </div>
+
+        {/* References and descriptions */}
+        <SectionPanel
+          icon={Settings2}
+          title="References & Description"
+          meta="Account and principal references shown on the printed invoice"
+          accent="primary"
+        >
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {DETAIL_FIELDS.map((f) => renderField(f, invoice, setField, viewMode))}
-
-            <FieldLabel label="Currency code">
-              <LookupField
-                compact
-                label="Currency code"
-                value={currCode}
-                columns={[
-                  { field: "code", header: "Code" },
-                  { field: "name", header: "Name" },
-                ]}
-                valueField="code"
-                displayFields={["code", "name"]}
-                loadOptions={async () => {
-                  if (currencyOptions.length) return currencyOptions;
-                  try {
-                    const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`);
-                    const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" }));
-                    if (opts.length) setCurrencyOptions(opts);
-                    return opts;
-                  } catch {
-                    return [];
-                  }
-                }}
-                onChange={(value) => {
-                  // A genuinely new currency selection should re-fetch its own
-                  // DB rate, so clear the "touched" flag here.
-                  setExRateTouched(false);
-                  setInvoice((prev: any) => ({ ...prev, curr_code: value }));
-                }}
-                disabled={viewMode || loadingCurrencies}
-                placeholder={loadingCurrencies ? "Loading…" : "Select currency"}
-              />
-            </FieldLabel>
-            <FieldLabel label="Exchange rate">
-              <Input
-                className="h-8 text-sm"
-                value={getValue(invoice, "ex_rate") ?? ""}
-                onChange={(e) => {
-                  setExRateTouched(true);
-                  setField("ex_rate", e.target.value);
-                }}
-                disabled={viewMode}
-                placeholder="Auto"
-              />
-            </FieldLabel>
+            {DETAIL_FIELDS.slice(3).map((f) => renderField(f, invoice, setField, viewMode))}
           </div>
-        </section>
+        </SectionPanel>
 
         {/* Billing grids */}
         <section className="grid gap-3 lg:grid-cols-2">
           {/* Job selection grid */}
-          <div className="flex max-h-[460px] min-h-[220px] flex-col rounded-md border bg-background shadow-sm">
+          <div className="flex max-h-[460px] min-h-[220px] flex-col overflow-hidden rounded-md border bg-background shadow-sm">
             <PanelHeader
               icon={<Briefcase size={14} />}
               accent="primary"
@@ -836,7 +989,7 @@ const invoiceHeader: TInvoice[] = [
                           <TableCell className="text-right">{row.quantity}</TableCell>
                           <TableCell className="text-right">{row.bill_rate.toFixed(2)}</TableCell>
                           <TableCell className="text-right">{row.cost_rate.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{row.bill.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold text-foreground">{row.bill.toFixed(2)}</TableCell>
                           <TableCell>{row.job_date ? formatDate(row.job_date) : ""}</TableCell>
                         </TableRow>
                       );
@@ -848,7 +1001,7 @@ const invoiceHeader: TInvoice[] = [
           </div>
 
           {/* Storage selection grid */}
-          <div className="flex max-h-[460px] min-h-[220px] flex-col rounded-md border bg-background shadow-sm">
+          <div className="flex max-h-[460px] min-h-[220px] flex-col overflow-hidden rounded-md border bg-background shadow-sm">
             <PanelHeader
               icon={<Boxes size={14} />}
               accent="amber"
@@ -912,7 +1065,7 @@ const invoiceHeader: TInvoice[] = [
                           <TableCell>{formatDate(row.RCPT_DATE)}</TableCell>
                           <TableCell>{formatDate(row.TXN_DATE)}</TableCell>
                           <TableCell className="text-right">{row.QTY}</TableCell>
-                          <TableCell className="text-right">{Number(row.AMOUNT ?? 0).toFixed(3)}</TableCell>
+                          <TableCell className="text-right font-semibold text-foreground">{Number(row.AMOUNT ?? 0).toFixed(3)}</TableCell>
                         </TableRow>
                       );
                     })
@@ -925,11 +1078,19 @@ const invoiceHeader: TInvoice[] = [
       </fieldset>
 
       {/* Totals */}
-      <footer className="flex flex-wrap items-center justify-end gap-6 rounded-md border bg-card px-4 py-2.5 shadow-sm">
-        <Total label="Job total" value={billingTotals.jobTotal} suffix={currCode} />
-        <Total label="Storage total" value={billingTotals.storageTotal} suffix={currCode} />
-        <div className="h-6 w-px bg-border" />
-        <Total label="Grand total" value={billingTotals.grandTotal} suffix={currCode} emphasize />
+      <footer className="flex flex-wrap items-center justify-between gap-4 rounded-md border bg-card px-4 py-2.5 shadow-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-emerald-500/10 text-emerald-600">
+            <Wallet2 size={14} />
+          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide">Invoice totals</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-6">
+          <Total label="Job total" value={billingTotals.jobTotal} suffix={currCode} />
+          <Total label="Storage total" value={billingTotals.storageTotal} suffix={currCode} />
+          <div className="h-6 w-px bg-border" />
+          <Total label="Grand total" value={billingTotals.grandTotal} suffix={currCode} emphasize />
+        </div>
       </footer>
     </div>
   );
