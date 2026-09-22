@@ -278,7 +278,8 @@ export function SalesInvoiceLinesTable({
                           ...row,
                           ...patch,
                         });
-
+                        const amount = amountBeforeDiscPrice({ ...row, ...patch });
+                        patch.disc_price = amount * (numberOrZero(row.disc_percent) / 100);
                         updateRow(row.id, patch);
                       }}
                     />
@@ -310,7 +311,8 @@ export function SalesInvoiceLinesTable({
                           ...row,
                           ...patch,
                         });
-
+                        const amount = amountBeforeDiscPrice({ ...row, ...patch });
+                        patch.disc_price = amount * (numberOrZero(row.disc_percent) / 100);
                         updateRow(row.id, patch);
                       }}
                     />
