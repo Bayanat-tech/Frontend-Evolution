@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
-import { Plus, Eye, Edit2, RefreshCw } from "lucide-react";
+import { Plus, Eye, Edit2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable } from "../../components/ui/DataTableAlms";
 import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
@@ -61,7 +61,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
   const queryClient = useQueryClient();
-
   const [activeTab, setActiveTab] = useState(initialTab);
   const [query, setQuery] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
@@ -242,12 +241,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   };
 
-  // ✅ FIX: Dialog turant close, phir active tab ki query refetch (non-blocking)
   const closePopup = useCallback((refresh?: boolean) => {
-    // 1. Dialog turant close
     setTaskPopup((prev) => ({ ...prev, open: false }));
-
-    // 2. Background mein sirf active tab refetch — data aa jayega apne aap
     if (refresh) {
       const queryKey = isPoGeneratedTab
         ? ["purchase-request-page", loginid, companyCode, activeCode3, "po"]
@@ -256,7 +251,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       queryClient.refetchQueries({ queryKey, type: "active" });
     }
   }, [queryClient, loginid, companyCode, activeCode3, isPoGeneratedTab]);
-
 
   const handleSavedDraft = useCallback((savedRequestNumber: string) => {
     setTaskPopup((prev) => {
@@ -278,11 +272,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       return prev;
     });
   }, []);
-
-  const handleRefresh = () => {
-    setNotice(null);
-    refetch();
-  };
 
   const handlePoView = (row: TPPOGenerated) => {
     const prNumber = row.PR_NUMBER || '';
@@ -478,14 +467,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Request</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Manage purchase requisition requests</p>
         </div>
-        <div className="finance-list-actions">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={handleRefresh}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title="Add Purchase Request" onClick={() => void openAddPopup()} style={{ background: "#082A89" }}>
-            <Plus size={15} /> Add PR
-          </Button>
-        </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
@@ -513,9 +494,24 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       <div className="min-h-[650px]">
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
-          data={filteredRows}
-          title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
-          subtitle={isPoGeneratedTab ? "Generated PO List" : "Purchase Request List"}
+  data={filteredRows}
+  title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
+  subtitle={
+    isPoGeneratedTab ? (
+      <span className="text-sm text-muted-foreground">Generated PO List</span>
+    ) : (
+      <button
+        type="button"
+        onClick={() => void openAddPopup()}
+        className="inline-flex items-center gap-1.5 rounded-md px-0.5 py-0.5 text-sm font-semibold text-white cursor-pointer transition-colors hover:opacity-90"
+        style={{ background: "#082A89" }}
+        title="Add Purchase Request"
+      >
+        <Plus size={10} />
+        Add PR
+      </button>
+    )
+  }
           searchValue={query}
           onSearchChange={(value) => { setQuery(value); setPageIndex(0); }}
           searchPlaceholder={isPoGeneratedTab ? "Search PO number, PR number, supplier..." : "Search request no, description, user..."}

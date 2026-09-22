@@ -1967,7 +1967,7 @@ const AddPRRequestPage = ({
                             <label className="field">
                               <span>Tax Type</span>
                               <Select
-                                value={String(header.TAX_TYPE || "No VAT")}
+                                value={String(header.TAX_TYPE || "Std.")}
                                 disabled={disabled}
                                 onChange={(e) => {
                                   const v = e.target.value;
