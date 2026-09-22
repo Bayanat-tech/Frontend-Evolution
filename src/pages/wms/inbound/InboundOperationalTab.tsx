@@ -1354,8 +1354,21 @@ if (!config) return (
         );
       }
       if (field.name === "qty_puom") return <Input type="number" min="0" value={String(formData.qty_puom ?? "")} onChange={(e) => setData((c) => ({ ...c, ...recalcQuantity(c, "qty_puom", e.target.value) }))} />;
-      if (field.name === "qty_luom") return <Input type="number" min="0" disabled={Number(formData.uom_count ?? 1) <= 1} value={String(formData.qty_luom ?? "")} onChange={(e) => setData((c) => ({ ...c, ...recalcQuantity(c, "qty_luom", e.target.value) }))} />;
-      if (field.disabled || field.name === "quantity") return <Input type="number" disabled value={String(formData.quantity ?? 0)} className="bg-muted text-muted-foreground" />;
+if (field.name === "qty_luom") {
+  const pUom = String(formData.p_uom || (formData as any).puom || "");
+  const lUom = String(formData.l_uom || (formData as any).luom || "");
+  const sameUom = !lUom || pUom === lUom; // only disable when there's no separate lowest UOM
+  return (
+    <Input
+      type="number"
+      min="0"
+      disabled={sameUom}
+      value={String(formData.qty_luom ?? "")}
+      onChange={(e) => setData((c) => ({ ...c, ...recalcQuantity(c, "qty_luom", e.target.value) }))}
+    />
+  );
+}   
+   if (field.disabled || field.name === "quantity") return <Input type="number" disabled value={String(formData.quantity ?? 0)} className="bg-muted text-muted-foreground" />;
         if (field.name === "exp_date") {
     return (
       <Input
