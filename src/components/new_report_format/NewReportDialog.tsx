@@ -55,7 +55,7 @@ export function NewReportDialog({
   const pageSheetRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [zoom, setZoom] = useState(74);
   const [page, setPage] = useState(1);
-  const [orientation, setOrientation] = useState<Orientation>("landscape");
+  const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [totalPages, setTotalPages] = useState(1);
   const [measuring, setMeasuring] = useState(false);
   /** Left page-thumb navbar visible */
@@ -193,7 +193,7 @@ export function NewReportDialog({
       setZoom(74);
       setPage(1);
       setTotalPages(1);
-      setOrientation("landscape");
+      setOrientation("portrait");
       setMeasuring(false);
       setNavOpen(true);
     }
