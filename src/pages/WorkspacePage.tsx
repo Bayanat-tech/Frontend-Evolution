@@ -119,6 +119,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const displayCollapsed = isMobile ? false : collapsed;
   const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "Company";
   const isFreightModule = (appCode || "").toLowerCase() === "fms";
+  const isFinanceModule = /^(finance|accounts?|fin|fas|f&a)$/i.test(appCode || "") || /\/finance(?:\/|$)/i.test(location.pathname);
+  const keepSidebarOpen = isFreightModule || isFinanceModule;
   const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
 
   // useEffect(() => {
@@ -126,17 +128,18 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   // }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
-    setExpanded({
+    setExpanded((current) => ({
+      ...(isFinanceModule ? current : {}),
       ...collectDefaultExpanded(activeApp?.children || [], 1),
       ...collectExpandedPath(activeMenuPath),
-    });
-  }, [activeApp?.id, activeApp?.title, location.pathname]);
+    }));
+  }, [activeApp?.id, activeApp?.title, location.pathname, isFinanceModule]);
 
   useEffect(() => {
-    if (!isMobile && isFreightModule) {
+    if (!isMobile && keepSidebarOpen) {
       setCollapsed(false);
     }
-  }, [isFreightModule, isMobile]);
+  }, [keepSidebarOpen, isMobile]);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -161,7 +164,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       setMobileMenuOpen(false);
       return;
     }
-    if (!isFreightModule) setCollapsed(true);
+    if (!keepSidebarOpen) setCollapsed(true);
   };
 
   return (

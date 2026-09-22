@@ -277,10 +277,11 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   ], []);
 
   return (
-    <section className="finance-list-page grid gap-4">
+    <section className={`finance-list-page grid gap-4 ${docType === "PI" && editor ? "finance-purchase-ui finance-purchase-editing" : ""}`}>
+      {!(docType === "PI" && editor) && <>
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">{docType === "PI" ? "Purchase Invoice" : meta.title}</h1>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
@@ -334,8 +335,9 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         }}
       />
 
+      </>}
       {editor && (
-        <div className="fixed inset-0 z-50 bg-background">
+        <div className={docType === "PI" ? "finance-purchase-editor" : "fixed inset-0 z-50 bg-background"}>
           <CommercialEditor
             docType={docType}
             editor={editor}
@@ -667,7 +669,7 @@ const withTax = {
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{META[docType].title}</h2>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{docType === "PI" ? "Purchase Invoice" : META[docType].title}</h2>
             </div>
             <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -718,11 +720,11 @@ const withTax = {
           <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
         </div>
       )}
-      <CardContent className="min-h-0 overflow-y-auto overflow-x-hidden p-3">
+      <CardContent className="commercial-editor-body min-h-0 overflow-y-auto overflow-x-hidden p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="grid min-w-0 gap-3">
+          <div className="commercial-editor-sections grid min-w-0 gap-3">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
        <div className="commercial-header-shell rounded-md border bg-card">
@@ -1497,7 +1499,7 @@ const withTax = {
                 </table>
               </div>
               
-              <div className="border-t px-3 py-2 text-sm">
+              <div className="commercial-line-totals border-t px-3 py-2 text-sm">
   <div className="flex items-center justify-between">
     <span className="text-muted-foreground">Total Amount</span>
     <strong className="text-emerald-600">{formatAmount(total)}</strong>
