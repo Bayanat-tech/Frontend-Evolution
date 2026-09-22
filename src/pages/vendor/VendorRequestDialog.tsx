@@ -72,8 +72,9 @@ export function VendorRequestDialog({
   const companyCode = user?.company_code || "";
   const loginid = user?.loginid || user?.username || "";
   const isEdit = Boolean(request?.DOC_NO);
-  const attachmentsLocked = approvalMode && Number(approvalFlowLevel) > 1;
-
+  // const attachmentsLocked = approvalMode && Number(approvalFlowLevel) > 1;
+  const attachmentsLocked = readOnly || (approvalMode && Number(approvalFlowLevel) > 1);
+  const infoReadOnly = readOnly || approvalMode;
   const [activeTab, setActiveTab] = useState<"info" | "details">("info");
   const [form, setForm] = useState<VendorRequestPayload>(() => emptyRequest(companyCode));
   const [items, setItems] = useState<VendorRow[]>([]);
@@ -228,9 +229,12 @@ export function VendorRequestDialog({
         <div className="flex w-full items-center justify-between gap-2">
           {approvalMode ? (
             <div className="flex gap-2">
-              <Button type="button" variant="outline" disabled={saving} onClick={() => onApprovalAction?.("SENTBACK", approvalFlowLevel)}><RotateCcw size={15} /> Send Back</Button>
+              <Button type="button" variant="outline" disabled={saving || readOnly} onClick={() => onApprovalAction?.("SENTBACK", approvalFlowLevel)}><RotateCcw size={15} /> Send Back</Button>
+              <Button type="button" variant="destructive" disabled={saving || readOnly} onClick={() => onApprovalAction?.("REJECTED", approvalFlowLevel)}><XCircle size={15} /> Reject</Button>
+              <Button type="button" disabled={saving || readOnly} onClick={(event) => void save(event as unknown as FormEvent, "APPROVED")}><CheckCircle2 size={15} /> Approve</Button>
+              {/* <Button type="button" variant="outline" disabled={saving} onClick={() => onApprovalAction?.("SENTBACK", approvalFlowLevel)}><RotateCcw size={15} /> Send Back</Button>
               <Button type="button" variant="destructive" disabled={saving} onClick={() => onApprovalAction?.("REJECTED", approvalFlowLevel)}><XCircle size={15} /> Reject</Button>
-              <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "APPROVED")}><CheckCircle2 size={15} /> Approve</Button>
+              <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "APPROVED")}><CheckCircle2 size={15} /> Approve</Button> */}
             </div>
           ) : !readOnly ? (
             <div className="flex gap-2">
@@ -259,7 +263,7 @@ export function VendorRequestDialog({
           <div className="grid-cols-1 grid-gap-2 rounded-md border bg-white p-1">
   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
     <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
-    <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={readOnly} />
+    <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={infoReadOnly} />
     <label className="grid gap-1 text-sm">
       <span className="font-medium text-muted-foreground">Ref Doc No</span>
       <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit} required>
@@ -268,12 +272,12 @@ export function VendorRequestDialog({
         {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
       </Select>
     </label>
-    <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={readOnly} />
+    <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={infoReadOnly} />
 
-    <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={readOnly} />
-    <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={readOnly} />
-    <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={readOnly} />
-    <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={readOnly} />
+    <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={infoReadOnly} />
+    <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={infoReadOnly} />
+    <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={infoReadOnly} />
+    <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={infoReadOnly} />
   </div>
 
   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
@@ -287,7 +291,7 @@ export function VendorRequestDialog({
     <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
     <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="sm:col-span-2 md:col-span-2" />
 
-    <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="sm:col-span-2 md:col-span-3" readOnly={readOnly} />
+    <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="sm:col-span-2 md:col-span-3" readOnly={infoReadOnly} />
   </div>
  </div>
         ) : (
@@ -482,12 +486,14 @@ function PendingItemsDialog({
   return (
     <Dialog open wide contentClassName="vendor-pending-dialog" title="Pending Items" onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button><Button onClick={() => onAdd(rows.filter((row) => selected[String(row.SERIAL_NO)]))}>Save</Button></>}>
       <div className="overflow-auto rounded-md border">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead className="bg-slate-50 text-left text-muted-foreground">
-            <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2">Price</th><th className="p-2">Currency</th><th className="p-2">Ex Rate</th></tr>
+            {/* <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2">Price</th><th className="p-2">Currency</th><th className="p-2">Ex Rate</th></tr> */}
+            {/* <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2">Org Qty</th><th className="p-2">Rate</th><th className="p-2">Currency</th><th className="p-2">Ex Rate</th><th className="p-2">Base Amt</th></tr> */}
+            <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2 text-right">Org Qty</th><th className="p-2 text-right">Rate</th><th className="p-2">Currency</th><th className="p-2 text-right">Ex Rate</th><th className="p-2 text-right">Base Amt</th></tr>
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Loading...</td></tr> : rows.map((row) => (
+            {/* {loading ? <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Loading...</td></tr> : rows.map((row) => (
               <tr key={String(row.SERIAL_NO)} className="border-t">
                 <td className="p-2"><input type="checkbox" checked={Boolean(selected[String(row.SERIAL_NO)])} onChange={(event) => setSelected((prev) => ({ ...prev, [String(row.SERIAL_NO)]: event.target.checked }))} /></td>
                 <td className="p-2">{String(row.SERIAL_NO || "")}</td>
@@ -496,9 +502,28 @@ function PendingItemsDialog({
                 <td className="p-2">{String(row.CURR_CODE || "")}</td>
                 <td className="p-2 text-right">{formatAmount(row.EX_RATE)}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            ))} */}
+
+
+      {loading ? <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Loading...</td></tr> : rows.map((row) => {
+      const price = Number(row.PRICE ?? row.RATE ?? 0);
+      const baseAmt = Number(row.QTY || 0) * price * Number(row.EX_RATE || 1);
+        return (
+          <tr key={String(row.SERIAL_NO)} className="border-t">
+          <td className="p-2"><input type="checkbox" checked={Boolean(selected[String(row.SERIAL_NO)])} onChange={(event) => setSelected((prev) => ({ ...prev, [String(row.SERIAL_NO)]: event.target.checked }))} /></td>
+          <td className="p-2">{String(row.SERIAL_NO || "")}</td>
+          <td className="p-2">{String(row.REMARKS || "")}</td>
+          <td className="p-2 text-right">{formatAmount(row.ORIGINAL_QTY ?? row.QTY)}</td>
+          <td className="p-2 text-right">{formatAmount(price)}</td>
+          <td className="p-2">{String(row.CURR_CODE || "")}</td>
+          <td className="p-2 text-right">{Number(row.EX_RATE || 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 6 })}</td>
+          <td className="p-2 text-right">{formatAmount(baseAmt)}</td>
+          </tr>
+       );
+     })}
+
+       </tbody>
+      </table>
       </div>
     </Dialog>
   );

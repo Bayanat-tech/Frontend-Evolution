@@ -61,17 +61,16 @@ export function VendorRequestsPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" title="View request" onClick={() => void openExisting(row.original)}><Eye size={15} /></Button>
-          <Button size="icon" variant="ghost" title="Edit request" onClick={() => void openExisting(row.original)}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" title="Edit request" disabled={tab === "SUBMITTED"} onClick={() => void openExisting(row.original)}><Edit2 size={15} /></Button>
         </div>
       ),
     },
-  ]), []);
+  ]), [tab]);
 
   return (
     <section className="grid gap-4">
       <VendorPageHeader
         title="Vendor Requests"
-        description="Draft, in-progress, rejected and closed purchase invoice requests."
         actions={<><RefreshButton loading={loading} onClick={() => void loadRows()} /><Button size="sm" onClick={() => setEditor(null)}><Plus size={14} /> New Request</Button></>}
       />
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
@@ -102,6 +101,7 @@ export function VendorRequestsPage() {
       {editor !== undefined && (
         <VendorRequestDialog
           open
+          readOnly={tab === "SUBMITTED"}
           request={editor}
           onClose={() => setEditor(undefined)}
           onSaved={async (action) => {
