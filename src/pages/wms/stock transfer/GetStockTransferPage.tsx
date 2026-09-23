@@ -939,7 +939,7 @@ useEffect(() => {
           </div>
           <button aria-label="Close" className="grid h-8 w-8 place-items-center rounded-md border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground" type="button" onClick={onClose}>
             <X size={16} />
-          </button>
+          </button>s
         </div>
 
         <div className="min-h-0 overflow-y-auto bg-muted/20 p-4 text-sm">

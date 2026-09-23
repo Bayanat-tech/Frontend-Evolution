@@ -227,7 +227,10 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
             <button
               className="font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
               type="button"
-              onClick={() => handleOpenView(row.original)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenView(row.original);
+              }}
               title="View Leave Request"
             >
               {reqNo}
@@ -242,16 +245,6 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         cell: ({ row }) => (
           <span className="text-[11.5px] text-foreground">
             {formatDate(row.original.REQUEST_DATE ?? row.original.requestDate)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "EMPLOYEE_ID",
-        header: "EMP ID",
-        size: 90,
-        cell: ({ row }) => (
-          <span className="text-[11.5px] text-foreground font-medium">
-            {String(row.original.EMPLOYEE_ID ?? row.original.employeeId ?? "-")}
           </span>
         ),
       },
@@ -311,11 +304,11 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         ),
       },
       {
-        accessorKey: "REASON",
+        accessorKey: "REMARKS",
         header: "REASON",
         minSize: 160,
         cell: ({ row }) => {
-          const reason = String(row.original.REASON ?? row.original.reason ?? "-");
+          const reason = String(row.original.REMARKS ?? row.original.remarks ?? "-");
           return (
             <div className="truncate" title={reason}>
               <span className="text-[11.5px] text-muted-foreground">{reason}</span>
@@ -337,6 +330,16 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
           );
         },
       },
+       {
+        accessorKey: "NEXT_ACTION_BY_NAME",
+        header: "Next Action By",
+        size: 90,
+        cell: ({ row }) => (
+          <span className="text-[11.5px] text-foreground font-medium">
+            {String(row.original.NEXT_ACTION_BY_NAME ?? row.original.next_action_by_name ?? "-")}
+          </span>
+        ),
+      },
       {
         id: "actions",
         header: "ACTIONS",
@@ -351,7 +354,10 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                 type="button"
                 className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title="View Leave Request"
-                onClick={() => handleOpenView(row.original)}
+                  onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenView(row.original);
+                }}
               >
                 <Eye size={13} />
               </button>
@@ -360,7 +366,10 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                   type="button"
                   className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                   title="Edit Leave Request"
-                  onClick={() => handleOpenEdit(row.original)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenEdit(row.original);
+                  }}
                 >
                   <Pencil size={13} />
                 </button>
@@ -373,7 +382,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                   e.stopPropagation();
                   handlePrint(row.original);
                 }}
-              >
+               >
                 <Printer size={13} />
               </button>
             </div>
@@ -467,7 +476,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         getRowId={(row, index) =>
           String(row.REQUEST_NUMBER ?? row.requestNumber ?? row.SR_NO ?? index)
         }
-        onRowClick={handleOpenView}
+        // onRowClick={handleOpenView}
       />
 
       {/* Leave Request Dialog (Add, Edit, View) */}

@@ -132,10 +132,18 @@ export async function validateHrLeave(payload: ValidateLeavePayload) {
   return response.data;
 }
 
-export async function saveHrLeaveApproval(payload: Record<string, unknown>) {
+export async function saveHrLeaveApproval(payload: Record<string, unknown>, tenantName?: string) {
+  if (tenantName ==="WMSTST"){
+    console.log('hit ALMS savehrleaveapproval route',payload);
   const response = await withHrFallback((prefix) => api.put<ApiResponse<unknown> & { request_number?: unknown }>(`${prefix}/gm/upsertLeaveApprovalHandler`, payload));
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save leave request");
-  return response.data;
+    if (!response.data.success) throw new Error(response.data.message || "Unable to save leave request");
+    return response.data;
+  }else{
+    console.log('hit mhdl savehrleaveapproval route',payload);
+    const response = await withHrFallback((prefix) => api.put<ApiResponse<unknown> & { request_number?: unknown }>(`${prefix}/gm/mhupsertLeaveApprovalHandler`, payload));
+    if (!response.data.success) throw new Error(response.data.message || "Unable to save leave request");
+    return response.data;
+  }
 }
 
 export async function uploadHrEmployeeAttachment(requestNumber: string, file: File) {
