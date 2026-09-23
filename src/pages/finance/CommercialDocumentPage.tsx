@@ -36,6 +36,9 @@ import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
+import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { formatDate } from "../../utils/date";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
 
@@ -131,8 +134,13 @@ const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 
 const commercialInvoiceSign = (docType: CommercialType): 1 | -1 =>
   docType === "PI" || docType === "PO" ? -1 : 1;
 
-export function CommercialDocumentPage({ docType }: { docType: CommercialType }) {
+export function CommercialDocumentPage({ docType, menuTitle }: { docType: CommercialType; menuTitle?: string }) {
   const meta = META[docType];
+  const isPurchase = docType === "PI" || docType === "PO" || (menuTitle ? /purchase/i.test(menuTitle) : false);
+  const defaultTitle = docType === "PI" ? "Purchase Invoice" : docType === "PO" ? "Purchase Order" : docType === "SI" ? "Sales Invoice" : meta.title;
+  const rawTitle = menuTitle || defaultTitle;
+  const pageTitle = rawTitle.replace(/[_]+/g, " ").trim();
+  const categoryBadge = isPurchase ? "PURCHASE" : "SALES";
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -232,8 +240,21 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   };
 
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
-    { accessorKey: "doc_no", header: "Doc No", cell: ({ getValue }) => <span className="font-semibold">{String(getValue() || "")}</span> },
-    { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => dateInput(getValue()) },
+    {
+      accessorKey: "doc_no",
+      header: "Doc No",
+      cell: ({ row, getValue }) => (
+        <button
+          type="button"
+          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          title={`Open ${String(getValue() || "")}`}
+        >
+          {String(getValue() || "")}
+        </button>
+      ),
+    },
+    { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "ac_name", header: "Party" },
     { accessorKey: "remarks", header: "Description" },
     { accessorKey: "div_code", header: "Div" },
@@ -277,19 +298,11 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   ], []);
 
   return (
-    <section className={`finance-list-page grid gap-4 ${docType === "PI" && editor ? "finance-purchase-ui finance-purchase-editing" : ""}`}>
-      {!(docType === "PI" && editor) && <>
-      <div className="finance-list-heading">
-        <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{docType === "PI" ? "Purchase Invoice" : meta.title}</h1>
-        </div>
-        <div className="finance-list-actions">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
+    <section className={`finance-list-page grid gap-4 ${editor ? "finance-document-ui finance-document-editing" : ""}`}>
+      {!editor && <>
+      <div className="finance-list-heading flex items-center justify-between gap-3">
+        <div className="finance-list-title flex items-center gap-2.5">
+          <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
         </div>
       </div>
 
@@ -299,7 +312,6 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         columns={columns}
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-        subtitle={`${meta.title} List`}
         searchValue={query}
         onSearchChange={(value) => {
           setQuery(value);
@@ -323,6 +335,16 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
           </div>
         }
         enableExport
+        actionButton={
+          <Button
+            type="button"
+            className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+            title={meta.addLabel}
+            onClick={() => setDivisionPicker(true)}
+          >
+            <Plus size={14} /> Add
+          </Button>
+        }
         exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
         initialSorting={[{ id: "doc_date", desc: true }]}
         pageIndex={pageIndex}
@@ -337,7 +359,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
 
       </>}
       {editor && (
-        <div className={docType === "PI" ? "finance-purchase-editor" : "fixed inset-0 z-50 bg-background"}>
+        <div className="finance-document-editor finance-document-ui">
           <CommercialEditor
             docType={docType}
             editor={editor}
@@ -351,30 +373,14 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         </div>
       )}
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the document form."
+        divisions={divisions}
+        onSelect={(division) => {
+          setEditor({ mode: "create", div: division });
+        }}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => {
-                setDivisionPicker(false);
-                setEditor({ mode: "create", div: division });
-              }}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+      />
 
       <Dialog
         open={Boolean(cancelTarget)}
@@ -661,31 +667,20 @@ const withTax = {
 };
 
   return (
-    <form className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {editMode ? "Edit Document" : "New Document"}
-              </p>
-              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{docType === "PI" ? "Purchase Invoice" : META[docType].title}</h2>
-            </div>
-            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-              <strong className="block text-xs leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
-            </div>
-            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-xs leading-tight text-primary-foreground">{formatAmount(total + taxTotal)}</strong>
-            </div>
-            {form.div_code && (
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
-                <strong className="block max-w-[220px] truncate text-xs leading-tight text-primary-foreground">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</strong>
-              </div>
-            )}
-          </div>
+          <FinanceDocumentIdentity
+            title={docType === "PI" ? "Purchase Invoice" : META[docType]?.title || "Commercial"}
+            documentNo={form.doc_no}
+            documentDate={form.doc_date}
+            total={formatAmount(total + taxTotal)}
+            divCode={form.div_code}
+            divName={form.div_name}
+            onBack={onClose}
+          headerExpanded={showHeaderDetails}
+            onToggleHeader={() => setShowHeaderDetails(value => !value)}
+          />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <span className="rounded-full border border-primary-foreground/35 px-2.5 py-1 text-xs font-semibold text-primary-foreground">Cancelled</span>}
             {form.doc_no && form.doc_no !== "0" && (
@@ -707,6 +702,7 @@ const withTax = {
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
+            <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
             <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
           </div>
         </div>
@@ -727,19 +723,68 @@ const withTax = {
           <div className="commercial-editor-sections grid min-w-0 gap-3">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-       <div className="commercial-header-shell rounded-md border bg-card">
-       <div className="commercial-section-title">
-         <div>
-           <p className="eyebrow m-0">Header</p>
-         </div>
-         <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
-       </div>
-       <div className={`commercial-header-panel commercial-header-block-grid payment-header-grid relative grid gap-2.5 p-3 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
-        <section className="commercial-header-block commercial-header-block-doc">
-          <div className="commercial-header-block-title">
-            <span>Document</span>
+        {/* Smart Collapsible Header */}
+        {!showHeaderDetails ? (
+          <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs">
+            <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                <span className="font-medium">{formatDate(form.doc_date)}</span>
+              </span>
+              {!isPO && form.inv_date && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="font-semibold text-[#00378C]">Inv Date:</span>
+                  <span className="font-medium">{formatDate(form.inv_date)}</span>
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5 truncate">
+                <span className="font-semibold text-[#00378C]">{isSales ? "Customer" : "Supplier"}:</span>
+                <span className="font-medium truncate">{form.ac_name || form.ac_code || "Not selected"}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-semibold text-[#00378C]">Currency:</span>
+                <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+              </span>
+              {form.ref_no && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="font-semibold text-[#00378C]">Ref:</span>
+                  <span className="font-medium">{form.ref_no}</span>
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-semibold text-[#00378C]">Tax:</span>
+                <span className="font-medium">{form.tax_type === "S" ? "STD (5%)" : "No Tax"}</span>
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+              onClick={() => setShowHeaderDetails(true)}
+            >
+              Show Header Fields <ChevronDown size={13} className="ml-1" />
+            </Button>
           </div>
-          <div className="commercial-header-block-fields">
+        ) : (
+          <div className="commercial-header-shell flex flex-col gap-1.5">
+            <div className="flex items-center justify-end px-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 text-xs text-slate-500 hover:text-[#00378C] cursor-pointer"
+                onClick={() => setShowHeaderDetails(false)}
+              >
+                <ChevronUp size={13} className="mr-1" /> Hide Header (Maximize Table)
+              </Button>
+            </div>
+            <div className="commercial-header-panel">
+              <section className="commercial-header-block commercial-header-block-doc">
+                <div className="commercial-header-block-title">
+                  <span>Document Details</span>
+                </div>
+                <div className="commercial-header-block-fields">
 
   {/* ── Doc No (edit only) ── */}
   {editMode && (
@@ -778,9 +823,16 @@ const withTax = {
     </Field>
   )}
 
-  {isSales && !isPO && (
+  {/* ── Division ── */}
+  <Field label="Division" required error={fieldErrors.div_name}>
+    <Input disabled required
+      value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
+  </Field>
+
+  {!isPO && (
     <LookupField
       label="Ref Doc"
+      className="col-span-2"
       disabled={isCancelled}
       value={form.ref_doc_no || ""}
       displayValue={form.ref_doc_no || ""}
@@ -875,92 +927,84 @@ const withTax = {
       </Select>
     </Field>
   )}
-
-  {/* ── Division ── */}
-  <Field label="Division" required error={fieldErrors.div_name}>
-    <Input disabled required
-      value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
-  </Field>
           </div>
         </section>
 
         <section className={`commercial-header-block commercial-header-block-party ${isSales ? "commercial-header-block-party-sales" : ""}`}>
           <div className="commercial-header-block-title">
-            <span>{isSales ? "Customer" : "Supplier"}</span>
+            <span>{isSales ? "Customer Details" : "Supplier Details"}</span>
           </div>
           <div className="commercial-header-block-fields">
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
-  <div className="field commercial-party-primary">
-  <LookupField
-    label={isSales ? "Customer" : "Supplier"} required
-    value={form.ac_code}
-    displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-    columns={[
-      { field: "ac_code",        header: "Code"     },
-      { field: "ac_name",        header: "Name"     },
-      { field: "curr_code",      header: "Currency" },
-      { field: "l4_description", header: "Remarks"  },
-    ]}
-    valueField="ac_code"
-    displayFields={["ac_code", "ac_name"]}
-    loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-    disabled={isCancelled}
-    onChange={(value, row) => {
-      const r   = row || {} as Record<string, unknown>;
-      const get = (k: string) =>
-        text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
+  <div className="col-span-1">
+    <LookupField
+      label={isSales ? "Customer" : "Supplier"} required
+      value={form.ac_code}
+      displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+      columns={[
+        { field: "ac_code",        header: "Code"     },
+        { field: "ac_name",        header: "Name"     },
+        { field: "curr_code",      header: "Currency" },
+        { field: "l4_description", header: "Remarks"  },
+      ]}
+      valueField="ac_code"
+      displayFields={["ac_code", "ac_name"]}
+      loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
+      disabled={isCancelled}
+      onChange={(value, row) => {
+        const r   = row || {} as Record<string, unknown>;
+        const get = (k: string) =>
+          text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
 
-      const newCurrCode = get("curr_code"); //change currency acc to curr
+        const newCurrCode = get("curr_code"); //change currency acc to curr
 
-      void (async () => {
-      let newExRate = form.ex_rate;
-      if (newCurrCode) {
-      const currRows = await getDynamicFinanceLookup({
-        parameter: "Account_Currency_CODE_Search",
-        code1: user?.company_code || "",
-      });
-      const match = currRows.find(
-        (r: Record<string, unknown>) =>
-          String(r["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
-      );
-      newExRate = Number(match?.["ex_rate"] ?? 1) || 1;
-    }
+        void (async () => {
+          let newExRate = form.ex_rate;
+          if (newCurrCode) {
+            const currRows = await getDynamicFinanceLookup({
+              parameter: "Account_Currency_CODE_Search",
+              code1: user?.company_code || "",
+            });
+            const match = currRows.find(
+              (r: Record<string, unknown>) =>
+                String(r["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
+            );
+            newExRate = Number(match?.["ex_rate"] ?? 1) || 1;
+          }
 
-      setForm((c) => ({
-        ...c,
-        ac_code:       value,
-        ac_name:       get("ac_name"),
-        curr_code:     get("curr_code"),
-        ex_rate:       newExRate,
-        // ex_rate: Number(get("ex_rate") || c.ex_rate ),
-        party_address: get("address"),
-        party_phone:   get("phone"),
-        party_fax:     get("fax"),
-        dlvr_contact:  get("contact_person"),
-        dlvr_mobile:   get("mobile_no"),
-        dlvr_email:    get("e_mail"),
-        remarks:       get("l4_description"), 
-      })); 
-    }) ();
-    }}
-  />
-   {fieldErrors.ac_code && (
-    <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
-      <AlertCircle size={11} /> {fieldErrors.ac_code}
-    </span>
-  )}
-</div>
-
+          setForm((c) => ({
+            ...c,
+            ac_code:       value,
+            ac_name:       get("ac_name"),
+            curr_code:     get("curr_code"),
+            ex_rate:       newExRate,
+            party_address: get("address"),
+            party_phone:   get("phone"),
+            party_fax:     get("fax"),
+            dlvr_contact:  get("contact_person"),
+            dlvr_mobile:   get("mobile_no"),
+            dlvr_email:    get("e_mail"),
+            remarks:       get("l4_description"), 
+          })); 
+        })();
+      }}
+    />
+    {fieldErrors.ac_code && (
+      <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+        <AlertCircle size={11} /> {fieldErrors.ac_code}
+      </span>
+    )}
+  </div>
 
   {/* Supplier/Customer Name — read-only display */}
-  <Field label={isSales ? "Customer Name" : "Supplier Name"}>
+  <Field label={isSales ? "Customer Name" : "Supplier Name"} className="col-span-1">
     <Input disabled value={form.ac_name || ""} />
   </Field>
 
   {/* Currency + Exchange Rate */}
-  <div className="field">
+  <div className="col-span-1">
     <LookupField
       label="Currency"
       required
@@ -980,29 +1024,28 @@ const withTax = {
     )}
   </div>
 
-  <Field label="Ex Rate" required error={fieldErrors.ex_rate}>
+  <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
     <Input disabled={isCancelled} type="number" step="0.000001" value={form.ex_rate}
       className={fieldErrors.ref_no ? "border-destructive" : ""}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
 
-  <label className="field col-span-2 max-md:col-span-1">
-    <span>Address</span>
+  <Field label="Address" className="col-span-2">
     <Input disabled={isCancelled} value={form.party_address || ""} onChange={(e) => update("party_address", e.target.value)} />
-  </label>
+  </Field>
 
   {/* Contact / Delivery */}
-  <Field label="Contact">
+  <Field label="Contact" className="col-span-1">
     <Input disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
   </Field>
-  <Field label="Mobile">
+  <Field label="Mobile" className="col-span-1">
     <Input disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
   </Field>
-  <Field label="E-mail">
+  <Field label="E-mail" className="col-span-1">
     <Input disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
   </Field>
 
-  <Field label="Payment Terms">
+  <Field label="Payment Terms" className="col-span-1">
     <Input disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
   </Field>
 
@@ -1076,118 +1119,11 @@ const withTax = {
           </div>
         </section>
 
-        {showReferenceBlock && !isSales && (
-        <section className="commercial-header-block commercial-header-block-extra">
-          <div className="commercial-header-block-title">
-            <span>Reference</span>
-          </div>
-          <div className="commercial-header-block-fields">
-  {!isPO && (
-    <LookupField
-      label="Ref Doc"
-      disabled={isCancelled}
-      value={form.ref_doc_no || ""}
-      displayValue={form.ref_doc_no || ""}
-      columns={[{ field: "DOC_NO", header: "Doc No" }, { field: "DOC_DATE", header: "Date" }, { field: "REF_NO", header: "Ref No" }, { field: "REMARKS", header: "Remarks" }]}
-      valueField="DOC_NO"
-      displayFields={["DOC_NO"]}
-      loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_LPO_REF_DOC", code1: user?.company_code || "", number1: form.div_code ? Number(form.div_code) : undefined })}
-      onChange={async (value, row) => {
-        if (!value || !row) return;
-        const r = row as Record<string, unknown>;
-        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
-        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
-        setForm((c) => ({ ...c, ref_doc_no: docNo }));
-        try {
-          let header: Record<string, unknown> = {};
-          try { header = await getPurchaseHeader(docNo, srcType); if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType); } catch { header = await getLpoHeader(docNo, srcType); }
-          let rawDetail: Record<string, unknown>[] = [];
-          try { const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType); if (res.length) rawDetail = res; } catch {}
-          if (!rawDetail.length) { try { rawDetail = await getLpoDetail(docNo, srcType); } catch {} }
-          const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
-          const mapped = mapForm(targetDocType, header, rawDetail);
-          setForm((c) => ({ ...c, ...mapped, doc_type: targetDocType, doc_no: c.doc_no, div_code: c.div_code, div_name: c.div_name, ref_doc_no: docNo, detail: mapped.detail }));
-        } catch (err) { console.error("Failed to load ref doc", err); setError(err instanceof Error ? err.message : "Unable to load reference document"); }
-      }}
-    />
-  )}
 
-  {/* ── Salesman Code + Name — SI / SV only ── */}
-  {isSales && (
-  <LookupField
-    label="Salesman"
-    disabled={isCancelled}
-    value={form.salesman_code ?? ""}
-    displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
-    columns={[
-      { field: "salesman_code", header: "Code" },
-      { field: "salesman_name", header: "Name" },
-    ]}
-    valueField="salesman_code"
-    displayFields={["salesman_code", "salesman_name"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter: "Salesman_Search",
-        code1: user?.company_code || "",
-      })
-    }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        salesman_code: value,
-        salesman_name: text(getLookupValue(row || {}, "salesman_name")),
-      }))
-    }
-  />
-  )}
-  {/* {isSales && (
-  <Field label="Salesman Name">
-    <Input disabled value={form.salesman_name || ""} />
-  </Field>
- )} */}
-
-  {/* ── Sector Code + Name — SI / SV only ── */}
-   {isSales && (
-   <LookupField
-    label="Sector"
-    disabled={isCancelled}
-    value={form.sector_code ?? ""}
-    displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
-    columns={[
-      { field: "sector_code", header: "Code" },
-      { field: "sector_name", header: "Name" },
-    ]}
-    valueField="sector_code"
-    displayFields={["sector_code", "sector_name"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter: "Sector_Search",
-        code1: user?.company_code || "",
-      })
-    }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        sector_code: value,
-        sector_name: text(getLookupValue(row || {}, "sector_name")),
-      }))
-    }
-  />
-  )}
-  {/* {isSales && (
-    <Field label="Sector Name">
-      <Input disabled value={form.sector_name || ""} />
-    </Field>
-  )} */}
-
-  {/* ── Tax Category  ── */}
-          </div>
-        </section>
-        )}
 
         <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}>
           <div className="commercial-header-block-title">
-            <span>Tax & Remarks</span>
+            <span>Tax & Additional Details</span>
           </div>
           <div className="commercial-header-block-fields">
   <LookupField
@@ -1284,69 +1220,34 @@ const withTax = {
     </Select>
   </Field>
 
-  {/* ── Remarks ) ── */}
-  <label className="field col-span-2 max-md:col-span-1">
-    <span>Remarks</span>
+  {/* ── Remarks ── */}
+  <Field label="Remarks" className="col-span-1">
     <Input disabled={isCancelled} value={form.remarks || ""}
       onChange={(e) => update("remarks", e.target.value)} />
-  </label>
+  </Field>
 
   {/* ── HSE Compliant + Letter Head checkboxes — PO only ── */}
   {/* PO table fields: hse_compliance (Y/N) / print_letter_head (bool) ── */}
-          </div>
-        </section>
-  {/* {isPO && (
-    <label className="field flex-row items-center gap-2">
-      <input
-        type="checkbox"
-        checked={form.hse_compliance === "Y"}
-        onChange={(e) => update("hse_compliance", e.target.checked ? "Y" : "N")}
-      />
-      <span>HSE Compliant</span>
-    </label>
-  )}
-  {isPO && (
-    <label className="field flex-row items-center gap-2">
-      <input
-        type="checkbox"
-        checked={!!form.print_letter_head}
-        onChange={(e) => update("print_letter_head", e.target.checked)}
-      />
-      <span>Letter Head</span>
-    </label>
-  )} */}
-
-</div>
-<div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
-  <div className="min-w-0 text-xs text-muted-foreground">
-    <span className="font-semibold text-foreground">{isSales ? "Customer" : "Supplier"}:</span>{" "}
-    <span className="truncate">{form.ac_name || form.ac_code || "Not selected"}</span>
-    <span className="mx-2 text-border">|</span>
-    <span className="font-semibold text-foreground">Currency:</span>{" "}
-    <span>{form.curr_code || "-"}</span>
-  </div>
-  <Button
-    type="button"
-    size="sm"
-    variant="ghost"
-    onClick={() => setShowHeaderDetails((value) => !value)}
-  >
-    {showHeaderDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-    {showHeaderDetails ? "Compact header" : "Show all header fields"}
-  </Button>
-</div>
-</div>
-            <div className="commercial-lines-card min-w-0 rounded-md border bg-card">
-              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-                <div>
-                  <p className="eyebrow m-0">Details</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Document Lines</h3>
+            </div>
+          </section>
+        </div>
+      </div>
+    )}
+            <div className="commercial-lines-card min-w-0 rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
+              <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">Line Items</h3>
+                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-semibold text-[#00378C]">
+                    {form.detail.length} {form.detail.length === 1 ? "line" : "lines"}
+                  </span>
                 </div>
-                <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
+                <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine} className="h-7 text-xs font-semibold border-[#00378C] text-[#00378C] hover:bg-blue-50">
+                  <Plus size={14} className="mr-1" /> Add Line
+                </Button>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
-                <table className="finance-lines-table w-full min-w-[3300px] text-[12px]">
-                  <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
+                <table className="finance-lines-table w-full min-w-[3300px] text-xs">
+                  <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
@@ -1585,12 +1486,20 @@ const withTax = {
   );
 }
 
-function Field({ label, children,error,required }: { label: string; children: React.ReactNode; error?: string; required?: boolean }) {
-  return <label className="field"><span>{label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}</span>{children}{error && (
+function Field({ label, children, error, required, className }: { label: string; children: React.ReactNode; error?: string; required?: boolean; className?: string }) {
+  return (
+    <label className={`field ${className || ""}`}>
+      <span>
+        {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
+      </span>
+      {children}
+      {error && (
         <span style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
           <AlertCircle size={11} /> {error}
         </span>
-      )}</label>;
+      )}
+    </label>
+  );
 }
 
 function emptyForm(docType: CommercialType, div?: Division): FormState {

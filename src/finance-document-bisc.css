@@ -1,0 +1,701 @@
+/* ==========================================================================
+   Finance Document & Editor BISC-Style Theme
+   Applied when editing Commercial (PO, PI, SI, SV) and Payment (BP, BR, CP, CR, CN, DN, JV) documents.
+   Matches the BISC & Freight standard:
+   - High-contrast crisp Inter typography (no faint or blurry text)
+   - Clean partitioned section cards with Royal Blue (#00378C) accent headers
+   - Distinct double-table management for Payment screens (Line Items + Invoice Allocations)
+   ========================================================================== */
+
+/* ── Global Font Smoothing & Antialiasing ─────────────────────────────────── */
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench,
+  .finance-payment-editor
+) {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-feature-settings: normal !important;
+  font-variation-settings: normal !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  color: #0f172a;
+}
+
+/* ── Workspace layout: stretch editor to fill viewport ───────────────────── */
+.workspace:has(.finance-document-editing) { height: 100dvh; min-height: 0; overflow: hidden; }
+.workspace-content:has(.finance-document-editing) > :is(.workspace-top-bar, .breadcrumb) { display: none !important; }
+.finance-document-editing { flex: 1; min-height: 0; display: flex; }
+.finance-document-editor { flex: 1; min-width: 0; min-height: 0; }
+
+/* ── Editor wrapper: bordered card ────────────────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  overflow: hidden;
+}
+:where(.finance-document-ui, .finance-document-editor) :is(.commercial-document-workbench, .payment-workbench) {
+  height: 100%;
+  min-height: 0;
+}
+
+/* ── Command header: BISC Royal Blue (#00378C) ────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header {
+  background: #00378C !important;
+  color: #ffffff !important;
+  padding: 6px 14px !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 8px rgba(0, 55, 140, 0.18) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header::after { display: none; }
+
+/* Header identity text colors on dark background */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header :is(h2, strong, p, span) { color: #fff; }
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header h2 { font-size: 14px; font-weight: 600; }
+:where(.finance-document-ui, .finance-document-editor) .finance-document-identity { color: rgba(255,255,255,0.9); }
+:where(.finance-document-ui, .finance-document-editor) .finance-document-identity strong { color: #fff; }
+
+/* Buttons inside dark header */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button {
+  height: 28px !important;
+  min-height: 28px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  padding-block: 3px !important;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-secondary,
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-outline {
+  background: rgba(255,255,255,0.12) !important;
+  border-color: rgba(255,255,255,0.25) !important;
+  color: #fff !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-secondary:hover,
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-outline:hover {
+  background: rgba(255,255,255,0.24) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-default {
+  background: #ffffff !important;
+  color: #00378C !important;
+  font-weight: 600 !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-default:hover {
+  background: #f1f5f9 !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:has(.lucide-ban) {
+  background: rgba(254,205,211,0.2) !important;
+  color: #fecdd3 !important;
+  border-color: rgba(254,205,211,0.4) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:has(.lucide-ban):hover {
+  background: rgba(254,205,211,0.35) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"] {
+  background: rgba(255,255,255,0.1) !important;
+  color: rgba(255,255,255,0.85) !important;
+  border-color: rgba(255,255,255,0.2) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"]:hover {
+  background: rgba(255,255,255,0.22) !important;
+  color: #ffffff !important;
+}
+
+/* ── Editor body layout ─────────────────────────────────────────────────────  */
+:where(.finance-document-ui, .finance-document-editor) .commercial-editor-body {
+  display: flex !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 8px 10px !important;
+  background: #f8fafc !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-editor-sections {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  gap: 8px !important;
+}
+
+/* ── High-Contrast, Ultra-Crisp Form Labels (Eliminates blurriness) ───────── */
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench,
+  .finance-payment-editor
+) :is(.field, label.field) {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench,
+  .finance-payment-editor
+) :is(.field > span, label.field > span, .field > label, label > span:first-child) {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  color: #334155 !important; /* Crisp Slate-700 */
+  line-height: 1.25 !important;
+  margin-bottom: 1px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  white-space: nowrap !important;
+}
+
+/* Red Asterisk on required labels */
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench
+) :is(label, .field > span) :is(span[style*="E24B4A"], .text-destructive, .text-red-500) {
+  color: #dc2626 !important;
+  font-weight: 700 !important;
+  margin-left: 1.5px !important;
+}
+
+/* Remove legacy outer borders and padding on field containers from styles.css */
+:where(.finance-document-ui, .finance-document-editor) :is(.commercial-header-block-fields, .finance-payment-header-fields) > :is(.field, label.field, div) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+
+/* ── Form Inputs, Selects & Lookups: Crisp borders & rich contrast ────────── */
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench,
+  .finance-payment-editor
+) :is(
+  .ui-input,
+  .ui-select,
+  .lookup-field-trigger,
+  .commercial-line-description,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+  select
+) {
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  border: 1px solid #94a3b8 !important; /* Visible, solid border */
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  color: #0f172a !important; /* Dark Slate-900: sharp text */
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 2px 8px !important;
+  width: 100% !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench
+) :is(.ui-input, .ui-select, .lookup-field-trigger, input, select):hover {
+  border-color: #64748b !important;
+}
+
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench
+) :is(.ui-input, .ui-select, .commercial-line-description, input, select):focus,
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench
+) .lookup-field-trigger:focus-within {
+  border-color: #00378C !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(0, 55, 140, 0.18) !important;
+}
+
+:where(
+  .finance-document-ui,
+  .finance-document-editor,
+  .commercial-editor,
+  .payment-workbench
+) :is(.ui-input, .ui-select, input, select):disabled {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 500 !important;
+  cursor: not-allowed !important;
+}
+
+/* ── Section Card Partitions (BISC Card System) ───────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .commercial-header-shell {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+/* Compact reduced-width panel (Max 1140px) prevents stretching */
+:where(.finance-document-ui, .finance-document-editor) .commercial-header-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 1140px !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .commercial-header-panel .commercial-header-block,
+:where(.finance-document-ui, .finance-document-editor) .finance-payment-header-block {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 1140px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+/* Visible BISC Section Title Header */
+:where(.finance-document-ui, .finance-document-editor) :is(.commercial-header-block-title, .finance-section-title) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 4px 10px !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) :is(.commercial-header-block-title, .finance-section-title) span {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #00378C !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) :is(.commercial-header-block-title, .finance-section-title) span::before {
+  content: "";
+  display: inline-block;
+  width: 3.5px;
+  height: 12px;
+  background: #00378C;
+  border-radius: 2px;
+}
+
+/* 4-Column Compact Grid for Commercial Header Fields */
+:where(.finance-document-ui, .finance-document-editor) .commercial-header-panel .commercial-header-block-fields {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px 12px !important;
+  padding: 8px 12px !important;
+  background: #ffffff !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 900px) {
+  :where(.finance-document-ui, .finance-document-editor) .commercial-header-panel .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* 3-Column Compact Grid for Payment Header Fields */
+:where(.finance-document-ui, .finance-document-editor) .finance-payment-header-fields {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px 12px !important;
+  padding: 8px 12px !important;
+  background: #ffffff !important;
+}
+
+/* ── Detail Lines Card: BISC Table Styling ────────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .commercial-lines-card,
+:where(.finance-document-ui, .finance-document-editor) .finance-table-card {
+  display: flex !important;
+  flex-direction: column !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+/* Card Header for Tables */
+:where(.finance-document-ui, .finance-document-editor) :is(.finance-line-actions, .finance-table-card-header) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 5px 12px !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) :is(.finance-line-actions, .finance-table-card-header) h3 {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #00378C !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) :is(.finance-line-actions, .finance-table-card-header) h3::before {
+  content: "";
+  display: inline-block;
+  width: 3.5px;
+  height: 12px;
+  background: #00378C;
+  border-radius: 2px;
+}
+
+/* ── BISC Royal Blue thead for ALL Finance Tables ─────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) table thead th {
+  background: #00378C !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  box-shadow: none !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-bottom: 1px solid #002d72 !important;
+  letter-spacing: 0.02em !important;
+  text-align: center !important;
+  padding: 0 8px !important;
+  white-space: nowrap !important;
+}
+:where(.finance-document-ui, .finance-document-editor) table thead th:last-child {
+  border-right: none !important;
+}
+
+/* Sticky column headers & cells */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead .finance-sticky-col {
+  background: #00378C !important;
+  color: #ffffff !important;
+  z-index: 8 !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr .finance-sticky-col {
+  background: #ffffff !important;
+  z-index: 4 !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:nth-child(even) .finance-sticky-col {
+  background: #f8fafc !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:hover .finance-sticky-col,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr.is-selected-detail .finance-sticky-col {
+  background: #eff6ff !important;
+}
+
+/* Table body rows and cells */
+:where(.finance-document-ui, .finance-document-editor) table tbody td {
+  padding: 3px 6px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  border-right: 1px solid #f1f5f9 !important;
+  font-size: 12px !important;
+  vertical-align: middle !important;
+}
+:where(.finance-document-ui, .finance-document-editor) table tbody tr {
+  height: 32px !important;
+}
+:where(.finance-document-ui, .finance-document-editor) table tbody tr:hover {
+  background-color: #f0f7ff !important;
+}
+
+/* Active / Selected detail row in Payment Detail Table */
+:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail {
+  background-color: #eff6ff !important;
+}
+:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail td:first-child {
+  border-left: 3px solid #00378C !important;
+}
+
+/* Number and money inputs in tables */
+:where(.finance-document-ui, .finance-document-editor) .finance-money-input,
+:where(.finance-document-ui, .finance-document-editor) .commercial-number-input {
+  text-align: right !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-variant-numeric: tabular-nums !important;
+  font-size: 12px !important;
+}
+
+/* ── Line totals & summaries ─────────────────────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .commercial-line-totals,
+:where(.finance-document-ui, .finance-document-editor) .finance-table-totals {
+  display: flex !important;
+  flex: none !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 20px !important;
+  padding: 6px 14px !important;
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+  font-size: 11.5px !important;
+}
+
+/* ── Sticky footer ───────────────────────────────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .commercial-sticky-footer {
+  padding: 6px 14px !important;
+  background: #f8fafc !important;
+  border-top: 1px solid #cbd5e1 !important;
+  box-shadow: 0 -1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* ── Responsive breakpoints ──────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  :where(.finance-document-ui, .finance-document-editor) .commercial-header-panel .commercial-header-block-fields,
+  :where(.finance-document-ui, .finance-document-editor) .finance-payment-header-fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 768px) {
+  :where(.finance-document-ui, .finance-document-editor) .commercial-header-panel .commercial-header-block-fields,
+  :where(.finance-document-ui, .finance-document-editor) .finance-payment-header-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ── Finance Listing Screen: BISC & Freight aligned table styles ──────────── */
+.finance-list-page {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+}
+
+.finance-list-page .data-table-shell {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04) !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+.finance-list-page .data-table-header {
+  padding: 8px 14px !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+}
+
+.finance-list-page .data-table-search {
+  height: 36px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Hide duplicate top scrollbar on finance tables (same as freight) */
+.finance-list-page .data-table-x-scrollbar {
+  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Crisp BISC Inter typography and compact 28px row height */
+.finance-list-page .data-table-scroll tbody td {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 11.5px !important;
+  color: #1a1a2e !important;
+  padding: 3px 8px !important;
+  height: 28px !important;
+  line-height: 1.25 !important;
+  vertical-align: middle !important;
+  border-color: #ecf0f5 !important;
+}
+
+.finance-list-page .data-table-scroll tbody tr:hover {
+  background-color: #eff6ff !important;
+}
+
+.finance-list-page .data-table-scroll thead th {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #334155 !important;
+  height: 36px !important;
+  border-right: 1px solid #ecf0f5 !important;
+  background-color: #ffffff !important;
+}
+
+.finance-list-page .data-table-pagination {
+  border-top: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  padding: 8px 14px !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+/* BISC Sidebar Switch Module button styling */
+.workspace .sidebar-switch-module {
+  min-height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  background: #00378C !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(0, 55, 140, 0.2) !important;
+  transition: opacity 140ms ease, background-color 140ms ease !important;
+  text-decoration: none !important;
+}
+.workspace .sidebar-switch-module:hover {
+  opacity: 0.92 !important;
+  color: #ffffff !important;
+}
+.workspace .sidebar-footer.collapsed .sidebar-switch-module {
+  width: 38px !important;
+  min-height: 38px !important;
+  margin-inline: auto !important;
+  padding: 0 !important;
+}
+
+/* ── Workspace Layout & Top Header (BISC style) ─────────────────────── */
+.workspace {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+
+.workspace-top-header {
+  height: 45px !important;
+  min-height: 45px !important;
+  background: var(--card, #ffffff);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.workspace-body {
+  display: flex;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.workspace-body > .sidebar {
+  padding-top: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+.workspace-body > .sidebar .sidebar-footer {
+  gap: 8px;
+  padding: 8px 12px 12px;
+}
+
+.sidebar-company-card {
+  transition: background-color 140ms ease;
+  border-radius: 8px;
+}
+
+/* Breadcrumb refinement in workspace-content */
+.workspace-content .breadcrumb {
+  margin-bottom: 8px !important;
+  padding-bottom: 6px !important;
+  font-size: 11.5px !important;
+}
+
+/* Viewport workbench: compact full-width header, independently scrolling tables. */
+.workspace-content:has(.finance-document-editor) { display:flex !important; flex-direction:column; min-height:0; overflow:hidden !important; padding:8px 12px !important; }
+.workspace-content:has(.finance-document-editor) > .breadcrumb { display:none !important; }
+.finance-document-editing, .finance-document-editor { min-width:0; min-height:0; flex:1; }
+.finance-document-editor { display:flex; border:0; border-radius:0; }
+.finance-document-editor .payment-workbench { flex:1; width:100%; height:100% !important; max-height:none !important; min-height:0; overflow:hidden; }
+.finance-document-editor .commercial-editor-body { overflow:hidden !important; padding:6px !important; }
+.finance-document-editor .commercial-editor-sections { width:100%; min-width:0; min-height:0; gap:6px !important; overflow:hidden; }
+.finance-document-editor .commercial-command-header { padding:5px 10px !important; box-shadow:none !important; }
+.finance-document-editor .commercial-command-header > div { min-height:32px; flex-wrap:wrap; gap:5px; }
+.finance-document-editor .finance-document-identity { gap:10px; }
+.finance-document-editor .finance-document-identity strong { font-size:14px !important; line-height:20px; }
+.finance-document-editor .finance-identity-number :is(span,strong) { color:#00378c !important; }
+.finance-header-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid #ffffff55; border-radius:6px; background:#ffffff18; color:white; }
+.finance-header-toggle:hover { background:#ffffff30; }
+.finance-document-editor .commercial-command-header .ui-button { background:#fff !important; border:1px solid #dbeafe !important; color:#00378c !important; }
+.finance-document-editor .commercial-command-header .ui-button:hover { background:#eff6ff !important; }
+.finance-document-editor .commercial-header-shell { flex:none; min-height:0; max-height:42% !important; overflow:auto !important; }
+.finance-document-editor .commercial-header-shell > .flex.items-center.justify-end { display:none; }
+.finance-document-editor .commercial-header-panel { display:grid !important; grid-template-columns:repeat(12,minmax(0,1fr)) !important; max-width:none !important; gap:5px !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block { grid-column:1 / -1 !important; max-width:none !important; box-shadow:none !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-fields { grid-template-columns:repeat(6,minmax(0,1fr)) !important; gap:5px 8px !important; padding:5px 8px !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-fields > * { grid-column:span 1 !important; order:0 !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :first-child { grid-column:span 2 !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(5) { grid-column:span 2 !important; }
+.finance-document-editor .commercial-header-block-title { padding:3px 8px !important; min-height:18px; }
+.finance-document-editor .commercial-header-block-title span { font-size:10px !important; line-height:12px; letter-spacing:0.02em !important; }
+.finance-document-editor .commercial-header-block-tax .commercial-header-block-fields { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+.finance-document-editor .finance-payment-header-block { max-width:none !important; }
+.finance-document-editor :is(.payment-header-grid,.finance-payment-header-fields) { grid-template-columns:repeat(6,minmax(0,1fr)) !important; gap:5px 8px !important; padding:6px 8px !important; min-width:0; max-width:100%; }
+.finance-document-editor .finance-header-fields { flex:none; max-height:35%; overflow:auto; }
+.finance-document-editor form[data-header-expanded="false"] .finance-header-fields { display:none !important; }
+.finance-document-editor .commercial-lines-card { display:flex !important; flex-direction:column; flex:1 1 0% !important; min-height:0 !important; max-height:none !important; overflow:hidden !important; margin:0 !important; }
+.finance-document-editor .commercial-lines-scroll { flex:1 1 0% !important; min-height:0 !important; max-height:none !important; overflow:auto !important; padding:0; }
+.finance-document-editor .commercial-lines-card > div:not(.commercial-lines-scroll) { flex:none; }
+.finance-document-editor .commercial-line-totals { display:flex; justify-content:flex-end; gap:22px; padding:5px 10px !important; }
+.finance-document-editor .commercial-line-totals > div { display:flex; gap:8px; border:0; padding:0; margin:0; }
+.finance-document-editor .finance-lines-table { --finance-col-no:38px; --finance-col-div:72px; --finance-col-account:260px; min-width:1900px !important; }
+.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:280px !important; min-width:280px; }
+.finance-document-editor .finance-lines-table .finance-amount-cell { width:120px; min-width:120px; }
+.finance-document-editor .finance-money-input { min-width:90px; }
+.finance-document-editor .commercial-sticky-footer { padding:4px 10px !important; min-height:32px; }
+/* Two-table forms reserve 38% of available table space for the active line's allocations. */
+.finance-document-editor .finance-allocation-panel { display:flex; flex-direction:column; flex:0.65 1 0% !important; min-height:120px; overflow:hidden !important; margin:0 !important; border:1px solid #cbd5e1; border-radius:8px; }
+.finance-document-editor .finance-allocation-panel > :first-child { flex:none; padding:4px 8px !important; }
+.finance-document-editor .finance-allocation-panel > :nth-child(2) { flex:1; min-height:0 !important; max-height:none !important; overflow:auto !important; }
+.finance-document-editor .finance-allocation-panel select { width:auto !important; max-width:260px; }
+.finance-document-editor .finance-payment-editor { min-width:0; }
+@media (max-width:1100px) {
+ .finance-document-editor .commercial-header-panel .commercial-header-block-fields,
+ .finance-document-editor :is(.payment-header-grid,.finance-payment-header-fields) { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+ .finance-document-editor .finance-document-identity h2 { display:none; }
+}
+@media (max-width:700px) {
+ .finance-document-editor .commercial-header-panel .commercial-header-block-fields,
+ .finance-document-editor :is(.payment-header-grid,.finance-payment-header-fields) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+ .finance-document-editor .finance-document-identity strong { font-size:12px !important; }
+ .finance-document-editor .finance-allocation-panel { min-height:90px; }
+}
+.finance-document-editor .commercial-header-panel.payment-header-grid { grid-template-columns:repeat(6,minmax(0,1fr)) !important; }
+.finance-document-editor form[data-header-expanded="false"] .commercial-header-shell:has(.payment-header-grid) { display:none !important; }
+.finance-document-editor .finance-payment-header-fields { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+.finance-document-editor .finance-allocation-panel .eyebrow { display:none; }
+.finance-document-editor .commercial-lines-card > .flex:not(.commercial-lines-scroll) { padding-top:3px !important; padding-bottom:3px !important; font-size:11px; }

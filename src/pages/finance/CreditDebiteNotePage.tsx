@@ -43,6 +43,9 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
+import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { formatDate } from "../../utils/date";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -67,8 +70,10 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) {
+export function CreditDebiteNotePage({ docType, menuTitle }: { docType: TransactionType; menuTitle?: string }) {
   const meta = DOCUMENT_META[docType];
+  const rawTitle = menuTitle || meta.title;
+  const pageTitle = rawTitle.replace(/[_]+/g, " ").trim();
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -155,7 +160,16 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     {
       accessorKey: "doc_no",
       header: "Doc No",
-      cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          title={`Open ${row.original.doc_no}`}
+        >
+          {row.original.doc_no}
+        </button>
+      ),
     },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "ac_name", header: "Account Name", size: 320 },
@@ -210,19 +224,10 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
   };
 
   return (
-    <section className="finance-list-page grid gap-4">
-      <div className="finance-list-heading">
-        <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
-        </div>
-        <div className="finance-list-actions">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
+    <section className={`finance-list-page grid gap-4 ${editor ? "finance-document-ui finance-document-editing" : ""}`}>
+      <div className="finance-list-heading flex items-center justify-between gap-3">
+        <div className="finance-list-title flex items-center gap-2.5">
+          <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
         </div>
       </div>
 
@@ -233,7 +238,6 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-          subtitle={`${meta.title} List`}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -259,6 +263,16 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
             </div>
           }
           enableExport
+          actionButton={
+            <Button
+              type="button"
+              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              title={meta.addLabel}
+              onClick={() => setDivisionPicker(true)}
+            >
+              <Plus size={14} /> Add
+            </Button>
+          }
           exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -279,7 +293,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
       </div>
 
       {editor && (
-        <div className="fixed inset-0 z-50 bg-background">
+        <div className="finance-document-editor finance-payment-editor finance-document-ui">
           <PaymentDocumentEditor
             docType={docType}
             editor={editor}
@@ -298,27 +312,12 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
         </div>
       )}
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the document form."
+        divisions={divisions}
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+      />
 
       <ConfirmDialog
         open={Boolean(cancelTarget)}
@@ -801,32 +800,21 @@ function PaymentDocumentEditor({
     });
   };
 
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+
   return (
-    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {editMode ? "Edit Document" : "New Document"}
-              </p>
-              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
-            </div>
-            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
-            </div>
-            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total + totalTax)}</strong>
-            </div>
-            {form.div_code && (
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
-                <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
-              </div>
-            )}
-          </div>
+          <FinanceDocumentIdentity
+            title={DOCUMENT_META[docType].title}
+            documentNo={form.doc_no}
+            documentDate={form.doc_date}
+            total={formatAmount(total + totalTax)}
+            onBack={onClose}
+          headerExpanded={showHeaderDetails}
+            onToggleHeader={() => setShowHeaderDetails(value => !value)}
+          />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
             {form.doc_no && form.doc_no !== "0" && (
@@ -862,7 +850,7 @@ function PaymentDocumentEditor({
       )}
 
 
-      <CardContent className="min-h-0 overflow-auto p-3">
+      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
@@ -875,7 +863,7 @@ function PaymentDocumentEditor({
                   <h3 className="m-0 text-sm font-semibold leading-tight">Credit/Debit Note Information</h3>
                 </div>
               </div>
-              <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+              <div className="finance-header-fields payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
                 {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
                 <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
                 {(docType === "CN" || docType === "DN") && <Field label="Inv No*" ><Input required disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} /></Field>}
@@ -1257,7 +1245,7 @@ function PaymentDocumentEditor({
               </div>
             </div>
 
-            <div className="rounded-md border bg-card">
+            <div className="finance-allocation-panel rounded-md border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Allocations</p>
@@ -1298,7 +1286,7 @@ function PaymentDocumentEditor({
         )}
       </CardContent>
 
-      <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
         <div className="text-sm text-muted-foreground">
           Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
         </div>
@@ -2015,11 +2003,6 @@ function dateInput(value: unknown) {
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
   return date.toISOString().slice(0, 10);
-}
-
-function formatDate(value: unknown) {
-  const date = dateInput(value);
-  return date || "";
 }
 
 function formatAmount(value: number) {

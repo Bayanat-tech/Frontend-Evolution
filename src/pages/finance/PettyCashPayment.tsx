@@ -1,3 +1,4 @@
+import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
@@ -39,6 +40,8 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
+import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { formatDate } from "../../utils/date";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -199,19 +202,10 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
 
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
+    <section className={`finance-list-page grid gap-4 ${editor ? "finance-document-ui finance-document-editing" : ""}`}>
+      <div className="finance-list-heading flex items-center justify-between gap-3">
+        <div className="finance-list-title flex items-center gap-2.5">
+          <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{meta.title}</h1>
         </div>
       </div>
 
@@ -222,7 +216,6 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-          subtitle={`${meta.title} List`}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -238,13 +231,26 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           manualPagination
           manualFiltering
           toolbar={
-            <div className="flex items-center gap-2">
-              <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-              </Select>
+            <div className="finance-list-controls">
+              <label className="finance-period-control">
+                <span>FY</span>
+                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+                  {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
+                </Select>
+              </label>
             </div>
           }
           enableExport
+          actionButton={
+            <Button
+              type="button"
+              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              title={meta.addLabel}
+              onClick={() => setDivisionPicker(true)}
+            >
+              <Plus size={14} /> Add
+            </Button>
+          }
           exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -264,7 +270,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
       </div>
 
       {editor && (
-        <div className="fixed inset-0 z-50 bg-background">
+        <div className="finance-document-editor finance-payment-editor finance-document-ui">
           <PettyCashPaymentDocument
             docType={docType}
             editor={editor}
@@ -278,27 +284,12 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
         </div>
       )}
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the document form."
+        divisions={divisions}
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+      />
 
       <ConfirmDialog
         open={Boolean(cancelTarget)}
@@ -718,26 +709,13 @@ function PettyCashPaymentDocument({
     });
   };
 
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
+    <form data-header-expanded={showHeaderDetails} className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+      <CardHeader className="commercial-command-header border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-12 items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {editMode ? "Edit Document" : "New Document"}
-              </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
-            </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
-            </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
-            </div>
-          </div>
+          <FinanceDocumentIdentity title={DOCUMENT_META[docType].title} documentNo={form.doc_no} documentDate={form.doc_date} total={formatAmount(total)} onBack={onClose} headerExpanded={showHeaderDetails} onToggleHeader={() => setShowHeaderDetails(value => !value)} />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -748,14 +726,14 @@ function PettyCashPaymentDocument({
         </div>
       </CardHeader>
 
-      <CardContent className="min-h-0 overflow-auto p-3">
+      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="grid gap-3">
+          <div className="commercial-editor-sections grid gap-3">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-            <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+            <div className="finance-header-fields payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
               <LookupField
@@ -1061,7 +1039,7 @@ function PettyCashPaymentDocument({
               </div>
             </div>
 
-            <div className="rounded-md border bg-card">
+            <div className="finance-allocation-panel rounded-md border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Allocations</p>
@@ -1101,7 +1079,7 @@ function PettyCashPaymentDocument({
         )}
       </CardContent>
 
-      <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
         <div className="text-sm text-muted-foreground">
           Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
         </div>
@@ -1802,11 +1780,6 @@ function dateInput(value: unknown) {
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
   return date.toISOString().slice(0, 10);
-}
-
-function formatDate(value: unknown) {
-  const date = dateInput(value);
-  return date || "";
 }
 
 function formatAmount(value: number) {
