@@ -238,7 +238,7 @@ export function SalesInvoiceLinesTable({
                           p_uom: newPUom,
                           l_uom: newLUom,
                           uppp: newUppp,
-                          sorder_unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.sorder_unit_price,
+                          unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
                         };
                         const merged = { ...row, ...patch };
                         if (isSameUom(merged)) {

@@ -234,11 +234,11 @@ export function SalesDnDetailsTable({
                                     <td className="finance-amount-cell w-24 px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled || samePoUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? 0 : row.so_qty_luom}
+                                            value={samePoUom ? 0 : row.so_qty_luom}
                                             onChange={(event) => {
                                                 const newQtyLuom = Number(event.target.value || 0);
 
@@ -246,7 +246,7 @@ export function SalesDnDetailsTable({
                                                     so_qty_luom: newQtyLuom,
                                                 };
 
-                                                patch.so_quantity = computeQuantity({
+                                                patch.so_quantity = computePoQuantity({
                                                     ...row,
                                                     ...patch,
                                                 });
@@ -317,11 +317,11 @@ export function SalesDnDetailsTable({
                                     <td className="finance-amount-cell w-24 px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled || samePoUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? 0 : row.qty_luom}
+                                            value={samePoUom ? 0 : row.qty_luom}
                                             onChange={(event) => {
                                                 const newQtyLuom = Number(event.target.value || 0);
 

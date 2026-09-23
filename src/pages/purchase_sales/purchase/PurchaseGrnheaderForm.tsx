@@ -116,6 +116,7 @@ export function PurchaseGrnHeaderForm({
                                     ...current,
                                     po_doc_no: value,
                                     ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                    ac_name: text(getLookupValue(row || {}, "ac_name")),
                                    po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                     po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                     po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
