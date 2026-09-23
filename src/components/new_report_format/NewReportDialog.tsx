@@ -26,12 +26,37 @@ const PAGE_SIZE: Record<Orientation, { w: number; h: number }> = {
   landscape: { w: 1123, h: 794 },
 };
 
-/** 8mm margin used by the report @page rule ≈ 30px at 96dpi */
-const PAGE_MARGIN_PX = 30;
+/** Fallback margin if the report HTML does not specify one */
+const DEFAULT_PAGE_MARGIN_MM = 8;
+
+/**
+ * Detect orientation from the report's @page rule,
+ * e.g. `@page { size: A4 landscape; }` → "landscape"
+ */
+const detectOrientation = (html: string): Orientation => {
+  const m = html.match(/@page\s*\{[^}]*?size\s*:\s*(?:A4\s+)?(portrait|landscape)/is);
+  if (m) return m[1].toLowerCase() as Orientation;
+  return /size[^;{]*landscape/i.test(html) ? "landscape" : "portrait";
+};
+
+/**
+ * Detect page margin (mm) from the report's @page rule,
+ * e.g. `@page { margin: 10mm; }` → 10
+ */
+const detectPageMarginMm = (html: string): number => {
+  const m = html.match(/@page\s*\{[^}]*?margin\s*:\s*([\d.]+)\s*mm/is);
+  if (m) {
+    const v = parseFloat(m[1]);
+    if (!isNaN(v) && v > 0) return v;
+  }
+  return DEFAULT_PAGE_MARGIN_MM;
+};
+
+const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
 
 /**
  * Report preview modal with:
- * - Portrait / Landscape dropdown
+ * - Orientation auto-detected from the report HTML (@page size rule)
  * - Real page breaks based on HTML content height
  * - Toolbar page indicator + left thumbnails driven by page count
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
@@ -53,7 +78,7 @@ export function NewReportDialog({
   const measureRef = useRef<HTMLIFrameElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageSheetRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [zoom, setZoom] = useState(74);
+  const [zoom, setZoom] = useState(100);
   const [page, setPage] = useState(1);
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [totalPages, setTotalPages] = useState(1);
@@ -61,17 +86,30 @@ export function NewReportDialog({
   /** Left page-thumb navbar visible */
   const [navOpen, setNavOpen] = useState(true);
 
+  /** Orientation the report HTML actually declares (auto-detected) */
+  const autoOrientation = useMemo<Orientation>(
+    () => (htmlContent ? detectOrientation(htmlContent) : "portrait"),
+    [htmlContent]
+  );
+
+  /** Page margin declared by the report HTML (falls back to 8mm) */
+  const pageMarginMm = useMemo(
+    () => (htmlContent ? detectPageMarginMm(htmlContent) : DEFAULT_PAGE_MARGIN_MM),
+    [htmlContent]
+  );
+  const pageMarginPx = mmToPx(pageMarginMm);
+
   const pageW = PAGE_SIZE[orientation].w;
   const pageH = PAGE_SIZE[orientation].h;
-  /** Content area inside the 8mm print margins */
-  const contentW = pageW - PAGE_MARGIN_PX * 2;
-  const contentH = pageH - PAGE_MARGIN_PX * 2;
+  /** Content area inside the report's own print margins */
+  const contentW = pageW - pageMarginPx * 2;
+  const contentH = pageH - pageMarginPx * 2;
 
   /**
    * Build HTML for preview that mirrors browser Print layout:
    * - Force the report's @media print rules on screen
    * - Constrain to A4 page width for the selected orientation
-   * - Same margins as @page { margin: 8mm }
+   * - Same margins as the report's @page rule
    */
   const preparedHtml = useMemo(() => {
     if (!htmlContent) return null;
@@ -98,7 +136,7 @@ export function NewReportDialog({
     max-width: ${contentW}px !important;
     min-width: ${contentW}px !important;
     margin: 0 !important;
-    padding: 6mm !important;
+    padding: ${pageMarginMm}mm !important;
     background: #ffffff !important;
     overflow: visible !important;
   }
@@ -119,7 +157,7 @@ export function NewReportDialog({
 
   /* Keep real print consistent with dialog orientation */
   @media print {
-    @page { size: A4 ${orientation}; margin: 8mm; }
+    @page { size: A4 ${orientation}; margin: ${pageMarginMm}mm; }
     html, body {
       background: white !important;
       overflow: visible !important;
@@ -132,7 +170,7 @@ export function NewReportDialog({
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
-      padding: 6mm !important;
+      padding: ${pageMarginMm}mm !important;
       overflow: visible !important;
     }
     table { font-size: 9px !important; }
@@ -147,7 +185,7 @@ export function NewReportDialog({
       return htmlContent.replace(/<html[^>]*>/i, (m) => `${m}<head>${inject}</head>`);
     }
     return `<!DOCTYPE html><html><head>${inject}</head><body>${htmlContent}</body></html>`;
-  }, [htmlContent, contentW, orientation]);
+  }, [htmlContent, contentW, orientation, pageMarginMm]);
 
   const [contentHeight, setContentHeight] = useState(0);
 
@@ -190,7 +228,7 @@ export function NewReportDialog({
 
   useEffect(() => {
     if (!open) {
-      setZoom(74);
+      setZoom(100);
       setPage(1);
       setTotalPages(1);
       setOrientation("portrait");
@@ -199,9 +237,11 @@ export function NewReportDialog({
     }
   }, [open]);
 
-  // When htmlContent changes (e.g. drill-down navigation), reset page + remeasure
+  // When htmlContent changes (e.g. drill-down navigation), reset page +
+  // auto-detect orientation from the new HTML, then remeasure
   useEffect(() => {
     if (!open || !htmlContent) return;
+    setOrientation(detectOrientation(htmlContent));
     setPage(1);
     setMeasuring(true);
     if (scrollRef.current) {
@@ -250,12 +290,11 @@ export function NewReportDialog({
         iframe.style.height = "10px";
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (doc?.body) {
-          // Suppress window.print() from report HTML while measuring (same as IframeReportRenderer)
+          // Suppress window.print() from report HTML while measuring
           const win = iframe.contentWindow as Window & { print?: () => void };
           if (win && typeof win.print === "function") {
             const originalPrint = win.print.bind(win);
             win.print = () => {};
-            // Restore after a tick so accidental auto-print is blocked only on load
             setTimeout(() => {
               try {
                 win.print = originalPrint;
@@ -319,10 +358,7 @@ export function NewReportDialog({
     if (!iframe) {
       iframe = document.createElement("iframe");
       iframe.id = PRINT_IFRAME_ID;
-      iframe.setAttribute(
-        "sandbox",
-        "allow-same-origin allow-scripts allow-modals"
-      );
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
       iframe.style.cssText =
         "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
       document.body.appendChild(iframe);
@@ -378,6 +414,9 @@ export function NewReportDialog({
     }
     if (best !== page) setPage(best);
   };
+
+  /** True when the user has manually overridden the auto-detected orientation */
+  const orientationOverridden = orientation !== autoOrientation;
 
   return (
     <div
@@ -469,6 +508,7 @@ export function NewReportDialog({
                 value={orientation}
                 onChange={(e) => setOrientation(e.target.value as Orientation)}
                 disabled={loading || !htmlContent}
+                title={`Auto-detected from report: ${autoOrientation}`}
                 style={{
                   height: 32,
                   padding: "0 28px 0 10px",
@@ -491,6 +531,54 @@ export function NewReportDialog({
                 <option value="landscape">Landscape</option>
               </select>
             </label>
+
+            {/* UX touch: show "Auto" state, and a reset button when overridden */}
+            {!loading && htmlContent && (
+              <>
+                <span
+                  title={`Auto-detected from report @page rule: ${autoOrientation}`}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                    textTransform: "uppercase",
+                    color: orientationOverridden ? "#d97706" : "#059669",
+                    background: orientationOverridden ? "#fffbeb" : "#ecfdf5",
+                    border: `1px solid ${orientationOverridden ? "#fcd34d" : "#a7f3d0"}`,
+                    borderRadius: 4,
+                    padding: "3px 7px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {orientationOverridden ? "Manual" : "Auto"}
+                </span>
+                {orientationOverridden && (
+                  <button
+                    type="button"
+                    onClick={() => setOrientation(autoOrientation)}
+                    title={`Reset to auto-detected (${autoOrientation})`}
+                    style={{
+                      height: 32,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#0b4ca1",
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: 6,
+                      padding: "0 10px",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <RotateCcw size={12} strokeWidth={2.5} />
+                    Reset
+                  </button>
+                )}
+              </>
+            )}
 
             <button
               type="button"
@@ -617,7 +705,7 @@ export function NewReportDialog({
             </span>
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.min(150, z + 10))}
+              onClick={() => setZoom((z) => Math.min(200, z + 10))}
               style={toolIconBtn}
               title="Zoom in"
             >
@@ -636,7 +724,7 @@ export function NewReportDialog({
           </button>
           <button
             type="button"
-            onClick={() => setZoom(orientation === "portrait" ? 74 : 60)}
+            onClick={() => setZoom(100)}
             style={toolIconBtn}
             title="Reset zoom"
           >
@@ -741,10 +829,10 @@ export function NewReportDialog({
                           <div
                             style={{
                               width: pageW,
-                              height: Math.min(pageH, sliceH + PAGE_MARGIN_PX * 2),
+                              height: Math.min(pageH, sliceH + pageMarginPx * 2),
                               overflow: "hidden",
                               boxSizing: "border-box",
-                              padding: PAGE_MARGIN_PX,
+                              padding: pageMarginPx,
                               background: "#fff",
                             }}
                           >
@@ -893,7 +981,7 @@ export function NewReportDialog({
                   const sliceH = isLast
                     ? Math.min(contentH, Math.max(remaining, 80))
                     : contentH;
-                  const sheetH = sliceH + PAGE_MARGIN_PX * 2;
+                  const sheetH = sliceH + pageMarginPx * 2;
 
                   return (
                     <div
@@ -921,7 +1009,7 @@ export function NewReportDialog({
                           position: "relative",
                           borderRadius: 1,
                           boxSizing: "border-box",
-                          padding: PAGE_MARGIN_PX,
+                          padding: pageMarginPx,
                         }}
                       >
                         <div
@@ -943,7 +1031,6 @@ export function NewReportDialog({
                               display: "block",
                               background: "#fff",
                               transform: `translateY(${offsetY}px)`,
-                              // pointer-events needed so drill links/buttons inside report work
                               pointerEvents: "auto",
                             }}
                             sandbox="allow-same-origin allow-scripts"
