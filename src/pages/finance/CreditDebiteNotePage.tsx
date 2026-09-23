@@ -46,6 +46,8 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { formatDate } from "../../utils/date";
+import { formatDocNo } from "../../utils/docNo";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -167,7 +169,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
-          {row.original.doc_no}
+          {formatDocNo(row.original.doc_no)}
         </button>
       ),
     },
@@ -864,36 +866,11 @@ function PaymentDocumentEditor({
                 </div>
               </div>
               <div className="finance-header-fields payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-                {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
-                <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
+                
+                <Field label="Doc Date"><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
                 {(docType === "CN" || docType === "DN") && <Field label="Inv No*" ><Input required disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} /></Field>}
-                {(docType === "CN" || docType === "DN") && <Field label="Inv Date" ><Input disabled={disabled} type="date" value={dateInput(form.inv_date)} onChange={(event) => updateField("inv_date", event.target.value)} /></Field>}
-                <LookupField
+                {(docType === "CN" || docType === "DN") && <Field label="Inv Date"><BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} /></Field>}
 
-                  label="Division *"
-                  value={form.div_code}
-                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                  valueField="div_code"
-                  displayFields={["div_code", "div_name"]}
-                  // loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                  loadOptions={() => getDynamicLookup({
-                    parameter: "Account_division",
-                    code1: user?.company_code,
-                    loginid: user?.loginid || user?.username || "ADMIN"
-                  })}
-                  disabled={disabled}
-
-                  onChange={async (value, row) => {
-                    setForm((current) => ({
-                      ...current,
-                      div_code: value,
-                      div_name: text(getLookupValue(row || {}, "div_name")),
-                    }));
-
-                  }}
-
-                />
                 <LookupField
                   label="Account *"
                   value={form.ac_code}
@@ -1057,7 +1034,6 @@ function PaymentDocumentEditor({
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
-                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       <th className="px-2 py-2 text-left">Select</th>
                       <th className="px-2 py-2 text-left">Description</th>
@@ -1076,11 +1052,10 @@ function PaymentDocumentEditor({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={17}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={16}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="finance-sticky-col finance-col-div w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
                         <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
                           <div className="w-full max-w-[460px] truncate">
                             <LookupField

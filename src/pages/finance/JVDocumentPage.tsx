@@ -46,6 +46,8 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { formatDate } from "../../utils/date";
+import { formatDocNo } from "../../utils/docNo";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -160,7 +162,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
     {
       accessorKey: "doc_no",
       header: "Doc No",
-      cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
+      cell: ({ row }) => <span className="font-semibold">{formatDocNo(row.original.doc_no)}</span>,
     },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "ac_name", header: "Account Name" },
@@ -812,23 +814,9 @@ function JVDocument({
                 <span></span>
               </div>
               <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
-                {editMode && (
-                  <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
-                )}
-                <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
-                <LookupField
-                  label="Division"
-                  value={form.div_code}
-                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                  valueField="div_code"
-                  displayFields={["div_code", "div_name"]}
-                  loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: user?.company_code, loginid: user?.loginid || user?.username || "ADMIN" })}
-                  disabled={disabled}
-                  onChange={async (value, row) => {
-                    setForm((current) => ({ ...current, div_code: value, div_name: text(getLookupValue(row || {}, "div_name")) }));
-                  }}
-                />
+
+                <Field label="Doc Date"><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
+
                 <LookupField
                   label="Currency"  
                   value={form.curr_code}
@@ -871,7 +859,6 @@ function JVDocument({
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
-                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       <th className="px-2 py-2 text-left">Select</th>
                       <th className="px-2 py-2 text-left">Description</th>
@@ -888,11 +875,10 @@ function JVDocument({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={14}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="finance-sticky-col finance-col-div w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
                         <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
                           <LookupField
                             label="Detail Account"

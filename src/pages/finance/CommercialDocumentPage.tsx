@@ -39,6 +39,8 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../utils/date";
+import { formatDocNo } from "../../utils/docNo";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
 
@@ -250,7 +252,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${String(getValue() || "")}`}
         >
-          {String(getValue() || "")}
+          {formatDocNo(getValue())}
         </button>
       ),
     },
@@ -786,28 +788,14 @@ const withTax = {
                 </div>
                 <div className="commercial-header-block-fields">
 
-  {/* ── Doc No (edit only) ── */}
-  {editMode && (
-    <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
-  )}
+
 
   {/* ── Doc Date ── */}
   <Field label="Doc Date" required error={fieldErrors.doc_date}>
-    <Input disabled={isCancelled} type="date" value={dateInput(form.doc_date)}
-    className={fieldErrors.doc_date ? "border-destructive" : ""}
-      onChange={(e) => update("doc_date", e.target.value)} />
+    <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
   </Field>
 
-  {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
-  {!isPO && (
-    <Field label="INV Date" required error={fieldErrors.inv_date}>
-      <Input disabled={isCancelled} type="date" value={dateInput(form.inv_date)}
-        className={fieldErrors.inv_date ? "border-destructive" : ""}
-        onChange={(e) => update("inv_date", e.target.value)} />
-    </Field>
-  )}
-
-  {/* ── Invoice No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
+  {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
       <Input disabled={isCancelled} value={form.ref_no || ""}
@@ -823,11 +811,14 @@ const withTax = {
     </Field>
   )}
 
-  {/* ── Division ── */}
-  <Field label="Division" required error={fieldErrors.div_name}>
-    <Input disabled required
-      value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
-  </Field>
+  {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
+  {!isPO && (
+    <Field label="INV Date" required error={fieldErrors.inv_date}>
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+    </Field>
+  )}
+
+
 
   {!isPO && (
     <LookupField
@@ -906,8 +897,7 @@ const withTax = {
   )}
   {isPO && (
     <Field label="Ref Date">
-      <Input disabled={isCancelled} type="date" value={dateInput(form.ref_date)}
-        onChange={(e) => update("ref_date", e.target.value)} />
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
     </Field>
   )}
   {isPO && (
@@ -998,10 +988,7 @@ const withTax = {
     )}
   </div>
 
-  {/* Supplier/Customer Name — read-only display */}
-  <Field label={isSales ? "Customer Name" : "Supplier Name"} className="col-span-1">
-    <Input disabled value={form.ac_name || ""} />
-  </Field>
+  
 
   {/* Currency + Exchange Rate */}
   <div className="col-span-1">
@@ -1250,7 +1237,6 @@ const withTax = {
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
-                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
                       <th className="px-2 py-2 text-left">Description</th>
@@ -1275,11 +1261,10 @@ const withTax = {
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? 21 : 17}>No lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? 20 : 16}>No lines yet</td></tr>
                      ) : form.detail.filter((line) => Number(line.serial_no) < 9000).map((line) => (
                       <tr className="border-t odd:bg-muted/20" key={line.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{line.serial_no}</td>
-                        <td className="finance-sticky-col finance-col-div px-2 py-1"><Input disabled value={form.div_code} /></td>
                         <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
                           <LookupField
                             label="Line Account"

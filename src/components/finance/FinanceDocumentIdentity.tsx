@@ -1,5 +1,6 @@
 import { ArrowLeft, FileText, ChevronUp, ChevronDown } from "lucide-react";
 import { formatDate } from "../../utils/date";
+import { formatDocNo } from "../../utils/docNo";
 
 /** Compact identity shared by finance commercial and payment command bars matching BISC design. */
 export function FinanceDocumentIdentity({
@@ -45,17 +46,15 @@ export function FinanceDocumentIdentity({
       )}
       <div className="flex items-center gap-2 text-xs flex-wrap">
         {/* Highlighted Doc No */}
-        {documentNo && documentNo !== "New" && documentNo !== "0" ? (
-          <div className="finance-identity-number rounded-md bg-white text-[#00378C] border border-white px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
-            <span className="text-[10px] uppercase font-bold text-slate-500">Doc No</span>
-            <strong className="text-xs font-bold text-[#00378C] font-mono">{documentNo}</strong>
-          </div>
-        ) : (
-          <div className="rounded-md bg-amber-400 text-amber-950 border border-amber-300 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
-            <span className="text-[10px] uppercase font-bold text-amber-900">Doc No</span>
-            <strong className="text-xs font-extrabold text-amber-950">NEW</strong>
-          </div>
-        )}
+        <div className="finance-identity-docno rounded-md bg-amber-400 text-black border border-amber-500 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-extrabold text-black tracking-wider">Doc No</span>
+          <span className="text-black font-extrabold select-none">-</span>
+          <strong className="text-xs font-black text-black font-mono tracking-tight">
+            {documentNo && documentNo !== "New" && documentNo !== "0"
+              ? String(documentNo).trim()
+              : "NEW"}
+          </strong>
+        </div>
 
         {/* Highlighted Date */}
         <div className="rounded-md bg-blue-950/40 border border-blue-300/40 text-blue-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">

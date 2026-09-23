@@ -6408,6 +6408,7 @@ freight-dense-form .freight-form-card {
 
 .finance-lines-table .finance-col-account {
   left: calc(var(--finance-col-no) + var(--finance-col-div));
+  left: var(--finance-col-no);
   width: var(--finance-col-account);
   min-width: var(--finance-col-account);
 }
