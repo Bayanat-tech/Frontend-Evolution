@@ -1,4 +1,4 @@
-import { AlignCenter, Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { AlignCenter, Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X, FileText, Building2 } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { formatDate } from "../../utils/date";
@@ -939,6 +939,7 @@ function PaymentDocumentEditor({
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
+                      <span className="finance-section-icon"><FileText size={11} /></span>
                       <span>Document & Payment Instrument</span>
                     </div>
                     <div className="finance-payment-header-fields">
@@ -955,6 +956,7 @@ function PaymentDocumentEditor({
                   {/* Section 2: Account & Currency Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
+                      <span className="finance-section-icon"><Building2 size={11} /></span>
                       <span>Account & Transaction Details</span>
                     </div>
                     <div className="finance-payment-header-fields">
@@ -1795,7 +1797,7 @@ function mapExistingDocument(
       serial_no: serialNo,
       doc_date: dateInput(row.doc_date),
       ac_code: text(row.ac_code),
-      ac_name: text(fallbackNested(raw, ["Account", "ac_name"]) ?? fallbackNested(raw, ["account", "ac_name"]) ?? row.ac_name ?? fallbackDetail.ac_name),
+      ac_name: text(fallbackNested(raw, ["Account", "ac_name"]) ?? fallbackNested(raw, ["account", "ac_name"]) ?? row.ac_name ?? row.ac_name_resolved ?? row.l4_name ?? row.l4_description ?? fallbackDetail.ac_name),
       remarks: text(row.remarks),
       curr_code: text(row.curr_code),
       curr_name: text(fallbackNested(raw, ["Currency", "curr_name"]) ?? fallbackNested(raw, ["currency", "curr_name"]) ?? row.curr_name ?? fallbackDetail.curr_name),

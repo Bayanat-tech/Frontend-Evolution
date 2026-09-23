@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X, AlertCircle } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -39,7 +39,6 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../utils/date";
-import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
@@ -252,7 +251,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${String(getValue() || "")}`}
         >
-          {formatDocNo(getValue())}
+          {String(getValue() || '')}
         </button>
       ),
     },
@@ -489,25 +488,39 @@ function CommercialEditor({
       if (!editMode || editor.mode !== "edit") return;
       setLoading(true);
       try {
-        const [header, detail] = await Promise.all([
-          
+        const [header, detail, docAccounts] = await Promise.all([
           docType === "PO"
             ? getLpoHeader(editor.row.doc_no, docType)
             // : getTransactionHeader
-            :getPurchaseHeader(editor.row.doc_no, docType),
+            : getPurchaseHeader(editor.row.doc_no, docType),
 
-            docType === "PO"
-             ? getLpoDetail(editor.row.doc_no, docType)
-             : getTransactionDetail(
-                 editor.row.doc_no,
-                 editor.row.div_code,
-                 docType,
-             ),
-         ]);
+          docType === "PO"
+            ? getLpoDetail(editor.row.doc_no, docType)
+            : getTransactionDetail(
+                editor.row.doc_no,
+                editor.row.div_code,
+                docType,
+              ),
+          getDocAccounts(docType, "D", editor.row.div_code).catch(() => []),
+        ]);
         
         if (mounted) {
           console.debug("CommercialDocumentPage: header loaded", header);
-          setForm(mapForm(docType, header, detail));
+          const accMap = new Map<string, string>();
+          (docAccounts || []).forEach((a: Record<string, unknown>) => {
+            const code = String(a.ac_code ?? a.AC_CODE ?? "").trim();
+            const name = String(a.ac_name ?? a.AC_NAME ?? "").trim();
+            if (code && name) accMap.set(code, name);
+          });
+          const enrichedDetail = (detail || []).map((row: Record<string, unknown>) => {
+            const acCode = String(row.ac_code ?? row.AC_CODE ?? "").trim();
+            const existingName = String(row.ac_name ?? row.AC_NAME ?? row.ac_name_resolved ?? "").trim();
+            if (!existingName && acCode && accMap.has(acCode)) {
+              return { ...row, ac_name: accMap.get(acCode) };
+            }
+            return row;
+          });
+          setForm(mapForm(docType, header, enrichedDetail));
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
@@ -544,6 +557,29 @@ function CommercialEditor({
   const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
   return sum + taxAmt * dir;
 }, 0);
+
+  
+  const [lineSearch, setLineSearch] = useState("");
+  const [showAllColumns, setShowAllColumns] = useState(false);
+
+  const filteredLines = useMemo(() => {
+    const q = lineSearch.trim().toLowerCase();
+    if (!q) return visibleLines;
+    return visibleLines.filter((line) => {
+      return (
+        String(line.serial_no).includes(q) ||
+        (line.ac_code && line.ac_code.toLowerCase().includes(q)) ||
+        (line.ac_name && line.ac_name.toLowerCase().includes(q)) ||
+        (line.l4_description && line.l4_description.toLowerCase().includes(q)) ||
+        (line.remarks && line.remarks.toLowerCase().includes(q)) ||
+        (line.job_no && line.job_no.toLowerCase().includes(q)) ||
+        (line.other_remarks && line.other_remarks.toLowerCase().includes(q)) ||
+        (line.tx_cat_code && line.tx_cat_code.toLowerCase().includes(q)) ||
+        (line.tx_compntcat_code_1 && line.tx_compntcat_code_1.toLowerCase().includes(q)) ||
+        (line.amount !== undefined && String(line.amount).includes(q))
+      );
+    });
+  }, [visibleLines, lineSearch]);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
   const updateLine = (id: string, patch: Partial<Line>) => {
@@ -784,6 +820,7 @@ const withTax = {
             <div className="commercial-header-panel">
               <section className="commercial-header-block commercial-header-block-doc">
                 <div className="commercial-header-block-title">
+                  <span className="finance-section-icon"><FileText size={11} /></span>
                   <span>Document Details</span>
                 </div>
                 <div className="commercial-header-block-fields">
@@ -922,6 +959,9 @@ const withTax = {
 
         <section className={`commercial-header-block commercial-header-block-party ${isSales ? "commercial-header-block-party-sales" : ""}`}>
           <div className="commercial-header-block-title">
+            <span className="finance-section-icon">
+              {isSales ? <User size={11} /> : <Building2 size={11} />}
+            </span>
             <span>{isSales ? "Customer Details" : "Supplier Details"}</span>
           </div>
           <div className="commercial-header-block-fields">
@@ -1110,6 +1150,7 @@ const withTax = {
 
         <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}>
           <div className="commercial-header-block-title">
+            <span className="finance-section-icon"><Receipt size={11} /></span>
             <span>Tax & Additional Details</span>
           </div>
           <div className="commercial-header-block-fields">
@@ -1221,19 +1262,58 @@ const withTax = {
       </div>
     )}
             <div className="commercial-lines-card min-w-0 rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
-              <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-2">
-                <div className="flex items-center gap-2">
+              <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
+                <div className="finance-line-actions-title flex items-center gap-2">
                   <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">Line Items</h3>
-                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-semibold text-[#00378C]">
-                    {form.detail.length} {form.detail.length === 1 ? "line" : "lines"}
+                  <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-[#00378C]">
+                    {lineSearch.trim()
+                      ? `${filteredLines.length} of ${form.detail.filter(l => Number(l.serial_no) < 9000).length} lines`
+                      : `${form.detail.filter(l => Number(l.serial_no) < 9000).length} lines`}
                   </span>
+                  {lineSearch.trim() && (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Filtered ({filteredLines.length})
+                    </span>
+                  )}
                 </div>
-                <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine} className="h-7 text-xs font-semibold border-[#00378C] text-[#00378C] hover:bg-blue-50">
-                  <Plus size={14} className="mr-1" /> Add Line
-                </Button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllColumns(!showAllColumns)}
+                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                      showAllColumns
+                        ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
+                        : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                    title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency & Tax"}
+                  >
+                    <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+                    <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+                  </button>
+
+                  <div className="bisc-table-search">
+                    <Search size={14} className="bisc-table-search-icon" />
+                    <input className="bisc-search-input"
+                      type="text"
+                      value={lineSearch}
+                      onChange={(e) => setLineSearch(e.target.value)}
+                      placeholder="Search lines (A/c, desc, job)..."
+                    />
+                    {lineSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setLineSearch("")}
+                        className="bisc-table-search-clear"
+                        title="Clear search"
+                      >
+                        <X size={10} strokeWidth={2.5} />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
-                <table className="finance-lines-table w-full min-w-[3300px] text-xs">
+                <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
@@ -1245,24 +1325,40 @@ const withTax = {
                       <th className="px-2 py-2 text-left">Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
-                      <th className="px-2 py-2 text-left">Tax Code</th>
-                      <th className="px-2 py-2 text-left">Tax Type</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
                       <th className="px-2 py-2 text-left">Tax %</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
-                       <th className="px-2 py-2 text-left">Currency</th>
-                      <th className="px-2 py-2 text-left">Ex Rate</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="px-2 py-2 text-left">Job</th>
                       {isPO && <th className="px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="px-2 py-2 text-left">Remarks</th>}
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
-                      <th className="px-2 py-2 text-left">Action</th>
+                      <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? 20 : 16}>No lines yet</td></tr>
-                     ) : form.detail.filter((line) => Number(line.serial_no) < 9000).map((line) => (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 16 : 12)}>No lines yet</td></tr>
+                    ) : filteredLines.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? (showAllColumns ? 20 : 16) : (showAllColumns ? 16 : 12)}>
+                          <div className="flex flex-col items-center justify-center gap-1.5 py-3">
+                            <Search size={20} className="text-slate-400" />
+                            <span className="text-xs font-medium text-slate-600">No matching lines found for &quot;{lineSearch}&quot;</span>
+                            <button
+                              type="button"
+                              onClick={() => setLineSearch("")}
+                              className="mt-1 text-xs font-semibold text-[#00378C] hover:underline cursor-pointer"
+                            >
+                              Clear search filter
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredLines.map((line) => (
                       <tr className="border-t odd:bg-muted/20" key={line.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{line.serial_no}</td>
                         <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
@@ -1295,7 +1391,7 @@ const withTax = {
     />
   </td>
 )}
-                        <td className="w-[960px] px-2 py-1">
+                        <td className="w-[200px] max-w-[240px] px-1 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
@@ -1309,23 +1405,26 @@ const withTax = {
                         {isPO && (<td className="w-36 px-2 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
                         </td>
                         )}
-                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-72 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
+                        <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
+                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
                         // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const amount = Number(e.target.value || 0);
     const taxperc   = Number(line.tx_compnt_perc_1 || 0);
     updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
   }} /></td>
-                        <td className="w-28 px-2 py-1">
-                          <Select disabled={isCancelled} className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
+                        <td className="w-14 max-w-[60px] px-1 py-1">
+                          <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
                             <option value={1}>Dr</option>
                           </Select>
                         </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
-                        <td className="w-40 px-2 py-1">
+                        {showAllColumns && (
+                          <td className="w-20 max-w-[80px] px-1 py-1"><Input disabled={isCancelled} value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
+                        )}
+{showAllColumns && (
+                        <td className="w-24 max-w-[95px] px-1 py-1">
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
   const perc = v === "S" ? 5 : 0;
@@ -1342,17 +1441,19 @@ const withTax = {
   <option value="E">Exempt</option>
 </Select>
                         </td>
-                        <td className="w-60 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
+                      )}
+                        <td className="w-14 max-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
                         // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" 
+                        <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" 
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
-                        <td className="w-[210px] px-2 py-1">
+{showAllColumns && (
+                        <td className="w-28 max-w-[115px] px-1 py-1">
                           <LookupField
                             label="Currency"
                             compact
@@ -1366,42 +1467,52 @@ const withTax = {
                             onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
                           />
                         </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.000001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
+                      )}
+                        {showAllColumns && (
+                          <td className="w-16 max-w-[65px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.000001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        )}
+                        <td className="w-20 max-w-[80px] px-1 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
                           <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
 )}
 {isPO && (
   <td className="w-[260px] px-2 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
 )}
-                        <td className="finance-amount-cell px-2 py-1">
+                        <td className="finance-amount-cell w-24 px-1 py-1">
                           {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
                           <Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
                           </td>
-                        <td className="px-2 py-1"><Button disabled={isCancelled} size="icon" type="button" variant="ghost" onClick={() => removeLine(line.id)}><X size={14} /></Button></td>
+                        <td className="finance-sticky-col-right px-1 py-1 text-center"><button type="button" disabled={isCancelled} title="Delete row" className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer" onClick={() => removeLine(line.id)}><Trash2 size={13} /></button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               
-              <div className="commercial-line-totals border-t px-3 py-2 text-sm">
-  <div className="flex items-center justify-between">
-    <span className="text-muted-foreground">Total Amount</span>
-    <strong className="text-emerald-600">{formatAmount(total)}</strong>
-  </div>
-  <div className="flex items-center justify-between">
-    <span className="text-muted-foreground">Tax Amount</span>
-    <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong>
-  </div>
-  <div className="flex items-center justify-between border-t mt-1 pt-1">
-    <span className="font-semibold">Net Total</span>
-    <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong>
-  </div>
-
-              {/* <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total+ taxTotal)}</strong> */}
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/70 px-3 py-2 gap-3">
+                <button
+                  type="button"
+                  disabled={isCancelled}
+                  onClick={addLine}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-[#00378C] hover:text-[#00378C] text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                >
+                  <PlusCircle size={14} className="text-[#00378C]" />
+                  <span>Add</span>
+                </button>
+                <div className="commercial-line-totals flex items-center gap-6 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Total Amount</span>
+                    <strong className="text-emerald-600 font-mono text-sm">{formatAmount(total)}</strong>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Tax Amount</span>
+                    <strong className="text-emerald-600 font-mono text-sm">{formatAmount(taxTotal)}</strong>
+                  </div>
+                  <div className="flex items-center gap-2 border-l border-slate-300 pl-4">
+                    <span className="font-semibold text-slate-800">Net Total</span>
+                    <strong className="text-emerald-600 font-mono text-sm">{formatAmount(total + taxTotal)}</strong>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1574,7 +1685,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         id: newId(),
         serial_no: Number(row.serial_no || index + 1),
         ac_code: text(row.ac_code),
-        ac_name: text(nested(raw, ["Account", "ac_name"]) ?? row.ac_name),
+        ac_name: text(nested(raw, ["Account", "ac_name"]) ?? row.ac_name ?? row.ac_name_resolved ?? row.l4_name ?? row.l4_description),
         remarks: text(row.remarks),
         qty: Number(row.qty || 1),
         price: Number(row.price || row.amount || 0),

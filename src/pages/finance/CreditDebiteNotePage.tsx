@@ -1728,7 +1728,7 @@ function mapExistingDocument(
       serial_no: serialNo,
       doc_date: dateInput(row.doc_date),
       ac_code: text(row.ac_code),
-      ac_name: text(nested(raw, ["Account", "ac_name"]) ?? row.ac_name),
+      ac_name: text(nested(raw, ["Account", "ac_name"]) ?? row.ac_name ?? row.ac_name_resolved ?? row.l4_name ?? row.l4_description),
       remarks: text(row.remarks),
       curr_code: text(row.curr_code),
       curr_name: text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name),

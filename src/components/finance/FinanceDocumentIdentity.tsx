@@ -1,6 +1,5 @@
 import { ArrowLeft, FileText, ChevronUp, ChevronDown } from "lucide-react";
 import { formatDate } from "../../utils/date";
-import { formatDocNo } from "../../utils/docNo";
 
 /** Compact identity shared by finance commercial and payment command bars matching BISC design. */
 export function FinanceDocumentIdentity({
