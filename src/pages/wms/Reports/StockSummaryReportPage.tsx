@@ -2,13 +2,13 @@
 import {
     BarChart2,
 } from "lucide-react";
-import { openWmsReport } from "../../../components/wms/reports/wmsReportPreviewStore";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
 import { MultiSelectField } from "../../../components/ui/MultiSelectField";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,12 +166,23 @@ const SelectField: React.FC<{
     </div>
 );
 
+/**
+ * getGrnPrintReportPreviewUrl-style helpers are not needed here since the
+ * stock summary endpoint already returns HTML/blob directly via `api.post`.
+ */
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function StockSummaryReport() {
     // ── State
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>("");
+    const [exportingExcel, setExportingExcel] = useState(false);
+
+    // ── Report preview dialog state (HTML fed straight into NewReportDialog) ──
+    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+    const [reportHtml, setReportHtml] = useState<string | null>(null);
+    const [reportPreviewError, setReportPreviewError] = useState("");
 
     // ── Parameter options
     const [prinOptions, setPrinOptions] = useState<Option[]>([]);
@@ -293,44 +304,124 @@ export default function StockSummaryReport() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cascadeKey]);
 
-    // ── Fetch the report HTML and publish it to the shared WMS preview
+    const buildPayload = (p: Params) => ({
+        prin_code: codesFromSelection(p.prin_code),
+        prod_code: codesFromSelection(p.prod_code),
+        site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
+        location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
+        group_by: p.group_by || null,
+    });
+
+    // ── Fetch the report HTML and feed it into NewReportDialog ───────────────
     const fetchReport = useCallback(async (p: Params) => {
+        // Open the dialog immediately so its spinner shows while we fetch.
+        setReportHtml(null);
+        setReportPreviewError("");
+        setReportPreviewOpen(true);
+
         setLoading(true);
         setError("");
-        const preview = openWmsReport("Stock Summary Report");
-
         try {
             const res = await api.post(
                 "/api/wms/reports/stocksummary/html",
-                {
-                    prin_code: codesFromSelection(p.prin_code),
-                    prod_code: codesFromSelection(p.prod_code),
-                    site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
-                    location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
-                    group_by: p.group_by || null,
-                },
+                buildPayload(p),
                 { responseType: "text" },
             );
-            preview.ready({
-                html: res.data,
-                filename: "stock_summary_report",
-                excelEndpoint: "/api/wms/reports/stocksummary/excel",
-                excelPayload: {
-                    prin_code: codesFromSelection(p.prin_code),
-                    prod_code: codesFromSelection(p.prod_code),
-                    site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
-                    location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
-                    group_by: p.group_by || null,
-                },
-            });
+            setReportHtml(res.data);
         } catch (e: any) {
             const message = e?.response?.data?.message ?? "Failed to load report. Please try again.";
-            preview.fail(message);
+            setReportPreviewError(message);
             setError(message);
         } finally {
             setLoading(false);
         }
     }, []);
+
+    const closeReportPreview = () => {
+        setReportPreviewOpen(false);
+        setReportHtml(null);
+        setReportPreviewError("");
+    };
+
+    // ── Excel export — direct blob download (mirrors GRN's export pattern) ──
+    const handleExportExcel = useCallback(async () => {
+        setExportingExcel(true);
+        setError("");
+        try {
+            const res = await api.post(
+                "/api/wms/reports/stocksummary/excel",
+                buildPayload(params),
+                { responseType: "blob" },
+            );
+            const blob = new Blob([res.data], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `stock_summary_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e: any) {
+            setError(e?.response?.data?.message ?? "Failed to export Excel. Please try again.");
+        } finally {
+            setExportingExcel(false);
+        }
+    }, [params]);
+
+    // Open the report HTML in a new browser tab
+    const handleOpenReportInNewWindow = () => {
+        if (!reportHtml) return;
+        const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+        const url = window.URL.createObjectURL(blob);
+        const win = window.open(url, "_blank");
+        if (win) {
+            setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+        } else {
+            window.URL.revokeObjectURL(url);
+        }
+    };
+
+    // Trigger the browser print dialog (Save as PDF) for the current report
+    const handleDownloadReportPdf = () => {
+        if (!reportHtml) return;
+        const PRINT_IFRAME_ID = "stock-summary-print-iframe";
+        let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+        if (!iframe) {
+            iframe = document.createElement("iframe");
+            iframe.id = PRINT_IFRAME_ID;
+            iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+            iframe.style.cssText =
+                "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+            document.body.appendChild(iframe);
+        }
+
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) return;
+
+        doc.open();
+        doc.write(reportHtml);
+        doc.close();
+
+        const doPrint = () => {
+            try {
+                iframe?.contentWindow?.focus();
+                iframe?.contentWindow?.print();
+            } catch {
+                /* ignore */
+            }
+        };
+
+        if (iframe.contentDocument?.readyState === "complete") {
+            setTimeout(doPrint, 300);
+        } else {
+            iframe.onload = () => setTimeout(doPrint, 300);
+            setTimeout(doPrint, 700);
+        }
+    };
 
     // ── Generate report
     // NOTE: Principal is now a multi-select with an "All" default (same as
@@ -506,6 +597,20 @@ export default function StockSummaryReport() {
 
                 </div>
             </div>
+
+            {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+            <NewReportDialog
+                open={reportPreviewOpen}
+                onClose={closeReportPreview}
+                title="Stock Summary Report"
+                htmlContent={reportHtml}
+                loading={loading}
+                error={reportPreviewError || null}
+                onExportExcel={handleExportExcel}
+                exportingExcel={exportingExcel}
+                onOpenInNewWindow={handleOpenReportInNewWindow}
+                onDownloadPdf={handleDownloadReportPdf}
+            />
         </div>
     );
 }
