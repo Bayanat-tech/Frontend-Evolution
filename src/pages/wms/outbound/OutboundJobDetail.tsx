@@ -18,6 +18,7 @@ import { jobClassLabels } from "./Outboundtypes";
 import { outboundJobTabPath } from "./OutboundHelpers";
 import { OutboundOperationalTab } from "./OutboundOperationalTab";
 import { Dialog } from "../../../components/ui/Dialog";
+import { NewReportDialog } from "../../../components/new_report_format";
 import { OutboundAcitivityBilling } from "./OutboundAcitivityBilling";
 
 type TReport = {
@@ -86,8 +87,6 @@ export function OutboundJobDetail({
   const [reportError,    setReportError]    = useState<string>("");
   const [excelLoading,   setExcelLoading]   = useState(false);
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
   const loadJob = async () => {
     setLoading(true);
     try {
@@ -133,10 +132,6 @@ export function OutboundJobDetail({
   }, [selectedReport]);
 
   // ── Toolbar handlers ──────────────────────────────────────────────────────
-  const handlePrint = () => {
-    iframeRef.current?.contentWindow?.postMessage("print", "*");
-  };
-
   const handleExcel = async () => {
     if (!selectedReport?.excelFn) return;
     const prinCode = value(job || {}, "prin_code") || principalCode;
@@ -148,6 +143,58 @@ export function OutboundJobDetail({
       console.error("Excel export error:", err);
     } finally {
       setExcelLoading(false);
+    }
+  };
+
+  // Open the report HTML in a new browser tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger the browser print dialog (Save as PDF) for the current report
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "outbound-job-report-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
     }
   };
 
@@ -181,8 +228,7 @@ export function OutboundJobDetail({
       : "In Progress";
   const jobDate = formatDate(value(job || {}, "job_date"));
 
-  const reportReady    = !reportLoading && !reportError && !!reportHtml;
-  const hasExcelExport  = !!selectedReport?.excelFn;
+  const hasExcelExport = !!selectedReport?.excelFn;
 
   return (
     <section className="grid gap-3">
@@ -302,63 +348,19 @@ export function OutboundJobDetail({
         </div>
       </Dialog>
 
-      {/* ── Dialog 2: Report viewer ── */}
-      <Dialog
+      {/* ── Dialog 2: Report viewer (NewReportDialog) ── */}
+      <NewReportDialog
         open={reportOpen}
-        title={selectedReport?.reportTitle ?? "Report"}
-        wide
         onClose={closeReportDialog}
-      >
-        <div className="flex flex-col" style={{ height: "75vh" }}>
-
-          {reportReady && (
-            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
-              <Button size="sm" variant="outline" onClick={handlePrint}>
-                <Printer size={13} /> Print / Save as PDF
-              </Button>
-
-              {hasExcelExport && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExcel}
-                  disabled={excelLoading}
-                >
-                  {excelLoading
-                    ? <RefreshCw size={13} className="animate-spin" />
-                    : <FileSpreadsheet size={13} />}
-                  {excelLoading ? "Exporting…" : "Export Excel"}
-                </Button>
-              )}
-            </div>
-          )}
-
-          {reportLoading && (
-            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-              <RefreshCw size={14} className="animate-spin" />
-              Loading report…
-            </div>
-          )}
-
-          {!reportLoading && reportError && (
-            <div className="flex flex-1 items-center justify-center text-sm text-red-600">
-              {reportError}
-            </div>
-          )}
-
-          {reportReady && (
-            <iframe
-              ref={iframeRef}
-              srcDoc={reportHtml}
-              title={selectedReport?.reportTitle}
-              className="flex-1 w-full rounded border-0"
-              style={{ minHeight: 0 }}
-            />
-          )}
-
-        </div>
-      </Dialog>
+        title={selectedReport?.reportTitle ?? "Report"}
+        htmlContent={reportHtml || null}
+        loading={reportLoading}
+        error={reportError || null}
+        onExportExcel={hasExcelExport ? handleExcel : undefined}
+        exportingExcel={excelLoading}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
     </section>
   );
 }
-
