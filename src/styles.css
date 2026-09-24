@@ -2433,6 +2433,345 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   background: var(--panel);
 }
 
+/* BISC Sidebar Search Box */
+.bisc-sidebar-search-container {
+  position: relative;
+  width: 100%;
+  flex: 0 0 auto;
+  padding: 4px 12px 8px;
+}
+
+.bisc-sidebar-search-box {
+  width: 100%;
+  height: 34px;
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 0 8px 0 10px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-shadow: none !important;
+  transition: border-color 160ms ease !important;
+  box-sizing: border-box !important;
+  cursor: text;
+}
+
+.bisc-sidebar-search-box:hover {
+  border-color: #94a3b8 !important;
+  box-shadow: none !important;
+}
+
+.bisc-sidebar-search-box:focus-within {
+  border-color: #00378C !important;
+  box-shadow: 0 0 0 2px rgba(0, 55, 140, 0.1) !important;
+  background: #ffffff !important;
+}
+
+.bisc-sidebar-search-icon {
+  position: static !important;
+  transform: none !important;
+  flex-shrink: 0 !important;
+  color: #00378C !important;
+  opacity: 0.85 !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.bisc-sidebar-search-input {
+  flex: 1 1 0% !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.bisc-sidebar-search-input::placeholder {
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+}
+
+.bisc-sidebar-search-clear {
+  flex-shrink: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 9999px !important;
+  background: #e2e8f0 !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #475569 !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  transition: all 120ms ease !important;
+}
+
+.bisc-sidebar-search-clear:hover {
+  background: #cbd5e1 !important;
+  color: #00378c !important;
+}
+
+.sidebar-search-collapsed-btn {
+  width: 34px;
+  margin: 4px auto 8px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #00378C;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.sidebar-search-collapsed-btn:hover {
+  background: #eff6ff;
+  border-color: #00378C;
+}
+
+/* Dark mode overrides */
+.app.dark .bisc-sidebar-search-box {
+  background: #111827 !important;
+  border-color: #374151 !important;
+}
+.app.dark .bisc-sidebar-search-box:hover {
+  border-color: #4b5563 !important;
+}
+.app.dark .bisc-sidebar-search-box:focus-within {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+.app.dark .bisc-sidebar-search-icon {
+  color: #38bdf8 !important;
+}
+.app.dark .bisc-sidebar-search-input {
+  color: #f1f5f9 !important;
+}
+.app.dark .bisc-sidebar-search-input::placeholder {
+  color: #64748b !important;
+}
+.app.dark .bisc-sidebar-search-clear {
+  background: #374151 !important;
+  color: #94a3b8 !important;
+}
+.app.dark .bisc-sidebar-search-clear:hover {
+  background: #f43f5e !important;
+  color: #ffffff !important;
+}
+.app.dark .sidebar-search-collapsed-btn {
+  background: #111827;
+  border-color: #374151;
+  color: #38bdf8;
+}
+
+/* BISC In-Sidebar Search Results List (Replaces Tree when searching) */
+.sidebar-search-results-panel {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel);
+  padding: 6px 2px 12px;
+}
+
+.bisc-search-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.bisc-search-results-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #00378C;
+}
+
+.bisc-search-results-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: #eff6ff;
+  color: #00378C;
+  border: 1px solid #bfdbfe;
+}
+
+.bisc-search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bisc-search-result-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  padding: 6px 8px !important;
+  border-radius: 8px !important;
+  text-decoration: none !important;
+  border: 1px solid transparent !important;
+  background: transparent;
+  transition: all 140ms ease !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+}
+
+.bisc-search-result-item:hover {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.bisc-search-result-item.selected {
+  background: #00378C !important;
+  border-color: #00378C !important;
+  box-shadow: 0 1px 3px rgba(0, 55, 140, 0.25) !important;
+}
+
+.bisc-search-result-icon {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  background: #eff6ff !important;
+  color: #00378C !important;
+  transition: all 140ms ease !important;
+}
+
+.bisc-search-result-item.selected .bisc-search-result-icon {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+.bisc-search-result-text {
+  min-width: 0 !important;
+  flex: 1 1 0% !important;
+}
+
+.bisc-search-result-title {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  color: #0f172a !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.bisc-search-result-item.selected .bisc-search-result-title {
+  color: #ffffff !important;
+}
+
+.bisc-search-result-trail {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  color: #64748b !important;
+  margin: 1px 0 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.bisc-search-result-item.selected .bisc-search-result-trail {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.bisc-search-empty-state {
+  padding: 28px 12px;
+  text-align: center;
+}
+
+.bisc-search-empty-icon {
+  margin: 0 auto 8px;
+  color: #cbd5e1;
+}
+
+.bisc-search-empty-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin: 0;
+}
+
+.bisc-search-empty-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 2px 0 10px;
+}
+
+.bisc-search-clear-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #00378C;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* Dark mode for search results */
+.app.dark .bisc-search-results-header {
+  border-bottom-color: #374151;
+}
+.app.dark .bisc-search-results-title {
+  color: #38bdf8;
+}
+.app.dark .bisc-search-results-badge {
+  background: #0f172a;
+  color: #38bdf8;
+  border-color: #1e3a8a;
+}
+.app.dark .bisc-search-result-item:hover {
+  background: #1f2937 !important;
+  border-color: #374151 !important;
+}
+.app.dark .bisc-search-result-item.selected {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+}
+.app.dark .bisc-search-result-icon {
+  background: #1e293b !important;
+  color: #38bdf8 !important;
+}
+.app.dark .bisc-search-result-title {
+  color: #f1f5f9 !important;
+}
+.app.dark .bisc-search-result-trail {
+  color: #94a3b8 !important;
+}
+.app.dark .bisc-search-empty-title {
+  color: #cbd5e1;
+}
+.app.dark .bisc-search-empty-desc {
+  color: #64748b;
+}
+.app.dark .bisc-search-clear-btn {
+  color: #38bdf8;
+}
+
+
 .sidebar-company-card {
   display: grid;
   gap: 5px;

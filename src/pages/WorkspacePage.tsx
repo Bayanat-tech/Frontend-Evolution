@@ -43,6 +43,7 @@ import {
   Receipt,
   RefreshCw,
   Ruler,
+  Search,
   Settings,
   Ship,
   ShoppingCart,
@@ -53,6 +54,7 @@ import {
   UserCog,
   Users,
   Warehouse,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -86,6 +88,32 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
   const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
+
+  const menuSearchRef = useRef<HTMLInputElement>(null);
+  const focusMenuSearch = useRef(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
+
+  const allScreens = useMemo(() => {
+    if (!activeApp?.children?.length) return [];
+    return collectSearchableMenuItems(activeApp.children, appCode || "");
+  }, [activeApp, appCode]);
+
+  const filteredScreens = useMemo(() => {
+    const q = menuSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return allScreens.filter((item) => {
+      const titleMatch = item.title.toLowerCase().includes(q);
+      const trailMatch = item.pathTrail.some((t) => t.toLowerCase().includes(q));
+      return titleMatch || trailMatch;
+    });
+  }, [allScreens, menuSearchQuery]);
+
+  useEffect(() => {
+    setSelectedSearchIndex(0);
+  }, [filteredScreens]);
+
+
 
   const handleLogout = () => {
     logout();
@@ -136,6 +164,12 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
+  useEffect(() => {
+    if (!displayCollapsed && focusMenuSearch.current) {
+      menuSearchRef.current?.focus();
+      focusMenuSearch.current = false;
+    }
+  }, [displayCollapsed]);
   const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "PURSHOTTAM KANJI & CO.";
   const companyCode = user?.company_code || user?.COMPANY_CODE || "01";
   const fallbackUserName = (user as { name?: string } | null)?.name;
@@ -146,6 +180,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const keepSidebarOpen = isFreightModule || isFinanceModule;
   const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
   const moduleSubtitle = moduleMeta?.fullForm || "Transactions";
+  const searchModuleName = moduleMeta?.fullForm
+    ? moduleMeta.fullForm.replace(/Management System/i, "").trim()
+    : (activeApp?.title ? titleCase(activeApp.title) : "Module");
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
@@ -289,22 +326,140 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             </button>
           </div>
 
+            {!displayCollapsed ? (
+              <div className="bisc-sidebar-search-container">
+                <div className="bisc-sidebar-search-box" role="search">
+                  <Search size={14} className="bisc-sidebar-search-icon" />
+                  <input
+                    ref={menuSearchRef}
+                    aria-label="Search menu"
+                    autoComplete="off"
+                    type="text"
+                    value={menuSearchQuery}
+                    onChange={(e) => {
+                      setMenuSearchQuery(e.target.value);
+                      setSelectedSearchIndex(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (filteredScreens[selectedSearchIndex]) {
+                          navigate(filteredScreens[selectedSearchIndex].target);
+                          setMenuSearchQuery("");
+                          handleMenuNavigate();
+                        }
+                      } else if (e.key === "Escape") {
+                        setMenuSearchQuery("");
+                      }
+                    }}
+                    placeholder="Search menu..."
+                    className="bisc-sidebar-search-input"
+                  />
+                  {menuSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
+                      className="bisc-sidebar-search-clear"
+                      title="Clear search"
+                      aria-label="Clear menu search"
+                    >
+                      <X size={11} strokeWidth={2.5} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="sidebar-search-collapsed-btn"
+                title="Search screens in this module"
+                aria-label="Expand menu and search"
+                onClick={() => { focusMenuSearch.current = true; setCollapsed(false); }}
+              >
+                <Search size={15} />
+              </button>
+            )}
+
           <nav className="sidebar-nav">
-            {(activeApp?.children || []).map((item, index) => (
-              <MenuItem
-                key={item.id || item.title}
-                item={item}
-                collapsed={displayCollapsed}
-                expanded={expanded}
-                setExpanded={setExpanded}
-                appCode={appCode || ""}
-                pathname={location.pathname}
-                selectedMenu={activeMenu}
-                level={1}
-                siblingIndex={index + 1}
-                onNavigate={handleMenuNavigate}
-              />
-            ))}
+            {menuSearchQuery.trim() ? (
+              <div className="sidebar-search-results-panel">
+                <div className="bisc-search-results-header">
+                  <span className="bisc-search-results-title">{searchModuleName} Screens</span>
+                  <span className="bisc-search-results-badge">
+                    {filteredScreens.length} found
+                  </span>
+                </div>
+
+                {filteredScreens.length === 0 ? (
+                  <div className="bisc-search-empty-state">
+                    <Search size={22} className="bisc-search-empty-icon" />
+                    <p className="bisc-search-empty-title">No matching screens found</p>
+                    <p className="bisc-search-empty-desc">for &quot;{menuSearchQuery}&quot;</p>
+                    <button
+                      type="button"
+                      onClick={() => setMenuSearchQuery("")}
+                      className="bisc-search-clear-btn"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bisc-search-results-list">
+                    {filteredScreens.map((item, index) => {
+                      const isSelected = index === selectedSearchIndex;
+                      return (
+                        <Link
+                          key={item.id}
+                          to={item.target}
+                          onClick={() => {
+                            setMenuSearchQuery("");
+                            handleMenuNavigate();
+                          }}
+                          onMouseEnter={() => setSelectedSearchIndex(index)}
+                          className={cn("bisc-search-result-item", isSelected && "selected")}
+                        >
+                          <span className="bisc-search-result-icon">
+                            <MenuIcon item={item.node} level={1} className={isSelected ? "text-white" : "text-[#00378C]"} />
+                          </span>
+                          <div className="bisc-search-result-text">
+                            <p className="bisc-search-result-title">
+                              {item.title}
+                            </p>
+                            {item.pathTrail.length > 0 && (
+                              <p className="bisc-search-result-trail">
+                                {item.pathTrail.join(" › ")}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              (activeApp?.children || []).map((item, index) => (
+                <MenuItem
+                  key={item.id || item.title}
+                  item={item}
+                  collapsed={displayCollapsed}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                  appCode={appCode || ""}
+                  pathname={location.pathname}
+                  selectedMenu={activeMenu}
+                  level={1}
+                  siblingIndex={index + 1}
+                  onNavigate={handleMenuNavigate}
+                />
+              ))
+            )}
           </nav>
 
           <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
@@ -610,4 +765,58 @@ function normalizeRoutePath(path: string) {
     .replace(/^\/+|\/+$/g, "")
     .replace(/^workspace\/[^/]+\//i, "")
     .toLowerCase();
+}
+
+interface SearchableMenuItem {
+  id: string;
+  title: string;
+  target: string;
+  pathTrail: string[];
+  node: MenuNode;
+}
+
+function collectSearchableMenuItems(
+  nodes: MenuNode[],
+  appCode: string,
+  trail: string[] = []
+): SearchableMenuItem[] {
+  const list: SearchableMenuItem[] = [];
+
+  const traverse = (items: MenuNode[], currentTrail: string[]) => {
+    for (const item of items) {
+      const hasChildren = Boolean(item.children && item.children.length > 0);
+      const title = titleCase(item.title || "");
+      const directPath = cleanPath(item.url_path);
+
+      if (!hasChildren || item.type === "item" || directPath) {
+        const target = getMenuNodeTarget(item, appCode);
+        if (target) {
+          list.push({
+            id: item.id || `${appCode}-${target}-${title}`,
+            title,
+            target,
+            pathTrail: currentTrail,
+            node: item,
+          });
+        }
+      }
+
+      if (hasChildren && item.children) {
+        traverse(item.children, [...currentTrail, title]);
+      }
+    }
+  };
+
+  traverse(nodes, trail);
+
+  // Deduplicate by target so the same screen does not appear multiple times
+  const seen = new Set<string>();
+  const unique: SearchableMenuItem[] = [];
+  for (const item of list) {
+    if (!seen.has(item.target)) {
+      seen.add(item.target);
+      unique.push(item);
+    }
+  }
+  return unique;
 }

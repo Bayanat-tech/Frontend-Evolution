@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt, List } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -57,6 +57,11 @@ type Line = {
   job_no?: string;
   dept_code?: string;
   cost_code?: string;
+  curr_code?: string;
+  curr_name?: string;
+  ex_rate?: number;
+  lcur_amount?: number;
+  tx_compnt_lcuramt_1?: number;
   tx_compntcat_code_1?: string;
   tx_cat_code?: string;
   tx_compnt_1_expmt?: string;
@@ -590,29 +595,26 @@ function CommercialEditor({
   // };
 
   const addLine = () => {
-  if (isCancelled) return;
-  setForm((current) => {
-    const newLine = emptyLine(docType, current.detail.length + 1);
-    // const withTax = {
-    //   ...newLine,
-    //   tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
-    //   tx_compnt_1_expmt:   current.tx_compnt_1_expmt || current.tax_type || "S",
-    //   tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
-    // };
-    const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
-    const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
-  ? current.tx_compnt_perc_1
-  : resolvedExpmt === "S" ? 5 : 0;
+    if (isCancelled) return;
+    setForm((current) => {
+      const newLine = emptyLine(docType, current.detail.length + 1, current.curr_code, current.curr_name, current.ex_rate || 1);
+      const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
+      const resolvedPerc = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
+        ? current.tx_compnt_perc_1
+        : resolvedExpmt === "S" ? 5 : 0;
 
-const withTax = {
-  ...newLine,
-  tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
-  tx_compnt_1_expmt:   resolvedExpmt,
-  tx_compnt_perc_1:    resolvedPerc,
-};
-    return { ...current, detail: [...current.detail, withTax] };
-  });
-};
+      const withTax: Line = {
+        ...newLine,
+        curr_code: current.curr_code,
+        curr_name: current.curr_name,
+        ex_rate: current.ex_rate || 1,
+        tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+        tx_compnt_1_expmt: resolvedExpmt,
+        tx_compnt_perc_1: resolvedPerc,
+      };
+      return { ...current, detail: [...current.detail, withTax] };
+    });
+  };
   const removeLine = (id: string) => {
     setForm((current) => ({ ...current, detail: current.detail.filter((line) => line.id !== id).map((line, index) => ({ ...line, serial_no: index + 1 })) }));
   };
@@ -1264,6 +1266,7 @@ const withTax = {
             <div className="commercial-lines-card min-w-0 rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
               <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
                 <div className="finance-line-actions-title flex items-center gap-2">
+                  <span className="finance-section-icon"><List size={11} className="text-white" /></span>
                   <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">Line Items</h3>
                   <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-[#00378C]">
                     {lineSearch.trim()
@@ -1458,18 +1461,41 @@ const withTax = {
                             label="Currency"
                             compact
                             disabled={isCancelled}
-                            value={form.curr_code ?? ""}
-                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+                            value={line.curr_code || form.curr_code || ""}
+                            displayValue={line.curr_name ? `${line.curr_code || form.curr_code} - ${line.curr_name}` : (line.curr_code || form.curr_code || "")}
                             columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                             valueField="curr_code"
                             displayFields={["curr_code", "curr_name", "ex_rate"]}
                             loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
-                            onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
+                            onChange={(value, row) => {
+                              const lineExRate = Number(getLookupValue(row || {}, "ex_rate") || line.ex_rate || form.ex_rate || 1);
+                              updateLine(line.id, {
+                                curr_code: value,
+                                curr_name: text(getLookupValue(row || {}, "curr_name")),
+                                ex_rate: lineExRate,
+                                lcur_amount: Math.abs(Number(line.amount || 0)) * lineExRate,
+                              });
+                            }}
                           />
                         </td>
                       )}
                         {showAllColumns && (
-                          <td className="w-16 max-w-[65px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.000001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                          <td className="w-16 max-w-[65px] px-1 py-1">
+                            <Input
+                              disabled={isCancelled}
+                              className="commercial-number-input finance-money-input"
+                              type="number"
+                              step="0.000001"
+                              value={line.ex_rate ?? form.ex_rate ?? 1}
+                              onChange={(event) => {
+                                const r = Number(event.target.value || 1);
+                                updateLine(line.id, {
+                                  ex_rate: r,
+                                  lcur_amount: Math.abs(Number(line.amount || 0)) * r,
+                                });
+                              }}
+                            />
+                          </td>
                         )}
                         <td className="w-20 max-w-[80px] px-1 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
@@ -1479,8 +1505,11 @@ const withTax = {
   <td className="w-[260px] px-2 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
 )}
                         <td className="finance-amount-cell w-24 px-1 py-1">
-                          {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
-                          <Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
+                          <Input
+                            className="commercial-number-input finance-money-input"
+                            disabled
+                            value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(line.ex_rate ?? form.ex_rate ?? 1))}
+                          />
                           </td>
                         <td className="finance-sticky-col-right px-1 py-1 text-center"><button type="button" disabled={isCancelled} title="Delete row" className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer" onClick={() => removeLine(line.id)}><Trash2 size={13} /></button></td>
                       </tr>
@@ -1489,28 +1518,28 @@ const withTax = {
                 </table>
               </div>
               
-              <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/70 px-3 py-2 gap-3">
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
                 <button
                   type="button"
                   disabled={isCancelled}
                   onClick={addLine}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-[#00378C] hover:text-[#00378C] text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                  className="commercial-add-line-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#00378c] bg-white text-[#00378c] hover:bg-blue-50/80 active:bg-blue-100 text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <PlusCircle size={14} className="text-[#00378C]" />
-                  <span>Add</span>
+                  <Plus size={14} strokeWidth={2.5} className="text-[#00378c]" />
+                  <span>Add Line</span>
                 </button>
-                <div className="commercial-line-totals flex items-center gap-6 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Total Amount</span>
-                    <strong className="text-emerald-600 font-mono text-sm">{formatAmount(total)}</strong>
+                <div className="commercial-line-totals flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 font-medium text-[11px]">Total Amount</span>
+                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Tax Amount</span>
-                    <strong className="text-emerald-600 font-mono text-sm">{formatAmount(taxTotal)}</strong>
+                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 font-medium text-[11px]">Tax Amount</span>
+                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(taxTotal)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 border-l border-slate-300 pl-4">
-                    <span className="font-semibold text-slate-800">Net Total</span>
-                    <strong className="text-emerald-600 font-mono text-sm">{formatAmount(total + taxTotal)}</strong>
+                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-md border border-blue-200 shadow-2xs">
+                    <span className="font-bold text-[#00378c] text-[11px]">Net Total</span>
+                    <strong className="text-[#00378c] font-mono text-xs font-bold">{formatAmount(total + taxTotal)}</strong>
                   </div>
                 </div>
               </div>
@@ -1614,11 +1643,15 @@ function emptyForm(docType: CommercialType, div?: Division): FormState {
   };
 }
 
-function emptyLine(docType: CommercialType, serialNo: number): Line {
+function emptyLine(docType: CommercialType, serialNo: number, currCode = "", currName = "", exRate = 1): Line {
   return {
     id: newId(),
     serial_no: serialNo,
     ac_code: "",
+    curr_code: currCode,
+    curr_name: currName,
+    ex_rate: exRate,
+    lcur_amount: 0,
     qty: 1,
     price: 0,
     amount: 0,
@@ -1681,15 +1714,23 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     print_letter_head: !!header.print_letter_head,
     detail: detailRaw.map((raw, index) => {
       const row = lowerRecord(raw);
+      const lineCurrCode = text(row.curr_code) || text(header.curr_code);
+      const lineCurrName = text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name) || text(nested(headerRaw, ["Currency", "curr_name"]) ?? header.curr_name);
+      const lineExRate = Number(row.ex_rate || header.ex_rate || 1);
+      const lineAmt = Math.abs(Number(row.amount || 0));
       return {
         id: newId(),
         serial_no: Number(row.serial_no || index + 1),
         ac_code: text(row.ac_code),
         ac_name: text(nested(raw, ["Account", "ac_name"]) ?? row.ac_name ?? row.ac_name_resolved ?? row.l4_name ?? row.l4_description),
         remarks: text(row.remarks),
+        curr_code: lineCurrCode,
+        curr_name: lineCurrName,
+        ex_rate: lineExRate,
+        lcur_amount: Number(row.lcur_amount || 0) || (lineAmt * lineExRate),
         qty: Number(row.qty || 1),
         price: Number(row.price || row.amount || 0),
-        amount: Math.abs(Number(row.amount || 0)),
+        amount: lineAmt,
         sign_ind: commercialDetailSign(docType, row.sign_ind),
         job_no: text(row.job_no),
         dept_code: text(row.dept_code),
@@ -1718,40 +1759,42 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     invoice_no: form.inv_no || "",
     invoice_date: form.inv_date || "",
     
-    detail: form.detail.map((line) => ({
-      company_code: companyCode,
-      doc_type: form.doc_type,
-      doc_no: form.doc_no || "1",
-      serial_no: line.serial_no,
-      doc_date: form.doc_date,
-      ac_code: line.ac_code,
-      remarks: line.remarks || "",
-      curr_code: form.curr_code,
-      ex_rate: Number(form.ex_rate || 1),
-      price: Number(line.price || 0),
-      qty: Number(line.qty || 1),
-      amount: Math.abs(Number(line.amount || 0)),
-      sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
-      sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "DR" : "CR",
-      tx_compntcat_code_1: line.tx_compntcat_code_1 || "",
-      tx_cat_code: line.tx_cat_code || "",
-      tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
-      tx_compnt_perc_1: Number(line.tx_compnt_perc_1 || 0),
-      // tx_compnt_amt_1: Number(line.tx_compnt_amt_1 || 0),
-      //  tx_compnt_amt_1: Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,   //correct 
-      job_no: line.job_no || "",
-      dept_code: line.dept_code || "",
-      div_code: form.div_code,
-      tx_compnt_amt_1:      Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,
-      tx_compnt_lcuramt_1:  (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
-      lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
-      prod_code: line.prod_code || "",
-      cost_code: line.cost_code || "", 
-      other_remarks: line.other_remarks || "",
-      // tx_compnt_lcuramt_1: (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
-      header_ac_code: form.ac_code,
-
-    })),
+    detail: form.detail.map((line) => {
+      const lineCurrCode = line.curr_code || form.curr_code || "";
+      const lineExRate = Number(line.ex_rate || form.ex_rate || 1);
+      const baseAmt = Math.abs(Number(line.amount || 0));
+      const taxAmt = baseAmt * Number(line.tx_compnt_perc_1 || 0) / 100;
+      return {
+        company_code: companyCode,
+        doc_type: form.doc_type,
+        doc_no: form.doc_no || "1",
+        serial_no: line.serial_no,
+        doc_date: form.doc_date,
+        ac_code: line.ac_code,
+        remarks: line.remarks || "",
+        curr_code: lineCurrCode,
+        ex_rate: lineExRate,
+        price: Number(line.price || 0),
+        qty: Number(line.qty || 1),
+        amount: baseAmt,
+        sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
+        sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "DR" : "CR",
+        tx_compntcat_code_1: line.tx_compntcat_code_1 || "",
+        tx_cat_code: line.tx_cat_code || "",
+        tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
+        tx_compnt_perc_1: Number(line.tx_compnt_perc_1 || 0),
+        job_no: line.job_no || "",
+        dept_code: line.dept_code || "",
+        div_code: form.div_code,
+        tx_compnt_amt_1: taxAmt,
+        tx_compnt_lcuramt_1: taxAmt * lineExRate,
+        lcur_amount: baseAmt * lineExRate,
+        prod_code: line.prod_code || "",
+        cost_code: line.cost_code || "", 
+        other_remarks: line.other_remarks || "",
+        header_ac_code: form.ac_code,
+      };
+    }),
     // children: {},
 
   };
@@ -1874,8 +1917,9 @@ function recalc(line: Line): Partial<Line> {
   const amount = qty * price;
   const perc   = Number(line.tx_compnt_perc_1 || 0);
   const taxAmt = (amount * perc) / 100;
+  const exRate = Number(line.ex_rate || 1);
 
-  return { qty: line.qty, price: line.price, amount, tx_compnt_amt_1: taxAmt };
+  return { qty: line.qty, price: line.price, amount, tx_compnt_amt_1: taxAmt, lcur_amount: Math.abs(amount) * exRate };
 }
 
 function lowerRecord(raw: Record<string, unknown>) {
