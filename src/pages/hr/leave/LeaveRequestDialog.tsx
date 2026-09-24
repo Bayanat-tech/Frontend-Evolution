@@ -1,4 +1,4 @@
-import { Loader2, Paperclip, RotateCcw, Save, Send, ShieldCheck, UserRound, X } from "lucide-react";
+import { Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -11,13 +11,13 @@ import {
   type HrLeaveEntitlement,
 } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
-import { Dialog } from "../../../components/ui/Dialog";
+import { LmsDialog } from "../../../components/ui/LmsDialog";
 import { Input } from "../../../components/ui/Input";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
-import { toApiDateInput } from "../../../hooks/apiDate";
+import { toApiDateInput, toBackendDate } from "../../../hooks/apiDate";
 
 type LeaveRequestDialogProps = {
   open: boolean;
@@ -80,14 +80,14 @@ const initialForm: LeaveForm = {
 
 export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = false, onClose, onSaved }: LeaveRequestDialogProps) {
  
-  console.log('leaveprops ', { open, initialRow, isEditMode, readOnly, onClose, onSaved });
+  // console.log('leaveprops ', { open, initialRow, isEditMode, readOnly, onClose, onSaved });
   const { user } = useAuth();
   const [form, setForm] = useState<LeaveForm>(initialForm);
   const [employees, setEmployees] = useState<HrEmployee[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<HrLeaveEntitlement[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
-  const [savingAction, setSavingAction] = useState<"SAVEASDRAFT" | "SUBMITTED" | null>(null);
+  const [savingAction, setSavingAction] = useState<"SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED"| null>(null);
   const [validating, setValidating] = useState(false);
   const [validationText, setValidationText] = useState("");
   const [requestNumber, setRequestNumber] = useState("");
@@ -98,9 +98,10 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
   const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
+  const tenantName = String(user?.tenant_name || user?.TENANT_NAME || "");
 
   useEffect(() => {
-    console.log('user',user);
+    // console.log('user',user);
     if (!open) return;
     const initialRequestNumber = getRowString(initialRow, "REQUEST_NUMBER", "requestNumber");
     setForm(initialRow ? formFromRow(initialRow) : { ...initialForm, requestDate: today() });
@@ -202,11 +203,11 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       const response = await validateHrLeave({
         companyCode,
         employeeId: form.employeeCode,
-        leaveStartDate: form.leaveStartDate,
-        leaveEndDate: form.leaveEndDate,
+        leaveStartDate: toBackendDate(form.leaveStartDate),
+        leaveEndDate: toBackendDate(form.leaveEndDate),
         leaveType: form.leaveType,
         leaveDays: Number(form.leaveDays || 0),
-      });
+      },tenantName);
       const text = parseValidationMessage(response);
       setValidationText(text);
       setNotice({ type: text.toLowerCase().includes("insufficient") || text.toLowerCase().includes("failed") ? "error" : "success", message: text });
@@ -219,8 +220,13 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     }
   };
 
-  const save = async (action: "SAVEASDRAFT" | "SUBMITTED") => {
+  console.log('save',form);
+  const save = async (action: "SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED") => {
     const errors = getValidationErrors(form);
+    // if(form.leaveEndDate){
+    //   setNotice({type:'error' , message:'tst'})
+    //   return
+    // }
     if (errors.length) {
       setNotice({ type: "error", message: errors[0] });
       return;
@@ -228,6 +234,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     setSavingAction(action);
     setNotice(null);
     try {
+      
       const saveResult = await saveHrLeaveApproval({
         COMPANY_CODE: companyCode,
         EMPLOYEE_NAME: form.employeeName,
@@ -262,10 +269,8 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         ACTUAL_RESUME_DATE: "",
         DUTY_RESUME_DATE: "",
         UUID: getUuid(),
-      },user?.tenantName);
-
-      console.log('save',save);
-
+      },tenantName);
+      
       const savedRequestNumber = getSavedRequestNumber(saveResult);
       if (savedRequestNumber) {
         setRequestNumber(savedRequestNumber);
@@ -308,32 +313,100 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   };
 
   return (
-    <Dialog
+    <LmsDialog
       open={open}
       title={readOnly ? "View Leave Request" : initialRow ? "Edit Leave Request" : "Add Leave Request"}
       wide
       contentClassName={`leave-request-dialog${readOnly ? " is-readonly" : ""}`}
       onClose={onClose}
-      footer={
-        readOnly ? (
-          <Button type="button" variant="outline" onClick={onClose}>Close</Button>
-        ) : (
-          <>
-            <Button type="button" variant="outline" size="icon" title="Cancel" aria-label="Cancel" onClick={onClose} disabled={Boolean(savingAction)}>
-              <X size={16} />
-            </Button>
-            <Button type="button" variant="outline" size="icon" title="Reset" aria-label="Reset" onClick={resetForm} disabled={Boolean(savingAction)}>
-              <RotateCcw size={16} />
-            </Button>
-            <Button type="button" variant="outline" size="icon" title="Save Draft" aria-label="Save Draft" onClick={() => void save("SAVEASDRAFT")} disabled={Boolean(savingAction)}>
-              {savingAction === "SAVEASDRAFT" ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-            </Button>
-            <Button type="button" size="icon" title="Submit" aria-label="Submit" onClick={() => void save("SUBMITTED")} disabled={Boolean(savingAction)}>
-              {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-            </Button>
-          </>
-        )
-      }
+footer={
+  readOnly ? (
+    <div className="flex items-center justify-end p-4">
+      <Button type="button" variant="outline" onClick={onClose}>
+        <X size={16} />
+        <span>Close</span>
+      </Button>
+    </div>
+  ) : (
+    <div className="flex w-full items-center justify-between gap-3 p-1">
+      {/* Left group: Cancel, Save As Draft, Submit */}
+      <div className="flex items-center gap-2">
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void save("SAVEASDRAFT")}
+          disabled={Boolean(savingAction)}
+          className="!w-auto shrink-0 whitespace-nowrap"
+        >
+          {savingAction === "SAVEASDRAFT" ? (
+            <Loader2 className="animate-spin" size={16} />
+          ) : (
+            <Save size={16} />
+          )}
+          <span>Save As Draft</span>
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => void save("SUBMITTED")}
+          disabled={Boolean(savingAction)}
+          className="!w-auto shrink-0 whitespace-nowrap"
+        >
+          {savingAction === "SUBMITTED" ? (
+            <Loader2 className="animate-spin" size={16} />
+          ) : (
+            <Send size={16} />
+          )}
+          <span>Submit</span>
+        </Button>
+        
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void save("CANCEL")}
+          disabled={Boolean(savingAction)}
+          className="!w-auto shrink-0 whitespace-nowrap"
+        >
+          {savingAction === "REJECTED" ? (
+            <Loader2 className="animate-spin" size={16} />
+          ) : (
+          <X size={16} />
+          )}
+          <span>Reject</span>
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void save("CANCEL")}
+          disabled={Boolean(savingAction)}
+          className="!w-auto shrink-0 whitespace-nowrap"
+        >
+          {savingAction === "CANCEL" ? (
+            <Loader2 className="animate-spin" size={16} />
+          ) : (
+          <Trash2 size={16} />
+          )}
+          <span>Cancel</span>
+        </Button>
+
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={openAttachments}
+        title={!requestNumber ? "Save Draft first to enable attachments" : "Attach files"}
+        disabled={!requestNumber || Boolean(savingAction)}
+        className="!w-auto shrink-0 whitespace-nowrap"
+      >
+        <Paperclip size={16} />
+        <span>Attachments</span>
+      </Button>
+    </div>
+  )
+}
     >
       <div className="leave-request-form">
         <NoticeToast notice={notice} onClose={() => setNotice(null)} />
@@ -482,7 +555,8 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
                   <textarea className="leave-request-textarea leave-request-textarea-small leave-status-remarks" value={statusRemark} disabled />
                 </Field>
               ) : null}
-              <div className="leave-attachments">
+
+              {/* <div className="leave-attachments">
                 <button
                   type="button"
                   className={`leave-attachment-button${!requestNumber ? " is-disabled" : ""}`}
@@ -503,7 +577,8 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
                   </span>
                 </button>
                 {!requestNumber ? <p className="leave-attachment-hint">Save draft first, then upload attachments.</p> : null}
-              </div>
+              </div> */}
+
             </div>
           </section>
         </div>
@@ -515,7 +590,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         loginId={loginId}
         onClose={() => setAttachmentOpen(false)}
       />
-    </Dialog>
+    </LmsDialog>
   );
 }
 
@@ -700,13 +775,13 @@ function getStatusRemark(row: Record<string, unknown> | null | undefined) {
   );
 }
 
-function getDateInputValue(value: string) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
-}
+// function getDateInputValue(value: string) {
+//   if (!value) return "";
+//   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+//   const date = new Date(value);
+//   if (Number.isNaN(date.getTime())) return "";
+//   return date.toISOString().slice(0, 10);
+// }
 
 function getYesNoValue(value: string): "N" | "Y" | "" {
   const normalized = value.toUpperCase();

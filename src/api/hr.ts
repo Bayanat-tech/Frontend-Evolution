@@ -125,11 +125,18 @@ export type ValidateLeavePayload = {
   leaveDays: number;
 };
 
-export async function validateHrLeave(payload: ValidateLeavePayload) {
-  const response = await withHrFallback((prefix) => api.get<IValidateLeaveResponse>(`${prefix}/gm/validateleave`, {
-    params: payload,
-  }));
-  return response.data;
+export async function validateHrLeave(payload: ValidateLeavePayload,tenantName?: string) {
+  if(tenantName === "WMSTST"){
+    const response = await withHrFallback((prefix) => api.get<IValidateLeaveResponse>(`${prefix}/gm/validateleave`, {
+      params: payload,
+    }));
+    return response.data;
+  }else{
+    const response = await withHrFallback((prefix) => api.get<IValidateLeaveResponse>(`${prefix}/gm/mhvalidateleave`, {
+      params: payload,
+    }));
+    return response.data;
+  }
 }
 
 export async function saveHrLeaveApproval(payload: Record<string, unknown>, tenantName?: string) {
