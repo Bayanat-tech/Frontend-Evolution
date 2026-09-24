@@ -9,6 +9,7 @@ export type TInvoiceDetail = Record<string, unknown>;
 export type IPrincipal = { prin_code: string; prin_name: string };
 
 type ApiResponse<T> = {
+  comparison_id: null;
   success: boolean;
   data?: T;
   message?: string;
@@ -239,3 +240,23 @@ const endpoint =
 
   return response.data;
 }
+
+export const insertQuotationComparison = async (data: {
+  company_code: string;
+  div_code: string;
+  quotation_nos: string;
+  user_id: string;
+}) => {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/purchase-sales/insertQuotationComparison",
+    data
+  );
+
+  if (!response.data.success) {
+    throw new Error(
+      response.data.message || "Quotation comparison failed"
+    );
+  }
+
+  return response.data;
+};

@@ -209,6 +209,7 @@ import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcess
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
+import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
 
 
  type WorkspaceRouteContext = {
@@ -516,6 +517,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Pams Dashboard",
   match: ({ pathname }) => pathname.toLowerCase().includes("/ems/masters/kpi%20masters/pms_dashboard"),
   element: () => <PamsDashboard />
+},
+
+{
+  name: "Quotation Comparison",
+  match: ({ pathname }) => pathname.toLowerCase().includes("purchase_sales/purchase/quotation_comparison"),
+  element: () => <QuotationComparisonPage />
 },
   
   {
