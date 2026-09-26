@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Download, Eye, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X, XCircle, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, Eye, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X, XCircle, UploadCloud, FileText, Building2, MapPinned, MessageSquare } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -20,6 +20,7 @@ import {
 } from "../../api/vendor";
 import { useAuth } from "../../state/AuthContext";
 import { cn } from "../../lib/utils";
+import { FieldGroup } from "./components";
 
 type RefDoc = VendorRow & {
   DOC_NO?: string;
@@ -89,38 +90,70 @@ export function VendorRequestDialog({
   const [savedDocNo, setSavedDocNo] = useState("");
   const formRef = useRef<HTMLFormElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const next = { ...emptyRequest(companyCode), ...(request || {}),
-    AC_NAME: (request as any)?.PARTY_NAME || "",
-    ADDRESS: (request as any)?.PARTY_ADDRESS || "",
-    PHONE: (request as any)?.PARTY_PHONE || "",
-    FAX: (request as any)?.PARTY_FAX || "",};
-    setForm(next);
-    setItems(normalizeItems(Array.isArray(request?.items) ? request.items : []));
-    setSavedDocNo(String(next.DOC_NO || ""));
-    setError("");
-    setActiveTab("info");
+useEffect(() => {
+  if (!open) return;
+  const next = { ...emptyRequest(companyCode), ...(request || {}) };
+  setForm(next);
+  setItems(normalizeItems(Array.isArray(request?.items) ? request.items : []));
+  setSavedDocNo(String(next.DOC_NO || ""));
+  setError("");
+  setActiveTab("info");
 
-    void Promise.all([
-      getVendorAccounts(loginid, companyCode).catch(() => []),
-      getPendingVendorLpo({ company_code: companyCode, ac_code: loginid }).catch(() => []),
-    ]).then(([accountRows, refRows]) => {
-      setAccounts(accountRows);
-      setRefDocs(refRows as RefDoc[]);
-      const account = accountRows[0];
-      if (!request?.AC_CODE && account) {
-        setForm((prev) => ({
-          ...prev,
-          AC_CODE: String(account.AC_CODE || ""),
-          AC_NAME: String(account.AC_NAME || account.AC_DESC || ""),
-          ADDRESS: String(account.ADDRESS || ""),
-          PHONE: String(account.PHONE || ""),
-          FAX: String(account.FAX || ""),
-        }));
-      }
-    });
-  }, [companyCode, loginid, open, request]);
+  // Existing doc: look up its own account. New request: look up the logged-in vendor's account.
+  const accountLookupCode = String(request?.AC_CODE || "") || loginid;
+
+  void Promise.all([
+    getVendorAccounts(accountLookupCode, companyCode).catch(() => []),
+    getPendingVendorLpo({ company_code: companyCode, ac_code: loginid }).catch(() => []),
+  ]).then(([accountRows, refRows]) => {
+    setAccounts(accountRows);
+    setRefDocs(refRows as RefDoc[]);
+    const account = accountRows[0];
+    if (account) {
+      setForm((prev) => ({
+        ...prev,
+        AC_CODE: String(prev.AC_CODE || account.AC_CODE || ""),
+        AC_NAME: String(account.AC_NAME || account.AC_DESC || ""),
+        ADDRESS: String(account.ADDRESS || ""),
+        PHONE: String(account.PHONE || ""),
+        FAX: String(account.FAX || ""),
+      }));
+    }
+  });
+}, [companyCode, loginid, open, request]);
+
+  // useEffect(() => {
+  //   if (!open) return;
+  //   const next = { ...emptyRequest(companyCode), ...(request || {}),
+  //   AC_NAME: (request as any)?.PARTY_NAME || "",
+  //   ADDRESS: (request as any)?.PARTY_ADDRESS || "",
+  //   PHONE: (request as any)?.PARTY_PHONE || "",
+  //   FAX: (request as any)?.PARTY_FAX || "",};
+  //   setForm(next);
+  //   setItems(normalizeItems(Array.isArray(request?.items) ? request.items : []));
+  //   setSavedDocNo(String(next.DOC_NO || ""));
+  //   setError("");
+  //   setActiveTab("info");
+
+  //   void Promise.all([
+  //     getVendorAccounts(loginid, companyCode).catch(() => []),
+  //     getPendingVendorLpo({ company_code: companyCode, ac_code: loginid }).catch(() => []),
+  //   ]).then(([accountRows, refRows]) => {
+  //     setAccounts(accountRows);
+  //     setRefDocs(refRows as RefDoc[]);
+  //     const account = accountRows[0];
+  //     if (!request?.AC_CODE && account) {
+  //       setForm((prev) => ({
+  //         ...prev,
+  //         AC_CODE: String(account.AC_CODE || ""),
+  //         AC_NAME: String(account.AC_NAME || account.AC_DESC || ""),
+  //         ADDRESS: String(account.ADDRESS || ""),
+  //         PHONE: String(account.PHONE || ""),
+  //         FAX: String(account.FAX || ""),
+  //       }));
+  //     }
+  //   });
+  // }, [companyCode, loginid, open, request]);
 
   const selectedRef = useMemo(() => refDocs.find((item) => String(item.DOC_NO || "") === String(form.REF_DOC_NO || "")), [form.REF_DOC_NO, refDocs]);
   const refDocOptions = useMemo(() => {
@@ -146,7 +179,27 @@ export function VendorRequestDialog({
       EX_RATE: ref?.EX_RATE ?? prev.EX_RATE,
       DIV_CODE: String(ref?.DIV_CODE || prev.DIV_CODE || ""),
       DIV_NAME: String(ref?.DIV_NAME || prev.DIV_NAME || ""),
+      AC_CODE: String(ref?.AC_CODE || prev.AC_CODE || ""),
     }));
+
+    if (ref?.AC_CODE && String(ref.AC_CODE) !== String(accounts[0]?.AC_CODE || "")) {
+  try {
+    const refAccountRows = await getVendorAccounts(String(ref.AC_CODE), companyCode);
+    const refAccount = refAccountRows[0];
+    if (refAccount) {
+      setForm((prev) => ({
+        ...prev,
+        AC_NAME: String(refAccount.AC_NAME || refAccount.AC_DESC || ""),
+        ADDRESS: String(refAccount.ADDRESS || ""),
+        PHONE: String(refAccount.PHONE || ""),
+        FAX: String(refAccount.FAX || ""),
+      }));
+    }
+  }
+  catch {
+    // non-fatal — AC_CODE from the ref doc is already set on form above
+  }
+}
     if (!docNo) {
       setItems([]);
       return;
@@ -179,11 +232,16 @@ export function VendorRequestDialog({
         ...form,
         COMPANY_CODE: companyCode,
         DOC_NO: savedDocNo || String(form.DOC_NO || ""),
-        AC_CODE: String(account.AC_CODE || form.AC_CODE || ""),
-        AC_NAME: String(account.AC_NAME || form.AC_NAME || ""),
-        ADDRESS: String(account.ADDRESS || form.ADDRESS || ""),
-        PHONE: String(account.PHONE || form.PHONE || ""),
-        FAX: String(account.FAX || form.FAX || ""),
+        // AC_CODE: String(account.AC_CODE || form.AC_CODE || ""),
+        // AC_NAME: String(account.AC_NAME || form.AC_NAME || ""),
+        // ADDRESS: String(account.ADDRESS || form.ADDRESS || ""),
+        // PHONE: String(account.PHONE || form.PHONE || ""),
+        // FAX: String(account.FAX || form.FAX || ""),
+        AC_CODE: String(form.AC_CODE || account.AC_CODE || ""),
+        AC_NAME: String(form.AC_NAME || account.AC_NAME || ""),
+        ADDRESS: String(form.ADDRESS || account.ADDRESS || ""),
+        PHONE: String(form.PHONE || account.PHONE || ""),
+        FAX: String(form.FAX || account.FAX || ""),
         LAST_ACTION: action,
         EDIT_USER: loginid,
         DOC_TYPE: String(selectedRef?.DOC_TYPE || form.DOC_TYPE || ""),
@@ -251,14 +309,14 @@ export function VendorRequestDialog({
     >
       {/* <form className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}> */}
       <form ref={formRef} className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
-        {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
+        {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-30 py-2 text-sm font-medium text-rose-700">{error}</div>}
 
         <div className="flex border-b">
           <TabButton active={activeTab === "info"} onClick={() => setActiveTab("info")}>Invoice Information</TabButton>
           <TabButton active={activeTab === "details"} onClick={() => setActiveTab("details")}>Invoice Details</TabButton>
         </div>
 
-        {activeTab === "info" ? (
+        {/* {activeTab === "info" ? (
 
           <div className="grid-cols-1 grid-gap-2 rounded-md border bg-white p-1">
   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
@@ -267,9 +325,9 @@ export function VendorRequestDialog({
     <label className="grid gap-1 text-sm">
       <span className="font-medium text-muted-foreground">Ref Doc No</span>
       <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit} required>
-        <option value="">Select Ref Doc</option>
+        <option value="">Select Ref Doc</option> */}
         {/* {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)} */}
-        {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+        {/* {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
       </Select>
     </label>
     <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={infoReadOnly} />
@@ -294,7 +352,98 @@ export function VendorRequestDialog({
     <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="sm:col-span-2 md:col-span-3" readOnly={infoReadOnly} />
   </div>
  </div>
-        ) : (
+        ) : ( */}
+
+        {activeTab === "info" ? (
+  <div className="grid gap-2">
+    {/* <FieldGroup title="Document Details" columns={4}>
+      <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
+      <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={infoReadOnly} />
+      <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={infoReadOnly} />
+      <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={infoReadOnly} />
+    </FieldGroup>
+
+    <FieldGroup title="Reference / Logistics" columns={4}>
+      <label className="grid gap-1 text-sm">
+        <span className="font-medium text-muted-foreground">Ref Doc No</span>
+        <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit} required>
+          <option value="">Select Ref Doc</option>
+          {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+        </Select>
+      </label>
+      <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={infoReadOnly} />
+      <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={infoReadOnly} />
+      <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={infoReadOnly} />
+    </FieldGroup> */}
+
+    <div className="vendor-field-group-row">
+  <FieldGroup title="Document Details" icon={FileText} columns={2}>
+    <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
+    <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={infoReadOnly} />
+    <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={infoReadOnly} />
+    <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={infoReadOnly} />
+  </FieldGroup>
+
+  <FieldGroup title="Reference " icon={MapPinned}columns={2}>
+    <label className="grid gap-0.5 text-[11px] text-sm">
+      <span className="font-semibold text-muted-foreground">Ref Doc No</span>
+      {/* <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit} required> */}
+      <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || approvalMode} required>
+        <option value="">Select Ref Doc</option>
+        {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+      </Select>
+    </label>
+    <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={infoReadOnly} />
+    <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={infoReadOnly} />
+    <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={infoReadOnly} />
+  </FieldGroup>
+</div>
+
+    {/* <FieldGroup title="Account Details" icon={Building2} columns={3}>
+      <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
+      <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly />
+      <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
+      <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
+      <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
+      <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
+      <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="sm:col-span-3" />
+    </FieldGroup> */}
+
+  {/* <FieldGroup title="Account Details" icon={Building2} columns={3}>
+  <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly inputClassName="max-w-[140px]" />
+  <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="sm:col-span-1" />
+  <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly inputClassName="max-w-[140px]" />
+  <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly inputClassName="max-w-[140px]" />
+  <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly inputClassName="max-w-[140px]" />
+  <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
+  <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="sm:col-span-3" />
+</FieldGroup> */}
+
+   {/* <FieldGroup title="Account Details" icon={Building2} columns={3} gridClassName="vendor-account-grid">
+  <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
+  <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly />
+  <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
+  <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
+  <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
+  <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
+  <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="sm:col-span-3" />
+</FieldGroup> */}
+  
+  <FieldGroup title="Account Details" icon={Building2} columns={3} gridClassName="vendor-account-grid">
+  <FormInput label="Account Number" value={String(form.AC_CODE || account.AC_CODE || "")} readOnly />
+  <FormInput label="Account Name" value={String(form.AC_NAME || account.AC_NAME || "")} readOnly />
+  <FormInput label="Phone" value={String(form.PHONE || account.PHONE || "")} readOnly />
+  <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
+  <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
+  <FormInput label="Fax" value={String(form.FAX || account.FAX || "")} readOnly />
+  <FormInput label="Address" value={String(form.ADDRESS || account.ADDRESS || "")} readOnly className="sm:col-span-3" />
+</FieldGroup>
+
+    <FieldGroup title="Remarks" icon={MessageSquare} columns={1}>
+      <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} readOnly={infoReadOnly} />
+    </FieldGroup>
+  </div>
+) : (
           <InvoiceDetailsTab
             items={items}
             loading={loadingRef}
@@ -312,7 +461,8 @@ export function VendorRequestDialog({
       {pendingOpen && !readOnly && (
         <PendingItemsDialog
           refDocNo={String(form.REF_DOC_NO || "")}
-          headerAcCode={String(items[0]?.HEADER_AC_CODE || account.AC_CODE || form.AC_CODE || "")}
+          // headerAcCode={String(items[0]?.HEADER_AC_CODE || account.AC_CODE || form.AC_CODE || "")}
+          headerAcCode={String(items[0]?.HEADER_AC_CODE || form.AC_CODE || account.AC_CODE || "")}
           existingItems={items}
           onClose={() => setPendingOpen(false)}
           onAdd={(rows) => {
@@ -360,7 +510,7 @@ function InvoiceDetailsTab({
   const reset = () => onItemsChange(items.map((item) => ({ ...item, QTY: 0 })));
 
   return (
-    <div className="vendor-detail-panel grid gap-2 rounded-md border bg-white p-2">
+    <div className="vendor-detail-panel vendor-compact grid gap-2 rounded-md border bg-white p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs font-semibold text-muted-foreground">
           {items.length} lines loaded
@@ -373,27 +523,71 @@ function InvoiceDetailsTab({
         )}
       </div>
       <div className="vendor-detail-scroll overflow-auto rounded-md border">
-        <table className="vendor-detail-table w-full min-w-[1360px] text-xs">
-          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-muted-foreground">
+        {/* <table className="vendor-detail-table w-full min-w-[1360px] text-xs"> */}
+          {/* <thead className="sticky top-0 z-10 bg-slate-50 text-left text-muted-foreground"> */}
+          {/* <thead className="vendor-detail-table-head sticky top-0 z-10 text-left"> */}
+           {/* <table className="vendor-detail-table w-full min-w-[1370px] text-[11px]">
+  <thead className="vendor-detail-table-head sticky top-0 z-10 text-left text-[10px] font-bold uppercase tracking-wide"> */}
+          <table className="vendor-detail-table w-full table-fixed text-[10px]">
+  <colgroup>
+    <col className="w-[4%]" />    {/* Sr No */}
+    <col className="w-[20%]" />   {/* Description */}
+    <col className="w-[5%]" />    {/* Qty */}
+    <col className="w-[5.5%]" />  {/* Org Qty */}
+    <col className="w-[6%]" />    {/* Rate */}
+    <col className="w-[6%]" />    {/* Amount */}
+    <col className="w-[5%]" />    {/* Currency */}
+    <col className="w-[5.5%]" />  {/* Ex Rate */}
+    <col className="w-[6%]" />    {/* Base Amt */}
+    <col className="w-[5%]" />    {/* Tax Code */}
+    <col className="w-[4%]" />    {/* Tax % */}
+    <col className="w-[7%]" />    {/* Tax Local Amt */}
+    <col className="w-[6%]" />    {/* Final Amt */}
+    <col className="w-[10%]" />   {/* Item Remark */}
+    <col className="w-[3%]" />    {/* Attach */}
+    <col className="w-[2%]" />    {/* Delete */}
+  </colgroup>
+
+  {/* <thead className="vendor-detail-table-head sticky top-0 z-10 text-left text-[10px] font-bold uppercase tracking-wide">
             <tr>
-              <th className="border-b px-1.5 py-1 font-semibold w-12">Sr No</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-15">Sr No</th>
               <th className="border-b px-1.5 py-1 font-semibold min-w-[240px] max-w-[340px]">Description</th>
-              <th className="border-b px-1.5 py-1 font-semibold w-[72px]">Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[100px]">Qty</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Org Qty</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[100px]">Rate</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Amount</th>
-              <th className="border-b px-1.5 py-1 font-semibold w-[78px]">Currency</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[78px]">Curr</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[84px]">Ex Rate</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Base Amt</th>
-              <th className="border-b px-1.5 py-1 font-semibold w-[56px]">Attach</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Tax Code</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[74px]">Tax %</th>
-              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Tax Local Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[128px]">Tax Local Amt</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Final Amt</th>
               <th className="border-b px-1.5 py-1 font-semibold min-w-[220px] max-w-[280px]">Item Remark</th>
+               <th className="border-b px-1.5 py-1 font-semibold w-[56px]">Attach</th>
               <th className="border-b px-1.5 py-1 font-semibold w-[48px]" />
             </tr>
-          </thead>
+          </thead> */}
+          <thead className="vendor-detail-table-head sticky top-0 z-10 text-left text-[10px] font-bold uppercase tracking-wide">
+  <tr>
+    <th className="border-b px-1 py-1 font-semibold">Sr No</th>
+    <th className="border-b px-1 py-1 font-semibold">Description</th>
+    <th className="border-b px-1 py-1 text-center font-semibold">Qty</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Org Qty</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Rate</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Amount</th>
+    <th className="border-b px-1 py-1 font-semibold">Curr</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Ex Rate</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Base Amt</th>
+    <th className="border-b px-1 py-1 font-semibold">Tax Code</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Tax %</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Tax Local Amt</th>
+    <th className="border-b px-1 py-1 text-right font-semibold">Final Amt</th>
+    <th className="border-b px-1 py-1 font-semibold">Item Remark</th>
+    <th className="border-b px-1 py-1 text-center font-semibold">Attach</th>
+    <th className="border-b px-1 py-1" />
+  </tr>
+</thead>
           <tbody>
             {loading ? (
               <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={16}>Loading invoice details...</td></tr>
@@ -407,24 +601,31 @@ function InvoiceDetailsTab({
               const taxLocal = baseAmt * (taxPerc / 100);
               return (
                 <tr key={`${item.SERIAL_NO || index}`} className="h-6 border-b">
-                  <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.SERIAL_NO || index + 1)}</td>
-                  <td className="min-w-[240px] max-w-[340px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
-                  <td className="w-[72px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} readOnly={readOnly} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
-                  <td className="w-[90px] px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(price)}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(amount)}</td>
+                  <td className="px-1.5 py-0.5 text-muted-foreground font-medium">{String(item.SERIAL_NO || index + 1)}</td>
+                  <td className="min-w-[240px] max-w-[340px] overflow-hidden truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
+                 {/* <td className="overflow-hidden truncate px-1 py-0.5 text-muted-foreground"
+  title={String(item.REMARKS || item.ITEM_DESC || "")}
+></td> */}
+                  <td className="w-[110px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} readOnly={readOnly} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
+                  <td className="w-[90px] px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(item.ORIGINAL_QTY)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(price)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(amount)}</td>
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(exRate)}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(exRate)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(baseAmt)}</td>
+                  {/* <td className="px-1.5 py-0.5">
+                    <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" disabled={!requestNumber} onClick={() => onOpenAttachment(Number(item.SERIAL_NO || index + 1))}><Paperclip size={12} /></Button>
+                  </td> */}
+                  <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.TX_CAT_CODE || "")}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(taxPerc)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(taxLocal)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground font-medium">{formatAmount(baseAmt + taxLocal)}</td>
+                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} readOnly={readOnly} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
                   <td className="px-1.5 py-0.5">
                     <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" disabled={!requestNumber} onClick={() => onOpenAttachment(Number(item.SERIAL_NO || index + 1))}><Paperclip size={12} /></Button>
                   </td>
-                  <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.TX_CAT_CODE || "")}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxPerc)}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxLocal)}</td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt + taxLocal)}</td>
-                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} readOnly={readOnly} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
                   <td className="px-1.5 py-0.5">{!readOnly && <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" onClick={() => onItemsChange(items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={12} /></Button>}</td>
+                  
                 </tr>
               );
             }) : (
@@ -486,13 +687,165 @@ function PendingItemsDialog({
   return (
     <Dialog open wide contentClassName="vendor-pending-dialog" title="Pending Items" onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button><Button onClick={() => onAdd(rows.filter((row) => selected[String(row.SERIAL_NO)]))}>Save</Button></>}>
       <div className="overflow-auto rounded-md border">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-slate-50 text-left text-muted-foreground">
+        <table className="w-full min-w-[900px] table-fixed text-[11px]">
+  <colgroup>
+    {/* Checkbox */}
+    <col className="w-[40px]" />
+
+    {/* Sr No */}
+    <col className="w-[60px]" />
+
+    {/* Description */}
+    <col className="w-[320px]" />
+
+    {/* Org Qty */}
+    <col className="w-[90px]" />
+
+    {/* Rate */}
+    <col className="w-[100px]" />
+
+    {/* Currency */}
+    <col className="w-[80px]" />
+
+    {/* Ex Rate */}
+    <col className="w-[90px]" />
+
+    {/* Base Amt */}
+    <col className="w-[110px]" />
+  </colgroup>
+
+  <thead className="vendor-detail-table-head sticky top-0 z-10 text-left text-[10px] font-bold uppercase tracking-wide">
+    <tr>
+      <th className="px-2 py-2 text-center"></th>
+
+      <th className="px-2 py-2 text-left">
+        Sr No
+      </th>
+
+      <th className="px-2 py-2 text-left">
+        Description
+      </th>
+
+      <th className="px-2 py-2 text-right">
+        Org Qty
+      </th>
+
+      <th className="px-2 py-2 text-right">
+        Rate
+      </th>
+
+      <th className="px-2 py-2 text-left">
+        Currency
+      </th>
+
+      <th className="px-2 py-2 text-right">
+        Ex Rate
+      </th>
+
+      <th className="px-2 py-2 text-right">
+        Base Amt
+      </th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {loading ? (
+      <tr>
+        <td
+          colSpan={8}
+          className="p-6 text-center text-muted-foreground"
+        >
+          Loading...
+        </td>
+      </tr>
+    ) : rows.map((row) => {
+      const price = Number(row.PRICE ?? row.RATE ?? 0);
+      const baseAmt =
+        Number(row.QTY || 0) *
+        price *
+        Number(row.EX_RATE || 1);
+
+      return (
+        <tr
+          key={String(row.SERIAL_NO)}
+          className="h-8 border-t"
+        >
+          {/* CHECKBOX */}
+          <td className="px-2 py-1 text-center">
+            <input
+              type="checkbox"
+              checked={Boolean(
+                selected[String(row.SERIAL_NO)]
+              )}
+              onChange={(event) =>
+                setSelected((prev) => ({
+                  ...prev,
+                  [String(row.SERIAL_NO)]:
+                    event.target.checked,
+                }))
+              }
+            />
+          </td>
+
+          {/* SR NO */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {String(row.SERIAL_NO || "")}
+          </td>
+
+          {/* DESCRIPTION */}
+          <td
+            className="px-2 py-1 truncate"
+            title={String(row.REMARKS || "")}
+          >
+            {String(row.REMARKS || "")}
+          </td>
+
+          {/* ORG QTY */}
+          <td className="px-2 py-1 text-right whitespace-nowrap">
+            {formatAmount(
+              row.ORIGINAL_QTY ?? row.QTY
+            )}
+          </td>
+
+          {/* RATE */}
+          <td className="px-2 py-1 text-right whitespace-nowrap">
+            {formatAmount(price)}
+          </td>
+
+          {/* CURRENCY */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {String(row.CURR_CODE || "")}
+          </td>
+
+          {/* EX RATE */}
+          <td className="px-2 py-1 text-right whitespace-nowrap">
+            {Number(row.EX_RATE || 0).toLocaleString(
+              "en-US",
+              {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 6,
+              }
+            )}
+          </td>
+
+          {/* BASE AMOUNT */}
+          <td className="px-2 py-1 text-right whitespace-nowrap">
+            {formatAmount(baseAmt)}
+          </td>
+        </tr>
+      );
+    })}
+  </tbody>
+</table>
+        {/* <table className="w-full min-w-[900px] text-sm"> */}
+        {/* <table className="w-full min-w-[900px] text-[11px] table-fixed">
+          <thead className="vendor-detail-table-head sticky top-0 z-10 text-left">
+          {/* <thead className="bg-slate-50 text-left text-muted-foreground"> */}
             {/* <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2">Price</th><th className="p-2">Currency</th><th className="p-2">Ex Rate</th></tr> */}
             {/* <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2">Org Qty</th><th className="p-2">Rate</th><th className="p-2">Currency</th><th className="p-2">Ex Rate</th><th className="p-2">Base Amt</th></tr> */}
-            <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2 text-right">Org Qty</th><th className="p-2 text-right">Rate</th><th className="p-2">Currency</th><th className="p-2 text-right">Ex Rate</th><th className="p-2 text-right">Base Amt</th></tr>
-          </thead>
-          <tbody>
+            {/* <tr><th className="w-8 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2 text-right">Org Qty</th><th className="p-2 text-right">Rate</th><th className="p-2">Currency</th><th className="p-2 text-right">Ex Rate</th><th className="p-2 text-right">Base Amt</th></tr> */}
+          {/* </thead>
+          <tbody> */} 
             {/* {loading ? <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Loading...</td></tr> : rows.map((row) => (
               <tr key={String(row.SERIAL_NO)} className="border-t">
                 <td className="p-2"><input type="checkbox" checked={Boolean(selected[String(row.SERIAL_NO)])} onChange={(event) => setSelected((prev) => ({ ...prev, [String(row.SERIAL_NO)]: event.target.checked }))} /></td>
@@ -504,7 +857,7 @@ function PendingItemsDialog({
               </tr>
             ))} */}
 
-
+{/* 
       {loading ? <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Loading...</td></tr> : rows.map((row) => {
       const price = Number(row.PRICE ?? row.RATE ?? 0);
       const baseAmt = Number(row.QTY || 0) * price * Number(row.EX_RATE || 1);
@@ -512,7 +865,7 @@ function PendingItemsDialog({
           <tr key={String(row.SERIAL_NO)} className="border-t">
           <td className="p-2"><input type="checkbox" checked={Boolean(selected[String(row.SERIAL_NO)])} onChange={(event) => setSelected((prev) => ({ ...prev, [String(row.SERIAL_NO)]: event.target.checked }))} /></td>
           <td className="p-2">{String(row.SERIAL_NO || "")}</td>
-          <td className="p-2">{String(row.REMARKS || "")}</td>
+          <td className="p-2 whitespace-nowrap">{String(row.REMARKS || "")}</td>
           <td className="p-2 text-right">{formatAmount(row.ORIGINAL_QTY ?? row.QTY)}</td>
           <td className="p-2 text-right">{formatAmount(price)}</td>
           <td className="p-2">{String(row.CURR_CODE || "")}</td>
@@ -521,9 +874,8 @@ function PendingItemsDialog({
           </tr>
        );
      })}
-
        </tbody>
-      </table>
+      </table> */}
       </div>
     </Dialog>
   );
@@ -696,15 +1048,29 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose, readOnly }: { 
           </div>
         ) : (
           <div className="max-h-[430px] overflow-auto rounded-md border">
-            <table className="w-full min-w-[760px] text-sm">
-              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
-                <tr>
+            {/* <table className="w-full min-w-[760px] text-sm">
+              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground"> */}
+               <table className="w-full min-w-[760px] text-[11px]">
+  <thead className="vendor-detail-table-head sticky top-0 text-[10px] font-bold uppercase tracking-wide">
+                {/* <tr>
                   <th className="px-3 py-2 text-left">SR. No</th>
                   <th className="px-3 py-2 text-left">Line</th>
                   <th className="px-3 py-2 text-left">File Name</th>
                   <th className="px-3 py-2 text-left">File Type</th>
                   <th className="px-3 py-2 text-right">Action</th>
-                </tr>
+                </tr> */}
+
+                <tr>
+  <th className="w-10 p-2" />
+  <th className="w-[70px] p-2">Sr No</th>
+  <th className="w-[280px] p-2 ">Description</th>
+  <th className="w-[100px] p-2 text-right">Org Qty</th>
+  <th className="w-[120px] p-2 text-right">Rate</th>
+  <th className="w-[90px] p-2">Currency</th>
+  <th className="w-[120px] p-2 text-right">Ex Rate</th>
+  <th className="w-[120px] p-2 text-right">Base Amt</th>
+</tr>
+
               </thead>
               <tbody>
                 {files.map((file, index) => {
@@ -844,17 +1210,22 @@ function getFileType(file: VendorRow) {
 }
 
 function TabButton({ active, children, onClick }: { active: boolean; children: string; onClick: () => void }) {
-  return <button type="button" className={cn("border-b-2 px-4 py-3 text-sm font-semibold", active ? "border-primary text-primary" : "border-transparent text-foreground")} onClick={onClick}>{children}</button>;
+  return <button type="button" className={cn(
+        "border-b-2 px-3.5 py-2 text-[11.5px] font-semibold",
+        active ? "border-[#00378c] text-[#00378c] bg-[#edf4fc]" : "border-transparent text-slate-500"
+      )}
+  //  className={cn("border-b-2 px-4 py-3 text-sm font-semibold", active ? "border-primary text-primary" : "border-transparent text-foreground")}
+    onClick={onClick}>{children}</button>;
 }
 
-function FormInput({ label, value, onChange, type = "text", readOnly, required, className }: { label: string; value: string; onChange?: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string }) {
+function FormInput({ label, value, onChange, type = "text", readOnly, required, className, inputClassName,}: { label: string; value: string; onChange?: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string; inputClassName?: string }) {
   return (
-    <label className={cn("grid gap-1 text-sm", className)}>
-      {/* <span className="font-medium text-muted-foreground">{required ? `*${label}` : label}</span> */}
-       <span className="font-medium text-muted-foreground">
+    // <label className={cn("grid gap-0.5 text-[11px]  leading-tight", className)}>
+        <label className={cn("grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground leading-tight", className)}>
+       <span className="font-semibold text-muted-foreground">
          {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
        </span>
-      <Input value={value} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)}
+      <Input className={cn("h-7 text-[11px] w-full", inputClassName)} value={value} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")} />
     </label>

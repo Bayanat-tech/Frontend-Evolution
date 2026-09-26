@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { executeVendorSql, getVendorRequest, type VendorRequestPayload } from "../../api/vendor";
 import { useAuth } from "../../state/AuthContext";
-import { makeVendorColumns, RefreshButton, TabStrip, VendorPageHeader } from "./components";
+import { makeVendorColumns, TabStrip, VendorPageHeader } from "./components";
 import { vendorRequestSql } from "./vendorSql";
 import type { Notice, VendorTableRow } from "./vendorTypes";
 import { VendorRequestDialog } from "./VendorRequestDialog";
@@ -16,31 +16,109 @@ type RequestTab = "DRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED";
 export function VendorRequestsPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<RequestTab>("DRAFT");
-  const [rows, setRows] = useState<VendorTableRow[]>([]);
+  // rows are derived from allRows based on selected tab
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [editor, setEditor] = useState<VendorRequestPayload | null | undefined>(undefined);
 
-  const loadRows = useCallback(async () => {
-    const company = user?.company_code || "";
-    const loginid = user?.loginid || user?.username || "";
-    if (!company || !loginid) return;
-    setLoading(true);
-    try {
-      setRows(await executeVendorSql(vendorRequestSql(company, loginid, tab)));
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to load vendor requests" });
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, user?.company_code, user?.loginid, user?.username]);
+  // const loadRows = useCallback(async () => {
+  //   const company = user?.company_code || "";
+  //   const loginid = user?.loginid || user?.username || "";
+  //   if (!company || !loginid) return;
+  //   setLoading(true);
+  //   try {
+  //     setRows(await executeVendorSql(vendorRequestSql(company, loginid, tab)));
+  //   } catch (err) {
+  //     setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to load vendor requests" });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [tab, user?.company_code, user?.loginid, user?.username]);
 
-  useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
+
+const [allRows, setAllRows] = useState<VendorTableRow[]>([]);
+
+const loadRows = useCallback(async () => {
+  const company = user?.company_code || "";
+  const loginid = user?.loginid || user?.username || "";
+  if (!company || !loginid) return;
+  setLoading(true);
+  try {
+    setAllRows(await executeVendorSql(vendorRequestSql(company, loginid, "ALL"))); // fetch everything
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to load vendor requests" });
+  } finally {
+    setLoading(false);
+  }
+}, [user?.company_code, user?.loginid, user?.username]);
+useEffect(() => {
+  void loadRows();
+}, [loadRows]);
+
+// const rows = useMemo(() => {
+//   return allRows.filter((r) => {
+//     const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+//     if (tab === "DRAFT") return !action;
+//     if (tab === "SUBMITTED") return ["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"].includes(action);
+//     if (tab === "REJECTED") return action === "REJECTED";
+//     if (tab === "CLOSED") return action === "CLOSED";
+//     return action === tab;
+//   });
+// }, [allRows, tab]);
+
+// const tabCounts = useMemo(() => {
+//   const countByStatus = (status: string | string[]) => {
+//     const statuses = Array.isArray(status) ? status : [status];
+//     return allRows.filter((r) => statuses.includes(String(r.LAST_ACTION || "").trim().toUpperCase())).length;
+//   };
+
+//   return {
+//     DRAFT: allRows.filter((r) => !String(r.LAST_ACTION || "").trim()).length,
+//     SUBMITTED: countByStatus(["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"]),
+//     REJECTED: countByStatus("REJECTED"),
+//     CLOSED: countByStatus("CLOSED"),
+//   };
+// }, [allRows]);
+
+//   useEffect(() => {
+//     void loadRows();
+//   }, [loadRows]);
     
-  const openExisting = async (row: VendorTableRow) => {
+// after
+const rows = useMemo(() => {
+  return allRows.filter((r) => {
+    const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+    if (tab === "DRAFT") return !action || action === "SAVEASDRAFT" || action === "SENTBACK";
+// const rows = useMemo(() => {
+//   return allRows.filter((r) => {
+//     const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+//     if (tab === "DRAFT") return !action || action === "SAVEASDRAFT";
+    if (tab === "SUBMITTED") return ["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"].includes(action);
+    if (tab === "REJECTED") return action === "REJECTED";
+    if (tab === "CLOSED") return action === "CLOSED";
+    return action === tab;
+  });
+}, [allRows, tab]);
+
+const tabCounts = useMemo(() => {
+  const countByStatus = (status: string | string[]) => {
+    const statuses = Array.isArray(status) ? status : [status];
+    return allRows.filter((r) => statuses.includes(String(r.LAST_ACTION || "").trim().toUpperCase())).length;
+  };
+
+  return {
+    DRAFT: allRows.filter((r) => {
+      const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+      return !action || action === "SAVEASDRAFT" || action === "SENTBACK";;
+    }).length,
+    SUBMITTED: countByStatus(["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"]),
+    REJECTED: countByStatus("REJECTED"),
+    CLOSED: countByStatus("CLOSED"),
+  };
+}, [allRows]);
+
+const openExisting = async (row: VendorTableRow) => {
     const rawDocNo = String(row.DOC_NO || "");
     const loginid = user?.loginid || user?.username || "";
     if (!rawDocNo || !loginid) return;
@@ -66,27 +144,39 @@ export function VendorRequestsPage() {
       ),
     },
   ]), [tab]);
+  
 
   return (
-    <section className="grid gap-4">
+    // <section className="grid gap-4">
+    <section className="vendor-list-screen grid gap-4">
       <VendorPageHeader
         title="Vendor Requests"
-        actions={<><RefreshButton loading={loading} onClick={() => void loadRows()} /><Button size="sm" onClick={() => setEditor(null)}><Plus size={14} /> New Request</Button></>}
+        // actions={<><RefreshButton loading={loading} onClick={() => void loadRows()} /><Button size="sm" onClick={() => setEditor(null)}><Plus size={14} /> New Request</Button></>}
       />
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
       <TabStrip
         value={tab}
         onChange={setTab}
         tabs={[
-          { label: "Draft", value: "DRAFT", icon: "draft" },
-          { label: "In Progress", value: "SUBMITTED", icon: "submitted" },
-          { label: "Reject", value: "REJECTED", icon: "rejected" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
+          { label: "Draft", value: "DRAFT" ,count: tabCounts.DRAFT},
+          { label: "In Progress", value: "SUBMITTED" ,count: tabCounts.SUBMITTED},
+          { label: "Reject", value: "REJECTED" ,count: tabCounts.REJECTED},
+          { label: "Closed", value: "CLOSED" ,count: tabCounts.CLOSED},
         ]}
       />
       <DataTable
         columns={columns}
         data={rows}
+        toolbar={
+           <button
+             type="button"
+             onClick={() => setEditor(null)}
+             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+           >
+             <Plus size={14} />
+               New Request
+              </button>
+         }
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search vendor requests..."
