@@ -1,7 +1,10 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
+  X,
+  MapPinned,
+  PackageCheck,
+  Coins,
   BarChart3,
   Download,
   Edit2,
@@ -10,7 +13,6 @@ import {
   Filter,
   Plane,
   Plus,
-  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -21,7 +23,6 @@ import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
-import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
@@ -285,63 +286,134 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
   };
 
   const columns = useMemo<ColumnDef<AirlineTariffRow>[]>(() => [
-    { accessorKey: "AIR_TARIFF_NO", header: "Tariff No", size: 90 },
-    { accessorKey: "AIRLINE_CODE", header: "Airline", size: 90 },
-    { accessorKey: "AIRLINE_NAME", header: "Airline Name", size: 210 },
-    { accessorKey: "SOURCE", header: "Source", size: 110 },
-    { accessorKey: "DESTINATION", header: "Destination", size: 120 },
-    { accessorKey: "DIRECT_VIA", header: "Direct/Via", size: 200 },
-    { accessorKey: "IATA_CODE", header: "IATA", size: 90 },
-    { accessorKey: "CURR_CODE", header: "Currency", size: 85 },
-    { accessorKey: "MINIMUM", header: "Min", size: 80 },
-    { accessorKey: "NORMAL", header: "Normal", size: 80 },
-    { accessorKey: "K_45", header: "45 kg", size: 70 },
-    { accessorKey: "K_100", header: "100 kg", size: 70 },
-    { accessorKey: "K_250", header: "250 kg", size: 70 },
-    { accessorKey: "K_300", header: "300 kg", size: 70 },
-    { accessorKey: "K_500", header: "500 kg", size: 70 },
-    { accessorKey: "K_1000", header: "1000 kg", size: 80 },
-    { accessorKey: "HARD_FREIGHT", header: "Hard", size: 70 },
-    { accessorKey: "PERISHABLE", header: "Perish", size: 70 },
-    { accessorKey: "RESTRICTION", header: "Restriction", size: 20},
-    { accessorKey: "RESTRICTION_DET", header: "Restriction Detail", size: 500 },
+    {
+      accessorKey: "AIR_TARIFF_NO",
+      header: "Tariff No",
+      size: 90,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => openEdit(row.original)}
+          className="font-semibold text-[#00378C] hover:underline cursor-pointer"
+          title="Click to edit tariff"
+        >
+          {text(row.original, "AIR_TARIFF_NO")}
+        </button>
+      ),
+    },
+    { accessorKey: "AIRLINE_CODE", header: "Airline", size: 85 },
+    { accessorKey: "AIRLINE_NAME", header: "Airline Name", size: 200 },
+    { accessorKey: "SOURCE", header: "Source", size: 105 },
+    { accessorKey: "DESTINATION", header: "Destination", size: 110 },
+    { accessorKey: "DIRECT_VIA", header: "Direct/Via", size: 150 },
+    { accessorKey: "IATA_CODE", header: "IATA", size: 80 },
+    { accessorKey: "CURR_CODE", header: "Currency", size: 80 },
+    {
+      accessorKey: "MINIMUM",
+      header: "Min",
+      size: 75,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "NORMAL",
+      header: "Normal",
+      size: 75,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "K_45",
+      header: "45 kg",
+      size: 70,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "K_100",
+      header: "100 kg",
+      size: 70,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "K_250",
+      header: "250 kg",
+      size: 70,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "K_300",
+      header: "300 kg",
+      size: 70,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "K_500",
+      header: "500 kg",
+      size: 70,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "K_1000",
+      header: "1000 kg",
+      size: 75,
+      cell: ({ getValue }) => <div className="text-right font-mono font-medium">{formatRate(getValue())}</div>,
+    },
+    {
+      accessorKey: "HARD_FREIGHT",
+      header: "Hard",
+      size: 65,
+      cell: ({ getValue }) => <div className="text-center">{String(getValue() ?? "") === "Y" ? "Yes" : "No"}</div>,
+    },
+    {
+      accessorKey: "PERISHABLE",
+      header: "Perish",
+      size: 65,
+      cell: ({ getValue }) => <div className="text-center">{String(getValue() ?? "") === "Y" ? "Yes" : "No"}</div>,
+    },
+    {
+      accessorKey: "RESTRICTION",
+      header: "Restriction",
+      size: 85,
+      cell: ({ getValue }) => <div className="text-center">{String(getValue() ?? "") === "Y" ? "Yes" : "No"}</div>,
+    },
+    { accessorKey: "RESTRICTION_DET", header: "Restriction Detail", size: 220 },
     ...(!isReport ? [{
       id: "actions",
+      enableColumnFilter: false,
+      enableSorting: false,
       header: "Actions",
-      size: 110,
+      size: 105,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md transition-colors"
             title="View tariff"
             onClick={(event) => {
               event.stopPropagation();
               openView(row.original);
             }}
           >
-            <Eye className="h-4 w-4" />
+            <Eye size={15} />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md transition-colors"
             title="Edit tariff"
             onClick={(event) => {
               event.stopPropagation();
               openEdit(row.original);
             }}
           >
-            <Edit2 className="h-4 w-4" />
+            <Edit2 size={15} />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
             title="Delete tariff"
             disabled={saving}
             onClick={(event) => {
@@ -349,191 +421,297 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
               void deleteTariffRow(row.original);
             }}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 size={15} />
           </Button>
         </div>
       ),
     } satisfies ColumnDef<AirlineTariffRow>] : []),
   ], [isReport, saving, deleteTariffRow]);
 
-   return (
-    <section className="freight-ui-standard freight-list-screen grid gap-3">
-       <div className={`rounded-md border shadow-sm ${isReport ? "overflow-hidden bg-card" : "bg-card"}`}>
-        <div className={`flex flex-wrap items-center justify-between gap-3  px-4 py-3 ${isReport ? "bg-[#185FA5] text-white" : ""}`}>
-          <div className="flex min-w-0 items-center gap-3">
-            <span className={`grid h-10 w-10 place-items-center rounded-md ${isReport ? "bg-white/15 text-white" : "bg-primary/10 text-primary"}`}>
-              {isReport ? <BarChart3 className="h-5 w-5" /> : <Plane className="h-5 w-5" />}
-            </span>
-            <div className="min-w-0">
-              {/* <div className={`text-[11px] font-bold uppercase tracking-[0.22em] ${isReport ? "text-blue-100" : "text-primary"}`}>Freight Air</div> */}
-              <h1 className={`truncate text-2xl font-bold ${isReport ? "text-white" : "text-foreground"}`}>
-                {isReport ? "Airline Tariff Report" : "Airline Tariff"}
-              </h1>
-              <p className={`text-sm ${isReport ? "text-blue-50" : "text-muted-foreground"}`}>
-                {isReport ? "Filter airline rate slabs by route, carrier and validity" : "Maintain airline source, destination and weight break rates"}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isReport && (
-              entryView === "list" ? (
-                <Button type="button" onClick={openAdd} disabled={saving}>
-                  <Plus className="h-4 w-4" /> Add
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" onClick={backToList} disabled={saving}>
-                  <ArrowLeft className="h-4 w-4" /> List
-                </Button>
-              )
-            )}
-            {(isReport || entryView === "list") && (
-              <Button type="button" variant={isReport ? "secondary" : "outline"} onClick={() => void loadRows()} disabled={loading}>
-                <RefreshCw className="h-4 w-4" /> Refresh
-              </Button>
-            )}
+  return (
+    <section className={`freight-airline-tariff-screen grid gap-2 ${entryView === "list" ? "freight-enquiry-list-screen" : "freight-ui-standard freight-dense-form"}`}>
+      {/* Top Header Card */}
+      <div className={`tariff-page-header flex flex-wrap items-center justify-between gap-2 ${isReport ? "bg-[#185FA5] text-white" : ""}`}>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className={`tariff-page-icon ${isReport ? "bg-white/15 text-white border-white/20" : ""}`}>
+            {isReport ? <BarChart3 size={20} /> : <Plane size={20} />}
+          </span>
+          <div className="min-w-0">
+            <h1 className={`truncate text-lg font-bold leading-tight ${isReport ? "text-white" : "text-slate-900"}`}>
+              {isReport
+                ? "Airline Tariff Report"
+                : entryView === "editor"
+                  ? form.air_tariff_no
+                    ? readOnly
+                      ? "View Airline Tariff"
+                      : "Edit Airline Tariff"
+                    : "New Airline Tariff"
+                  : "Airline Tariff"}
+            </h1>
           </div>
         </div>
 
-        {(notice || isReport || entryView === "editor") && (
-        <div className="grid gap-3 p-3">
-          {notice && (
-            <div className={`rounded-md border px-3 py-2 text-sm font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-destructive/20 bg-destructive/10 text-destructive"}`}>
-              {notice.text}
+        {/* Header Right Action: In editor mode, shows Back to List button. In list mode, Refresh and Add are removed from here. */}
+        {entryView === "editor" && !isReport && (
+            <div className="flex items-center gap-2">
+              {!readOnly && (
+                <>
+                  {Boolean(form.air_tariff_no) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={deleteTariff}
+                      disabled={saving}
+                      className="h-8 gap-1.5 text-xs font-semibold rounded-lg text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                    >
+                      <Trash2 size={14} /> Delete
+                    </Button>
+                  )}
+                  <Button
+                    type="submit" form="airline-tariff-form"
+                    disabled={saving}
+                    className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <Save size={14} /> Save
+                  </Button>
+                </>
+              )}
+              <Button type="button" variant="outline" size="icon" onClick={backToList} disabled={saving} aria-label="Close tariff" title="Close tariff" className="h-8 w-8 rounded-lg"><X size={16} /></Button>
             </div>
-          )}
+        )}
+      </div>
 
-          {isReport ? (
-            <>
-              <div className="grid gap-2 md:grid-cols-5">
-                <ReportTile label="Rows" value={String(rows.length)} />
-                <ReportTile label="Airlines" value={String(reportSummary.airlines)} />
-                <ReportTile label="Routes" value={String(reportSummary.routes)} />
-                <ReportTile label="Currencies" value={String(reportSummary.currencies)} />
-                <ReportTile label="Lowest Min" value={reportSummary.lowestMinimum ? String(reportSummary.lowestMinimum) : "-"} />
-              </div>
-              <ReportFilters
-                companyCode={companyCode}
-                filters={filters}
-                setFilters={setFilters}
-                onRun={() => void loadRows()}
-                loading={loading}
-              />
-            </>
-          ) : entryView === "editor" ? (
-            <form className="grid gap-3" onSubmit={saveTariff}>
-              <div className="grid gap-3 ">
-                <div className="rounded-md border bg-muted/20">
-                  <SectionTitle title="Route and Airline" subtitle={`${form.airline_code || "Airline pending"} / ${form.source || "-"} -> ${form.destination || "-"}`} />
-                  <div className="grid gap-2 p-3 md:grid-cols-4 tariff-form-fields"> 
-                    <Field label="Tariff No" value={form.air_tariff_no || "Auto"} disabled onChange={() => undefined} />
-                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground tariff-lookup-fix">
-                      <span>Airline <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span></span>
-                      <LookupField
-                      label="Airline"
-                      value={form.airline_code}
-                      displayValue={form.airline_name}
-                      required
-                      compact
-                      valueField="AIRLINE_CODE"
-                      displayFields={["AIRLINE_CODE", "AIRLINE_NAME"]}
-                      columns={[{ field: "AIRLINE_CODE", header: "Code" }, { field: "AIRLINE_NAME", header: "Airline" }]}
-                      loadOptions={() => loadLookup("freight_airline", companyCode)}
-                      disabled={readOnly}
-                      onChange={(value, row) => updateForm(setForm, {
-                        airline_code: value,
-                        airline_name: text(row, "AIRLINE_NAME", "airline_name"),
-                      })}
-                    />
-                    </div>
-                    <Field label="Source" value={form.source} required disabled={readOnly} onChange={(value) => updateForm(setForm, { source: value })} />
-                    <Field label="Destination" value={form.destination} required disabled={readOnly} onChange={(value) => updateForm(setForm, { destination: value })} />
-                    <Field label="Direct/Via" value={form.direct_via} disabled={readOnly} onChange={(value) => updateForm(setForm, { direct_via: value })} />
-                    <Field label="IATA Code" value={form.iata_code} disabled={readOnly} onChange={(value) => updateForm(setForm, { iata_code: value })} />
-                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground tariff-lookup-fix">
-                      <span>Currency <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span></span>
-                      <LookupField
-                      label="Currency"
-                      value={form.curr_code}
-                      compact
-                      valueField="CURR_CODE"
-                      displayFields={["CURR_CODE", "CURR_NAME"]}
-                      columns={[{ field: "CURR_CODE", header: "Code" }, { field: "CURR_NAME", header: "Currency" }]}
-                      loadOptions={() => loadLookup("freight_currency", companyCode)}
-                      disabled={readOnly}
-                      onChange={(value) => updateForm(setForm, { curr_code: value })}
-                    />
-                    </div>
-                    <SelectField label="Hard Freight" value={form.hard_freight} disabled={readOnly} onChange={(value) => updateForm(setForm, { hard_freight: value })} />
-                    <SelectField label="Perishable" value={form.perishable} disabled={readOnly} onChange={(value) => updateForm(setForm, { perishable: value })} />
-                    <SelectField label="Restriction" value={form.restriction} disabled={readOnly} onChange={(value) => updateForm(setForm, { restriction: value })} />
-                    <div className="grid gap-2 p-3 pt-0 md:grid-cols-1">
-                    <Field label="Restriction Detail" value={form.restriction_det} disabled={readOnly} onChange={(value) => updateForm(setForm, { restriction_det: value })} />
-                  </div>
-                  </div>
-                </div>
-
-                <div className="rounded-md border bg-muted/20">
-                  <SectionTitle title="Weight Breaks" subtitle={`${form.curr_code || "Currency pending"} rate slabs`} />
-                  <div className="grid gap-2 p-3 sm:grid-cols-4 tariff-form-fields">
-                    {slabFields.map((field) => (
-                      <Field
-                        key={field.key}
-                        label={field.label}
-                        value={form[field.key]}
-                        type="number"
-                        disabled={readOnly}
-                        onChange={(value) => updateForm(setForm, { [field.key]: value })}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="outline" onClick={backToList} disabled={saving}>
-                  <ArrowLeft className="h-4 w-4" /> Cancel
-                </Button>
-                {!readOnly && (
-                  <>
-                    <Button type="button" variant="outline" onClick={deleteTariff} disabled={saving || !form.air_tariff_no}>
-                      <Trash2 className="h-4 w-4" /> Delete
-                    </Button>
-                    <Button type="submit" disabled={saving}>
-                      <Save className="h-4 w-4" /> Save
-                    </Button>
-                  </>
-                )}
-              </div>
-            </form>
-          ) : null
-          }
+      {notice && (
+        <div className={`rounded-md border px-3 py-2 text-sm font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-destructive/20 bg-destructive/10 text-destructive"}`}>
+          {notice.text}
         </div>
       )}
-      </div>
-    
+
+      {isReport && (
+        <div className="grid gap-3">
+          <div className="grid gap-2 md:grid-cols-5">
+            <ReportTile label="Rows" value={String(rows.length)} />
+            <ReportTile label="Airlines" value={String(reportSummary.airlines)} />
+            <ReportTile label="Routes" value={String(reportSummary.routes)} />
+            <ReportTile label="Currencies" value={String(reportSummary.currencies)} />
+            <ReportTile label="Lowest Min" value={reportSummary.lowestMinimum ? String(reportSummary.lowestMinimum) : "-"} />
+          </div>
+          <ReportFilters
+            companyCode={companyCode}
+            filters={filters}
+            setFilters={setFilters}
+            onRun={() => void loadRows()}
+            loading={loading}
+          />
+        </div>
+      )}
+
+      {entryView === "editor" && !isReport && (
+        <form id="airline-tariff-form" className="flex flex-col gap-2" onSubmit={saveTariff}>
+          {/* Card 1: Route and Airline */}
+          <div className="freight-master-form-card">
+            <div className="freight-master-form-header">
+              <h3><span className="freight-section-icon"><MapPinned size={16} /></span>Route and Airline</h3>
+            </div>
+            <div className="freight-master-form-body">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
+                <Field
+                  label="Tariff No"
+                  value={form.air_tariff_no || "Auto Generated"}
+                  disabled
+                  onChange={() => undefined}
+                />
+
+                <div className="freight-master-field">
+                  <label className="freight-master-label">
+                    <span>Airline</span>
+                    <span className="text-red-500 font-bold ml-0.5">*</span>
+                  </label>
+                  <LookupField
+                    compact
+                    value={form.airline_code}
+                    displayValue={form.airline_name ? `${form.airline_code} - ${form.airline_name}` : form.airline_code}
+                    required
+                    valueField="AIRLINE_CODE"
+                    displayFields={["AIRLINE_CODE", "AIRLINE_NAME"]}
+                    columns={[{ field: "AIRLINE_CODE", header: "Code" }, { field: "AIRLINE_NAME", header: "Airline" }]}
+                    loadOptions={() => loadLookup("freight_airline", companyCode)}
+                    disabled={readOnly}
+                    onChange={(value, row) => updateForm(setForm, {
+                      airline_code: value,
+                      airline_name: text(row, "AIRLINE_NAME", "airline_name"),
+                    })}
+                  />
+                </div>
+
+                <Field
+                  label="Source"
+                  value={form.source}
+                  required
+                  disabled={readOnly}
+                  placeholder="e.g. INDIA"
+                  onChange={(value) => updateForm(setForm, { source: value.toUpperCase() })}
+                />
+
+                <Field
+                  label="Destination"
+                  value={form.destination}
+                  required
+                  disabled={readOnly}
+                  placeholder="e.g. OMAN"
+                  onChange={(value) => updateForm(setForm, { destination: value.toUpperCase() })}
+                />
+
+                <Field
+                  label="Direct / Via"
+                  value={form.direct_via}
+                  disabled={readOnly}
+                  placeholder="e.g. Direct / Via DXB"
+                  onChange={(value) => updateForm(setForm, { direct_via: value })}
+                />
+
+                <Field
+                  label="IATA Code"
+                  value={form.iata_code}
+                  disabled={readOnly}
+                  placeholder="e.g. 123"
+                  onChange={(value) => updateForm(setForm, { iata_code: value })}
+                />
+
+              </div>
+            </div>
+          </div>
+          <div className="freight-master-form-card">
+            <div className="freight-master-form-header"><h3><span className="freight-section-icon"><PackageCheck size={16} /></span>Cargo Handling</h3></div>
+            <div className="freight-master-form-body">
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                <SelectField
+                  label="Hard Freight"
+                  value={form.hard_freight}
+                  disabled={readOnly}
+                  onChange={(value) => updateForm(setForm, { hard_freight: value })}
+                />
+
+                <SelectField
+                  label="Perishable"
+                  value={form.perishable}
+                  disabled={readOnly}
+                  onChange={(value) => updateForm(setForm, { perishable: value })}
+                />
+
+                <SelectField
+                  label="Restriction"
+                  value={form.restriction}
+                  disabled={readOnly}
+                  onChange={(value) => updateForm(setForm, { restriction: value })}
+                />
+
+                <Field
+                  className="col-span-1 sm:col-span-3"
+                  label="Restriction Detail"
+                  value={form.restriction_det}
+                  disabled={readOnly}
+                  placeholder="Enter restriction remarks or details if applicable..."
+                  onChange={(value) => updateForm(setForm, { restriction_det: value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Weight Breaks */}
+          <div className="freight-master-form-card">
+            <div className="freight-master-form-header">
+              <h3><span className="freight-section-icon"><Coins size={16} /></span>Currency and Weight Breaks</h3>
+            </div>
+            <div className="freight-master-form-body">
+              <div className="tariff-currency-row">                <div className="freight-master-field">
+                  <label className="freight-master-label">
+                    <span>Currency</span>
+                    <span className="text-red-500 font-bold ml-0.5">*</span>
+                  </label>
+                  <LookupField
+                    compact
+                    value={form.curr_code}
+                    required
+                    valueField="CURR_CODE"
+                    displayFields={["CURR_CODE", "CURR_NAME"]}
+                    columns={[{ field: "CURR_CODE", header: "Code" }, { field: "CURR_NAME", header: "Currency" }]}
+                    loadOptions={() => loadLookup("freight_currency", companyCode)}
+                    disabled={readOnly}
+                    onChange={(value) => updateForm(setForm, { curr_code: value })}
+                  />
+                </div>
+
+</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+                {slabFields.map((field) => (
+                  <Field
+                    key={field.key}
+                    label={field.label}
+                    value={form[field.key]}
+                    type="number"
+                    numeric
+                    placeholder="0.00"
+                    disabled={readOnly}
+                    onChange={(value) => updateForm(setForm, { [field.key]: value })}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+
+        </form>
+      )}
+
       {(isReport || entryView === "list") && (
         <DataTable
-          columns={columns}
+          columns={isReport ? columns : columns.filter((column) => column.id === "actions" || ("accessorKey" in column && ["AIR_TARIFF_NO", "AIRLINE_NAME", "SOURCE", "DESTINATION", "CURR_CODE", "MINIMUM", "NORMAL"].includes(String(column.accessorKey))))}
           data={rows}
           loading={loading}
           density="grid"
-          height={isReport ? "calc(100vh - 355px)" : "calc(100vh - 230px)"}
-          minWidth={1280}
+          height={isReport ? "calc(100dvh - 355px)" : "calc(100dvh - 180px)"}
+          enableColumnFilters
+          enablePagination
+          pageSize={25}
+          getRowId={(row) => String(row.AIR_TARIFF_NO)}
+          minWidth={isReport ? 1400 : 850}
           enableExport
           exportFilename={isReport ? "airline-tariff-report.csv" : "airline-tariff.csv"}
           searchValue={isReport ? undefined : searchText}
           onSearchChange={isReport ? undefined : setSearchText}
           searchPlaceholder="Search tariff no, airline, source, destination..."
           emptyText="No airline tariff records found"
-          toolbar={isReport ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => exportCsv(rows)}>
-              <Download className="h-4 w-4" /> CSV
-            </Button>
-          ) : undefined}
+          actionButton={
+            !isReport ? (
+              <Button
+                type="button"
+                onClick={openAdd}
+                disabled={saving}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg cursor-pointer transition-colors"
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+            ) : undefined
+          }
+          toolbar={
+            isReport ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => exportCsv(rows)}>
+                <Download className="h-4 w-4" /> CSV
+              </Button>
+            ) : undefined
+          }
         />
       )}
     </section>
   );
+}
+
+function formatRate(value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  const num = Number(value);
+  if (isNaN(num)) return String(value);
+  return num === 0 ? "-" : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 }
 
 function ReportTile({ label, value }: { label: string; value: string }) {
@@ -639,13 +817,11 @@ function ReportFilters({
   );
 }
 
-function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
-      <div>
-        <div className="text-sm font-bold uppercase text-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">{subtitle}</div>
-      </div>
+    <div className="freight-master-form-header">
+      <h3>{title}</h3>
+      {subtitle && <span className="freight-master-form-subtitle">{subtitle}</span>}
     </div>
   );
 }
@@ -657,6 +833,9 @@ function Field({
   disabled,
   required,
   type = "text",
+  placeholder,
+  className,
+  numeric,
 }: {
   label: string;
   value: string;
@@ -664,28 +843,47 @@ function Field({
   disabled?: boolean;
   required?: boolean;
   type?: string;
+  placeholder?: string;
+  className?: string;
+  numeric?: boolean;
 }) {
   return (
-    <label className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
-      {label}
-        <Input
-        className="h-8 text-sm font-semibold" style={{ borderColor: "#94a3b8" }}
+    <div className={`freight-master-field ${className || ""}`}>
+      <label className="freight-master-label">
+        <span>{label}</span>
+        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+      </label>
+      <input
+        className={`freight-master-input ${numeric ? "numeric" : ""}`}
         value={value}
         type={type}
         required={required}
         disabled={disabled}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
       />
-    </label>
+    </div>
   );
 }
 
-function SelectField({ label, value, disabled, onChange }: { label: string; value: string; disabled?: boolean; onChange: (value: string) => void }) {
+function SelectField({
+  label,
+  value,
+  disabled,
+  onChange,
+  className,
+}: {
+  label: string;
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
   return (
-    <label className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
-      {label}
+    <div className={`freight-master-field ${className || ""}`}>
+      <label className="freight-master-label">{label}</label>
       <select
-        className="h-8 rounded-md border border-slate-400 bg-background px-2 text-sm font-semibold text-foreground shadow-none"
+        className="freight-master-select"
         value={value || "N"}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -693,7 +891,7 @@ function SelectField({ label, value, disabled, onChange }: { label: string; valu
         <option value="N">No</option>
         <option value="Y">Yes</option>
       </select>
-    </label>
+    </div>
   );
 }
 
