@@ -260,24 +260,53 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         </button>
       ),
     },
-    { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
+    {
+      accessorKey: "doc_date",
+      header: () => <div className="text-center w-full">Date</div>,
+      cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
+    },
     { accessorKey: "ac_name", header: "Party" },
     { accessorKey: "remarks", header: "Description" },
-    { accessorKey: "div_code", header: "Div" },
     {
-     id: "amount",
-     header: "Amount",
-     accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
-     cell: ({ row }) =>
-     formatAmount(
-      Number(row.original.net_amount ?? row.original.amount ?? 0)
-    ),
-},
+      accessorKey: "div_code",
+      header: () => <div className="text-center w-full">Div</div>,
+      cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
+    },
+    {
+      id: "amount",
+      header: () => <div className="text-right w-full">Amount</div>,
+      accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
+      cell: ({ row }) => (
+        <div className="text-right font-mono font-medium">
+          {formatAmount(Number(row.original.net_amount ?? row.original.amount ?? 0))}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "canceled",
+      header: () => <div className="text-center w-full">Status</div>,
+      cell: ({ getValue }) => {
+        const isCanceled = String(getValue() || "N") === "Y";
+        return (
+          <div className="flex justify-center">
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                isCanceled
+                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              }`}
+            >
+              {isCanceled ? "Cancelled" : "Active"}
+            </span>
+          </div>
+        );
+      },
+    },
     {
       id: "actions",
-      header: "Actions",
+      header: () => <div className="text-center w-full">Actions</div>,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-center gap-1">
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
           <Button size="icon" variant="ghost" 
           onClick={() =>
