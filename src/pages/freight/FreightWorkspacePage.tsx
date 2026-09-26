@@ -2,18 +2,19 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   ClipboardList,
+  Compass,
   FileSpreadsheet,
   FileText,
   Loader2,
   RefreshCw,
   Search,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
 
 type FreightProcess = "enquiry" | "rfq" | "quotation";
@@ -121,40 +122,43 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
   }, [companyCode, userId]);
 
   return (
-    <section className="freight-list-screen freight-control-center grid gap-2">
-      <section className="overflow-hidden rounded-md border bg-card shadow-sm">
-        <div className="grid gap-3 border-b bg-white px-4 py-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+    <section className="freight-control-center">
+      {/* 1. Master Header Card */}
+      <div className="freight-landing-header flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="bisc-master-icon-box">
+            <Compass size={22} className="text-[#00378C]" />
+          </span>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-primary">Freight Management</div>
-            <h1 className="m-0 text-[21px] font-extrabold leading-tight text-slate-950">Freight Control Center</h1>
-            <p className="m-0 max-w-3xl text-[12px] font-medium text-slate-500">
-              Search enquiry, RFQ, quotation, job, house BL, HBL, or principal from one clean workspace.
-            </p>
+            <h1 className="m-0 text-lg font-bold leading-tight text-slate-900">Freight Control Center</h1>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            title="Refresh dashboard"
-            onClick={loadWorkspace}
-            className="h-9 w-9 rounded-md border-blue-100 bg-blue-50 text-primary hover:bg-blue-100"
-          >
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          </Button>
         </div>
-        <div className="grid gap-2 bg-slate-50/70 p-2 md:grid-cols-4">
-          <Metric icon={BriefcaseBusiness} label="Open Jobs" value={valueText(summary.OPEN_JOBS)} tone="blue" />
-          <Metric icon={ClipboardList} label="Pending Enquiry" value={valueText(summary.PENDING_ENQUIRIES)} tone="amber" />
-          <Metric icon={FileText} label="Active RFQ" value={valueText(summary.ACTIVE_RFQ)} tone="violet" />
-          <Metric icon={FileSpreadsheet} label="Quotations" value={valueText(summary.ACTIVE_QUOTATIONS)} tone="emerald" />
-        </div>
-      </section>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          title="Refresh dashboard"
+          onClick={loadWorkspace}
+          className="h-8 w-8 rounded-lg border-[#cbd5e1] hover:bg-[#eff6ff] hover:text-[#00378C] text-slate-600 transition-colors cursor-pointer"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+        </Button>
+      </div>
 
-      <section className="overflow-hidden rounded-md border bg-card shadow-sm">
+      {/* 2. KPI Metrics Grid */}
+      <div className="freight-kpi-grid">
+        <Metric icon={BriefcaseBusiness} label="Open Jobs" value={valueText(summary.OPEN_JOBS)} tone="blue" />
+        <Metric icon={ClipboardList} label="Pending Enquiry" value={valueText(summary.PENDING_ENQUIRIES)} tone="amber" />
+        <Metric icon={FileText} label="Active RFQ" value={valueText(summary.ACTIVE_RFQ)} tone="violet" />
+        <Metric icon={FileSpreadsheet} label="Quotations" value={valueText(summary.ACTIVE_QUOTATIONS)} tone="emerald" />
+      </div>
+
+      {/* 3. Global Search & Data Shell */}
+      <div className="freight-search-shell">
         <PanelHeader
           icon={Search}
           title="Global Freight Search"
-          subtitle="Commercial and operations records"
+          subtitle=""
           action={
             <div className="flex flex-wrap items-center gap-1.5">
               <ResultPill label="Records" value={String(resultStats.total)} tone="blue" />
@@ -164,16 +168,17 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
           }
         />
         <form
-          className="grid gap-2 border-b bg-slate-50/50 p-2.5 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+          className="flex flex-wrap items-center gap-2 border-b border-[#e2e8f0] bg-slate-50/60 p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void searchFreight(smartSearch);
           }}
         >
-          <div className="relative freight-smart-search-field">
-            <Search className="freight-smart-search-icon pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-slate-400" size={18} />
-            <Input
-              className="freight-smart-search-input h-10 rounded-md border-slate-200 bg-white pl-11 pr-4 text-[14px] font-semibold shadow-sm placeholder:font-semibold placeholder:text-slate-500 focus-visible:ring-primary/25"
+          <div className="relative flex-1 min-w-[280px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              className="freight-control-search-input w-full"
               value={smartSearch}
               onChange={(event) => {
                 const value = event.target.value;
@@ -182,82 +187,119 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
               }}
               placeholder="Search AI/00001/00008, RFQ no, quotation no, job no, HBL, house/BL number, principal..."
             />
+            {smartSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSmartSearch("");
+                  void searchFreight("");
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-          <Button type="submit" className="h-10 min-w-28 rounded-md text-sm font-bold">
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Search
+          <Button
+            type="submit"
+            disabled={loading}
+            className="h-[38px] px-5 bg-[#00378C] text-white hover:bg-[#002d72] font-semibold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+          >
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Search
           </Button>
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="h-10 w-10 rounded-md"
+            className="h-[38px] w-[38px] rounded-lg border-[#cbd5e1] hover:bg-[#eff6ff] hover:text-[#00378C] cursor-pointer"
             title="Reset search"
             onClick={() => {
               setSmartSearch("");
               void searchFreight("");
             }}
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={15} />
           </Button>
         </form>
+
         <div className="max-h-[calc(100vh-325px)] min-h-[220px] overflow-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="bg-blue-50 text-xs uppercase text-blue-950">
+          <table className="w-full min-w-[960px] border-collapse">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left font-bold">Type</th>
-                <th className="px-4 py-3 text-left font-bold">Reference</th>
-                <th className="px-4 py-3 text-left font-bold">Date</th>
-                <th className="px-4 py-3 text-left font-bold">Principal</th>
-                <th className="px-4 py-3 text-left font-bold">Movement</th>
-                <th className="px-4 py-3 text-left font-bold">House / BL</th>
-                <th className="px-4 py-3 text-left font-bold">Status</th>
-                <th className="px-4 py-3 text-right font-bold">Action</th>
+                <th style={{ width: "95px" }}>Type</th>
+                <th style={{ width: "160px" }}>Reference</th>
+                <th style={{ width: "100px" }}>Date</th>
+                <th>Principal</th>
+                <th style={{ width: "180px" }}>Movement</th>
+                <th style={{ width: "120px" }}>House / BL</th>
+                <th style={{ width: "110px", textAlign: "center" }}>Status</th>
+                <th style={{ width: "95px", textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
-                    <Loader2 size={18} className="mx-auto mb-2 animate-spin" /> Searching freight records
+                    <Loader2 size={18} className="mx-auto mb-2 animate-spin text-[#00378C]" /> Searching freight records
                   </td>
                 </tr>
               ) : smartRows.length ? (
-                smartRows.slice(0, 18).map((row, index) => (
-                  <tr key={`${row.RECORD_TYPE || "ROW"}-${row.RECORD_NO || index}`} className="border-t hover:bg-blue-50/40">
-                    <td className="px-4 py-3">
-                      <span className={`rounded px-2 py-1 text-[11px] font-bold uppercase ${recordTypeClass(row.RECORD_TYPE)}`}>
+                smartRows.slice(0, 25).map((row, index) => (
+                  <tr key={`${row.RECORD_TYPE || "ROW"}-${row.RECORD_NO || index}`} className="transition-colors">
+                    <td>
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10.5px] font-bold uppercase border ${getRecordTypeBadge(String(row.RECORD_TYPE || ""))}`}>
                         {text(row.RECORD_TYPE)}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <button type="button" className="font-bold text-primary hover:underline" onClick={() => openSearchRow(row)}>
+                    <td>
+                      <button
+                        type="button"
+                        className="font-bold text-[#00378C] hover:underline cursor-pointer text-left leading-tight block"
+                        onClick={() => openSearchRow(row)}
+                      >
                         {text(row.RECORD_NO)}
                       </button>
-                      <div className="text-xs font-medium text-muted-foreground">{text(row.SOURCE_REF)}</div>
+                      {text(row.SOURCE_REF) && (
+                        <div className="text-[11px] font-medium text-slate-400 mt-0.5">{text(row.SOURCE_REF)}</div>
+                      )}
                     </td>
-                    <td className="px-4 py-3">{formatDate(row.RECORD_DATE)}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-foreground">{text(row.PRIN_NAME || row.PRIN_CODE)}</div>
-                      <div className="text-xs font-medium text-muted-foreground">{text(row.PRIN_CODE)}</div>
+                    <td className="text-slate-600 font-mono text-[11.5px] whitespace-nowrap">{formatDate(row.RECORD_DATE)}</td>
+                    <td>
+                      <div className="font-bold text-slate-900 leading-snug">{text(row.PRIN_NAME || row.PRIN_CODE)}</div>
+                      {text(row.PRIN_CODE) && text(row.PRIN_NAME) && (
+                        <div className="text-[11px] font-medium text-slate-400">{text(row.PRIN_CODE)}</div>
+                      )}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-foreground">{jobTypeLabel(row.JOB_TYPE)} / {modeLabel(row.TRANSPORT_MODE)}</div>
-                      <div className="text-xs font-medium text-muted-foreground">{text(row.ORIGIN_PORT)} to {text(row.DESTINATION_PORT)}</div>
+                    <td>
+                      <div className="font-bold text-slate-900 leading-snug">
+                        {jobTypeLabel(row.JOB_TYPE)} / {modeLabel(row.TRANSPORT_MODE)}
+                      </div>
+                      <div className="text-[11px] font-medium text-slate-500">
+                        {text(row.ORIGIN_PORT) || "—"} to {text(row.DESTINATION_PORT) || "—"}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">{text(row.HOUSE_BL_NO)}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md border bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{text(row.STATUS)}</span>
+                    <td className="text-slate-700 font-medium">{text(row.HOUSE_BL_NO) || "—"}</td>
+                    <td className="text-center">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadge(String(row.STATUS || ""))}`}>
+                        {text(row.STATUS) || "Active"}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button type="button" variant="outline" size="sm" onClick={() => openSearchRow(row)}>
-                        Open <ArrowRight size={13} />
-                      </Button>
+                    <td className="text-center">
+                      <button
+                        type="button"
+                        className="freight-open-btn"
+                        onClick={() => openSearchRow(row)}
+                        title={`Open ${text(row.RECORD_NO)}`}
+                      >
+                        Open <ArrowRight size={12} />
+                      </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-12 text-center text-slate-400 font-medium">
                     {message || "Search for an enquiry, RFQ, quotation, job, HBL, or principal."}
                   </td>
                 </tr>
@@ -265,7 +307,7 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
             </tbody>
           </table>
         </div>
-      </section>
+      </div>
     </section>
   );
 
@@ -278,16 +320,26 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
   }
 }
 
-function PanelHeader({ title, subtitle, icon: Icon, action }: { title: string; subtitle: string; icon: LucideIcon; action?: ReactNode }) {
+function PanelHeader({
+  title,
+  subtitle,
+  icon: Icon,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  icon: LucideIcon;
+  action?: ReactNode;
+}) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b bg-white px-3 py-2">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-blue-50 text-primary">
-          <Icon size={16} />
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#eff6ff] text-[#00378C] border border-[#dbeafe]">
+          <Icon size={14} />
         </span>
         <div className="min-w-0">
-          <h2 className="m-0 text-[13px] font-bold leading-tight text-slate-950">{title}</h2>
-          <p className="m-0 truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
+          <h2 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">{title}</h2>
+          <p className="m-0 truncate text-[11px] font-medium text-slate-500">{subtitle}</p>
         </div>
       </div>
       {action}
@@ -295,38 +347,56 @@ function PanelHeader({ title, subtitle, icon: Icon, action }: { title: string; s
   );
 }
 
-function Metric({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: string; value: string; tone: "blue" | "amber" | "violet" | "emerald" }) {
-  const toneClass = {
-    blue: "border-blue-100 bg-blue-50 text-blue-700",
-    amber: "border-amber-100 bg-amber-50 text-amber-700",
-    violet: "border-violet-100 bg-violet-50 text-violet-700",
-    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  tone: "blue" | "amber" | "violet" | "emerald";
+}) {
+  const toneConfig = {
+    blue: { bg: "bg-[#eff6ff]", border: "border-[#bfdbfe]", text: "text-[#00378C]" },
+    amber: { bg: "bg-[#fffbeb]", border: "border-[#fde68a]", text: "text-[#b45309]" },
+    violet: { bg: "bg-[#f5f3ff]", border: "border-[#ddd6fe]", text: "text-[#6d28d9]" },
+    emerald: { bg: "bg-[#ecfdf5]", border: "border-[#a7f3d0]", text: "text-[#047857]" },
   }[tone];
 
   return (
-    <div className="flex items-center gap-2.5 rounded-md border bg-white px-3 py-2 shadow-sm ring-1 ring-slate-100">
-      <span className={`grid h-8 w-8 place-items-center rounded-md border ${toneClass}`}>
-        <Icon size={15} />
+    <div className="freight-kpi-card">
+      <span className={`freight-kpi-icon border ${toneConfig.bg} ${toneConfig.border} ${toneConfig.text}`}>
+        <Icon size={18} />
       </span>
       <div className="min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
-        <div className="truncate text-base font-extrabold text-slate-950">{value}</div>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
+        <div className="truncate text-xl font-black text-slate-900 mt-0.5 leading-none">{value}</div>
       </div>
     </div>
   );
 }
 
-function ResultPill({ label, value, tone }: { label: string; value: string; tone: "blue" | "amber" | "emerald" }) {
+function ResultPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "blue" | "amber" | "emerald";
+}) {
   const toneClass = {
-    blue: "border-blue-100 bg-blue-50 text-blue-800",
-    amber: "border-amber-100 bg-amber-50 text-amber-800",
-    emerald: "border-emerald-100 bg-emerald-50 text-emerald-800",
+    blue: "border-[#bfdbfe] bg-[#eff6ff] text-[#00378C]",
+    amber: "border-[#fde68a] bg-[#fffbeb] text-[#b45309]",
+    emerald: "border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]",
   }[tone];
 
   return (
-    <span className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-bold uppercase ${toneClass}`}>
+    <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-[10.5px] font-bold uppercase ${toneClass}`}>
       {label}
-      <strong className="text-sm leading-none">{value}</strong>
+      <strong className="text-xs leading-none">{value}</strong>
     </span>
   );
 }
@@ -348,12 +418,30 @@ function formatDate(value: unknown) {
   return date.toLocaleDateString("en-GB");
 }
 
-function recordTypeClass(value: unknown) {
-  const type = String(value || "").toUpperCase();
-  if (type === "JOB") return "bg-blue-100 text-blue-800";
-  if (type === "QUOTATION") return "bg-emerald-100 text-emerald-800";
-  if (type === "RFQ") return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-800";
+function getRecordTypeBadge(value: string) {
+  const type = value.toUpperCase();
+  if (type === "JOB") return "bg-[#eff6ff] text-[#00378C] border-[#bfdbfe]";
+  if (type === "QUOTATION") return "bg-[#ecfdf5] text-[#047857] border-[#a7f3d0]";
+  if (type === "RFQ") return "bg-[#fffbeb] text-[#b45309] border-[#fde68a]";
+  if (type === "ENQUIRY") return "bg-[#f3e8ff] text-[#7e22ce] border-[#e9d5ff]";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+}
+
+function getStatusBadge(value: string) {
+  const s = value.toLowerCase();
+  if (s.includes("complete") || s.includes("approved")) {
+    return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  }
+  if (s.includes("confirm")) {
+    return "bg-blue-50 text-[#00378C] border-blue-200";
+  }
+  if (s.includes("cancel")) {
+    return "bg-red-50 text-red-700 border-red-200";
+  }
+  if (s.includes("draft") || s.includes("progress") || s.includes("pending")) {
+    return "bg-amber-50 text-amber-700 border-amber-200";
+  }
+  return "bg-slate-50 text-slate-700 border-slate-200";
 }
 
 function modeLabel(value: unknown) {
@@ -373,3 +461,4 @@ function jobTypeLabel(value: unknown) {
 }
 
 export type { FreightWorkspaceTarget };
+

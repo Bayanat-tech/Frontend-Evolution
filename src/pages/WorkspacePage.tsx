@@ -43,6 +43,7 @@ import {
   Receipt,
   RefreshCw,
   Ruler,
+  Search,
   Settings,
   Ship,
   ShoppingCart,
@@ -53,13 +54,13 @@ import {
   UserCog,
   Users,
   Warehouse,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
-import { HeaderProfile } from "../components/HeaderProfile";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
@@ -76,6 +77,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
 
   const activeApp = useMemo(() => {
@@ -86,10 +89,54 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
+  const menuSearchRef = useRef<HTMLInputElement>(null);
+  const focusMenuSearch = useRef(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
+
+  const allScreens = useMemo(() => {
+    if (!activeApp?.children?.length) return [];
+    return collectSearchableMenuItems(activeApp.children, appCode || "");
+  }, [activeApp, appCode]);
+
+  const filteredScreens = useMemo(() => {
+    const q = menuSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return allScreens.filter((item) => {
+      const titleMatch = item.title.toLowerCase().includes(q);
+      const trailMatch = item.pathTrail.some((t) => t.toLowerCase().includes(q));
+      return titleMatch || trailMatch;
+    });
+  }, [allScreens, menuSearchQuery]);
+
+  useEffect(() => {
+    setSelectedSearchIndex(0);
+  }, [filteredScreens]);
+
+
+
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
   };
+
+  useEffect(() => {
+    if (!profileDropdownOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileDropdownOpen(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [profileDropdownOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -117,26 +164,43 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
-  const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "Company";
+  useEffect(() => {
+    if (!displayCollapsed && focusMenuSearch.current) {
+      menuSearchRef.current?.focus();
+      focusMenuSearch.current = false;
+    }
+  }, [displayCollapsed]);
+  const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "PURSHOTTAM KANJI & CO.";
+  const companyCode = user?.company_code || user?.COMPANY_CODE || "01";
+  const fallbackUserName = (user as { name?: string } | null)?.name;
+  const displayName = user?.username || user?.loginid || fallbackUserName || "User";
+  const userInitials = (displayName || "U").slice(0, 3).toUpperCase();
   const isFreightModule = (appCode || "").toLowerCase() === "fms";
+  const isFinanceModule = /^(finance|accounts?|fin|fas|f&a)$/i.test(appCode || "") || /\/finance(?:\/|$)/i.test(location.pathname);
+  const keepSidebarOpen = isFreightModule || isFinanceModule;
   const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
+  const moduleSubtitle = moduleMeta?.fullForm || "Transactions";
+  const searchModuleName = moduleMeta?.fullForm
+    ? moduleMeta.fullForm.replace(/Management System/i, "").trim()
+    : (activeApp?.title ? titleCase(activeApp.title) : "Module");
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
   // }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
-    setExpanded({
+    setExpanded((current) => ({
+      ...(isFinanceModule ? current : {}),
       ...collectDefaultExpanded(activeApp?.children || [], 1),
       ...collectExpandedPath(activeMenuPath),
-    });
-  }, [activeApp?.id, activeApp?.title, location.pathname]);
+    }));
+  }, [activeApp?.id, activeApp?.title, location.pathname, isFinanceModule]);
 
   useEffect(() => {
-    if (!isMobile && isFreightModule) {
+    if (!isMobile && keepSidebarOpen) {
       setCollapsed(false);
     }
-  }, [isFreightModule, isMobile]);
+  }, [keepSidebarOpen, isMobile]);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -161,113 +225,311 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       setMobileMenuOpen(false);
       return;
     }
-    if (!isFreightModule) setCollapsed(true);
+    if (!keepSidebarOpen) setCollapsed(true);
   };
 
   return (
-    <div className="workspace" style={{ fontFamily: "Inter, sans-serif" }}>
-      <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
-
-        <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
-          {!displayCollapsed && (
-            <div
-              className="sidebar-module-heading"
-              style={{
-                "--module-accent": moduleMeta?.accent.icon || "#00378c",
-                "--module-accent-light": moduleMeta?.accent.light || "#eff6ff",
-              } as CSSProperties}
-              title={moduleMeta?.fullForm || "Workspace"}
-            >
-              <span className="sidebar-module-name">{moduleMeta?.fullForm || "Workspace"}</span>
-            </div>
-          )}
-          <button
-            className="icon-button sidebar-toggle"
-            onClick={toggleSidebar}
-            title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
-            aria-label={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
-          >
-            {isMobile ? mobileMenuOpen ? <PanelLeftClose size={17} /> : <Menu size={17} /> : displayCollapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
-          </button>
-        </div>
-
-        <nav className="sidebar-nav">
-          {(activeApp?.children || []).map((item, index) => (
-            <MenuItem
-              key={item.id || item.title}
-              item={item}
-              collapsed={displayCollapsed}
-              expanded={expanded}
-              setExpanded={setExpanded}
-              appCode={appCode || ""}
-              pathname={location.pathname}
-              selectedMenu={activeMenu}
-              level={1}
-              siblingIndex={index + 1}
-              onNavigate={handleMenuNavigate}
-            />
-          ))}
-        </nav>
-
-        <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
-          <div className="sidebar-company-row" title={companyName} aria-label={companyName}>
-            <Building2 size={16} aria-hidden="true" />
-            {!displayCollapsed && <span>{companyName}</span>}
-          </div>
-          <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
-            <LayoutGrid size={16} />
-            {!displayCollapsed && "Switch Module"}
+    <div className="workspace h-screen flex flex-col overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
+      {/* Top Header - BISC style: clean white/card, logo + company left, dark mode + profile right */}
+      <header className="workspace-top-header h-[45px] bg-card border-b border-border flex items-center justify-between px-5 shrink-0 z-20">
+        {/* Left: Logo + Company Name */}
+        <div className="flex items-center gap-3 min-w-[200px]">
+          <Link to="/apps" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+            <Building2 className="h-5 w-5 text-primary shrink-0" />
+            <span className="text-foreground font-semibold text-sm tracking-tight">{companyName}</span>
           </Link>
-          <HeaderProfile variant="sidebar" user={user} dark={dark} onToggleTheme={onToggleTheme} onLogout={handleLogout} />
         </div>
-      </aside>
-      {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
 
-      <section className={cn("workspace-main", isFreightModule && "bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
-        <div className="mobile-appbar">
-          <button className="icon-button" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu" title="Open menu">
-            <Menu size={19} />
+        {/* Center spacer */}
+        <div className="flex-1" />
+
+        {/* Right: Dark mode + User profile */}
+        <div className="flex items-center gap-2 min-w-[200px] justify-end">
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="cursor-pointer w-8 h-8 rounded-full flex items-center justify-center hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            title={dark ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
-        </div>
 
-        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
-          <nav className="breadcrumb" aria-label="Breadcrumb">
-            <Link to="/apps">
-              <Home size={14} /> Home
-            </Link>
-            {activeApp && (
-              <>
-                <ChevronRight size={14} />
-                {appRouteTarget ? (
-                  <Link to={appRouteTarget}>{titleCase(activeApp.title)}</Link>
-                ) : (
-                  <span>{titleCase(activeApp.title)}</span>
-                )}
-              </>
+          <div className="w-px h-6 bg-border mx-1" />
+
+          {/* Profile chip & dropdown */}
+          <div className="relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setProfileDropdownOpen((prev) => !prev)}
+              className="cursor-pointer flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-secondary transition-colors"
+              title="User profile"
+              aria-label="User profile"
+              aria-expanded={profileDropdownOpen}
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00378C] to-blue-500 flex items-center justify-center shadow-sm">
+                <span className="text-white text-xs font-semibold">{userInitials}</span>
+              </div>
+              <div className="hidden md:block text-left">
+                <p className="text-foreground text-xs font-semibold leading-tight">{displayName}</p>
+                <p className="text-muted-foreground text-[10.5px] leading-tight">
+                  {companyCode} &middot; {moduleSubtitle}
+                </p>
+              </div>
+              <ChevronDown
+                className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform hidden md:block", profileDropdownOpen && "rotate-180")}
+              />
+            </button>
+            {profileDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 py-1">
+                <div className="px-3 py-2 border-b border-border/60 md:hidden">
+                  <p className="text-foreground text-xs font-semibold truncate">{displayName}</p>
+                  <p className="text-muted-foreground text-[10.5px]">{companyCode} &middot; {moduleSubtitle}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setProfileDropdownOpen(false); handleLogout(); }}
+                  className="cursor-pointer w-full flex items-center gap-2.5 px-4 py-2.5 text-destructive hover:bg-destructive/10 transition-colors text-xs font-medium"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
             )}
-            {activeMenuPath.map((node, index) => {
-              const isLast = index === activeMenuPath.length - 1;
-              const target = getMenuNodeTarget(node, appCode || "");
-              return (
-                <span className="breadcrumb-segment" key={node.id || `${node.title}-${index}`}>
-                  <ChevronRight size={14} />
-                  {isLast || !target ? (
-                    <span aria-current={isLast ? "page" : undefined} className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
-                  ) : (
-                    <Link to={target}>{titleCase(node.title)}</Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Layout Body (Sidebar + Content) */}
+      <div className="workspace-body flex flex-1 overflow-hidden min-h-0 w-full">
+        <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
+          <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
+            {!displayCollapsed && (
+              <div
+                className="sidebar-module-heading"
+                style={{
+                  "--module-accent": moduleMeta?.accent.icon || "#00378c",
+                  "--module-accent-light": moduleMeta?.accent.light || "#eff6ff",
+                } as CSSProperties}
+                title={moduleMeta?.fullForm || "Workspace"}
+              >
+                <span className="sidebar-module-name">{moduleMeta?.fullForm || "Workspace"}</span>
+              </div>
+            )}
+            <button
+              className="icon-button sidebar-toggle"
+              onClick={toggleSidebar}
+              title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
+              aria-label={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
+            >
+              {isMobile ? mobileMenuOpen ? <PanelLeftClose size={17} /> : <Menu size={17} /> : displayCollapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
+            </button>
+          </div>
+
+            {!displayCollapsed ? (
+              <div className="bisc-sidebar-search-container">
+                <div className="bisc-sidebar-search-box" role="search">
+                  <Search size={14} className="bisc-sidebar-search-icon" />
+                  <input
+                    ref={menuSearchRef}
+                    aria-label="Search menu"
+                    autoComplete="off"
+                    type="text"
+                    value={menuSearchQuery}
+                    onChange={(e) => {
+                      setMenuSearchQuery(e.target.value);
+                      setSelectedSearchIndex(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (filteredScreens[selectedSearchIndex]) {
+                          navigate(filteredScreens[selectedSearchIndex].target);
+                          setMenuSearchQuery("");
+                          handleMenuNavigate();
+                        }
+                      } else if (e.key === "Escape") {
+                        setMenuSearchQuery("");
+                      }
+                    }}
+                    placeholder="Search menu..."
+                    className="bisc-sidebar-search-input"
+                  />
+                  {menuSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
+                      className="bisc-sidebar-search-clear"
+                      title="Clear search"
+                      aria-label="Clear menu search"
+                    >
+                      <X size={11} strokeWidth={2.5} />
+                    </button>
                   )}
-                </span>
-              );
-            })}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="sidebar-search-collapsed-btn"
+                title="Search screens in this module"
+                aria-label="Expand menu and search"
+                onClick={() => { focusMenuSearch.current = true; setCollapsed(false); }}
+              >
+                <Search size={15} />
+              </button>
+            )}
+
+          <nav className="sidebar-nav">
+            {menuSearchQuery.trim() ? (
+              <div className="sidebar-search-results-panel">
+                <div className="bisc-search-results-header">
+                  <span className="bisc-search-results-title">{searchModuleName} Screens</span>
+                  <span className="bisc-search-results-badge">
+                    {filteredScreens.length} found
+                  </span>
+                </div>
+
+                {filteredScreens.length === 0 ? (
+                  <div className="bisc-search-empty-state">
+                    <Search size={22} className="bisc-search-empty-icon" />
+                    <p className="bisc-search-empty-title">No matching screens found</p>
+                    <p className="bisc-search-empty-desc">for &quot;{menuSearchQuery}&quot;</p>
+                    <button
+                      type="button"
+                      onClick={() => setMenuSearchQuery("")}
+                      className="bisc-search-clear-btn"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bisc-search-results-list">
+                    {filteredScreens.map((item, index) => {
+                      const isSelected = index === selectedSearchIndex;
+                      return (
+                        <Link
+                          key={item.id}
+                          to={item.target}
+                          onClick={() => {
+                            setMenuSearchQuery("");
+                            handleMenuNavigate();
+                          }}
+                          onMouseEnter={() => setSelectedSearchIndex(index)}
+                          className={cn("bisc-search-result-item", isSelected && "selected")}
+                        >
+                          <span className="bisc-search-result-icon">
+                            <MenuIcon item={item.node} level={1} className={isSelected ? "text-white" : "text-[#00378C]"} />
+                          </span>
+                          <div className="bisc-search-result-text">
+                            <p className="bisc-search-result-title">
+                              {item.title}
+                            </p>
+                            {item.pathTrail.length > 0 && (
+                              <p className="bisc-search-result-trail">
+                                {item.pathTrail.join(" › ")}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              (activeApp?.children || []).map((item, index) => (
+                <MenuItem
+                  key={item.id || item.title}
+                  item={item}
+                  collapsed={displayCollapsed}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                  appCode={appCode || ""}
+                  pathname={location.pathname}
+                  selectedMenu={activeMenu}
+                  level={1}
+                  siblingIndex={index + 1}
+                  onNavigate={handleMenuNavigate}
+                />
+              ))
+            )}
           </nav>
 
-          {workspaceRoute}
-          <FinanceReportPreview />
-          <FreightReportPreview />
-          <WmsReportPreview />
-          <PsReportPreview />
-        </main>
-      </section>
+          <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
+            <div className={cn("sidebar-company-card p-2.5 rounded-lg border border-border bg-muted/40", displayCollapsed && "p-2 flex items-center justify-center")} title={companyName}>
+              {!displayCollapsed ? (
+                <>
+                  <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] font-bold tracking-wider uppercase mb-1">
+                    <Building2 size={12} className="shrink-0" />
+                    <span>Company</span>
+                  </div>
+                  <p className="text-foreground text-xs font-semibold truncate leading-tight">{companyName}</p>
+                </>
+              ) : (
+                <Building2 size={16} className="text-muted-foreground" />
+              )}
+            </div>
+            <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
+              <ArrowLeft size={16} />
+              {!displayCollapsed && <span>Switch Module</span>}
+            </Link>
+          </div>
+        </aside>
+        {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
+
+        <section className={cn("workspace-main", isFreightModule && "bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
+          <div className="mobile-appbar">
+            <button className="icon-button" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu" title="Open menu">
+              <Menu size={19} />
+            </button>
+          </div>
+
+          <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
+            <nav className="breadcrumb flex items-center gap-1.5 py-1 px-0 mb-3 text-xs text-muted-foreground border-b border-border/60 shrink-0" aria-label="Breadcrumb">
+              <Link to="/apps" className="hover:text-foreground flex items-center gap-1 transition-colors">
+                <Home size={13} /> Home
+              </Link>
+              {activeApp && (
+                <>
+                  <ChevronRight size={13} className="text-muted-foreground/60 shrink-0" />
+                  {appRouteTarget ? (
+                    <Link to={appRouteTarget} className="hover:text-foreground transition-colors">{titleCase(activeApp.title)}</Link>
+                  ) : (
+                    <span>{titleCase(activeApp.title)}</span>
+                  )}
+                </>
+              )}
+              {activeMenuPath.map((node, index) => {
+                const isLast = index === activeMenuPath.length - 1;
+                const target = getMenuNodeTarget(node, appCode || "");
+                return (
+                  <span className="inline-flex items-center gap-1.5" key={node.id || `${node.title}-${index}`}>
+                    <ChevronRight size={13} className="text-muted-foreground/60 shrink-0" />
+                    {isLast || !target ? (
+                      <span aria-current={isLast ? "page" : undefined} className={isLast ? "font-semibold text-foreground" : undefined}>{titleCase(node.title)}</span>
+                    ) : (
+                      <Link to={target} className="hover:text-foreground transition-colors">{titleCase(node.title)}</Link>
+                    )}
+                  </span>
+                );
+              })}
+            </nav>
+
+            {workspaceRoute}
+            <FinanceReportPreview />
+            <FreightReportPreview />
+            <WmsReportPreview />
+            <PsReportPreview />
+          </main>
+        </section>
+      </div>
     </div>
   );
 }
@@ -503,4 +765,58 @@ function normalizeRoutePath(path: string) {
     .replace(/^\/+|\/+$/g, "")
     .replace(/^workspace\/[^/]+\//i, "")
     .toLowerCase();
+}
+
+interface SearchableMenuItem {
+  id: string;
+  title: string;
+  target: string;
+  pathTrail: string[];
+  node: MenuNode;
+}
+
+function collectSearchableMenuItems(
+  nodes: MenuNode[],
+  appCode: string,
+  trail: string[] = []
+): SearchableMenuItem[] {
+  const list: SearchableMenuItem[] = [];
+
+  const traverse = (items: MenuNode[], currentTrail: string[]) => {
+    for (const item of items) {
+      const hasChildren = Boolean(item.children && item.children.length > 0);
+      const title = titleCase(item.title || "");
+      const directPath = cleanPath(item.url_path);
+
+      if (!hasChildren || item.type === "item" || directPath) {
+        const target = getMenuNodeTarget(item, appCode);
+        if (target) {
+          list.push({
+            id: item.id || `${appCode}-${target}-${title}`,
+            title,
+            target,
+            pathTrail: currentTrail,
+            node: item,
+          });
+        }
+      }
+
+      if (hasChildren && item.children) {
+        traverse(item.children, [...currentTrail, title]);
+      }
+    }
+  };
+
+  traverse(nodes, trail);
+
+  // Deduplicate by target so the same screen does not appear multiple times
+  const seen = new Set<string>();
+  const unique: SearchableMenuItem[] = [];
+  for (const item of list) {
+    if (!seen.has(item.target)) {
+      seen.add(item.target);
+      unique.push(item);
+    }
+  }
+  return unique;
 }

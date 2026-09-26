@@ -107,6 +107,18 @@ export type TransactionChildRow = Record<string, unknown> & {
   lcur_amount?: number;
   isEditMode?: boolean;
   IsDeletable?: boolean;
+  inv_no?: string;
+  inv_date?: string;
+  inv_amt?: number | null;
+  c_bal_amt_org?: number | null;
+  c_curr_amt?: number | null;
+  job_no?: string;
+  doc_refno?: string;
+  doc_refno_2?: string;
+  exp_type_code?: string;
+  exp_subtype_code?: string;
+  exp_code?: string;
+  exp_description?: string;
 };
 
 export type TransactionDefaultData = {
@@ -513,6 +525,28 @@ export async function openDocumentReport(docType: TransactionType | string, docN
   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 }
 
+export async function openDocumentReportv1(
+  docType: TransactionType | string,
+  docNo: string
+): Promise<string> {
+  if (!docNo) {
+    throw new Error("Document number is required");
+  }
+  const response = await api.get(
+    `/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}`,
+    {
+      responseType: "text",
+    }
+  );
+  if (typeof response.data === "string") {
+    return response.data;
+  }
+  if (response.data instanceof Blob) {
+    return await response.data.text();
+  }
+  throw new Error("Unexpected report response format");
+}
+
 /**
  * Opens the Cheque Book Monitoring Report in a new tab
  */
@@ -539,21 +573,15 @@ interface ReportParams {
 }
 
 // ── generic helper (same blob → new tab pattern) ──────────────────────────
-async function openReportInTab(endpoint: string, params: ReportParams): Promise<Window | null> {
+async function openReportInTab(endpoint: string, params: ReportParams): Promise<string> {
   try {
     const response = await api.post(endpoint, params, {
       responseType: "blob",
     });
 
-    const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const reportWindow = window.open(url, "_blank", "noopener,noreferrer");
-
-    if (!reportWindow) console.error("Please allow popups to view this report");
-
-    window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-
-    return reportWindow;
+    // Convert the blob to an HTML string
+    const html = await response.data.text();
+    return html;
   } catch (error) {
     console.error(`Failed to open report [${endpoint}]:`, error);
     throw error;
@@ -565,10 +593,11 @@ async function openReportInTab(endpoint: string, params: ReportParams): Promise<
 
 // ── GRN Print Report ───────────────────────────────────────────────────────
 export async function openGrnPrintReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/getGrnPrintReport/html`,
     params
   );
+  return html;
 }
 
 export async function getGrnPrintReportPreviewUrl(params: ReportParams): Promise<string> {
@@ -611,10 +640,11 @@ export async function exportGrnPrintReportExcel(params: ReportParams): Promise<v
 // }
 
 export async function openChequeDateWiseReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/cheque-date-wise/html`,
     params
   );
+  return html;
 }
 
 // ── 2. Detail Dump ────────────────────────────────────────────────────────
@@ -627,18 +657,20 @@ export async function openChequeDateWiseReport(params: ReportParams) {
 
 // ── 3. Ledger With Details ────────────────────────────────────────────────
 export async function openLedgerWithDetailsReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/ledger-with-details/html`,
     params
   );
+  return html;
 }
 
 // ── 4. Ledger With Opposite Entry ─────────────────────────────────────────
 export async function openLedgerOppositeEntryReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/ledger-opposite-entry/html`,
     params
   );
+  return html;
 }
 
 // // ── 5. Summary Dump ───────────────────────────────────────────────────────
@@ -651,39 +683,44 @@ export async function openLedgerOppositeEntryReport(params: ReportParams) {
 
 // ── 6. Account Payee Wise ─────────────────────────────────────────────────
 export async function openAccountPayeeWiseReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/account-payee-wise/html`,
     params
   );
+  return html;
 }
 // -------Ageing Report----------------------
 export async function openInvdatewiseDetailReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/InvdatewiseDetail/html`,
     params
   );
+  return html;
 }
 
 export async function openInvdatewiseSummaryReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     `/api/finance/transactions/reports/InvdatewiseSummary/html`,
     params
   );
+  return html;
 }
 
 export async function openDuedatewiseDetailReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
 
     `/api/finance/transactions/reports/DuedatewiseDetail/html`,
     params
-  )
+  );
+  return html;
 }
 
 export async function openDuedatewiseSummaryReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/DuedatewiseSummary/html",
     params
   );
+  return html;
 }
 
 // ─── PeriodWise Excel Export Functions ───────────────────────────────────────
@@ -807,34 +844,38 @@ export async function exportLedgerWithDetailsExcel(params: ReportParams): Promis
 
 
 export async function openOutstandingListReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/OutstandingList/html",
     params
   );
+  return html;
 }
 
 export async function taxOutInReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/tax-vat-out-ledger/html",
     params
 
   )
+  return html;
 }
 
 // ---------AC_statement report-----
 export async function openAcStatementReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/AcStatementReport/html",
     params
   );
+  return html;
 }
 
 // Capex Approval Report and Excel route
 export async function openCapexApprovalReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/CapexApprovalReport/html", 
     params
   );
+  return html;
 }
 
 export async function exportCapexApprovalExcel(params: ReportParams): Promise<void> {
@@ -858,10 +899,11 @@ export async function exportCapexApprovalExcel(params: ReportParams): Promise<vo
 
 
 export async function openPRPurchaseReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/PRPurchaseReport/html",
     params
   );
+  return html;
 }
 
 // PrRegisterReport report and Excel route
@@ -922,24 +964,28 @@ export async function exportAcStatementExcel(params: ReportParams): Promise<void
 
 
 export async function taxOutInSummaryReport(params: ReportParams) {
-  await openReportInTab(
+  const html =  await openReportInTab(
     "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
     params
   );
+
+  return html;
 }
 export async function openOutstandingStatementDetailReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/OutstandingDetailReport/html",
     params
   );
+  return html;
 }
 
 
 export async function openOutstandingStatementSummaryReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/OutstandingSummaryReport/html",
     params
   );
+  return html
 }
 
 // Outstanding Statement Excel Export
@@ -972,10 +1018,11 @@ export async function exportOutstandingSummaryExcel(params: ReportParams): Promi
 
 
 export async function jobListingReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/wms-joblisting/html",
     params
   );
+  return html;
 }
 
 export async function exportJobListingExcel(params: ReportParams): Promise<void> {
@@ -1495,18 +1542,20 @@ export async function getVisaExpiryReportExcelDownload(params: ReportParams): Pr
 }
 
 export async function TransationReport(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/wms-TransactionProductReport/html",
     params
   );
+  return html;
 }
 
 
 export async function TransationReportwithoutTransafer(params: ReportParams) {
-  await openReportInTab(
+  const html = await openReportInTab(
     "/api/finance/transactions/reports/wms-TransactionProductWithoutTransfersReport/html",
     params
   );
+  return html;
 }
 
 export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {

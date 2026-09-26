@@ -208,6 +208,7 @@ import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
+import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 
 
  type WorkspaceRouteContext = {
@@ -233,6 +234,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name : 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
     element: () => <ConsolidatePayUnitPage />,
+  },
+  {
+    name: "Salary Advance Recovery",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/advance/deduction_letter"),
+    element: () => <SalaryAdvanceRecoveryPage />,
   },
 
   // {
@@ -607,7 +613,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Commercial Documents",
     match: ({ pathname }) => Boolean(getCommercialDocType(pathname)),
-    element: ({ pathname }) => <CommercialDocumentPage docType={getCommercialDocType(pathname)!} />,
+    element: ({ pathname, activeMenu }) => (
+      <CommercialDocumentPage
+        docType={getCommercialDocType(pathname)!}
+        menuTitle={activeMenu?.title ? activeMenu.title.replace(/[_]+/g, " ").trim() : undefined}
+      />
+    ),
   },
   {
     name: "Finance Journal Voucher",
@@ -627,12 +638,22 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Credit/Debit Notes",
     match: ({ pathname }) => Boolean(getCreditDebitNoteDocType(pathname)),
-    element: ({ pathname }) => <CreditDebiteNotePage docType={getCreditDebitNoteDocType(pathname)!} />,
+    element: ({ pathname, activeMenu }) => (
+      <CreditDebiteNotePage
+        docType={getCreditDebitNoteDocType(pathname)!}
+        menuTitle={activeMenu?.title ? activeMenu.title.replace(/[_]+/g, " ").trim() : undefined}
+      />
+    ),
   },
   {
     name: "Finance Payment Documents",
     match: ({ pathname }) => Boolean(getTransactionDocType(pathname)),
-    element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
+    element: ({ pathname, activeMenu }) => (
+      <PaymentDocumentPage
+        docType={getTransactionDocType(pathname)!}
+        menuTitle={activeMenu?.title ? activeMenu.title.replace(/[_]+/g, " ").trim() : undefined}
+      />
+    ),
   },
   {
     name: "Finance Utility Master",
@@ -1830,12 +1851,25 @@ function getCreditDebitNoteDocType(pathname: string) {
 
 function getTransactionDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
-  if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
-  if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
-  if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/cheque-payment") ||
+    normalized.includes("/finance/accounts/transactions/bank-payment") ||
+    normalized.includes("/finance/accounts/transactions/bank_payment")
+  ) return "BP" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/cheque-receipt") ||
+    normalized.includes("/finance/accounts/transactions/bank-receipt") ||
+    normalized.includes("/finance/accounts/transactions/bank_receipt")
+  ) return "BR" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/cash-receipt") ||
+    normalized.includes("/finance/accounts/transactions/cash_receipt")
+  ) return "CR" as const;
   if (
     normalized.includes("/finance/accounts/transactions/petty_cash_payment") ||
-    normalized.includes("/finance/accounts/transactions/petty-cash-payment")
+    normalized.includes("/finance/accounts/transactions/petty-cash-payment") ||
+    normalized.includes("/finance/accounts/transactions/cash-payment") ||
+    normalized.includes("/finance/accounts/transactions/cash_payment")
   ) return "CP" as const;
   return null;
 }
@@ -1852,10 +1886,12 @@ function getCommercialDocType(pathname: string) {
 
 function isJournalVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
+  const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
   return (
-    normalized.includes("/finance/accounts/transactions/jv") ||
-    normalized.includes("/finance/accounts/transactions/provisional") ||
-    normalized.includes("/finance/accounts/transactions/journal")
+    !isReverse &&
+    (normalized.includes("/finance/accounts/transactions/jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/journal"))
   );
 }
 
@@ -1864,8 +1900,9 @@ function isRVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
     normalized.includes("/finance/accounts/transactions/rjv") ||
-    normalized.includes("/finance/accounts/transactions/provisional") ||
-    normalized.includes("/finance/accounts/transactions/journal")
+    normalized.includes("/finance/accounts/transactions/reverse_jv") ||
+    normalized.includes("/finance/accounts/transactions/reverse-jv") ||
+    normalized.includes("/finance/accounts/transactions/reverse")
   );
 }
 

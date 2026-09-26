@@ -1632,3 +1632,432 @@ input[tabindex="-1"].opacity-0,
 .freight-report-preview button:disabled { opacity: .45; cursor: not-allowed; }
 .freight-report-preview :is(button,a):focus-visible { outline: 2px solid #00378c; outline-offset: 2px; }
 @media (max-width: 640px) { .freight-report-preview-backdrop { padding: 8px; } .freight-report-preview { height: 96dvh; } .freight-report-preview footer { align-items: flex-start; flex-direction: column; padding: 10px; } }
+
+/* ==========================================================================
+   Freight Master & Airline Tariff Screen - BISC Reference Master Implementation
+   ========================================================================== */
+
+.freight-master-screen {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+}
+
+/* Master Header Card */
+.freight-master-screen .bisc-master-header {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  padding: 10px 16px !important;
+}
+
+.freight-master-screen .bisc-master-icon-box {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #eff6ff !important;
+  color: #00378C !important;
+  border: 1px solid #dbeafe !important;
+  flex-shrink: 0 !important;
+}
+
+/* Data Table Container and Royal Blue Headers */
+.freight-master-screen .data-table-shell {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+.freight-master-screen .data-table-header {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Hide duplicate top scrollbar */
+.freight-master-screen .data-table-x-scrollbar {
+  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* BISC Royal Blue thead for Master Tables */
+.freight-master-screen .data-table-scroll th {
+  background: #00378C !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 8px !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-bottom: 1px solid #002d72 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.freight-master-screen .data-table-scroll th:last-child {
+  border-right: none !important;
+}
+
+.freight-master-screen .data-table-scroll th button,
+.freight-master-screen .data-table-scroll th svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Table cells */
+.freight-master-screen .data-table-scroll td {
+  height: 28px !important;
+  font-size: 11.5px !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  border-right: 1px solid #f1f5f9 !important;
+  padding: 2px 8px !important;
+  font-weight: 500 !important;
+}
+
+.freight-master-screen .data-table-scroll tr:nth-child(even) td {
+  background: #f8fafc !important;
+}
+
+.freight-master-screen .data-table-scroll tr:hover td {
+  background: #eff6ff !important;
+}
+
+/* BISC Form Cards */
+.freight-master-form-card {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+.freight-master-form-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 14px !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.freight-master-form-header h3 {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #00378C !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.freight-master-form-header h3::before {
+  content: "";
+  display: inline-block;
+  width: 3.5px;
+  height: 12px;
+  background: #00378C;
+  border-radius: 2px;
+}
+
+.freight-master-form-subtitle {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: #64748b !important;
+}
+
+.freight-master-form-body {
+  padding: 14px 16px !important;
+  background: #ffffff !important;
+}
+
+/* Form Fields in BISC Master */
+.freight-master-field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.freight-master-label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  margin-bottom: 1px !important;
+}
+
+.freight-master-input,
+.freight-master-select {
+  height: 32px !important;
+  min-height: 32px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background-color: #f8f9fb !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 0 9px !important;
+  width: 100% !important;
+  outline: none !important;
+  box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.02) !important;
+  transition: all 140ms ease !important;
+  box-sizing: border-box !important;
+}
+
+.freight-master-input:hover,
+.freight-master-select:hover {
+  border-color: #94a3b8 !important;
+  background-color: #ffffff !important;
+}
+
+.freight-master-input:focus,
+.freight-master-select:focus {
+  border-color: #00378C !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.14) !important;
+}
+
+.freight-master-input:disabled,
+.freight-master-select:disabled {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  border-color: #e2e8f0 !important;
+  cursor: not-allowed !important;
+}
+
+.freight-master-input.numeric {
+  text-align: right !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-weight: 600 !important;
+}
+
+/* Lookup field harmonization in Master form */
+.freight-master-field .lookup-field-trigger {
+  height: 32px !important;
+  min-height: 32px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background-color: #f8f9fb !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 0 4px 0 9px !important;
+  transition: all 140ms ease !important;
+}
+
+.freight-master-field .lookup-field-trigger:hover {
+  border-color: #94a3b8 !important;
+  background-color: #ffffff !important;
+}
+
+.freight-master-field .lookup-field-trigger:focus-within {
+  border-color: #00378C !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.14) !important;
+}
+
+/* Master Form Bottom Actions */
+.freight-master-actions-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 14px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+
+/* Keep tariff tables on the shared enquiry styles and compact its editor. */
+.freight-airline-tariff-screen .tariff-page-header { min-height:38px; padding:4px 0; }
+.freight-airline-tariff-screen .tariff-page-header h1 { font-size:18px !important; font-weight:600 !important; margin:0 !important; }
+.freight-airline-tariff-screen .tariff-page-icon { display:grid; place-items:center; width:28px; height:28px; border-radius:6px; background:#00378c0d; color:#00378c; }
+.freight-airline-tariff-screen.freight-dense-form .tariff-page-header { padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); }
+.freight-airline-tariff-screen .freight-master-form-header { padding:6px 10px !important; }
+.freight-airline-tariff-screen .freight-master-form-body { padding:8px 10px !important; }
+.freight-airline-tariff-screen .freight-master-label { flex-direction:row !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important; text-transform:none !important; letter-spacing:normal !important; font-size:12px !important; line-height:16px !important; }
+.freight-airline-tariff-screen .freight-master-form-card { border-radius:6px !important; box-shadow:none !important; }
+
+/* Icon-led BISC groups, matching enquiry panels. */
+.freight-airline-tariff-screen #airline-tariff-form { padding:10px; border:1px solid #d5dfeb; border-radius:10px; background:#eef3f9; }
+.freight-airline-tariff-screen .freight-master-form-card { border:1px solid #cbd5e1 !important; border-radius:10px !important; background:#fff !important; }
+.freight-airline-tariff-screen .freight-master-form-header { min-height:40px; background:#f4f7fb !important; padding:6px 12px !important; }
+.freight-airline-tariff-screen .freight-master-form-header h3 { text-transform:none !important; font-size:12px !important; gap:8px !important; }
+.freight-airline-tariff-screen .freight-master-form-header h3::before { display:none !important; }
+.freight-airline-tariff-screen .freight-section-icon { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:6px; background:#00378c; color:#fff; }
+.freight-airline-tariff-screen .freight-section-icon svg { stroke:white !important; }
+.freight-airline-tariff-screen .freight-master-form-body { padding:10px 12px !important; }
+.freight-airline-tariff-screen .tariff-currency-row { max-width:320px; margin-bottom:10px; }
+
+/* ==========================================================================
+   Freight Control Center & Landing Page - BISC UI Style
+   ========================================================================== */
+
+.freight-control-center {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+}
+
+/* Landing Page Header Card */
+.freight-control-center .freight-landing-header {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  padding: 12px 18px !important;
+}
+
+/* KPI Metric Cards Grid */
+.freight-control-center .freight-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+@media (max-width: 900px) {
+  .freight-control-center .freight-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+.freight-control-center .freight-kpi-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+  transition: all 140ms ease !important;
+}
+
+.freight-control-center .freight-kpi-card:hover {
+  border-color: #00378C !important;
+  box-shadow: 0 2px 6px rgba(0, 55, 140, 0.08) !important;
+}
+
+.freight-control-center .freight-kpi-icon {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+/* Search Shell Card */
+.freight-control-center .freight-search-shell {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+/* Search input with padding override to fix overlapping icon */
+.freight-control-center .freight-control-search-input {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding-left: 38px !important;
+  padding-right: 32px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  outline: none !important;
+}
+
+.freight-control-center .freight-control-search-input:focus {
+  border-color: #00378C !important;
+  box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.14) !important;
+}
+
+/* Table Royal Blue Header */
+.freight-control-center table thead th {
+  background: #00378C !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 12px !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-bottom: 1px solid #002d72 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.freight-control-center table thead th:last-child {
+  border-right: none !important;
+}
+
+/* Table Rows */
+.freight-control-center table tbody td {
+  height: 32px !important;
+  font-size: 12px !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 4px 12px !important;
+  vertical-align: middle !important;
+}
+
+.freight-control-center table tbody tr:nth-child(even) td {
+  background: #f8fafc !important;
+}
+
+.freight-control-center table tbody tr:hover td {
+  background: #eff6ff !important;
+}
+
+/* Action button in table */
+.freight-control-center .freight-open-btn {
+  height: 26px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #00378C !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  cursor: pointer !important;
+  transition: all 140ms ease !important;
+}
+
+.freight-control-center .freight-open-btn:hover {
+  background: #00378C !important;
+  color: #ffffff !important;
+  border-color: #00378C !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.2) !important;
+}
+
