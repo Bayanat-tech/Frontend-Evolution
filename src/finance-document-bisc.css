@@ -1092,3 +1092,113 @@
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:hover .finance-sticky-col-right {
   background: #eff6ff !important;
 }
+
+/* ── BISC Commercial Lines Header ────────────────────────────────────────── */
+.finance-line-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 12px !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  background-color: #f8fafc !important;
+}
+
+.finance-line-actions-left,
+.finance-line-actions-title-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.finance-line-actions-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 4px !important;
+  background-color: #00378c !important;
+  color: #ffffff !important;
+}
+
+.finance-line-actions-title {
+  margin: 0 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #00378c !important;
+}
+
+.finance-line-actions-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  border-radius: 9999px !important;
+  background-color: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #00378c !important;
+}
+
+/* ── BISC Commercial Lines Footer & Summary Chips ────────────────────────── */
+.commercial-lines-footer {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  border-top: 1px solid #cbd5e1 !important;
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  padding: 8px 12px !important;
+  gap: 12px !important;
+}
+
+.commercial-summary-chips,
+.commercial-line-totals {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  font-size: 12px !important;
+}
+
+.commercial-summary-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: #ffffff !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.commercial-summary-chip.commercial-summary-net {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+.commercial-summary-label {
+  color: #64748b !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+}
+
+.commercial-summary-chip.commercial-summary-net .commercial-summary-label {
+  color: #00378c !important;
+  font-weight: 700 !important;
+}
+
+.commercial-summary-value {
+  color: #0f172a !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.commercial-summary-chip.commercial-summary-net .commercial-summary-value {
+  color: #00378c !important;
+  font-weight: 700 !important;
+}
+

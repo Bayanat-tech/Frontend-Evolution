@@ -1,6 +1,7 @@
-import { AlignCenter, Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X, FileText, Building2 } from "lucide-react";
+import { AlignCenter, Ban, ChevronDown, ChevronUp, Download, Edit2, List, Paperclip, Plus, Printer, RefreshCw, Save, Search, Trash2, X, FileText, Building2 } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
@@ -185,24 +186,49 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
         </button>
       ),
     },
-    { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
+    {
+      accessorKey: "doc_date",
+      header: () => <div className="text-center">Date</div>,
+      cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
+    },
     { accessorKey: "ac_name", header: "Account Name" },
     ...(docType === "BP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
     ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
-    { accessorKey: "div_code", header: "Div"  ,size : 30},
+    {
+      accessorKey: "amount",
+      header: () => <div className="text-right">Amount</div>,
+      cell: ({ getValue }) => {
+        const val = Number(getValue() || 0);
+        return <div className="text-right font-mono font-medium">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
+      },
+    },
+    {
+      accessorKey: "div_code",
+      header: () => <div className="text-center">Div</div>,
+      cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
+      size: 30,
+    },
     {
       accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ getValue }) => (
+        <div className="flex justify-center">
+          {String(getValue() || "N") === "Y" ? (
+            <Badge variant="outline" className="border-destructive text-destructive font-semibold">Cancelled</Badge>
+          ) : (
+            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Active</Badge>
+          )}
+        </div>
+      ),
     },
     {
       id: "actions",
-      header: "Actions",
+      header: () => <div className="text-center">Actions</div>,
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-center gap-1">
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
@@ -392,6 +418,12 @@ function PaymentDocumentEditor({
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const [lineSearch, setLineSearch] = useState("");
+  const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
+
+  const toggleRowExpanded = (id: string) => {
+    setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -525,6 +557,19 @@ function PaymentDocumentEditor({
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
 
+  const filteredDetail = useMemo(() => {
+    const q = lineSearch.trim().toLowerCase();
+    if (!q) return form.detail;
+    return form.detail.filter((d) =>
+      String(d.serial_no).includes(q) ||
+      (d.ac_code && d.ac_code.toLowerCase().includes(q)) ||
+      (d.ac_name && d.ac_name.toLowerCase().includes(q)) ||
+      (d.remarks && d.remarks.toLowerCase().includes(q)) ||
+      (d.job_no && d.job_no.toLowerCase().includes(q)) ||
+      (d.amount !== undefined && String(d.amount).includes(q))
+    );
+  }, [form.detail, lineSearch]);
+
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -577,6 +622,7 @@ function PaymentDocumentEditor({
     }
     if (!value) return;
     setSelectedDetailId(detail.id);
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     try {
       const child = await getChildTableName(value);
       const childTable = child?.table || "";
@@ -672,14 +718,21 @@ function PaymentDocumentEditor({
     setChildLoading(true);
     setError("");
     try {
+      const divCode = detail.div_code || form.div_code;
       const rows = await getFinanceMasterRows(detail.child_table, {
         code: detail.ac_code,
-        extra_param1: form.div_code,
+        extra_param1: divCode,
         extra_param2: docType,
-        extra_param3: form.doc_no || "1",
-        extra_param4: String(detail.serial_no),
+        extra_param3: form.doc_no || "0",
+        extra_param4: String(detail.serial_no || 1),
       });
-      let mapped = rows.map((row, index) => mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1));
+      let mapped = rows.map((row, index) => {
+        const m = mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1);
+        return {
+          ...m,
+          amount: 0,
+        };
+      });
       // if invoice child rows, fetch outstanding balances for each invoice and populate amounts
       if (detail.child_table === "invoice") {
         mapped = await Promise.all(
@@ -687,10 +740,14 @@ function PaymentDocumentEditor({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(form.div_code, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo);
               const balance = resp?.balances?.[0];
-              if (balance) {
-                return { ...m, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount } as TransactionChildRow;
+              if (balance && balance.outstanding_amount != null) {
+                return {
+                  ...m,
+                  inv_amt: balance.original_amount ?? m.inv_amt,
+                  c_bal_amt_org: balance.outstanding_amount ?? m.c_bal_amt_org,
+                } as TransactionChildRow;
               }
               return m;
             } catch {
@@ -698,55 +755,76 @@ function PaymentDocumentEditor({
             }
           }),
         );
+
+        // Auto-allocate if detail line already has an amount
+        const parentAmt = Number(detail.amount || 0);
+        if (parentAmt > 0) {
+          let remaining = parentAmt;
+          mapped = mapped.map((row) => {
+            if (remaining <= 0) return { ...row, amount: 0 };
+            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
+            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            remaining -= allocated;
+            return { ...row, amount: allocated };
+          });
+        }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
+      setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load allocations");
     } finally {
       setChildLoading(false);
     }
   };
-  const addChildRow = () => {
-    if (!selectedDetail?.child_table) return;
+  const addChildRow = (targetDetail?: TransactionDetail) => {
+    const detail = targetDetail || selectedDetail;
+    if (!detail) return;
+    if (!detail.child_table) {
+      updateDetail(detail.id, { child_table: "job" });
+    }
     setForm((current) => {
-      const currentRows = ((current.children[selectedDetail.id] || []) as TransactionChildRow[]);
+      const currentRows = ((current.children[detail.id] || []) as TransactionChildRow[]);
       const nextRows = [
         ...currentRows,
-        emptyChildRow(selectedDetail, current, docType, user?.company_code || "", currentRows.length + 1),
+        emptyChildRow(detail, current, docType, user?.company_code || "", currentRows.length + 1),
       ];
-      return { ...current, children: { ...current.children, [selectedDetail.id]: nextRows } };
+      return { ...current, children: { ...current.children, [detail.id]: nextRows } };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [detail.id]: true }));
   };
 
-  const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>) => {
-    if (!selectedDetail) return;
+  const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>, targetDetailId?: string) => {
+    const dId = targetDetailId || selectedDetail?.id;
+    if (!dId) return;
     setForm((current) => {
-      const rows = ((current.children[selectedDetail.id] || []) as TransactionChildRow[]).map((row) =>
+      const rows = ((current.children[dId] || []) as TransactionChildRow[]).map((row) =>
         row.id === childId ? { ...row, ...patch } : row,
       );
       const childTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
       return {
         ...current,
-        children: { ...current.children, [selectedDetail.id]: rows },
+        children: { ...current.children, [dId]: rows },
         detail: current.detail.map((d) =>
-          d.id === selectedDetail.id ? { ...d, amount: childTotal } : d,
+          d.id === dId ? { ...d, amount: childTotal } : d,
         ),
       };
     });
   };
 
-  const removeChildRow = (childId: string) => {
-    if (!selectedDetail) return;
+  const removeChildRow = (childId: string, targetDetailId?: string) => {
+    const dId = targetDetailId || selectedDetail?.id;
+    if (!dId) return;
     setForm((current) => {
-      const rows = ((current.children[selectedDetail.id] || []) as TransactionChildRow[])
+      const rows = ((current.children[dId] || []) as TransactionChildRow[])
         .filter((row) => row.id !== childId)
         .map((row, index) => ({ ...row, dtl_sr_no: index + 1 }));
       const childTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
       return {
         ...current,
-        children: { ...current.children, [selectedDetail.id]: rows },
+        children: { ...current.children, [dId]: rows },
         detail: current.detail.map((d) =>
-          d.id === selectedDetail.id ? { ...d, amount: childTotal } : d,
+          d.id === dId ? { ...d, amount: childTotal } : d,
         ),
       };
     });
@@ -1050,251 +1128,294 @@ function PaymentDocumentEditor({
               </div>
             )}
 
-            <div className="commercial-lines-card rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
-              <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00378C] text-[11px] font-bold text-white">1</span>
-                  <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">Accounting Line Items</h3>
-                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-semibold text-[#00378C]">
-                    {form.detail.length} {form.detail.length === 1 ? "line" : "lines"}
+            <div className="commercial-lines-card rounded-md border bg-card">
+              <div className="finance-line-actions">
+                <div className="finance-line-actions-left">
+                  <span className="finance-line-actions-icon"><List size={14} /></span>
+                  <span className="finance-line-actions-title">Accounting Lines</span>
+                  <span className="finance-line-actions-badge">
+                    {lineSearch.trim()
+                      ? `${filteredDetail.length} of ${form.detail.length} lines`
+                      : `${form.detail.length} ${form.detail.length === 1 ? "line" : "lines"}`}
                   </span>
+                  {lineSearch.trim() && (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Filtered ({filteredDetail.length})
+                    </span>
+                  )}
                 </div>
-                <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow} className="h-7 text-xs font-semibold border-[#00378C] text-[#00378C] hover:bg-blue-50">
-                  <Plus size={14} className="mr-1" /> Add Line
-                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="bisc-table-search">
+                    <Search size={13} className="bisc-table-search-icon" />
+                    <input
+                      className="bisc-search-input"
+                      type="text"
+                      value={lineSearch}
+                      onChange={(e) => setLineSearch(e.target.value)}
+                      placeholder="Search lines..."
+                    />
+                    {lineSearch && (
+                      <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow} className="commercial-add-line-btn">
+                    <Plus size={14} /> Add Line
+                  </Button>
+                </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[32vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className="finance-lines-table w-full min-w-[2140px] text-xs">
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-left text-white">Select</th>
+                      <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
                       <th className="px-2 py-2 text-left text-white">Description</th>
                       <th className="px-2 py-2 text-left text-white">Currency</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left text-white">Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
                       <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
                       <th className="px-2 py-2 text-left text-white">Tax Code</th>
                       <th className="px-2 py-2 text-left text-white">Tax Type</th>
                       <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left text-white">Tax Amt</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
                       <th className="px-2 py-2 text-left text-white">Job No</th>
                       <th className="px-2 py-2 text-left text-white">Ex Rate</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left text-white">Base Amount</th>
-                      <th className="px-2 py-2 text-left text-white">Action</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>
+                      <th className="px-2 py-2 text-center text-white w-14">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={16}>No detail lines yet</td></tr>
-                    ) : form.detail.map((detail) => (
-                      <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
-                        <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
-                          <div className="w-full max-w-[460px] truncate">
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={15}>No detail lines yet — click "Add Line" to get started</td></tr>
+                    ) : filteredDetail.length === 0 ? (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={15}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                    ) : filteredDetail.map((detail) => (
+                      <>
+                        <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
+                          <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
+                          <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
+                            <div className="w-full max-w-[460px] truncate">
+                              <LookupField
+                                label="Detail Account"
+                                compact
+                                placeholder="A/c code"
+                                value={detail.ac_code}
+                                displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                                valueField="ac_code"
+                                displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
+                                loadOptions={() => getDynamicLookup({
+                                  parameter: "Account_AC_CODE_Serach_HDR",
+                                  code1: user?.company_code,
+                                  code2: "D",
+                                  code3: form.doc_type,
+                                  code4: form.div_code
+                                })}
+                                disabled={disabled}
+                                onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                              />
+                            </div>
+                          </td>
+                          <td className="px-2 py-1 text-center whitespace-nowrap">
+                            {detail.ac_code ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDetailId(detail.id);
+                                  toggleRowExpanded(detail.id);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-2xs ${
+                                  expandedRowIds[detail.id]
+                                    ? "bg-[#00378C] text-white"
+                                    : (form.children[detail.id] || []).length > 0
+                                      ? "bg-blue-50 text-[#00378C] border border-blue-300 hover:bg-blue-100"
+                                      : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+                                }`}
+                                title={expandedRowIds[detail.id] ? "Collapse allocation" : "Expand allocation details"}
+                              >
+                                {expandedRowIds[detail.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                <span>
+                                  {detail.child_table === "invoice"
+                                    ? `Inv (${(form.children[detail.id] || []).length})`
+                                    : detail.child_table === "job"
+                                      ? `Job (${(form.children[detail.id] || []).length})`
+                                      : detail.child_table === "expense"
+                                        ? `Exp (${(form.children[detail.id] || []).length})`
+                                        : (form.children[detail.id] || []).length > 0
+                                          ? `Alloc (${(form.children[detail.id] || []).length})`
+                                          : "+ Alloc"}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </td>
+                          <td className="w-[220px] px-2 py-1"><Input className="h-7 text-xs" disabled={disabled} placeholder="Line remarks" value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
+
+                          <td className="w-[210px] px-2 py-1">
                             <LookupField
-                              label="Detail Account"
+                              label="Currency"
                               compact
-                              placeholder="A/c code"
-                              value={detail.ac_code}
-                              displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                              valueField="ac_code"
-                              displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
+                              placeholder="Currency"
+                              value={detail.curr_code || form.curr_code}
+                              displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
+                              columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                              valueField="curr_code"
+                              displayFields={["curr_code", "curr_name"]}
                               loadOptions={() => getDynamicLookup({
-                                parameter: "Account_AC_CODE_Serach_HDR",
+                                parameter: "Account_Currency_CODE_Serach",
                                 code1: user?.company_code,
-                                code2: "D",
-                                code3: form.doc_type,
-                                code4: form.div_code
+                                loginid: user?.loginid || user?.username || "ADMIN"
                               })}
                               disabled={disabled}
-                              onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                              onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
                             />
-                          </div>
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          <input
-                            checked={selectedDetail?.id === detail.id}
-                            className="h-4 w-4 accent-[#00378C] cursor-pointer"
-                            disabled={!detail.ac_code}
-                            onChange={() => setSelectedDetailId(detail.id)}
-                            type="radio"
-                          />
-                        </td>
-                        <td className="w-[220px] px-2 py-1"><Input className="h-7 text-xs" disabled={disabled} placeholder="Line remarks" value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
-
-                        <td className="w-[210px] px-2 py-1">
-                          <LookupField
-                            label="Currency"
-                            compact
-                            placeholder="Currency"
-                            value={detail.curr_code || form.curr_code}
-                            displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
-                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                            valueField="curr_code"
-                            displayFields={["curr_code", "curr_name"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "Account_Currency_CODE_Serach",
-                              code1: user?.company_code,
-                              loginid: user?.loginid || user?.username || "ADMIN"
-                            })}
-                            disabled={disabled}
-                            onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
-                          />
-                        </td>
-                        <td className="finance-amount-cell px-2 py-1">
-                          <div className="flex flex-col gap-1">
-                            <Input
-                              disabled={disabled}
-                              type="number"
-                              style={{ textAlign: "right" }}
-                              step="0.001"
-                              value={Number(detail.amount || 0)}
-                              onChange={(event) => {
-                                const newAmount = Number(event.target.value || 0);
+                          </td>
+                          <td className="finance-amount-cell px-2 py-1">
+                            <div className="flex flex-col gap-1">
+                              <Input
+                                disabled={disabled}
+                                type="number"
+                                style={{ textAlign: "right" }}
+                                step="0.001"
+                                value={Number(detail.amount || 0)}
+                                onChange={(event) => {
+                                  const newAmount = Number(event.target.value || 0);
+                                  const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
+                                  if (detail.child_table === "invoice" && childRows.length > 0) {
+                                    updateDetailAmount(detail.id, newAmount);
+                                  } else {
+                                    updateDetail(detail.id, { amount: newAmount });
+                                  }
+                                }}
+                              />
+                              {(() => {
                                 const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
-                                if (detail.child_table === "invoice" && childRows.length > 0) {
-                                  updateDetailAmount(detail.id, newAmount);
-                                } else {
-                                  updateDetail(detail.id, { amount: newAmount });
-                                }
-                              }}
+                                if (detail.child_table !== "invoice" || childRows.length === 0) return null;
+
+                                const effectiveCeiling = childRows.reduce((sum, r) => {
+                                  const outstanding = Number(r.c_bal_amt_org) || 0;
+                                  const allocated = Number(r.amount) || 0;
+                                  return sum + Math.max(outstanding, allocated);
+                                }, 0);
+
+                                return Number(detail.amount || 0) > effectiveCeiling + 0.001 ? (
+                                  <span className="text-xs text-red-500">
+                                    Amount exceeds total outstanding ({effectiveCeiling.toFixed(3)})
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
+                          </td>
+                          <td className="w-28 px-2 py-1">
+                            <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
+                              <option value={1}>Dr</option>
+                              <option value={-1}>Cr</option>
+                            </Select>
+                          </td>
+                          <td className="w-28 px-2 py-1">
+                            <LookupField
+                              label="Tax Code"
+                              compact
+                              placeholder="Tax code"
+                              value={detail.tx_compntcat_code_1 || "N/A"}
+                              displayValue={detail.tx_compntcat_code_1 || "N/A"}
+                              columns={[
+                                { field: "tx_compntcat_code", header: "Code" },
+                                { field: "tx_compntcat_name", header: "Name" },
+                              ]}
+                              valueField="tx_compntcat_code"
+                              displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+                              loadOptions={() => getDynamicLookup({
+                                parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+                                code1: user?.company_code,
+                                loginid: user?.loginid || user?.username || "ADMIN",
+                              })}
+                              disabled={disabled}
+                              onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
                             />
-                            {(() => {
-                              const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
-                              if (detail.child_table !== "invoice" || childRows.length === 0) return null;
-
-                              const effectiveCeiling = childRows.reduce((sum, r) => {
-                                const outstanding = Number(r.c_bal_amt_org) || 0;
-                                const allocated = Number(r.amount) || 0;
-                                return sum + Math.max(outstanding, allocated);
-                              }, 0);
-
-                              return Number(detail.amount || 0) > effectiveCeiling + 0.001 ? (
-                                <span className="text-xs text-red-500">
-                                  Amount exceeds total outstanding ({effectiveCeiling.toFixed(3)})
-                                </span>
-                              ) : null;
-                            })()}
-                          </div>
-                        </td>
-                        <td className="w-28 px-2 py-1">
-                          <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                            <option value={1}>Dr</option>
-                            <option value={-1}>Cr</option>
-                          </Select>
-                        </td>
-                        <td className="w-28 px-2 py-1">
-                          <LookupField
-                            label="Tax Code"
-                            compact
-                            placeholder="Tax code"
-                            value={detail.tx_compntcat_code_1 || "N/A"}
-                            displayValue={detail.tx_compntcat_code_1 || "N/A"}
-                            columns={[
-                              { field: "tx_compntcat_code", header: "Code" },
-                              { field: "tx_compntcat_name", header: "Name" },
-                            ]}
-                            valueField="tx_compntcat_code"
-                            displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                              code1: user?.company_code,
-                              loginid: user?.loginid || user?.username || "ADMIN",
-                            })}
-                            disabled={disabled}
-                            onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
-                          />
-                        </td>
-                        <td className="w-40 px-2 py-1">
-                          <Select
-                            disabled={disabled}
-                            value={detail.tx_compnt_1_expmt || "N"}
-                            onChange={(event) => {
-                              const taxType = event.target.value;
-                              const taxPerc = taxType === "S" ? 5 : 0;
-                              const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
-                              updateDetail(detail.id, {
-                                tx_compnt_1_expmt: taxType,
-                                tx_compnt_perc_1: taxPerc,
-                                tx_compnt_amt_1: taxAmt,
-                              });
-                            }}
-                          >
-                            <option value="N">No Tax</option>
-                            <option value="S">Std Tax</option>
-                            <option value="Z">Zero</option>
-                            <option value="E">Exempt</option>
-                          </Select>
-                        </td>
-                        <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1))} /></td>
-                        <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
-                      </tr>
+                          </td>
+                          <td className="w-40 px-2 py-1">
+                            <Select
+                              disabled={disabled}
+                              value={detail.tx_compnt_1_expmt || "N"}
+                              onChange={(event) => {
+                                const taxType = event.target.value;
+                                const taxPerc = taxType === "S" ? 5 : 0;
+                                const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                                updateDetail(detail.id, {
+                                  tx_compnt_1_expmt: taxType,
+                                  tx_compnt_perc_1: taxPerc,
+                                  tx_compnt_amt_1: taxAmt,
+                                });
+                              }}
+                            >
+                              <option value="N">No Tax</option>
+                              <option value="S">Std Tax</option>
+                              <option value="Z">Zero</option>
+                              <option value="E">Exempt</option>
+                            </Select>
+                          </td>
+                          <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
+                          <td className="w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                          <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1))} /></td>
+                          <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                        </tr>
+                        {expandedRowIds[detail.id] && (
+                          <tr key={`${detail.id}_alloc`} className="bg-slate-50/70 border-b border-blue-200/60">
+                            <td colSpan={15} className="p-0 pl-10 pr-3 pb-2 pt-0.5">
+                              <SmartInlineAllocationTable
+                                detail={detail}
+                                rows={(form.children[detail.id] || []) as TransactionChildRow[]}
+                                loading={childLoading && selectedDetailId === detail.id}
+                                disabled={disabled}
+                                formatAmount={formatAmount}
+                                onChange={(childId, patch) => updateChildRow(childId, patch, detail.id)}
+                                onRemove={(childId) => removeChildRow(childId, detail.id)}
+                                onAdd={() => addChildRow(detail)}
+                                onSetChildTable={(table) => updateDetail(detail.id, { child_table: table })}
+                                onRefreshInvoices={() => void loadChildrenForDetail(detail)}
+                                onInvNoBlur={handleInvNoBlur}
+                                onClose={() => toggleRowExpanded(detail.id)}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
-              </div>
-              <div className="flex items-center justify-end gap-8  px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Tax</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(totalTax)}</strong>
-              </div>
-              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Net Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{(formatAmount(total + totalTax))}</strong>
-              </div>
-            </div>
-
-            <div className="finance-allocation-panel rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#cbd5e1] bg-slate-50 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00378C] text-[11px] font-bold text-white">2</span>
-                  <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">
-                    {selectedDetail?.child_table ? `${titleCase(selectedDetail.child_table)} Allocations` : "Invoice & Sub-Ledger Allocations"}
-                  </h3>
-                  {selectedDetail && (
-                    <span className="rounded bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                      Line #{selectedDetail.serial_no}: <strong className="font-semibold text-[#00378C]">{selectedDetail.ac_code || "No Account"}</strong>
-                      {selectedDetail.child_table ? ` (${selectedDetail.child_table.toUpperCase()})` : ""}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-slate-600">Active Line:</span>
-                  <Select
-                    className="w-56 h-7 text-xs"
-                    value={selectedDetail?.id || ""}
-                    onChange={(event) => setSelectedDetailId(event.target.value)}
-                  >
-                    {form.detail.map((detail) => (
-                      <option key={detail.id} value={detail.id}>
-                        Line {detail.serial_no}: {detail.ac_code || "No account"} {detail.child_table ? `(${detail.child_table})` : ""}
-                      </option>
-                    ))}
-                  </Select>
-                  <Button disabled={disabled || !selectedDetail?.child_table} size="sm" type="button" variant="outline" onClick={addChildRow} className="h-7 text-xs font-semibold border-[#00378C] text-[#00378C] hover:bg-blue-50">
-                    <Plus size={14} className="mr-1" /> Add Allocation
-                  </Button>
+              <div className="commercial-lines-footer">
+                <Button
+                  disabled={disabled || !form.div_code || !form.curr_code}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={addDetailRow}
+                  className="commercial-add-line-btn"
+                >
+                  <Plus size={14} /> Add Line
+                </Button>
+                <div className="commercial-summary-chips">
+                  <div className="commercial-summary-chip">
+                    <span className="commercial-summary-label">Total Amount</span>
+                    <span className="commercial-summary-value">{formatAmount(total)}</span>
+                  </div>
+                  <div className="commercial-summary-chip">
+                    <span className="commercial-summary-label">Tax Amount</span>
+                    <span className="commercial-summary-value">{formatAmount(totalTax)}</span>
+                  </div>
+                  <div className="commercial-summary-chip commercial-summary-net">
+                    <span className="commercial-summary-label">Net Total</span>
+                    <span className="commercial-summary-value font-bold text-[#00378C]">{formatAmount(total + totalTax)}</span>
+                  </div>
                 </div>
               </div>
-              <ChildAllocationTable
-                childTable={selectedDetail?.child_table || ""}
-                parentId={selectedDetail?.id}
-                disabled={disabled}
-                loading={childLoading}
-                rows={selectedChildren}
-                onChange={updateChildRow}
-                onRemove={removeChildRow}
-                onInvNoBlur={handleInvNoBlur}
-              />
             </div>
           </div>
         )}
@@ -1302,7 +1423,7 @@ function PaymentDocumentEditor({
 
       <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
         <div className="text-sm text-muted-foreground">
-          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
+          Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>

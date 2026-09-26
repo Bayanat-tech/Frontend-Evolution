@@ -88,12 +88,12 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
       cell.style.color = "#00378c";
       cell.style.fontWeight = "bold";
     });
-    table.querySelectorAll(".subtotal-row td, .subtotal-row th").forEach((cell) => {
+    table.querySelectorAll<HTMLElement>(".subtotal-row td, .subtotal-row th").forEach((cell) => {
       cell.style.backgroundColor = "#f1f5f9";
       cell.style.color = "#00378c";
       cell.style.fontWeight = "bold";
     });
-    table.querySelectorAll(".grand-total-row td, .grand-total-row th").forEach((cell) => {
+    table.querySelectorAll<HTMLElement>(".grand-total-row td, .grand-total-row th").forEach((cell) => {
       cell.style.backgroundColor = "#e2e8f0";
       cell.style.color = "#00378c";
       cell.style.fontWeight = "bold";

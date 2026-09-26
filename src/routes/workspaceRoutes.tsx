@@ -1886,10 +1886,12 @@ function getCommercialDocType(pathname: string) {
 
 function isJournalVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
+  const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
   return (
-    normalized.includes("/finance/accounts/transactions/jv") ||
-    normalized.includes("/finance/accounts/transactions/provisional") ||
-    normalized.includes("/finance/accounts/transactions/journal")
+    !isReverse &&
+    (normalized.includes("/finance/accounts/transactions/jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/journal"))
   );
 }
 
@@ -1898,8 +1900,9 @@ function isRVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
     normalized.includes("/finance/accounts/transactions/rjv") ||
-    normalized.includes("/finance/accounts/transactions/provisional") ||
-    normalized.includes("/finance/accounts/transactions/journal")
+    normalized.includes("/finance/accounts/transactions/reverse_jv") ||
+    normalized.includes("/finance/accounts/transactions/reverse-jv") ||
+    normalized.includes("/finance/accounts/transactions/reverse")
   );
 }
 
