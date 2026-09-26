@@ -158,7 +158,7 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
         <PanelHeader
           icon={Search}
           title="Global Freight Search"
-          subtitle="Commercial and operations records"
+          subtitle=""
           action={
             <div className="flex flex-wrap items-center gap-1.5">
               <ResultPill label="Records" value={String(resultStats.total)} tone="blue" />
