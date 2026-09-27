@@ -18,6 +18,13 @@ export type HrMasterResponse = {
   count: number;
 };
 
+type LeaveValidationResult = {
+  success?: boolean;
+  isValid: boolean;
+  availableBalance: number | null;
+  message: string;
+};
+
 export async function getHrMaster(master: string, options: Record<string, unknown> = {}) {
   const response = await withHrFallback((prefix) => api.get<ApiResponse<HrMasterResponse>>(`${prefix}/${master}`, { params: options }));
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
@@ -126,13 +133,13 @@ export type ValidateLeavePayload = {
 };
 
 export async function validateHrLeave(payload: ValidateLeavePayload,tenantName?: string) {
-  if(tenantName === "WMSTST"){
-    const response = await withHrFallback((prefix) => api.get<IValidateLeaveResponse>(`${prefix}/gm/validateleave`, {
+  if(tenantName === "WMSTST" || tenantName === 'WMSDEV' || tenantName === 'WMSDEV Development'){
+    const response = await withHrFallback((prefix) => api.get<LeaveValidationResult>(`${prefix}/gm/validateleave`, {
       params: payload,
     }));
     return response.data;
   }else{
-    const response = await withHrFallback((prefix) => api.get<IValidateLeaveResponse>(`${prefix}/gm/mhvalidateleave`, {
+    const response = await withHrFallback((prefix) => api.get<LeaveValidationResult>(`${prefix}/gm/mhvalidateleave`, {
       params: payload,
     }));
     return response.data;
