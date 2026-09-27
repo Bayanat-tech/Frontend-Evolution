@@ -1147,7 +1147,7 @@
   display: flex !important;
   flex-wrap: wrap !important;
   align-items: center !important;
-  justify-content: space-between !important;
+  justify-content: flex-end !important;
   border-top: 1px solid #cbd5e1 !important;
   background-color: rgba(248, 250, 252, 0.95) !important;
   padding: 8px 12px !important;

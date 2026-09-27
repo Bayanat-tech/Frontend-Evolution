@@ -262,7 +262,8 @@ const AssignUserDiv = () => {
 
   // ── render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="workspace-main flex flex-col gap-3 p-3">
+    <div className="finance-utility-page workspace-main flex flex-col gap-3">
+      <div><h1 className="m-0 font-semibold">Assign User Division</h1></div>
       {/* Header bar */}
       <div className="rounded-lg border border-[#c7d2e3] bg-card px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
@@ -297,7 +298,7 @@ const AssignUserDiv = () => {
       </div>
 
       {/* Two-panel layout */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
 
         {/* Left – Available Users */}
         <div className="flex min-w-0 flex-col gap-1">
