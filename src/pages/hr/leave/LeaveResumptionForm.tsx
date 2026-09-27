@@ -450,10 +450,14 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
         leaveDays: requestedDays,
       });
 
-      let isValid = result.success && result.isValid;
+      let isValid: boolean = Boolean(result.success && result.isValid);
       let message = result.message || "Leave validation passed!";
 
-      if (result.availableBalance !== undefined && result.availableBalance < requestedDays) {
+      if (
+        result.availableBalance !== undefined &&
+        result.availableBalance !== null &&
+        result.availableBalance < requestedDays
+      ) {
         isValid = false;
         message = `Insufficient leave balance. Available: ${result.availableBalance} days, Requested: ${requestedDays} days`;
       }
@@ -472,7 +476,16 @@ const LeaveResumptionForm: React.FC<AddLeaveApprovalFormProps> = ({
         }
       }
 
-      setValidationResult({ ...result, isValid, message });
+      const validationResponse: IValidateLeaveResponse = {
+        ...result,
+        success: result.success ?? isValid,
+        isValid,
+        message,
+        validationResult: result,
+        availableBalance: result.availableBalance ?? undefined,
+      };
+
+      setValidationResult(validationResponse);
       if (isValid) toast.success(message);
       else toast.error(message);
     } catch (error) {
