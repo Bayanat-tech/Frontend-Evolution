@@ -499,7 +499,7 @@ export function BudgetRequestEditor({
   return (
     <>
       <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+        className={`finance-utility-page finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();
@@ -752,8 +752,8 @@ export function BudgetRequestEditor({
           )}
         </CardContent>
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+          <div className="flex flex-wrap gap-2">
 
             <Button
               type="button"

@@ -184,7 +184,7 @@ export function PrepaidRegisterPage() {
   };
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="eyebrow">Asset Utility</p>
@@ -323,7 +323,7 @@ function PrepaidEditor({
   };
 
   return (
-    <div className="flex min-h-[690px] flex-col">
+    <div className="finance-utility-editor flex min-h-0 flex-col">
       <div className="border-b p-4">
         <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
         <div className="flex items-start justify-between gap-3">

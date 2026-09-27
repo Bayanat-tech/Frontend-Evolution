@@ -167,7 +167,7 @@ useEffect(() => {
   };
 
   return (
-    <section className="finance-list-page grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Budget Request</h1>
