@@ -869,7 +869,7 @@ const invoiceHeader: TInvoice[] = [
                 />
               </FieldLabel>
               <FieldLabel label="Exchange rate">
-                <Input className="h-8 text-[12.5px]" value={getValue(invoice, "ex_rate") ?? ""} placeholder="Auto" disabled />
+                <Input className="h-8 text-[12.5px]" value={getValue(invoice, "ex_rate") ?? ""} placeholder="Auto"  />
               </FieldLabel>
               <FieldLabel label="Credit note no" className="sm:col-span-1">
                 <Input

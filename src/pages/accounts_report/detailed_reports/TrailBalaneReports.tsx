@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, Play, RefreshCw, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, X } from "lucide-react";
 
-import { Button } from "../../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
 import { useAuth } from "../../../state/AuthContext";
 import { api } from "../../../api/client";
 import { getDynamicLookup } from "../../../api/lookups";
-import ReportDialogPage from "../../../components/ReportDialogPage";
+import { NewReportPage } from "../../../components/new_report_format";
 import { NewReportDialog } from "../../../components/new_report_format";
+import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 
 type AnyRow = Record<string, unknown>;
 
@@ -47,9 +46,6 @@ const DRILL_ENDPOINTS: Record<DrillLevel, string> = {
   detail: "api/finance/transactions/report/trialbalance/drilldown/detail",
 };
 
-// NOTE: adjust these paths if your backend names the drill-down excel
-// endpoints differently — this assumes the same /excel suffix pattern
-// used elsewhere in this file.
 const DRILL_EXCEL_ENDPOINTS: Record<DrillLevel, string> = {
   l3:     "api/finance/transactions/report/trialbalance/drilldown/l3/excel",
   l4:     "api/finance/transactions/report/trialbalance/drilldown/l4/excel",
@@ -119,13 +115,7 @@ const AC_L4 = {
   label:             "L4 Code",
 };
 
-type FormState = {
-  from_date:         string;
-  to_date:           string;
-  division_code:     string;
-  report_format:     TReportFormat;
-  exclude_zero_txns: boolean;
-};
+type FormValues = Record<string, unknown>;
 
 type Division = { div_code: string; div_name: string };
 
@@ -139,90 +129,6 @@ interface DrillEntry {
   payload: Record<string, unknown>;
 }
 
-// ─── Reusable checkbox selector ───────────────────────────────────────────────
-
-interface CheckboxSelectorProps {
-  rows:         AnyRow[];
-  loading:      boolean;
-  selectedKeys: Set<string>;
-  valueField:   string;
-  descField:    string;
-  label:        string;
-  onToggle:     (key: string) => void;
-  onClearAll:   () => void;
-  onSelectAll:  () => void;
-}
-
-function CheckboxSelector({
-  rows, loading, selectedKeys, valueField, descField, label,
-  onToggle, onClearAll, onSelectAll,
-}: CheckboxSelectorProps) {
-  const selCount = selectedKeys.size;
-  const total    = rows.length;
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] text-muted-foreground">
-          {loading ? "Loading…" : `${selCount} of ${total} ${label} selected`}
-        </p>
-        <div className="flex items-center gap-3">
-          {!loading && selCount < total && (
-            <button
-              onClick={onSelectAll}
-              className="text-[10px] text-primary/80 hover:text-primary underline"
-            >
-              Select all
-            </button>
-          )}
-          {selCount > 0 && (
-            <button
-              onClick={onClearAll}
-              className="text-[10px] text-destructive/70 hover:text-destructive underline"
-            >
-              Clear all
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="max-h-56 overflow-y-auto rounded border border-border">
-        {loading ? (
-          <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">Loading items…</div>
-        ) : rows.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">No items available</div>
-        ) : (
-          rows.map((row) => {
-            const key     = String(row[valueField]);
-            const desc    = String(row[descField] ?? "");
-            const checked = selectedKeys.has(key);
-            return (
-              <label
-                key={key}
-                className={[
-                  "flex items-center gap-2.5 px-3 py-1.5 cursor-pointer select-none",
-                  "border-b border-border last:border-b-0 transition-colors",
-                  checked
-                    ? "bg-primary/5 text-primary"
-                    : "hover:bg-muted/40 text-foreground",
-                ].join(" ")}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onToggle(key)}
-                  className="h-3 w-3 accent-primary flex-shrink-0"
-                />
-                <span className="text-[11px] font-medium w-24 flex-shrink-0">{key}</span>
-                <span className="text-[11px] text-muted-foreground truncate">{desc}</span>
-              </label>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Drill breadcrumb bar ─────────────────────────────────────────────────────
 
 interface DrillBreadcrumbProps {
@@ -232,26 +138,51 @@ interface DrillBreadcrumbProps {
 
 function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
   return (
-    <div className="flex items-center gap-1 flex-wrap px-3 py-1.5 text-[10px]">
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        flexWrap: "wrap",
+        padding: "6px 12px",
+        fontSize: 11,
+      }}
+    >
       <button
         type="button"
         onClick={() => onNavigate(-1)}
-        className="flex items-center gap-1 text-primary/80 hover:text-primary font-medium"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          color: "var(--primary, #00378c)",
+          fontWeight: 500,
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+          fontSize: 11,
+        }}
       >
         <ChevronLeft size={11} /> Main Report
       </button>
       {stack.map((entry, i) => (
-        <span key={entry.id} className="flex items-center gap-1">
-          <span className="text-muted-foreground">/</span>
+        <span key={entry.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <span style={{ color: "var(--muted, #6b7a8d)" }}>/</span>
           <button
             type="button"
             onClick={() => onNavigate(i)}
-            className={[
-              "font-medium",
-              i === stack.length - 1
-                ? "text-foreground cursor-default"
-                : "text-primary/80 hover:text-primary",
-            ].join(" ")}
+            style={{
+              fontWeight: 500,
+              fontSize: 11,
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: i === stack.length - 1 ? "default" : "pointer",
+              color: i === stack.length - 1
+                ? "var(--text, #1a1a2e)"
+                : "var(--primary, #00378c)",
+            }}
           >
             {entry.label}
           </button>
@@ -259,6 +190,45 @@ function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
       ))}
     </div>
   );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function rowsToOptions(
+  rows: AnyRow[],
+  valueField: string,
+  descField: string
+): ReportOption[] {
+  return rows.map((row) => {
+    const value = String(row[valueField] ?? "");
+    const desc = String(row[descField] ?? "");
+    return {
+      value,
+      label: desc ? `${value} – ${desc}` : value,
+      code: value,
+    };
+  });
+}
+
+/** MultiSelectField uses "All" as sentinel; strip it for API payloads. */
+function normalizeMulti(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v) => v !== "All" && v !== "" && v != null).map(String);
+}
+
+/** If the multi-select is effectively "All" (or empty), expand to every available code. */
+function resolveCodes(
+  selected: unknown,
+  availableRows: AnyRow[],
+  valueField: string
+): string[] {
+  const normalized = normalizeMulti(selected);
+  if (normalized.length === 0) {
+    return availableRows
+      .map((row) => String(row[valueField] ?? ""))
+      .filter((v) => v !== "");
+  }
+  return normalized;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -271,11 +241,13 @@ export default function TrialBalancePage() {
   const config   = REPORT_TYPES[reportType];
   const isAcMode = reportType === "ac";
 
-  // ── Form state ─────────────────────────────────────────────────────────────
-  const [form, setForm] = useState<FormState>({
+  // ── Form values (NewReportPage shape) ──────────────────────────────────────
+  const [values, setValues] = useState<FormValues>({
     from_date:         "",
     to_date:           "",
     division_code:     "",
+    primary_codes:     ["All"],
+    l4_codes:          ["All"],
     report_format:     "standard",
     exclude_zero_txns: false,
   });
@@ -287,17 +259,16 @@ export default function TrialBalancePage() {
   // ── Primary selector ───────────────────────────────────────────────────────
   const [primaryRows, setPrimaryRows]       = useState<AnyRow[]>([]);
   const [primaryLoading, setPrimaryLoading] = useState(false);
-  const [selectedKeys, setSelectedKeys]     = useState<Set<string>>(new Set());
 
   // ── Secondary selector (AC mode L4) ───────────────────────────────────────
-  const [l4Rows, setL4Rows]                 = useState<AnyRow[]>([]);
-  const [l4Loading, setL4Loading]           = useState(false);
-  const [selectedL4Keys, setSelectedL4Keys] = useState<Set<string>>(new Set());
+  const [l4Rows, setL4Rows]       = useState<AnyRow[]>([]);
+  const [l4Loading, setL4Loading] = useState(false);
 
   // ── Main report state ──────────────────────────────────────────────────────
   const [reportHtml, setReportHtml]       = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError]     = useState<string | null>(null);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // ── Drill-down state ───────────────────────────────────────────────────────
   const [drillStack, setDrillStack]     = useState<DrillEntry[]>([]);
@@ -306,7 +277,6 @@ export default function TrialBalancePage() {
   const drillIdCounter                  = useRef(0);
 
   // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
-  // Works with NewReportDialog page iframes (sandbox: allow-scripts allow-same-origin)
   useEffect(() => {
     const handler = async (ev: MessageEvent) => {
       if (!ev.data || ev.data.type !== "DRILL_DOWN") return;
@@ -357,7 +327,7 @@ export default function TrialBalancePage() {
           payload,
         };
 
-        setDrillStack(prev => [...prev, entry]);
+        setDrillStack((prev) => [...prev, entry]);
       } catch (err: any) {
         const msg =
           err?.response?.data?.message ||
@@ -399,7 +369,7 @@ export default function TrialBalancePage() {
     const fetch = async () => {
       setPrimaryLoading(true);
       setPrimaryRows([]);
-      setSelectedKeys(new Set());
+      setValues((prev) => ({ ...prev, primary_codes: ["All"] }));
       try {
         const res = await getDynamicLookup({
           parameter: config.selectorParameter,
@@ -437,54 +407,152 @@ export default function TrialBalancePage() {
     fetch();
   }, [isAcMode, user]);
 
+  // ── Derived options ────────────────────────────────────────────────────────
+  const divisionOptions: ReportOption[] = useMemo(
+    () =>
+      divisions.map((d) => ({
+        value: d.div_code,
+        label: `${d.div_code} – ${d.div_name}`,
+        code: d.div_code,
+      })),
+    [divisions]
+  );
+
+  const primaryOptions = useMemo(
+    () => rowsToOptions(primaryRows, config.valueField, config.descField),
+    [primaryRows, config.valueField, config.descField]
+  );
+
+  const l4Options = useMemo(
+    () => rowsToOptions(l4Rows, AC_L4.valueField, AC_L4.descField),
+    [l4Rows]
+  );
+
+  const reportTypeOptions: ReportOption[] = useMemo(
+    () =>
+      (Object.entries(REPORT_TYPES) as [ReportType, ReportTypeConfig][]).map(
+        ([key, cfg]) => ({ value: key, label: cfg.label })
+      ),
+    []
+  );
+
+  const reportFormatOptions: ReportOption[] = useMemo(
+    () => REPORT_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    []
+  );
+
+  // ── Field config for NewReportPage ─────────────────────────────────────────
+  const fields: ReportFieldConfig[] = useMemo(() => {
+    const list: ReportFieldConfig[] = [
+      {
+        key: "report_type",
+        type: "select",
+        label: "Report Type",
+        options: reportTypeOptions,
+        placeholder: "Select type",
+        colSpan: 3,
+      },
+      {
+        key: "division_code",
+        type: "select",
+        label: "Division",
+        options: divisionOptions,
+        placeholder: "All Divisions",
+        loading: divisionsLoading,
+        colSpan: 3,
+      },
+      {
+        key: "from_date",
+        type: "daterange",
+        label: "Date Range",
+        toKey: "to_date",
+        required: true,
+        colSpan: 6,
+      },
+      {
+        key: "primary_codes",
+        type: "multiselect",
+        label: isAcMode ? "A/c Code" : `${config.label} Codes`,
+        options: primaryOptions,
+        placeholder: "All",
+        loading: primaryLoading,
+        colSpan: isAcMode ? 6 : 12,
+      },
+    ];
+
+    if (isAcMode) {
+      list.push(
+        {
+          key: "l4_codes",
+          type: "multiselect",
+          label: "L4 Code",
+          options: l4Options,
+          placeholder: "All",
+          loading: l4Loading,
+          colSpan: 6,
+        },
+        {
+          key: "report_format",
+          type: "select",
+          label: "Report Format",
+          options: reportFormatOptions,
+          placeholder: "Standard",
+          colSpan: 4,
+        }
+      );
+    }
+
+    return list;
+  }, [
+    reportTypeOptions,
+    divisionOptions,
+    divisionsLoading,
+    primaryOptions,
+    primaryLoading,
+    l4Options,
+    l4Loading,
+    isAcMode,
+    config.label,
+    reportFormatOptions,
+  ]);
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
-  const handleTogglePrimary = useCallback((key: string) => {
-    setSelectedKeys((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+  const handleChange = useCallback((key: string, value: unknown) => {
+    if (key === "report_type") {
+      const next = value as ReportType;
+      if (next && REPORT_TYPES[next]) {
+        setReportType(next);
+        setValues((prev) => ({
+          ...prev,
+          primary_codes: ["All"],
+          l4_codes: ["All"],
+        }));
+        setReportError(null);
+        setReportHtml(null);
+        setDrillStack([]);
+        setDrillError(null);
+      }
+      return;
+    }
+    setValues((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const handleSelectAllPrimary = useCallback(() => {
-    setSelectedKeys(new Set(primaryRows.map((r) => String(r[config.valueField]))));
-  }, [primaryRows, config.valueField]);
-
-  const handleToggleL4 = useCallback((key: string) => {
-    setSelectedL4Keys((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
+  const handleClearAll = useCallback(() => {
+    setValues({
+      from_date:         "",
+      to_date:           "",
+      division_code:     "",
+      primary_codes:     ["All"],
+      l4_codes:          ["All"],
+      report_format:     "standard",
+      exclude_zero_txns: false,
     });
-  }, []);
-
-  const handleSelectAllL4 = useCallback(() => {
-    setSelectedL4Keys(new Set(l4Rows.map((r) => String(r[AC_L4.valueField]))));
-  }, [l4Rows]);
-
-  const handleReset = () => {
-    setForm({
-      from_date: "", to_date: "", division_code: "",
-      report_format: "standard", exclude_zero_txns: false,
-    });
-    setSelectedKeys(new Set());
-    setSelectedL4Keys(new Set());
     setReportError(null);
     setReportHtml(null);
     setDrillStack([]);
     setDrillError(null);
-  };
-
-  const handleTypeChange = (type: ReportType) => {
-    setReportType(type);
-    setSelectedKeys(new Set());
-    setSelectedL4Keys(new Set());
-    setReportError(null);
-    setReportHtml(null);
-    setDrillStack([]);
-    setDrillError(null);
-  };
+  }, []);
 
   const handleCloseReport = () => {
     setReportHtml(null);
@@ -501,34 +569,48 @@ export default function TrialBalancePage() {
     if (index === -1) {
       setDrillStack([]);
     } else {
-      setDrillStack(prev => prev.slice(0, index + 1));
+      setDrillStack((prev) => prev.slice(0, index + 1));
     }
     setDrillError(null);
   };
 
-  const canGenerate = Boolean(form.from_date && form.to_date);
+  const canGenerate = Boolean(values.from_date && values.to_date);
 
   const buildPayload = () => {
-    const base = {
+    const primary = resolveCodes(
+      values.primary_codes,
+      primaryRows,
+      config.valueField
+    );
+
+    const base: Record<string, unknown> = {
       company_code:          user?.company_code ?? "",
-      division_code:         form.division_code,
-      from_date:             form.from_date,
-      to_date:               form.to_date,
-      [config.formValueKey]: Array.from(selectedKeys),
+      division_code:         (values.division_code as string) || "",
+      from_date:             values.from_date as string,
+      to_date:               values.to_date as string,
+      [config.formValueKey]: primary,
     };
+
     if (isAcMode) {
       return {
         ...base,
-        report_format:        form.report_format,
-        exclude_zero_txns:    form.exclude_zero_txns,
-        [AC_L4.formValueKey]: Array.from(selectedL4Keys),
+        report_format:        (values.report_format as string) || "standard",
+        exclude_zero_txns:    Boolean(values.exclude_zero_txns),
+        [AC_L4.formValueKey]: resolveCodes(
+          values.l4_codes,
+          l4Rows,
+          AC_L4.valueField
+        ),
       };
     }
     return base;
   };
 
   const handleGenerate = async () => {
-    if (!canGenerate) return;
+    if (!canGenerate) {
+      setReportError("From Date and To Date are required.");
+      return;
+    }
     setReportLoading(true);
     setReportError(null);
     setReportHtml(null);
@@ -553,6 +635,7 @@ export default function TrialBalancePage() {
   };
 
   const handleExcel = async () => {
+    setExportingExcel(true);
     try {
       const response = await api.post(config.excelEndpoint, buildPayload(), {
         responseType: "arraybuffer",
@@ -575,6 +658,8 @@ export default function TrialBalancePage() {
         err?.message ||
         "Failed to download Excel";
       setReportError(String(msg));
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -583,6 +668,7 @@ export default function TrialBalancePage() {
     const topDrill = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
     if (!topDrill) return;
     const endpoint = DRILL_EXCEL_ENDPOINTS[topDrill.level];
+    setExportingExcel(true);
     try {
       const response = await api.post(endpoint, topDrill.payload, {
         responseType: "arraybuffer",
@@ -605,6 +691,8 @@ export default function TrialBalancePage() {
         err?.message ||
         "Failed to download Excel";
       setDrillError(String(msg));
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -615,220 +703,65 @@ export default function TrialBalancePage() {
   const dialogHtml = topDrill ? topDrill.html : reportHtml;
   const dialogOpen = reportHtml !== null;
 
+  // Values passed to NewReportPage (include synthetic report_type for the select)
+  const pageValues: FormValues = {
+    ...values,
+    report_type: reportType,
+  };
+
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      <section className="grid gap-4">
-
-        {/* Page Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
-              {pageTitle}
-            </h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
-              <RefreshCw size={15} />
-            </Button>
-            <Button disabled={!canGenerate || reportLoading} onClick={handleGenerate}>
-              {reportLoading ? (
-                <>
-                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Generating…
-                </>
-              ) : (
-                <><Play size={15} /> Generate Report</>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Error Banner */}
-        {reportError && (
-          <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
-            <span className="font-semibold">Error:</span> {reportError}
-            <button onClick={() => setReportError(null)} className="ml-auto text-destructive/60 hover:text-destructive">
-              <X size={12} />
-            </button>
+      <NewReportPage
+        title={pageTitle}
+        fields={fields}
+        values={pageValues}
+        onChange={handleChange}
+        onClearAll={handleClearAll}
+        onGenerate={handleGenerate}
+        loading={reportLoading}
+        optionsLoading={divisionsLoading || primaryLoading || (isAcMode && l4Loading)}
+        error={reportError}
+        onClearError={() => setReportError(null)}
+        fieldsPerRow={4}
+      >
+        {isAcMode && (
+          <div
+            style={{
+              marginTop: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                color: "var(--text, #1a1a2e)",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(values.exclude_zero_txns)}
+                onChange={(e) =>
+                  setValues((p) => ({ ...p, exclude_zero_txns: e.target.checked }))
+                }
+                style={{
+                  width: 14,
+                  height: 14,
+                  accentColor: "var(--primary, #00378c)",
+                }}
+              />
+              Exclude Zero TXNs
+            </label>
           </div>
         )}
+      </NewReportPage>
 
-        {/* Report Type Selector */}
-        <Card className="border-border shadow-sm overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-primary" />
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Report Type</p>
-                <h2 className="text-[11px] font-semibold text-foreground leading-tight">Select which trial balance to generate</h2>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 py-3">
-            <div className="flex gap-0 border border-border rounded-md overflow-hidden w-fit">
-              {(Object.entries(REPORT_TYPES) as [ReportType, ReportTypeConfig][]).map(([key, cfg]) => (
-                <button
-                  key={key}
-                  onClick={() => handleTypeChange(key)}
-                  className={[
-                    "px-4 py-1.5 text-[11px] font-medium transition-colors border-r border-border last:border-r-0",
-                    reportType === key
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted/40",
-                  ].join(" ")}
-                >
-                  {cfg.label}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Filters */}
-        <Card className="border-border shadow-sm overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-primary" />
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Parameters</p>
-                <h2 className="text-[11px] font-semibold text-foreground leading-tight">Report Filters</h2>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 py-3">
-            <div className={`grid grid-cols-1 gap-3 ${isAcMode ? "sm:grid-cols-2 md:grid-cols-3" : "sm:grid-cols-2 md:grid-cols-4"}`}>
-              <label className={`flex flex-col gap-1.5 ${!isAcMode ? "sm:col-span-2" : ""}`}>
-                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">Division</span>
-                <select
-                  value={form.division_code}
-                  onChange={(e) => setForm((p) => ({ ...p, division_code: e.target.value }))}
-                  disabled={divisionsLoading}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50"
-                >
-                  <option value="">— All Divisions —</option>
-                  {divisions.map((d) => (
-                    <option key={d.div_code} value={d.div_code}>{d.div_code} – {d.div_name}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  From Date <strong className="text-destructive">*</strong>
-                </span>
-                <input
-                  type="date"
-                  value={form.from_date}
-                  onChange={(e) => setForm((p) => ({ ...p, from_date: e.target.value }))}
-                  className="h-7 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                />
-              </label>
-
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  To Date <strong className="text-destructive">*</strong>
-                </span>
-                <input
-                  type="date"
-                  value={form.to_date}
-                  onChange={(e) => setForm((p) => ({ ...p, to_date: e.target.value }))}
-                  className="h-7 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                />
-              </label>
-
-              {isAcMode && (
-                <div className="flex flex-col gap-0.5 sm:col-span-2 md:col-span-3">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Report Format</span>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 pt-0.5">
-                    {REPORT_FORMAT_OPTIONS.map(({ value, label }) => (
-                      <label key={value} className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="report_format"
-                          value={value}
-                          checked={form.report_format === value}
-                          onChange={() => setForm((p) => ({ ...p, report_format: value }))}
-                          className="h-3 w-3 accent-primary"
-                        />
-                        <span className="text-[11px] text-foreground">{label}</span>
-                      </label>
-                    ))}
-                    <label className="flex items-center gap-1.5 cursor-pointer ml-auto">
-                      <input
-                        type="checkbox"
-                        checked={form.exclude_zero_txns}
-                        onChange={(e) => setForm((p) => ({ ...p, exclude_zero_txns: e.target.checked }))}
-                        className="h-3 w-3 accent-primary"
-                      />
-                      <span className="text-[11px] text-foreground">Exclude Zero TXNs</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Selector area */}
-        <Card className="border-border shadow-sm overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-primary" />
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Code Selection</p>
-                <h2 className="text-[11px] font-semibold text-foreground leading-tight">
-                  {isAcMode ? "A/c Code & L4 Code" : `${config.label} Codes`}
-                </h2>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 py-3">
-            {isAcMode ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">A/c Code</p>
-                  <CheckboxSelector
-                    rows={primaryRows} loading={primaryLoading}
-                    selectedKeys={selectedKeys} valueField={config.valueField}
-                    descField={config.descField} label="A/c codes"
-                    onToggle={handleTogglePrimary}
-                    onClearAll={() => setSelectedKeys(new Set())}
-                    onSelectAll={handleSelectAllPrimary}
-                  />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">L4 Code</p>
-                  <CheckboxSelector
-                    rows={l4Rows} loading={l4Loading}
-                    selectedKeys={selectedL4Keys} valueField={AC_L4.valueField}
-                    descField={AC_L4.descField} label="L4 codes"
-                    onToggle={handleToggleL4}
-                    onClearAll={() => setSelectedL4Keys(new Set())}
-                    onSelectAll={handleSelectAllL4}
-                  />
-                </div>
-              </div>
-            ) : (
-              <CheckboxSelector
-                rows={primaryRows} loading={primaryLoading}
-                selectedKeys={selectedKeys} valueField={config.valueField}
-                descField={config.descField} label={`${config.label} codes`}
-                onToggle={handleTogglePrimary}
-                onClearAll={() => setSelectedKeys(new Set())}
-                onSelectAll={handleSelectAllPrimary}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-      </section>
-
-      {/* ── New Report Dialog (with drill support via headerSlot) ── */}
       <NewReportDialog
         open={dialogOpen}
         onClose={handleCloseReport}
@@ -837,30 +770,77 @@ export default function TrialBalancePage() {
         loading={reportLoading || drillLoading}
         error={drillError ?? (reportError && !reportHtml ? reportError : null)}
         onExportExcel={topDrill ? handleDrillExcel : handleExcel}
+        exportingExcel={exportingExcel}
         headerSlot={
-          (drillLoading || drillError || drillStack.length > 0) ? (
-            <div className="flex flex-col gap-0">
+          drillLoading || drillError || drillStack.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {drillLoading && (
-                <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-border text-[10px] text-primary">
-                  <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 16px",
+                    background: "var(--primary-soft, #e8f0ff)",
+                    borderBottom: "1px solid var(--border, #cbd5e1)",
+                    fontSize: 11,
+                    color: "var(--primary, #00378c)",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 12,
+                      height: 12,
+                      border: "2px solid color-mix(in srgb, var(--primary, #00378c) 30%, transparent)",
+                      borderTopColor: "var(--primary, #00378c)",
+                      borderRadius: "50%",
+                      animation: "nr-spin 0.75s linear infinite",
+                      display: "inline-block",
+                    }}
+                  />
                   Loading drill-down…
                 </div>
               )}
 
               {drillError && (
-                <div className="flex items-center gap-2 px-4 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive">
-                  <span className="font-semibold">Drill-down error:</span> {drillError}
-                  <button type="button" onClick={() => setDrillError(null)} className="ml-auto">
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 16px",
+                    background: "#fef2f2",
+                    borderBottom: "1px solid #fecaca",
+                    fontSize: 11,
+                    color: "var(--danger, #dc2626)",
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>Drill-down error:</span> {drillError}
+                  <button
+                    type="button"
+                    onClick={() => setDrillError(null)}
+                    style={{
+                      marginLeft: "auto",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--danger, #dc2626)",
+                      padding: 0,
+                      display: "flex",
+                    }}
+                  >
                     <X size={11} />
                   </button>
                 </div>
               )}
 
               {drillStack.length > 0 && (
-                <div className="border-b border-border bg-muted/20">
+                <div
+                  style={{
+                    borderBottom: "1px solid var(--border, #cbd5e1)",
+                    background: "var(--panel-soft, #f0f4f8)",
+                  }}
+                >
                   <DrillBreadcrumb stack={drillStack} onNavigate={handleDrillNavigate} />
                 </div>
               )}

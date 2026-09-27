@@ -281,7 +281,7 @@ export function AccountTreePage() {
   };
 
   return (
-    <section className="finance-page grid gap-4">
+    <section className="finance-utility-page finance-list-page finance-page grid gap-4">
       <div className="finance-toolbar flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">A/C Tree</h1>
@@ -645,7 +645,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails }: { dialog: Di
   };
 
   return (
-      <div className="account-editor flex flex-col"> 
+      <div className="finance-utility-editor account-editor flex flex-col">
       <div className="flex items-start justify-between gap-4 border-b p-4">
         <div>
           <p className="eyebrow">{isEdit ? "Modify Node" : "Create Node"}</p>

@@ -712,21 +712,29 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
       setModalNotice(null); setProcessOpen(true);
     };
 
-    const loadLocations = async (siteCode: string, target: "from" | "to") => {
-      if (!siteCode) { target === "from" ? setLocationFromOptions([]) : setLocationToOptions([]); return; }
-      try {
-        const res = await api.post("/api/wms/inbound/executeRawSql", {
-          raw_sql: `SELECT * FROM MS_LOCATION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND SITE_CODE = '${sqlEscape(siteCode)}' ORDER BY LOCATION_CODE`,
-        });
-        const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
-        const opts = data.map((r: Record<string, unknown>) => ({
-          value: String(r["LOCATION_CODE"] ?? r["location_code"] ?? ""),
-          label: String(r["LOCATION_CODE"] ?? r["location_code"]),
-        }));
-        target === "from" ? setLocationFromOptions(opts) : setLocationToOptions(opts);
-      } catch { /* ignore */ }
-    };
+   const [locationsLoading, setLocationsLoading] = useState<{ from: boolean; to: boolean }>({ from: false, to: false });
 
+const loadLocations = async (siteCode: string, target: "from" | "to") => {
+  if (!siteCode) { target === "from" ? setLocationFromOptions([]) : setLocationToOptions([]); return; }
+  setLocationsLoading((c) => ({ ...c, [target]: true }));
+  try {
+    const res = await api.post("/api/wms/inbound/executeRawSql", {
+      raw_sql: `SELECT * FROM MS_LOCATION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND SITE_CODE = '${sqlEscape(siteCode)}' ORDER BY LOCATION_CODE`,
+    });
+    const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+    const opts = data.map((r: Record<string, unknown>) => ({
+      value: String(r["LOCATION_CODE"] ?? r["location_code"] ?? ""),
+      label: String(r["LOCATION_CODE"] ?? r["location_code"]),
+    }));
+    target === "from" ? setLocationFromOptions(opts) : setLocationToOptions(opts);
+    if (opts.length === 0) toast.error(`No locations found for site ${siteCode}`);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : `Unable to load locations for ${siteCode}`);
+    target === "from" ? setLocationFromOptions([]) : setLocationToOptions([]);
+  } finally {
+    setLocationsLoading((c) => ({ ...c, [target]: false }));
+  }
+};
     // ── save add ─────────────────────────────────────────────────────────────
     const saveAdd = async (e: FormEvent) => {
       e.preventDefault();
@@ -1533,6 +1541,8 @@ const ediPreviewColumns = makeColumns(
   false, // no checkbox column
 );
 
+
+
     // ── render ───────────────────────────────────────────────────────────────
     return (
       <section className="grid gap-3">
@@ -1896,7 +1906,7 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
           <div className="relative flex items-center">
             <Select
               value={putawayForm.location_from}
-              disabled={!putawayForm.site_from || locationFromOptions.length === 0}
+              disabled={!putawayForm.site_from || locationsLoading.from}
               onChange={(e) => {
                 const loc = e.target.value;
                 setPutawayForm((c) => ({ ...c, location_from: loc, location_to: loc }));
@@ -1955,7 +1965,7 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
           <div className="relative flex items-center">
             <Select
               value={putawayForm.location_to}
-              disabled={!putawayForm.site_from || locationToOptions.length === 0}
+              disabled={!putawayForm.site_from || locationsLoading.to}
               onChange={(e) => setPutawayForm((c) => ({ ...c, location_to: e.target.value }))}
               className="pr-7"
             >
