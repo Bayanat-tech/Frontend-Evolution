@@ -254,7 +254,7 @@ export function DocumentSetupPage() {
   ], []);
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="eyebrow">Finance Master</p>

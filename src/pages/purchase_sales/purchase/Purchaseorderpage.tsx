@@ -11,7 +11,7 @@ import { NewReportDialog } from "../../../components/new_report_format";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
+import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
 import { LPO_CONFIG } from "./Purchaseordertypes";
 

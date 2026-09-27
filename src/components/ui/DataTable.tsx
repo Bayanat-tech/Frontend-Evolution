@@ -22,6 +22,7 @@ import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
 import { BiscDatePicker } from "./BiscDatePicker";
+import { formatDate } from "../../utils/date";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
@@ -36,6 +37,7 @@ export type DataTableProps<TData, TValue> = {
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   toolbar?: ReactNode;
+  actionButton?: ReactNode;
   loading?: boolean;
   loaderType?: DataTableLoaderType; 
   emptyText?: string;
@@ -180,6 +182,7 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   searchPlaceholder = "Search...",
   toolbar,
+  actionButton,
   loading,
   loaderType = "skeleton",
   emptyText = "No records found",
@@ -229,7 +232,15 @@ export function DataTable<TData, TValue>({
   const enhancedColumns = useMemo(
     () => columns.map((column) => {
       const id = "id" in column && column.id ? column.id : "accessorKey" in column ? String(column.accessorKey) : "";
-      return isDateColumn(id) && !column.filterFn ? { ...column, filterFn: dateBetween as FilterFn<TData> } : column;
+      const isDate = isDateColumn(id) || (typeof column.header === "string" && /(^|_|\s)(date|dt)(_|\s|$)/i.test(column.header));
+      if (isDate) {
+        return {
+          ...column,
+          filterFn: column.filterFn || (dateBetween as FilterFn<TData>),
+          ...(!column.cell ? { cell: ({ getValue }: { getValue: () => unknown }) => formatDate(getValue()) } : {}),
+        };
+      }
+      return column;
     }),
     [columns],
   );
@@ -441,11 +452,7 @@ export function DataTable<TData, TValue>({
                   filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
                 />
               )}
-              {Boolean(_subtitle || (_title && !_title.includes("Records") && !_title.includes("Loading"))) && (
-                <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1 rounded-lg border border-[#00378C] text-white bg-[#00378C] shadow-sm select-none shrink-0 font-medium text-[13px]">
-                  <span>{_subtitle || _title}</span>
-                </div>
-              )}
+              {actionButton}
             </div>
             {!onSearchChange && !toolbar && !showExport && !(_subtitle || _title) && <span className="min-h-1 flex-1" />}
             {table.getState().columnFilters.filter((f) => hasFilterValue(f.value)).length > 0 && (
