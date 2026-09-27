@@ -837,17 +837,6 @@ function CommercialEditor({
           </div>
         ) : (
           <div className="commercial-header-shell flex flex-col gap-1.5">
-            <div className="flex items-center justify-end px-1">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-6 text-xs text-slate-500 hover:text-[#00378C] cursor-pointer"
-                onClick={() => setShowHeaderDetails(false)}
-              >
-                <ChevronUp size={13} className="mr-1" /> Hide Header (Maximize Table)
-              </Button>
-            </div>
             <div className="commercial-header-panel">
               <section className="commercial-header-block commercial-header-block-doc">
                 <div className="commercial-header-block-title">
@@ -1342,6 +1331,17 @@ function CommercialEditor({
                       </button>
                     )}
                   </div>
+
+                  <Button
+                    disabled={isCancelled}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={addLine}
+                    className="commercial-add-line-btn"
+                  >
+                    <Plus size={14} /> Add Line
+                  </Button>
                 </div>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
@@ -1547,16 +1547,7 @@ function CommercialEditor({
                 </table>
               </div>
               
-              <div className="commercial-lines-footer flex flex-wrap items-center justify-between border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
-                <button
-                  type="button"
-                  disabled={isCancelled}
-                  onClick={addLine}
-                  className="commercial-add-line-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#00378c] bg-white text-[#00378c] hover:bg-blue-50/80 active:bg-blue-100 text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Plus size={14} strokeWidth={2.5} className="text-[#00378c]" />
-                  <span>Add Line</span>
-                </button>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
                 <div className="commercial-line-totals flex items-center gap-3 text-xs">
                   <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
                     <span className="text-slate-500 font-medium text-[11px]">Total Amount</span>

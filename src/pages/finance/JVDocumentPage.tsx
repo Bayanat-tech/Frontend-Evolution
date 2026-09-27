@@ -1,5 +1,5 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, X } from "lucide-react";
+import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -406,6 +406,7 @@ function JVDocument({
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const [showAllColumns, setShowAllColumns] = useState(false);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
 
   const toggleRowExpanded = (id: string) => {
@@ -936,17 +937,6 @@ function JVDocument({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5 mb-3">
-                <div className="flex items-center justify-end px-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 text-xs text-slate-500 hover:text-[#00378C] cursor-pointer"
-                    onClick={() => setShowHeaderDetails(false)}
-                  >
-                    <ChevronUp size={13} className="mr-1" /> Hide Header (Maximize Tables)
-                  </Button>
-                </div>
                 <div className="finance-payment-header-block">
                   <div className="finance-section-title">
                     <span className="finance-section-icon"><FileText size={11} /></span>
@@ -984,37 +974,77 @@ function JVDocument({
                 <div className="finance-line-actions-left">
                   <span className="finance-line-actions-icon"><List size={14} /></span>
                   <span className="finance-line-actions-title">Accounting Lines</span>
-                  <span className="finance-line-actions-badge">{form.detail.length} {form.detail.length === 1 ? "line" : "lines"}</span>
+                  <span className="finance-line-actions-badge">
+                    {lineSearch.trim()
+                      ? `${filteredDetail.length} of ${form.detail.length} lines`
+                      : `${form.detail.length} ${form.detail.length === 1 ? "line" : "lines"}`}
+                  </span>
+                  {lineSearch.trim() && (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Filtered ({filteredDetail.length})
+                    </span>
+                  )}
                 </div>
-                <div className="finance-line-actions-right">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllColumns(!showAllColumns)}
+                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                      showAllColumns
+                        ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
+                        : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                    title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Type, Job, Dept & Ex Rate"}
+                  >
+                    <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+                    <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+                  </button>
+
+                  <div className="bisc-table-search">
+                    <Search size={13} className="bisc-table-search-icon" />
+                    <input
+                      className="bisc-search-input"
+                      type="text"
+                      value={lineSearch}
+                      onChange={(e) => setLineSearch(e.target.value)}
+                      placeholder="Search lines..."
+                    />
+                    {lineSearch && (
+                      <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
                   <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2140px] text-xs">
+                <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
                       <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
                       <th className="px-2 py-2 text-left text-white">Description</th>
-                      <th className="px-2 py-2 text-left text-white">Currency</th>
-                      <th className="px-2 py-2 text-left text-white">Ex Rate</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
                       <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
-                      <th className="px-2 py-2 text-left text-white">Tax Type</th>
-                      <th className="px-2 py-2 text-left text-white">Job No</th>
-                      <th className="px-2 py-2 text-left text-white">Dept</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Dept</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
                       <th className="px-2 py-2 text-center text-white w-14">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
-                    ) : form.detail.map((detail) => (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 13 : 7}>No detail lines yet — click "Add Line" to get started</td></tr>
+                    ) : filteredDetail.length === 0 ? (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 13 : 7}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                    ) : filteredDetail.map((detail) => (
                       <>
                         <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
                           <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
@@ -1073,27 +1103,41 @@ function JVDocument({
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </td>
-                          <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
-                          <td className="w-[210px] px-2 py-1">
-                            <LookupField
-                              label="Currency"
-                              compact
-                              placeholder="Currency"
-                              value={detail.curr_code || form.curr_code}
-                              displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
-                              columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                              valueField="curr_code"
-                              displayFields={["curr_code", "curr_name"]}
-                              loadOptions={() => getDynamicLookup({
-                                parameter: "Account_Currency_CODE_Serach",
-                                code1: user?.company_code,
-                                loginid: user?.loginid || user?.username || "ADMIN"
-                              })}
+                          <td className="w-[200px] max-w-[240px] px-1 py-1">
+                            <textarea
                               disabled={disabled}
-                              onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
+                              className="commercial-line-description"
+                              title={detail.remarks || ""}
+                              rows={1}
+                              value={detail.remarks || ""}
+                              onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })}
+                              placeholder="Line remarks"
                             />
                           </td>
-                          <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                          {showAllColumns && (
+                            <td className="w-[210px] px-2 py-1">
+                              <LookupField
+                                label="Currency"
+                                compact
+                                placeholder="Currency"
+                                value={detail.curr_code || form.curr_code}
+                                displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
+                                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                                valueField="curr_code"
+                                displayFields={["curr_code", "curr_name"]}
+                                loadOptions={() => getDynamicLookup({
+                                  parameter: "Account_Currency_CODE_Serach",
+                                  code1: user?.company_code,
+                                  loginid: user?.loginid || user?.username || "ADMIN"
+                                })}
+                                disabled={disabled}
+                                onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
+                              />
+                            </td>
+                          )}
+                          {showAllColumns && (
+                            <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                          )}
                           <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                           <td className="w-28 px-2 py-1">
                             <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
@@ -1101,35 +1145,43 @@ function JVDocument({
                               <option value={-1}>Cr</option>
                             </Select>
                           </td>
-                          <td className="w-28 px-2 py-1">
-                            <Select
-                              disabled={disabled}
-                              value={detail.tx_compnt_1_expmt || "N"}
-                              onChange={(event) => {
-                                const taxType = event.target.value;
-                                const taxPerc = taxType === "S" ? 5 : 0;
-                                const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
-                                updateDetail(detail.id, {
-                                  tx_compnt_1_expmt: taxType,
-                                  tx_compnt_perc_1: taxPerc,
-                                  tx_compnt_amt_1: taxAmt,
-                                });
-                              }}
-                            >
-                              <option value="N">No Tax</option>
-                              <option value="S">Std Tax</option>
-                              <option value="Z">Zero</option>
-                              <option value="E">Exempt</option>
-                            </Select>
-                          </td>
-                          <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
-                          <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                          <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1))} /></td>
+                          {showAllColumns && (
+                            <td className="w-28 px-2 py-1">
+                              <Select
+                                disabled={disabled}
+                                value={detail.tx_compnt_1_expmt || "N"}
+                                onChange={(event) => {
+                                  const taxType = event.target.value;
+                                  const taxPerc = taxType === "S" ? 5 : 0;
+                                  const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                                  updateDetail(detail.id, {
+                                    tx_compnt_1_expmt: taxType,
+                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_amt_1: taxAmt,
+                                  });
+                                }}
+                              >
+                                <option value="N">No Tax</option>
+                                <option value="S">Std Tax</option>
+                                <option value="Z">Zero</option>
+                                <option value="E">Exempt</option>
+                              </Select>
+                            </td>
+                          )}
+                          {showAllColumns && (
+                            <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
+                          )}
+                          {showAllColumns && (
+                            <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
+                          )}
+                          {showAllColumns && (
+                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                          )}
                           <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                         </tr>
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="bg-slate-50/70 border-b border-blue-200/60">
-                            <td colSpan={13} className="p-0 pl-10 pr-3 pb-2 pt-0.5">
+                            <td colSpan={showAllColumns ? 13 : 7} className="p-0 pl-10 pr-3 pb-2 pt-0.5">
                               <SmartInlineAllocationTable
                                 detail={detail}
                                 rows={(form.children[detail.id] || []) as TransactionChildRow[]}
@@ -1152,10 +1204,7 @@ function JVDocument({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer">
-                <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn">
-                  <Plus size={14} /> Add Line
-                </Button>
+              <div className="commercial-lines-footer flex justify-end">
                 <div className="commercial-summary-chips">
                   <div className={`commercial-summary-chip ${Math.abs(total) > 0.001 ? "border-destructive text-destructive bg-red-50" : "border-emerald-200 text-emerald-700 bg-emerald-50"}`}>
                     <span className="commercial-summary-label">Balance</span>

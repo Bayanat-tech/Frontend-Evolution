@@ -271,20 +271,19 @@ export function SmartInlineAllocationTable({
                         />
                       </td>
                       <td className="w-28 px-2 py-1 text-right font-mono text-[11px] text-slate-600">
-                        {text(row.inv_amt)}
+                        {row.inv_amt != null ? formatAmount(Number(row.inv_amt)) : "-"}
                       </td>
-                      <td className="w-28 px-2 py-1 text-right font-mono text-[11px] font-medium text-slate-700">
-                        {text(row.c_bal_amt_org)}
+                      <td className="w-28 px-2 py-1 text-right font-mono text-[11px] font-semibold text-slate-800">
+                        {row.c_bal_amt_org != null ? formatAmount(Number(row.c_bal_amt_org)) : "-"}
                       </td>
                       <td className="w-44 px-2 py-1">
                         <div className="flex items-center gap-1">
                           <Input
-                            className="h-6 text-xs font-mono flex-1"
+                            className="h-6 text-xs font-mono flex-1 commercial-number-input finance-money-input"
                             disabled={disabled}
                             type="number"
-                            style={{ textAlign: "right" }}
                             step="0.001"
-                            value={Number(((Number(row.amount) || 0) * (Number(row.ex_rate) || 1)).toFixed(3))}
+                            value={Number(row.amount || 0)}
                             onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
                           />
                           {Number(row.c_bal_amt_org || row.inv_amt || 0) > 0 && (
@@ -347,10 +346,9 @@ export function SmartInlineAllocationTable({
                       </td>
                       <td className="w-36 px-2 py-1">
                         <Input
-                          className="h-6 text-xs font-mono"
+                          className="h-6 text-xs font-mono commercial-number-input finance-money-input"
                           disabled={disabled}
                           type="number"
-                          style={{ textAlign: "right" }}
                           step="0.001"
                           value={Number(row.amount || 0)}
                           onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
@@ -453,10 +451,9 @@ export function SmartInlineAllocationTable({
                       </td>
                       <td className="w-32 px-2 py-1">
                         <Input
-                          className="h-6 text-xs font-mono"
+                          className="h-6 text-xs font-mono commercial-number-input finance-money-input"
                           disabled={disabled}
                           type="number"
-                          style={{ textAlign: "right" }}
                           step="0.001"
                           value={Number(row.amount || 0)}
                           onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
