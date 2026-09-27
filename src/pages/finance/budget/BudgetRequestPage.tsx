@@ -10,9 +10,9 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { BudgetEditorState, BudgetRequestEditor } from "./BudgetRequestEditor";
 import {  getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
 import { DivisionPickerDialog } from "../../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../../utils/date";
+import { TabStrip } from "../../../components/commonComponents";
 
 
 // TODO: replace with the real budget-request row shape once the backend contract is confirmed.
