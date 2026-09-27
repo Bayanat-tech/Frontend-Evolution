@@ -189,7 +189,7 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
   };
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="eyebrow">Asset Utility</p>
@@ -297,7 +297,7 @@ function AssetSaleEditor({ editor, title, companyCode, loginId, onClose, onSaved
   };
 
   return (
-    <div className="flex min-h-[690px] flex-col">
+    <div className="finance-utility-editor flex min-h-0 flex-col">
       <div className="border-b p-4">
         <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">{title}</h2>
