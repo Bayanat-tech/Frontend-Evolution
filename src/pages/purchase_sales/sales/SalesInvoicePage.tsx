@@ -11,7 +11,7 @@ import ReportDialogPage from "../../../components/ReportDialogPage";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
+import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SIN_CONFIG } from "./SalesOrdertypes";
 import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
