@@ -32,17 +32,20 @@ import {
 import { api } from "../../../api/client";
 import { ImportStockTransEdi } from "./Importstocktransedi";
 
-// ─── NEW report-format components ────────────────────────────────────────────
-import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
+// ─── Report viewer (mirrors OutboundJobDetail exactly) ────────────────────────
 import { NewReportDialog } from "../../../components/new_report_format";
-import type {
-  ReportFieldConfig,
-  ReportOption,
-} from "../../../components/new_report_format/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type WmsRow = Record<string, unknown>;
 type NoticeState = { type: "success" | "error"; message: string } | null;
+
+type TReport = {
+  id: string;
+  reportTitle: string;
+  htmlEndpoint: string;
+  excelEndpoint: string;
+  fileStem: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function val(row: WmsRow, key: string) {
@@ -118,6 +121,24 @@ const TABS = [
   { label: "Confirm", value: "confirmed" },
 ];
 
+// ─── Report registry (mirrors REPORTS in OutboundJobDetail) ──────────────────
+const REPORTS: TReport[] = [
+  {
+    id: "1",
+    reportTitle: "Stock Transfer Report",
+    htmlEndpoint: "/api/wms/reports/stocktransfer-report/html",
+    excelEndpoint: "/api/wms/reports/stocktransfer-report/excel",
+    fileStem: "stock-transfer",
+  },
+  {
+    id: "2",
+    reportTitle: "Stock Confirmation Report",
+    htmlEndpoint: "/api/wms/reports/stockconfirmation-report/html",
+    excelEndpoint: "/api/wms/reports/stockconfirmation-report/excel",
+    fileStem: "stock-confirmation",
+  },
+];
+
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({
   flag,
@@ -183,36 +204,6 @@ function Section({
   );
 }
 
-// ─── Report registry ─────────────────────────────────────────────────────────
-// Same reports that were in the old picker dialog. Now expressed as
-// HTML + Excel endpoints and driven through NewReportPage / NewReportDialog.
-type TReport = {
-  id: string;
-  reportTitle: string;
-  htmlEndpoint: string;
-  excelEndpoint: string;
-  fileStem: string;
-};
-
-const REPORTS: TReport[] = [
-  {
-    id: "1",
-    reportTitle: "Stock Transfer Report",
-    htmlEndpoint: "/api/wms/reports/stocktransfer-report/html",
-    excelEndpoint: "/api/wms/reports/stocktransfer-report/excel",
-    fileStem: "stock-transfer",
-  },
-  {
-    id: "2",
-    reportTitle: "Stock Confirmation Report",
-    htmlEndpoint: "/api/wms/reports/stockconfirmation-report/html",
-    excelEndpoint: "/api/wms/reports/stockconfirmation-report/excel",
-    fileStem: "stock-confirmation",
-  },
-];
-
-const DEFAULT_REPORT_ID = "1";
-
 // ─── Main component ───────────────────────────────────────────────────────────
 export function StockTransferViewPage() {
   const { user } = useAuth();
@@ -251,15 +242,14 @@ export function StockTransferViewPage() {
 
   const [importOpen, setImportOpen] = useState(false);
 
-  // ── Report state (NEW) ──
-  const [selectedReportId, setSelectedReportId] = useState<string>(
-    DEFAULT_REPORT_ID
-  );
-  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState<string | null>(null);
-  const [reportPreviewError, setReportPreviewError] = useState("");
-  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
-  const [reportGenerating, setReportGenerating] = useState(false);
+  // ── Report dialog state (mirrors OutboundJobDetail exactly) ──
+  const [listOpen, setListOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<TReport | null>(null);
+  const [reportHtml, setReportHtml] = useState<string>("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string>("");
+  const [excelLoading, setExcelLoading] = useState(false);
 
   // ── Load data ──
   const loadData = async (clearNotice = true) => {
@@ -317,6 +307,44 @@ export function StockTransferViewPage() {
     setSelectedRows([]);
     setSelectedBatchKeys(new Set());
   }, [selectedTab]);
+
+  // ── Fetch HTML when a report is selected (mirrors OutboundJobDetail exactly) ──
+  useEffect(() => {
+    if (!selectedReport) return;
+
+    if (!stn_no) {
+      setReportError("Transfer no is not available.");
+      return;
+    }
+
+    setReportHtml("");
+    setReportError("");
+    setReportLoading(true);
+
+        api
+      .get(selectedReport.htmlEndpoint, {
+        params: {
+          stn_no,
+          company_code,
+          prin_code,
+        },
+        responseType: "text",
+        headers: { Accept: "text/html" },
+      })
+      .then((res) => {
+        const html = typeof res.data === "string" ? res.data : String(res.data);
+        setReportHtml(html);
+      })
+      .catch((err) => {
+        console.error("Report API error:", err);
+        setReportError(
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to load report. Please try again."
+        );
+      })
+      .finally(() => setReportLoading(false));
+  }, [selectedReport]);
 
   const isAnyConfirmed = useMemo(
     () => gridData.some((r) => r.confirmed === "Y"),
@@ -445,60 +473,16 @@ export function StockTransferViewPage() {
     }
   };
 
-  // ── Generate report ──
-  const handleGenerateReport = async () => {
-    if (!stn_no) {
-      setReportPreviewError("Transfer no is not available.");
-      return;
-    }
-
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-    setReportGenerating(true);
-
+  // ── Excel export (mirrors OutboundJobDetail's handleExcel) ──
+  const handleExcel = async () => {
+    if (!selectedReport) return;
+    setExcelLoading(true);
     try {
-      const rpt =
-        REPORTS.find((r) => r.id === selectedReportId) ?? REPORTS[0];
-      const res = await api.get(rpt.htmlEndpoint, {
+            const res = await api.get(selectedReport.excelEndpoint, {
         params: {
-          stn_no: `'${stn_no}'`,
-          company_code: `'${company_code}'`,
-          prin_code: `'${prin_code}'`,
-        },
-        responseType: "text",
-        headers: { Accept: "text/html" },
-      });
-      const html = typeof res.data === "string" ? res.data : String(res.data);
-      setReportHtml(html);
-    } catch (e: any) {
-      setReportPreviewError(
-        e?.response?.data?.message ||
-          e?.message ||
-          "Failed to generate report"
-      );
-    } finally {
-      setReportGenerating(false);
-    }
-  };
-
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
-
-  // ── Excel export ──
-  const handleExportExcel = async () => {
-    setReportPreviewExporting(true);
-    try {
-      const rpt =
-        REPORTS.find((r) => r.id === selectedReportId) ?? REPORTS[0];
-      const res = await api.get(rpt.excelEndpoint, {
-        params: {
-          stn_no: `'${stn_no}'`,
-          company_code: `'${company_code}'`,
-          prin_code: `'${prin_code}'`,
+          stn_no,
+          company_code,
+          prin_code,
         },
         responseType: "blob",
       });
@@ -508,50 +492,86 @@ export function StockTransferViewPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${rpt.fileStem}-${stn_no}-${new Date()
+      link.download = `${selectedReport.fileStem}-${stn_no}-${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setReportPreviewError(
-        e?.response?.data?.message ||
-          e?.message ||
-          "Unable to export report"
-      );
+    } catch (err) {
+      console.error("Excel export error:", err);
     } finally {
-      setReportPreviewExporting(false);
+      setExcelLoading(false);
     }
   };
 
-  // ── Report filter fields ──
-  const reportOptions: ReportOption[] = useMemo(
-    () => REPORTS.map((r) => ({ value: r.id, label: r.reportTitle })),
-    []
-  );
-
-  const reportFields: ReportFieldConfig[] = useMemo(
-    () => [
-      {
-        key: "reportId",
-        label: "Report",
-        type: "select",
-        options: reportOptions,
-        placeholder: "Stock Transfer Report",
-      },
-    ],
-    [reportOptions]
-  );
-
-  const setReportParam = (key: string, value: any) => {
-    if (key === "reportId") setSelectedReportId(String(value));
+  // Open the report HTML in a new browser tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
   };
 
-  const handleResetReportParams = () => {
-    setSelectedReportId(DEFAULT_REPORT_ID);
-    setReportPreviewError("");
+  // Trigger the browser print dialog (Save as PDF) for the current report
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "stock-transfer-report-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
+  // ── Report dialog helpers (mirrors OutboundJobDetail exactly) ──
+  const openListDialog = () => setListOpen(true);
+
+  const selectReport = (rp: TReport) => {
+    setListOpen(false);
+    setSelectedReport(rp);
+    setReportOpen(true);
+  };
+
+  const closeReportDialog = () => {
+    setReportOpen(false);
+    setSelectedReport(null);
+    setReportHtml("");
+    setReportError("");
   };
 
   // ── Columns (unchanged) ──
@@ -1026,12 +1046,7 @@ export function StockTransferViewPage() {
                 <CheckCircle2 size={14} />
                 {confirming ? "Confirming..." : "Confirm Transfer"}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleGenerateReport}
-                disabled={reportGenerating}
-              >
+              <Button size="sm" variant="outline" onClick={openListDialog}>
                 <Printer size={14} /> Print
               </Button>
             </>
@@ -1203,36 +1218,39 @@ export function StockTransferViewPage() {
         />
       </Dialog>
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          NEW REPORT FORMAT — replaces the old print picker + IframeReportRenderer
-          ───────────────────────────────────────────────────────────────────── */}
+      {/* ── Dialog 1: Report list (mirrors OutboundJobDetail exactly) ── */}
+      <Dialog
+        open={listOpen}
+        title="Select Report"
+        compact
+        onClose={() => setListOpen(false)}
+      >
+        <div className="flex flex-col gap-1 p-2">
+          {REPORTS.map((rp) => (
+            <button
+              key={rp.id}
+              onClick={() => selectReport(rp)}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5 text-left text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <Printer size={14} className="text-muted-foreground shrink-0" />
+              {rp.reportTitle}
+            </button>
+          ))}
+        </div>
+      </Dialog>
 
-      <NewReportPage
-        title="Stock Transfer Report"
-        fields={reportFields}
-        values={{ reportId: selectedReportId }}
-        onChange={setReportParam}
-        onClearAll={handleResetReportParams}
-        onGenerate={handleGenerateReport}
-        loading={reportGenerating}
-        optionsLoading={false}
-        error={reportPreviewError || null}
-        onClearError={() => setReportPreviewError("")}
-        fieldsPerRow={4}
-      />
-
+      {/* ── Dialog 2: Report viewer (NewReportDialog, mirrors OutboundJobDetail exactly) ── */}
       <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={
-          REPORTS.find((r) => r.id === selectedReportId)?.reportTitle ??
-          "Stock Transfer Report"
-        }
-        htmlContent={reportHtml}
-        loading={reportGenerating}
-        error={reportPreviewError || null}
-        onExportExcel={handleExportExcel}
-        exportingExcel={reportPreviewExporting}
+        open={reportOpen}
+        onClose={closeReportDialog}
+        title={selectedReport?.reportTitle ?? "Report"}
+        htmlContent={reportHtml || null}
+        loading={reportLoading}
+        error={reportError || null}
+        onExportExcel={handleExcel}
+        exportingExcel={excelLoading}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
       />
     </section>
   );
