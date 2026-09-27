@@ -18,6 +18,21 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
   doc.querySelectorAll(".field .label").forEach((label) => { label.textContent = `${label.textContent?.trim().replace(/:$/, "")}: `; });
   doc.querySelectorAll(".party-block .label").forEach((label) => label.after(doc.createElement("br")));
 
+  // Transform .filter-summary into a styled table card box
+  doc.querySelectorAll(".filter-summary").forEach((div) => {
+    const filterTable = doc.createElement("table");
+    filterTable.className = "filter-summary-table";
+    filterTable.setAttribute("data-pdfmake", JSON.stringify({
+      widths: ["*"],
+      layout: "filterBoxTable",
+    }));
+    const row = filterTable.insertRow();
+    const cell = row.insertCell();
+    cell.className = "filter-summary";
+    cell.innerHTML = div.innerHTML;
+    div.replaceWith(filterTable);
+  });
+
   // Transform .group-title into a shaded table banner
   doc.querySelectorAll(".group-title").forEach((div) => {
     const text = div.textContent?.trim() || "";
@@ -48,7 +63,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
 
   let maxColumns = 0;
   doc.querySelectorAll("table").forEach((table) => {
-    if (table.classList.contains("group-header-banner")) return;
+    if (table.classList.contains("group-header-banner") || table.classList.contains("filter-summary-table")) return;
     const columns = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
     const details = table.classList.contains("report-details-table");
     if (!details) maxColumns = Math.max(maxColumns, columns);
@@ -84,6 +99,11 @@ export function prepareReportHtml(html: string, browserWindow: Window = window) 
     }));
 
     table.querySelectorAll("th").forEach((cell) => {
+      cell.style.backgroundColor = "#00378c";
+      cell.style.color = "#ffffff";
+      cell.style.fontWeight = "bold";
+    });
+    table.querySelectorAll<HTMLElement>(".group-header-row td, .group-header-row th, .group-banner").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
       cell.style.color = "#00378c";
       cell.style.fontWeight = "bold";
@@ -135,7 +155,7 @@ export async function buildFreightPdfDefinition(report: FreightReportDocument, i
       h3: { fontSize: 9, bold: true, color: "#00378c", marginBottom: 2 },
       p: { margin: [0, 1, 0, 3] },
       td: { margin: [1, 1.5, 1, 1.5] },
-      th: { bold: true, color: "#00378c", fillColor: "#eaf0f8", margin: [1, 2.5, 1, 2.5] },
+      th: { bold: true, color: "#ffffff", fillColor: "#00378c", margin: [1, 2.5, 1, 2.5] },
       table: { margin: [0, 2, 0, 5] },
     },
   }) as Content;
@@ -143,12 +163,15 @@ export async function buildFreightPdfDefinition(report: FreightReportDocument, i
     num: { alignment: "right" }, right: { alignment: "right" }, center: { alignment: "center" },
     "primary-text": { bold: true, color: "#00378c" },
     "group-title": { bold: true, fontSize: 9.5, color: "#00378c", margin: [0, 6, 0, 2] },
+    "group-banner": { bold: true, fontSize: 9.5, color: "#00378c", fillColor: "#eaf0f8" },
+    "group-header-row": { bold: true, fillColor: "#eaf0f8", color: "#00378c" },
     "grand-total-title": { bold: true, fontSize: 10.5, color: "#00378c", margin: [0, 8, 0, 2] },
-    title: { fontSize: 13, bold: true, color: "#00378c", margin: [0, 0, 0, 3] },
+    title: { fontSize: 13, bold: true, color: "#00378c", margin: [0, 0, 0, 2] },
     "subtotal-row": { bold: true, fillColor: "#f1f5f9", color: "#00378c" },
     "grand-total-row": { bold: true, fillColor: "#e2e8f0", color: "#00378c" },
     label: { bold: true, color: "#475569" }, sub: { color: "#64748b", margin: [0, 0, 0, 4] },
-    "filter-summary": { fontSize: 8, color: "#475569", margin: [0, 4, 0, 6] },
+    "filter-summary": { fontSize: 7.5, color: "#475569", margin: [0, 0, 0, 0], lineHeight: 1.25 },
+    "filter-header": { bold: true, color: "#00378c" },
     signature: { margin: [0, 14, 0, 0], alignment: "right" },
     empty: { margin: [0, 12, 0, 12], alignment: "center", color: "#64748b" },
   };
@@ -156,33 +179,49 @@ export async function buildFreightPdfDefinition(report: FreightReportDocument, i
     info: { title: identity.title, author: identity.company, subject: "Freight report" },
     pageSize: prepared.maxColumns > 14 ? "A3" : "A4",
     pageOrientation,
-    pageMargins: [28, branded ? 92 : 44, 28, 36],
+    pageMargins: [28, branded ? 84 : 36, 28, 30],
     defaultStyle: { font: "Inter", fontSize: prepared.maxColumns > 12 ? 7 : (prepared.maxColumns > 8 ? 7.5 : 8.5), color: "#1e293b", lineHeight: 1.15 },
     styles,
-    header: {
-      margin: [28, 14, 28, 0],
-      stack: [
-        { columns: [
-          logo ? { image: logo, fit: [155, 58], width: 170 } : { text: "", width: 170 },
-          { stack: [
-            { text: companyName, bold: true, fontSize: 14, color: "#172033", margin: [0, 0, 0, 4] },
-            ...address.map((line) => ({ text: line, fontSize: 8, color: "#64748b", margin: [0, 0, 0, 2] as [number, number, number, number] })),
-          ], alignment: "right" },
-        ] },
-        { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
-      ],
+    header: (currentPage: number, pageCount: number, pageSize: { width: number; height: number }) => {
+      const pWidth = pageSize?.width || pageWidth;
+      return {
+        margin: [28, 10, 28, 0],
+        stack: [
+          {
+            columns: [
+              logo ? { image: logo, fit: [140, 38], width: 155 } : { text: "", width: 155 },
+              {
+                stack: [
+                  { text: companyName, bold: true, fontSize: 11.5, color: "#172033", margin: [0, 0, 0, 1.5] },
+                  ...address.map((line) => ({ text: line, fontSize: 6.8, color: "#64748b", margin: [0, 0, 0, 0.8] as [number, number, number, number] })),
+                ],
+                alignment: "right",
+              },
+            ],
+          },
+          {
+            margin: [0, 4, 0, 0],
+            canvas: [
+              { type: "line", x1: 0, y1: 0, x2: pWidth - 56, y2: 0, lineWidth: 1.5, lineColor: "#00378c" },
+            ],
+          },
+        ],
+      };
     },
-    footer: (page, count) => ({
-      margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
-      stack: [
-        { canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
-        { columns: [
-          { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
-          { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
-        ] },
-        { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
-      ],
-    }),
+    footer: (page, count, pageSize: any) => {
+      const pWidth = pageSize?.width || pageWidth;
+      return {
+        margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
+        stack: [
+          { canvas: [{ type: "line", x1: 0, y1: 0, x2: pWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
+          { columns: [
+            { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
+            { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
+          ] },
+          { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
+        ],
+      };
+    },
     content,
   };
 }
@@ -224,10 +263,25 @@ export async function createFreightPdf(report: FreightReportDocument, identity: 
       paddingRight: () => 4,
       paddingTop: () => 3.5,
       paddingBottom: () => 3.5,
-      fillColor: (rowIndex: number, node: any) => {
-        if (rowIndex < (node.table.headerRows || 1)) return "#eaf0f8";
+      fillColor: (rowIndex: number, node: any, columnIndex: number) => {
+        const cell = node.table.body[rowIndex]?.[columnIndex];
+        if (cell?.fillColor) return cell.fillColor;
+        const rowFirstCell = node.table.body[rowIndex]?.[0];
+        if (rowFirstCell?.fillColor) return rowFirstCell.fillColor;
+        if (rowIndex < (node.table.headerRows || 1)) return "#00378c";
         return rowIndex % 2 === 1 ? "#ffffff" : "#fcfdfe";
       },
+    },
+    filterBoxTable: {
+      hLineWidth: () => 0.5,
+      vLineWidth: (i: number) => (i === 0 ? 2.5 : 0.5),
+      hLineColor: () => "#e2e8f0",
+      vLineColor: (i: number) => (i === 0 ? "#00378c" : "#e2e8f0"),
+      paddingLeft: () => 6,
+      paddingRight: () => 6,
+      paddingTop: () => 3,
+      paddingBottom: () => 3,
+      fillColor: () => "#f8fafc",
     },
     noBorders: {
       hLineWidth: () => 0,
@@ -254,6 +308,7 @@ export async function downloadFreightExcel(report: FreightReportDocument, identi
 
   const styles = {
     title: { font: { name: "Inter", sz: 14, bold: true, color: { rgb: "00378C" } }, alignment: { vertical: "center" } },
+    filterSummary: { font: { name: "Inter", sz: 9, italic: true, color: { rgb: "475569" } }, alignment: { vertical: "center" } },
     groupTitle: { font: { name: "Inter", sz: 11, bold: true, color: { rgb: "00378C" } }, fill: { fgColor: { rgb: "EAF0F8" } }, alignment: { vertical: "center" } },
     label: { font: { name: "Inter", sz: 10, bold: true, color: { rgb: "374151" } }, fill: { fgColor: { rgb: "F1F5F9" } } },
     header: { font: { name: "Inter", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "00378C" } }, alignment: { horizontal: "center", vertical: "center", wrapText: true } },
@@ -269,7 +324,7 @@ export async function downloadFreightExcel(report: FreightReportDocument, identi
   const groups = Array.from(doc.querySelectorAll(".group"));
   const allTables = Array.from(doc.querySelectorAll("table")).filter((t) => !t.classList.contains("report-details-table"));
 
-  if (groups.length > 0) {
+  if (allTables.length > 0 || groups.length > 0) {
     const sheetData: any[][] = [];
     const merges: any[] = [];
     const rowTypes: string[] = [];
@@ -279,35 +334,82 @@ export async function downloadFreightExcel(report: FreightReportDocument, identi
     merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } });
     rowTypes.push("title");
 
+    // Filter summary row (if present)
+    const filterEl = doc.querySelector(".filter-summary");
+    if (filterEl) {
+      const filterText = filterEl.textContent?.replace(/\s+/g, " ").trim() || "";
+      if (filterText) {
+        const curR = sheetData.length;
+        sheetData.push([filterText]);
+        merges.push({ s: { r: curR, c: 0 }, e: { r: curR, c: 8 } });
+        rowTypes.push("filterSummary");
+      }
+    }
+
     sheetData.push([]);
     rowTypes.push("blank");
 
-    groups.forEach((group) => {
-      const titleEl = group.querySelector(".group-title");
-      const table = group.querySelector("table");
-      if (!table) return;
+    if (groups.length > 0) {
+      groups.forEach((group) => {
+        const titleEl = group.querySelector(".group-title");
+        const table = group.querySelector("table");
+        if (!table) return;
 
-      if (titleEl) {
-        const curR = sheetData.length;
-        sheetData.push([titleEl.textContent?.trim() || ""]);
-        merges.push({ s: { r: curR, c: 0 }, e: { r: curR, c: 8 } });
-        rowTypes.push("groupTitle");
-      }
+        if (titleEl) {
+          const curR = sheetData.length;
+          sheetData.push([titleEl.textContent?.trim() || ""]);
+          merges.push({ s: { r: curR, c: 0 }, e: { r: curR, c: 8 } });
+          rowTypes.push("groupTitle");
+        }
+
+        Array.from(table.rows).forEach((row, rIdx) => {
+          const isHead = row.parentElement?.tagName === "THEAD" || (rIdx === 0 && !!row.querySelector("th"));
+          const isGrand = row.classList.contains("grand-total-row");
+          const isSub = row.classList.contains("subtotal-row");
+          const isGroupHeader = row.classList.contains("group-header-row") || !!row.querySelector(".group-banner");
+
+          const curR = sheetData.length;
+          const rowValues: any[] = [];
+          let c = 0;
+
+          Array.from(row.cells).forEach((cell) => {
+            const colSpan = cell.colSpan || 1;
+            const text = cell.textContent?.trim() || "";
+            const isNum = /^-?\d[\d,]*(?:\.\d+)?$/.test(text);
+            rowValues[c] = isNum && !isHead && !isGroupHeader ? Number(text.replace(/,/g, "")) : text;
+            if (colSpan > 1) {
+              merges.push({ s: { r: curR, c }, e: { r: curR, c: c + colSpan - 1 } });
+            }
+            c += colSpan;
+          });
+
+          sheetData.push(rowValues);
+          rowTypes.push(isHead ? "header" : isGroupHeader ? "groupTitle" : isGrand ? "grandTotal" : isSub ? "subtotal" : "data");
+        });
+
+        sheetData.push([]);
+        rowTypes.push("blank");
+      });
+    } else {
+      // Single unified table
+      const table = allTables[0];
+      const maxCols = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
 
       Array.from(table.rows).forEach((row, rIdx) => {
         const isHead = row.parentElement?.tagName === "THEAD" || (rIdx === 0 && !!row.querySelector("th"));
         const isGrand = row.classList.contains("grand-total-row");
         const isSub = row.classList.contains("subtotal-row");
+        const isGroupHeader = row.classList.contains("group-header-row") || !!row.querySelector(".group-banner");
 
         const curR = sheetData.length;
         const rowValues: any[] = [];
         let c = 0;
 
         Array.from(row.cells).forEach((cell) => {
-          const colSpan = cell.colSpan || 1;
+          const colSpan = isGroupHeader ? maxCols : (cell.colSpan || 1);
           const text = cell.textContent?.trim() || "";
           const isNum = /^-?\d[\d,]*(?:\.\d+)?$/.test(text);
-          rowValues[c] = isNum && !isHead ? Number(text.replace(/,/g, "")) : text;
+          rowValues[c] = isNum && !isHead && !isGroupHeader ? Number(text.replace(/,/g, "")) : text;
           if (colSpan > 1) {
             merges.push({ s: { r: curR, c }, e: { r: curR, c: c + colSpan - 1 } });
           }
@@ -315,12 +417,9 @@ export async function downloadFreightExcel(report: FreightReportDocument, identi
         });
 
         sheetData.push(rowValues);
-        rowTypes.push(isHead ? "header" : isGrand ? "grandTotal" : isSub ? "subtotal" : "data");
+        rowTypes.push(isHead ? "header" : isGroupHeader ? "groupTitle" : isGrand ? "grandTotal" : isSub ? "subtotal" : "data");
       });
-
-      sheetData.push([]);
-      rowTypes.push("blank");
-    });
+    }
 
     const sheet = XLSX.utils.aoa_to_sheet(sheetData);
     sheet["!merges"] = merges;
@@ -338,9 +437,10 @@ export async function downloadFreightExcel(report: FreightReportDocument, identi
         const valStr = String(cell.v ?? "");
         widths[c] = Math.max(widths[c], Math.min(45, valStr.length + 3));
 
-        const isNum = typeof cell.v === "number" || (/^-?\d[\d,]*(?:\.\d+)?$/.test(valStr) && rType !== "header");
+        const isNum = typeof cell.v === "number" || (/^-?\d[\d,]*(?:\.\d+)?$/.test(valStr) && rType !== "header" && rType !== "groupTitle");
 
         if (rType === "title") cell.s = styles.title;
+        else if (rType === "filterSummary") cell.s = styles.filterSummary;
         else if (rType === "groupTitle") cell.s = styles.groupTitle;
         else if (rType === "header") cell.s = styles.header;
         else if (rType === "subtotal") cell.s = isNum ? styles.subtotalNumber : styles.subtotal;
@@ -354,7 +454,7 @@ export async function downloadFreightExcel(report: FreightReportDocument, identi
     const sheetName = reportFilename(report.filename || identity.title).slice(0, 31);
     XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
   } else {
-    // Fallback if no .group containers
+    // Fallback if no tables
     allTables.forEach((table, index) => {
       const sheet = XLSX.utils.table_to_sheet(table, { raw: true });
       const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
