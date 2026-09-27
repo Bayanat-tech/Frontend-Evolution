@@ -10,10 +10,10 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "../purchase/Purchaseordereditor";
 import { SAJ_CONFIG, STR_CONFIG } from "./Inventorytypes";
 import { StockadjustmentEditor } from "./StockadjustmentEditor";
+import { TabStrip } from "../../../components/commonComponents";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface InventoryOrderRow {
