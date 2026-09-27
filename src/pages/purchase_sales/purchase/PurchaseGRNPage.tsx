@@ -11,7 +11,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
+import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState } from "./Purchaseordereditor";
 import { GRN_CONFIG, PO_DOC_TYPE } from "./Purchaseordertypes";
 import { PurchaseGRNEditor } from "./PurchaseGRNeditor";

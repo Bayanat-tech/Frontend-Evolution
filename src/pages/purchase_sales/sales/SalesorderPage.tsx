@@ -11,10 +11,10 @@ import { NewReportDialog } from "../../../components/new_report_format";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "./SalesOrdereditor";
 import { SDN_CONFIG, SO_CONFIG } from "./SalesOrdertypes";
+import { TabStrip } from "../../../components/commonComponents";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {

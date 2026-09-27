@@ -1,5 +1,6 @@
 export type FreightReportDocument = {
   html: string;
+  company?: { name: string; address: string[]; logo: string };
   filename?: string;
   orientation?: "portrait" | "landscape";
 };

@@ -1,15 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, Search, Check, Eye } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import {
   getDynamicLookupaccount,
   type DynamicQueryParams,
 } from "../../../api/lookups";
 import { api } from "../../../api/client";
-import { Button } from "../../../components/ui/Button";
-import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
+import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
 import { NewReportDialog } from "../../../components/new_report_format";
+import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -18,6 +16,8 @@ interface PurchaseOrderReportProps {
   };
 }
 
+// ─── Types ──────────────────────────────────────────────────────────────────
+
 type SupplierRow = { AC_CODE: string; AC_NAME: string };
 type ProductRow = { PROD_CODE: string; PROD_NAME: string };
 type DocRow = { DOC_NO: string; DOC_DATE: string; DOC_TYPE: string };
@@ -25,20 +25,18 @@ type LogoRow = { COMP_LOGO: string };
 
 type ReportCriteria = "Summary" | "Detail";
 
-interface Filters {
+interface Params {
   dateFrom: string;
   dateTo: string;
-  docNo: string;
-  docNoName: string;
-  supplierCode: string;
-  supplierName: string;
-  productFrom: string;
-  productFromName: string;
-  productTo: string;
-  productToName: string;
+  docNo: string[];
+  supplierCode: string[];
+  productFrom: string[];
+  productTo: string[];
   reportType: ReportCriteria;
   cancelledPO: boolean;
 }
+
+// ─── Helpers (same conventions as StockAgeingQuantityReport) ──────────────────
 
 const toISODate = (d: Date) => {
   const y = d.getFullYear();
@@ -60,24 +58,19 @@ const addDays = (d: Date, n: number) => {
   return next;
 };
 
-const defaultDateFrom = () =>
-  toISODate(new Date(new Date().getFullYear(), 0, 1));
+const defaultDateFrom = () => toISODate(new Date(new Date().getFullYear(), 0, 1));
 const defaultDateTo = () => toISODate(new Date());
 
-const buildDefaultFilters = (): Filters => ({
+const DEFAULT_PARAMS: Params = {
   dateFrom: defaultDateFrom(),
   dateTo: defaultDateTo(),
-  docNo: "",
-  docNoName: "",
-  supplierCode: "",
-  supplierName: "",
-  productFrom: "",
-  productFromName: "",
-  productTo: "",
-  productToName: "",
+  docNo: ["All"],
+  supplierCode: ["All"],
+  productFrom: ["All"],
+  productTo: ["All"],
   reportType: "Summary",
   cancelledPO: false,
-});
+};
 
 function uppercaseKeys<T>(row: Record<string, any>): T {
   const out: Record<string, any> = {};
@@ -85,290 +78,178 @@ function uppercaseKeys<T>(row: Record<string, any>): T {
   return out as T;
 }
 
-// ─── Field wrapper (same as PoOrderRegisterPage) ───────────────────────────
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
-      {children}
-    </label>
-  );
-}
-
-function DateField({ value, onChange, max, min }: { value: string; onChange: (v: string) => void; max?: string; min?: string }) {
-  return (
-    <input
-      type="date"
-      className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-      value={value}
-      min={min}
-      max={max}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
-
-// ─── Generic Search Field (autocomplete), styled like the BISC inputs ──────
-
-const SearchField: React.FC<{
-  options: Array<{ code: string; name: string; extra?: string }>;
-  code: string;
-  name: string;
-  onChange: (code: string, name: string) => void;
-  loading?: boolean;
-  placeholder?: string;
-  displayFormat?: (item: { code: string; name: string; extra?: string }) => string;
-}> = ({
-  options,
-  code,
-  name,
-  onChange,
-  loading,
-  placeholder = "All",
-  displayFormat,
-}) => {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(
-      (o) =>
-        o.name.toLowerCase().includes(q) ||
-        o.code.toLowerCase().includes(q)
-    );
-  }, [options, query]);
-
-  const getDisplayText = (item: { code: string; name: string; extra?: string }) => {
-    if (displayFormat) {
-      return displayFormat(item);
-    }
-    return `${item.code} | ${item.name}`;
-  };
-
-  return (
-    <div ref={rootRef} style={{ position: "relative" }}>
-      <input
-        type="text"
-        value={open ? query : name || code}
-        placeholder={loading ? "Loading…" : placeholder}
-        disabled={loading}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => setQuery(e.target.value)}
-        className="h-8 w-full rounded-md px-2 text-sm font-medium text-foreground shadow-sm"
-        style={{
-          border: "1px solid #aebdce",
-          background: "#f4f7fb",
-          opacity: loading ? 0.6 : 1,
-          cursor: loading ? "not-allowed" : "text",
-          outline: "none",
-          boxSizing: "border-box",
-        }}
-      />
-      {open && !loading && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: 4,
-            background: "#fff",
-            border: "1px solid #aebdce",
-            borderRadius: 8,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-            zIndex: 50,
-            maxHeight: 220,
-            overflowY: "auto",
-            padding: 4,
-          }}
-        >
-          <div
-            onClick={() => {
-              onChange("", "");
-              setOpen(false);
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 8px",
-              fontSize: 12,
-              borderRadius: 4,
-              cursor: "pointer",
-              fontWeight: 600,
-              color: "#00449b",
-              background: !code ? "#f4f7fb" : "transparent",
-            }}
-          >
-            {!code && <Check size={12} />} All
-          </div>
-          {filtered.map((s) => (
-            <div
-              key={s.code}
-              onClick={() => {
-                onChange(s.code, s.name);
-                setOpen(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 8px",
-                fontSize: 12,
-                borderRadius: 4,
-                cursor: "pointer",
-                color: "#374151",
-                background: code === s.code ? "#f4f7fb" : "transparent",
-              }}
-            >
-              {code === s.code && <Check size={12} color="#00449b" />}
-              {getDisplayText(s)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+// Rows with a code + name pair → { value: "code::name", label: "code - name" }.
+// The option value is a unique composite of code+name, mirroring the pattern
+// used for principal/department/product options in the stock ageing report,
+// so the same code can appear more than once under a different name.
+const mapCodeNameOptions = (
+  rows: Array<{ code: string; name: string }>,
+): ReportOption[] => {
+  const seen = new Set<string>();
+  const options: ReportOption[] = [];
+  rows.forEach(({ code, name }) => {
+    if (!code) return;
+    const value = `${code}::${name}`;
+    if (seen.has(value)) return;
+    seen.add(value);
+    options.push({ value, label: name ? `${code} - ${name}` : code });
+  });
+  return options.sort((a, b) => a.label.localeCompare(b.label));
 };
+
+const codeFromOptionValue = (v: string): string => v.split("::")[0];
+
+const codesFromSelection = (values: string[]): string[] => {
+  if (!values.length || values.includes("All")) return ["All"];
+  const codes = new Set<string>();
+  values.forEach((v) => codes.add(codeFromOptionValue(v)));
+  return Array.from(codes);
+};
+
+// The Purchase Order backend endpoints take a single code per field
+// (supplier_code, product_from, product_to, doc_no) rather than an array.
+// Selecting a value in these multiselects still lets a user pick only one
+// meaningful filter at a time; we take the first selected code when building
+// the request body. If the backend is updated to accept a list, swap
+// firstCodeFromSelection(...) below for codesFromSelection(...).
+const firstCodeFromSelection = (values: string[]): string => {
+  const codes = codesFromSelection(values);
+  return codes[0] === "All" ? "All" : codes[0];
+};
+
+const reportTypeOptions: ReportOption[] = [
+  { value: "Summary", label: "Summary" },
+  { value: "Detail", label: "Detail" },
+];
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   const { user } = useAuth();
   const loginid = (user as any)?.loginid ?? "";
-  const companyCode: string =
-    ((user as any)?.company_code as string)?.trim() || "All";
+  const companyCode: string = ((user as any)?.company_code as string)?.trim() || "All";
 
-  const [pending, setPending] = useState<Filters>(buildDefaultFilters());
-  const [applied, setApplied] = useState<Filters>(buildDefaultFilters());
+  const [params, setParams] = useState<Params>(DEFAULT_PARAMS);
+  const [appliedParams, setAppliedParams] = useState<Params>(DEFAULT_PARAMS);
+
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("Select filters and run the report.");
+  const [error, setError] = useState("");
+  const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
 
-  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
+  // ── Report preview dialog state (raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
-  const setPendingField = <K extends keyof Filters>(key: K, val: Filters[K]) =>
-    setPending((prev) => ({ ...prev, [key]: val }));
+  // ── Lookup options ──
+  const [supplierOptions, setSupplierOptions] = useState<ReportOption[]>([]);
+  const [productOptions, setProductOptions] = useState<ReportOption[]>([]);
+  const [docOptions, setDocOptions] = useState<ReportOption[]>([]);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [optLoading, setOptLoading] = useState(false);
+  const [optError, setOptError] = useState("");
 
-  const dateRangeValid = !pending.dateFrom || !pending.dateTo || pending.dateFrom <= pending.dateTo;
+  const optionsRequestRef = useRef(0);
 
-  // Suppliers lookup using stored procedure
-  const { data: supplierRows = [], isLoading: isSupplierLoading } = useQuery<SupplierRow[]>({
-    queryKey: ["po_get_suppliers", companyCode, loginid],
-    queryFn: async () => {
-      const rows = await getDynamicLookupaccount({
-        parameter: "PENDING_PURCHASE_ORDER_SUPPLIERS",
-        loginid,
-        code1: companyCode,
-      } as DynamicQueryParams);
-      return (rows || []).map((r) =>
-        uppercaseKeys<SupplierRow>(r as Record<string, any>)
+  const dateRangeValid = !params.dateFrom || !params.dateTo || params.dateFrom <= params.dateTo;
+
+  const loadOptions = useCallback(async () => {
+    const requestId = ++optionsRequestRef.current;
+    setOptLoading(true);
+    setOptError("");
+
+    try {
+      const [supplierRows, productRows, docRows, logoRows] = await Promise.all([
+        getDynamicLookupaccount({
+          parameter: "PENDING_PURCHASE_ORDER_SUPPLIERS",
+          loginid,
+          code1: companyCode,
+        } as DynamicQueryParams),
+        getDynamicLookupaccount({
+          parameter: "PENDING_PURCHASE_ORDER_PRODUCTS",
+          loginid,
+          code1: companyCode,
+          code2: "ALL",
+        } as DynamicQueryParams),
+        getDynamicLookupaccount({
+          parameter: "PENDING_PURCHASE_ORDER_DOCNO",
+          loginid,
+          code1: companyCode,
+        } as DynamicQueryParams),
+        getDynamicLookupaccount({
+          parameter: "PENDING_PURCHASE_ORDER_LOGO",
+          loginid,
+          code1: companyCode,
+        } as DynamicQueryParams),
+      ]);
+
+      if (requestId !== optionsRequestRef.current) return;
+
+      const suppliers = (supplierRows || []).map((r) => uppercaseKeys<SupplierRow>(r as Record<string, any>));
+      const products = (productRows || []).map((r) => uppercaseKeys<ProductRow>(r as Record<string, any>));
+      const docs = (docRows || []).map((r) => uppercaseKeys<DocRow>(r as Record<string, any>));
+      const logos = (logoRows || []).map((r) => uppercaseKeys<LogoRow>(r as Record<string, any>));
+
+      setSupplierOptions(
+        mapCodeNameOptions(suppliers.map((s) => ({ code: s.AC_CODE, name: s.AC_NAME }))),
       );
-    },
-  });
-
-  // Products lookup using stored procedure
-  const { data: productRows = [], isLoading: isProductLoading } = useQuery<ProductRow[]>({
-    queryKey: ["po_get_products", companyCode, loginid],
-    queryFn: async () => {
-      const rows = await getDynamicLookupaccount({
-        parameter: "PENDING_PURCHASE_ORDER_PRODUCTS",
-        loginid,
-        code1: companyCode,
-        code2: "ALL",
-      } as DynamicQueryParams);
-      return (rows || []).map((r) =>
-        uppercaseKeys<ProductRow>(r as Record<string, any>)
+      setProductOptions(
+        mapCodeNameOptions(products.map((p) => ({ code: p.PROD_CODE, name: p.PROD_NAME }))),
       );
-    },
-    enabled: !!companyCode,
-  });
-
-  // Document Numbers lookup using stored procedure
-  const { data: docRows = [], isLoading: isDocLoading } = useQuery<DocRow[]>({
-    queryKey: ["po_get_docno", companyCode, loginid],
-    queryFn: async () => {
-      const rows = await getDynamicLookupaccount({
-        parameter: "PENDING_PURCHASE_ORDER_DOCNO",
-        loginid,
-        code1: companyCode,
-      } as DynamicQueryParams);
-      return (rows || []).map((r) =>
-        uppercaseKeys<DocRow>(r as Record<string, any>)
+      setDocOptions(
+        mapCodeNameOptions(docs.map((d) => ({ code: d.DOC_NO, name: d.DOC_TYPE }))),
       );
-    },
-    enabled: !!companyCode,
-  });
+      setLogoUrl(logos[0]?.COMP_LOGO || "");
+    } catch (e: any) {
+      if (requestId !== optionsRequestRef.current) return;
+      console.error("Failed to load parameter options", e);
+      setOptError(e?.message ?? "Failed to load filter options");
+    } finally {
+      if (requestId === optionsRequestRef.current) setOptLoading(false);
+    }
+  }, [companyCode, loginid]);
 
-  // Company logo lookup using stored procedure (PENDING_PURCHASE_ORDER_LOGO)
-  const { data: logoRows = [] } = useQuery<LogoRow[]>({
-    queryKey: ["po_get_logo", companyCode, loginid],
-    queryFn: async () => {
-      const rows = await getDynamicLookupaccount({
-        parameter: "PENDING_PURCHASE_ORDER_LOGO",
-        loginid,
-        code1: companyCode,
-      } as DynamicQueryParams);
-      return (rows || []).map((r) =>
-        uppercaseKeys<LogoRow>(r as Record<string, any>)
-      );
-    },
-    enabled: !!companyCode,
-  });
+  useEffect(() => {
+    loadOptions();
+  }, [loadOptions]);
 
-  const logoUrl = logoRows[0]?.COMP_LOGO || "";
-
-  const buildBody = (f: Filters) => {
-    const from = parseISODate(f.dateFrom);
-    const toInclusive = parseISODate(f.dateTo);
+  const buildBody = (p: Params) => {
+    const from = parseISODate(p.dateFrom);
+    const toInclusive = parseISODate(p.dateTo);
     const toExclusive = toInclusive ? addDays(toInclusive, 1) : null;
 
     return {
       company_code: companyCode,
-      supplier_code: f.supplierCode || "All",
-      product_from: f.productFrom || "All",
-      product_to: f.productTo || "All",
-      cancelled: f.cancelledPO ? "Y" : "N",
-      doc_no: f.docNo ? Number(f.docNo) : 0,
+      supplier_code: firstCodeFromSelection(p.supplierCode),
+      product_from: firstCodeFromSelection(p.productFrom),
+      product_to: firstCodeFromSelection(p.productTo),
+      cancelled: p.cancelledPO ? "Y" : "N",
+      doc_no: p.docNo.includes("All") ? 0 : Number(firstCodeFromSelection(p.docNo)),
       date_from: from ? toISODate(from) : null,
       date_to: toExclusive ? toISODate(toExclusive) : null,
-      report_type: f.reportType,
+      report_type: p.reportType,
       logo_url: logoUrl || null,
     };
   };
 
-  // Fetch the report HTML and show it in the local NewReportDialog popup.
-  const handleGenerate = async () => {
-    if (!dateRangeValid) return;
-    setLoading(true);
-    setMessage("");
+  // ── Fetch the report HTML and show it in the local NewReportDialog popup ──
+  const handleGenerateReport = async () => {
+    if (!dateRangeValid) {
+      setError("Date From must be on or before Date To.");
+      return;
+    }
+
     setReportHtml(null);
     setReportPreviewError("");
     setReportPreviewOpen(true);
 
+    setLoading(true);
+    setError("");
+
     try {
-      const body = buildBody(pending);
-      setApplied({ ...pending });
+      const body = buildBody(params);
+      setAppliedParams({ ...params });
 
       const res = await api.post("/api/purchase-sales/reports/pending-po/html", body, {
         responseType: "text",
@@ -377,11 +258,11 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
 
       const htmlContent = typeof res.data === "string" ? res.data : String(res.data);
       setReportHtml(htmlContent);
-      setMessage("Report generated.");
+      setHasGeneratedReport(true);
     } catch (e: any) {
       const failure = e?.response?.data?.message || e?.message || "Failed to generate report";
+      setError(failure);
       setReportPreviewError(failure);
-      setMessage(failure);
     } finally {
       setLoading(false);
     }
@@ -394,10 +275,10 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   };
 
   // ── Excel export for the currently generated report ──
-  const handleReportPreviewExcel = async () => {
+  const handleExportExcel = useCallback(async () => {
     setReportPreviewExporting(true);
     try {
-      const body = buildBody(applied);
+      const body = buildBody(appliedParams);
       const res = await api.post("/api/purchase-sales/reports/pending-po/excel", body, {
         responseType: "blob",
       });
@@ -417,153 +298,152 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     } finally {
       setReportPreviewExporting(false);
     }
+  }, [appliedParams, logoUrl]);
+
+  const setParam = (key: string, val: any) => setParams((prev) => ({ ...prev, [key]: val }));
+
+  const handleReset = () => {
+    setParams(DEFAULT_PARAMS);
+    setAppliedParams(DEFAULT_PARAMS);
+    setHasGeneratedReport(false);
+    setError("");
+    setOptError("");
   };
 
-  function resetFilters() {
-    const d = buildDefaultFilters();
-    setPending(d);
-    setApplied(d);
-    setMessage("Select filters and run the report.");
-  }
-
-  // Format for document number display
-  const formatDocDisplay = (item: { code: string; name: string; extra?: string }) => {
-    return `${item.code} | ${item.extra || ''}`;
-  };
+  const fields: ReportFieldConfig[] = [
+    {
+      key: "supplierCode",
+      label: "Supplier",
+      type: "multiselect",
+      options: supplierOptions,
+      loading: optLoading,
+    },
+    {
+      key: "productFrom",
+      label: "Product From",
+      type: "multiselect",
+      options: productOptions,
+      loading: optLoading,
+    },
+    {
+      key: "productTo",
+      label: "Product To",
+      type: "multiselect",
+      options: productOptions,
+      loading: optLoading,
+    },
+    {
+      key: "docNo",
+      label: "Document No",
+      type: "multiselect",
+      options: docOptions,
+      loading: optLoading,
+    },
+    {
+      key: "reportType",
+      label: "Report Criteria",
+      type: "select",
+      options: reportTypeOptions,
+      placeholder: reportTypeOptions[0].label,
+    },
+  ];
 
   return (
-    <section className="freight-ui-standard freight-report-screen">
-      <div className="freight-report-card">
-        <div className="freight-report-titlebar">
-          <h1>Pending Purchase Order Report</h1>
-          <span className="freight-report-title-dot" aria-hidden="true" />
-        </div>
-
-        <ReportFilterHeader onClear={resetFilters} />
-
-        <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <Field label="Date From">
-            <DateField
-              value={pending.dateFrom}
-              onChange={(v) => setPendingField("dateFrom", v)}
-              max={pending.dateTo || undefined}
-            />
-          </Field>
-
-          <Field label="Date To">
-            <DateField
-              value={pending.dateTo}
-              onChange={(v) => setPendingField("dateTo", v)}
-              min={pending.dateFrom || undefined}
-            />
-          </Field>
-
-          <Field label="Document No">
-            <SearchField
-              options={docRows.map((d) => ({
-                code: d.DOC_NO,
-                name: d.DOC_NO,
-                extra: d.DOC_TYPE,
-              }))}
-              code={pending.docNo}
-              name={pending.docNoName}
-              loading={isDocLoading}
-              onChange={(code, name) => {
-                setPendingField("docNo", code);
-                setPendingField("docNoName", name);
-              }}
-              placeholder="All"
-              displayFormat={formatDocDisplay}
-            />
-          </Field>
-
-          <Field label="Supplier">
-            <SearchField
-              options={supplierRows.map((s) => ({ code: s.AC_CODE, name: s.AC_NAME }))}
-              code={pending.supplierCode}
-              name={pending.supplierName}
-              loading={isSupplierLoading}
-              onChange={(code, name) => {
-                setPendingField("supplierCode", code);
-                setPendingField("supplierName", name);
-              }}
-            />
-          </Field>
-
-          <Field label="Product From">
-            <SearchField
-              options={productRows.map((p) => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
-              code={pending.productFrom}
-              name={pending.productFromName}
-              loading={isProductLoading}
-              onChange={(code, name) => {
-                setPendingField("productFrom", code);
-                setPendingField("productFromName", name);
-              }}
-              placeholder="All"
-            />
-          </Field>
-
-          <Field label="Product To">
-            <SearchField
-              options={productRows.map((p) => ({ code: p.PROD_CODE, name: p.PROD_NAME }))}
-              code={pending.productTo}
-              name={pending.productToName}
-              loading={isProductLoading}
-              onChange={(code, name) => {
-                setPendingField("productTo", code);
-                setPendingField("productToName", name);
-              }}
-              placeholder="All"
-            />
-          </Field>
-
-          <Field label="Report Criteria">
-            <select
-              className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-              value={pending.reportType}
-              onChange={(e) => setPendingField("reportType", e.target.value as ReportCriteria)}
-            >
-              <option value="Summary">Summary</option>
-              <option value="Detail">Detail</option>
-            </select>
-          </Field>
-
-          <div>
-            <Field label="Cancelled PO">
-              <div
-                className="flex min-h-[36px] items-center gap-2 rounded-md px-3 py-1.5 shadow-sm"
-                style={{ border: "1px solid #aebdce", background: "#f4f7fb" }}
-              >
-                <label
-                  onClick={() => setPendingField("cancelledPO", !pending.cancelledPO)}
-                  className="inline-flex items-center gap-2 cursor-pointer select-none normal-case whitespace-nowrap"
+    <>
+      <NewReportPage
+        title="Pending Purchase Order Report"
+        fields={fields}
+        values={params}
+        onChange={setParam}
+        onClearAll={handleReset}
+        onGenerate={handleGenerateReport}
+        loading={loading}
+        optionsLoading={optLoading}
+        error={error || optError || null}
+        onClearError={() => {
+          setError("");
+          setOptError("");
+        }}
+        fieldsPerRow={4}
+      >
+        {/* Date range + Cancelled PO toggle — bespoke to this report, no matching NewReportPage field type */}
+        <div style={{ marginTop: 8 }}>
+          <fieldset className="rounded-md border p-3">
+            <legend className="px-1 text-[11px] font-semibold uppercase text-muted-foreground">
+              Document Date Range
+            </legend>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+              <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                Date From
+                <input
+                  type="date"
+                  className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+                  value={params.dateFrom}
+                  max={params.dateTo || undefined}
+                  disabled={loading}
+                  onChange={(e) => setParam("dateFrom", e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                Date To
+                <input
+                  type="date"
+                  className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
+                  value={params.dateTo}
+                  min={params.dateFrom || undefined}
+                  disabled={loading}
+                  onChange={(e) => setParam("dateTo", e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                Cancelled PO
+                <div
+                  className="flex h-8 items-center gap-2 rounded-md px-3 shadow-sm"
+                  style={{ border: "1px solid #aebdce", background: "#f4f7fb" }}
                 >
                   <span
-                    className="flex h-4 w-4 items-center justify-center rounded transition-colors"
-                    style={{
-                      border: `2px solid ${pending.cancelledPO ? "#1d4ed8" : "#9ca3af"}`,
-                      background: pending.cancelledPO ? "#1d4ed8" : "transparent",
-                    }}
+                    onClick={() => !loading && setParam("cancelledPO", !params.cancelledPO)}
+                    className="inline-flex cursor-pointer select-none items-center gap-2 normal-case"
                   >
-                    {pending.cancelledPO && <Check size={10} color="#fff" strokeWidth={3} />}
+                    <span
+                      className="flex h-4 w-4 items-center justify-center rounded transition-colors"
+                      style={{
+                        border: `2px solid ${params.cancelledPO ? "#1d4ed8" : "#9ca3af"}`,
+                        background: params.cancelledPO ? "#1d4ed8" : "transparent",
+                      }}
+                    />
+                    <span className={`text-sm font-normal ${params.cancelledPO ? "text-blue-700" : "text-foreground"}`}>
+                      Include Cancelled PO
+                    </span>
                   </span>
-                  <span className={`text-sm font-normal ${pending.cancelledPO ? "text-blue-700" : "text-foreground"}`}>
-                    Include Cancelled PO
-                  </span>
-                </label>
+                </div>
+              </label>
+            </div>
+            {!dateRangeValid && (
+              <div className="mt-2 text-[10px] normal-case text-red-600">
+                Date From must be on or before Date To.
               </div>
-            </Field>
-          </div>
+            )}
+          </fieldset>
         </div>
 
-        <div className="freight-report-actions">
-          <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
-          </Button>
-        </div>
-        {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
-      </div>
+        {hasGeneratedReport && (
+          <div style={{ marginTop: 8 }}>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#065f46",
+                background: "#d1fae5",
+                padding: "3px 10px",
+                borderRadius: 12,
+                fontWeight: 500,
+              }}
+            >
+              Report generated successfully
+            </span>
+          </div>
+        )}
+      </NewReportPage>
 
       <NewReportDialog
         open={reportPreviewOpen}
@@ -572,10 +452,10 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
         htmlContent={reportHtml}
         loading={loading}
         error={reportPreviewError || null}
-        onExportExcel={handleReportPreviewExcel}
+        onExportExcel={handleExportExcel}
         exportingExcel={reportPreviewExporting}
       />
-    </section>
+    </>
   );
 };
 

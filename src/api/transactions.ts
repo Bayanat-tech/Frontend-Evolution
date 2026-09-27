@@ -107,6 +107,18 @@ export type TransactionChildRow = Record<string, unknown> & {
   lcur_amount?: number;
   isEditMode?: boolean;
   IsDeletable?: boolean;
+  inv_no?: string;
+  inv_date?: string;
+  inv_amt?: number | null;
+  c_bal_amt_org?: number | null;
+  c_curr_amt?: number | null;
+  job_no?: string;
+  doc_refno?: string;
+  doc_refno_2?: string;
+  exp_type_code?: string;
+  exp_subtype_code?: string;
+  exp_code?: string;
+  exp_description?: string;
 };
 
 export type TransactionDefaultData = {

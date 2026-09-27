@@ -278,7 +278,7 @@ export function AssetRegisterPage() {
 
   // ===================== RENDER =====================
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

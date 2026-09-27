@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
-import { openWmsReport } from "../../../components/wms/reports/wmsReportPreviewStore";
 import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
+import { NewReportDialog } from "../../../components/new_report_format";
 import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -141,6 +141,12 @@ export default function StockAgeingQuantityReport() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>("");
     const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
+    const [exportingExcel, setExportingExcel] = useState(false);
+
+    // ── Report preview dialog state (HTML fed straight into NewReportDialog) ──
+    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+    const [reportHtml, setReportHtml] = useState<string | null>(null);
+    const [reportPreviewError, setReportPreviewError] = useState("");
 
     const [prinOptions, setPrinOptions] = useState<ReportOption[]>([]);
     const [prodOptions, setProdOptions] = useState<ReportOption[]>([]);
@@ -252,14 +258,20 @@ export default function StockAgeingQuantityReport() {
         { value: "principal", label: "Stock Ageing (Quantity) Summary" },
     ];
 
+    // ── Fetch the report HTML and feed it into NewReportDialog ───────────────
     const handleGenerateReport = async () => {
         if (hasAgeErrors) {
             setError("Please fix the age bucket cutoffs before generating the report.");
             return;
         }
+
+        // Open the dialog immediately so its spinner shows while we fetch.
+        setReportHtml(null);
+        setReportPreviewError("");
+        setReportPreviewOpen(true);
+
         setLoading(true);
         setError("");
-        const preview = openWmsReport("Stock Ageing (Quantity) Report");
         const payload = buildPayload(params);
 
         try {
@@ -268,20 +280,100 @@ export default function StockAgeingQuantityReport() {
                 payload,
                 { responseType: "text" },
             );
-            preview.ready({
-                html: res.data,
-                filename: `stock_ageing_quantity_report_${new Date().toISOString().slice(0, 10)}`,
-                orientation: "landscape",
-                excelEndpoint: "/api/wms/reports/stockageing/quantity/excel",
-                excelPayload: payload,
-            });
+            setReportHtml(res.data);
             setHasGeneratedReport(true);
         } catch (e: any) {
             const failure = e?.response?.data?.message ?? "Failed to load report. Please try again.";
             setError(failure);
-            preview.fail(failure);
+            setReportPreviewError(failure);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const closeReportPreview = () => {
+        setReportPreviewOpen(false);
+        setReportHtml(null);
+        setReportPreviewError("");
+    };
+
+    // ── Excel export — direct blob download (mirrors GRN's export pattern) ──
+    const handleExportExcel = useCallback(async () => {
+        setExportingExcel(true);
+        setError("");
+        try {
+            const res = await api.post(
+                "/api/wms/reports/stockageing/quantity/excel",
+                buildPayload(params),
+                { responseType: "blob" },
+            );
+            const blob = new Blob([res.data], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `stock_ageing_quantity_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e: any) {
+            setError(e?.response?.data?.message ?? "Failed to export Excel. Please try again.");
+        } finally {
+            setExportingExcel(false);
+        }
+    }, [params]);
+
+    // Open the report HTML in a new browser tab
+    const handleOpenReportInNewWindow = () => {
+        if (!reportHtml) return;
+        const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+        const url = window.URL.createObjectURL(blob);
+        const win = window.open(url, "_blank");
+        if (win) {
+            setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+        } else {
+            window.URL.revokeObjectURL(url);
+        }
+    };
+
+    // Trigger the browser print dialog (Save as PDF) for the current report
+    const handleDownloadReportPdf = () => {
+        if (!reportHtml) return;
+        const PRINT_IFRAME_ID = "stock-ageing-qty-print-iframe";
+        let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+        if (!iframe) {
+            iframe = document.createElement("iframe");
+            iframe.id = PRINT_IFRAME_ID;
+            iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+            iframe.style.cssText =
+                "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+            document.body.appendChild(iframe);
+        }
+
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) return;
+
+        doc.open();
+        doc.write(reportHtml);
+        doc.close();
+
+        const doPrint = () => {
+            try {
+                iframe?.contentWindow?.focus();
+                iframe?.contentWindow?.print();
+            } catch {
+                /* ignore */
+            }
+        };
+
+        if (iframe.contentDocument?.readyState === "complete") {
+            setTimeout(doPrint, 300);
+        } else {
+            iframe.onload = () => setTimeout(doPrint, 300);
+            setTimeout(doPrint, 700);
         }
     };
 
@@ -328,65 +420,81 @@ export default function StockAgeingQuantityReport() {
     ];
 
     return (
-        <NewReportPage
-            title="Stock Ageing (Quantity) Report"
-            fields={fields}
-            values={params}
-            onChange={setParam}
-            onClearAll={handleReset}
-            onGenerate={handleGenerateReport}
-            loading={loading}
-            optionsLoading={optLoading}
-            error={error || optError || null}
-            onClearError={() => {
-                setError("");
-                setOptError("");
-            }}
-            fieldsPerRow={4}
-        >
-            {/* Age bucket boundaries — bespoke to this report, no matching NewReportPage field type */}
-            <div style={{ marginTop: 8 }}>
-                <fieldset className="rounded-md border p-3">
-                    <legend className="px-1 text-[11px] font-semibold uppercase text-muted-foreground">
-                        Age Bucket Boundaries (days)
-                    </legend>
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                        <AgeRangeField label="Bucket 1 Cutoff" value={params.age1} onChange={(v) => setParam("age1", v)} error={ageErrors.age1} disabled={loading} />
-                        <AgeRangeField label="Bucket 2 Cutoff" value={params.age2} onChange={(v) => setParam("age2", v)} error={ageErrors.age2} disabled={loading} />
-                        <AgeRangeField label="Bucket 3 Cutoff" value={params.age3} onChange={(v) => setParam("age3", v)} error={ageErrors.age3} disabled={loading} />
-                        <AgeRangeField label="Bucket 4 Cutoff" value={params.age4} onChange={(v) => setParam("age4", v)} error={ageErrors.age4} disabled={loading} />
-                        <AgeRangeField label="Bucket 5 Cutoff" value={params.age5} onChange={(v) => setParam("age5", v)} error={ageErrors.age5} disabled={loading} />
-                    </div>
-                    <div className={`mt-2 text-[10px] ${hasAgeErrors ? "text-red-600" : "text-muted-foreground"}`}>
-                        {hasAgeErrors
-                            ? "Each bucket cutoff must be a positive number greater than the previous bucket's cutoff."
-                            : `Produces buckets: Below ${params.age1 || 30}, ${params.age1 || 30}-${params.age2 || 60}, ${params.age2 || 60}-${params.age3 || 90}, ${params.age3 || 90}-${params.age4 || 120}, ${params.age4 || 120}-${params.age5 || 150}, Above ${params.age5 || 150}`}
-                    </div>
-                </fieldset>
-            </div>
-
-            {hasAgeErrors && !error && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "#b91c1c" }}>
-                    Fix the age bucket cutoffs before generating the report.
-                </div>
-            )}
-
-            {hasGeneratedReport && (
+        <>
+            <NewReportPage
+                title="Stock Ageing (Quantity) Report"
+                fields={fields}
+                values={params}
+                onChange={setParam}
+                onClearAll={handleReset}
+                onGenerate={handleGenerateReport}
+                loading={loading}
+                optionsLoading={optLoading}
+                error={error || optError || null}
+                onClearError={() => {
+                    setError("");
+                    setOptError("");
+                }}
+                fieldsPerRow={4}
+            >
+                {/* Age bucket boundaries — bespoke to this report, no matching NewReportPage field type */}
                 <div style={{ marginTop: 8 }}>
-                    <span
-                        style={{
-                            fontSize: 12,
-                            color: "#065f46",
-                            background: "#d1fae5",
-                            padding: "3px 10px",
-                            borderRadius: 12,
-                            fontWeight: 500,
-                        }}
-                    >
-                        Report generated successfully
-                    </span>
+                    <fieldset className="rounded-md border p-3">
+                        <legend className="px-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                            Age Bucket Boundaries (days)
+                        </legend>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                            <AgeRangeField label="Bucket 1 Cutoff" value={params.age1} onChange={(v) => setParam("age1", v)} error={ageErrors.age1} disabled={loading} />
+                            <AgeRangeField label="Bucket 2 Cutoff" value={params.age2} onChange={(v) => setParam("age2", v)} error={ageErrors.age2} disabled={loading} />
+                            <AgeRangeField label="Bucket 3 Cutoff" value={params.age3} onChange={(v) => setParam("age3", v)} error={ageErrors.age3} disabled={loading} />
+                            <AgeRangeField label="Bucket 4 Cutoff" value={params.age4} onChange={(v) => setParam("age4", v)} error={ageErrors.age4} disabled={loading} />
+                            <AgeRangeField label="Bucket 5 Cutoff" value={params.age5} onChange={(v) => setParam("age5", v)} error={ageErrors.age5} disabled={loading} />
+                        </div>
+                        <div className={`mt-2 text-[10px] ${hasAgeErrors ? "text-red-600" : "text-muted-foreground"}`}>
+                            {hasAgeErrors
+                                ? "Each bucket cutoff must be a positive number greater than the previous bucket's cutoff."
+                                : `Produces buckets: Below ${params.age1 || 30}, ${params.age1 || 30}-${params.age2 || 60}, ${params.age2 || 60}-${params.age3 || 90}, ${params.age3 || 90}-${params.age4 || 120}, ${params.age4 || 120}-${params.age5 || 150}, Above ${params.age5 || 150}`}
+                        </div>
+                    </fieldset>
                 </div>
-            )}
-        </NewReportPage>
+
+                {hasAgeErrors && !error && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#b91c1c" }}>
+                        Fix the age bucket cutoffs before generating the report.
+                    </div>
+                )}
+
+                {hasGeneratedReport && (
+                    <div style={{ marginTop: 8 }}>
+                        <span
+                            style={{
+                                fontSize: 12,
+                                color: "#065f46",
+                                background: "#d1fae5",
+                                padding: "3px 10px",
+                                borderRadius: 12,
+                                fontWeight: 500,
+                            }}
+                        >
+                            Report generated successfully
+                        </span>
+                    </div>
+                )}
+            </NewReportPage>
+
+            {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+            <NewReportDialog
+                open={reportPreviewOpen}
+                onClose={closeReportPreview}
+                title="Stock Ageing (Quantity) Report"
+                htmlContent={reportHtml}
+                loading={loading}
+                error={reportPreviewError || null}
+                onExportExcel={handleExportExcel}
+                exportingExcel={exportingExcel}
+                onOpenInNewWindow={handleOpenReportInNewWindow}
+                onDownloadPdf={handleDownloadReportPdf}
+            />
+        </>
     );
 }

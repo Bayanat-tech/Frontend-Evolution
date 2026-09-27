@@ -124,7 +124,7 @@ export function ChequeDepositSlipPage() {
   const rightColumns = useMemo(() => chequeColumns(selectedDeposit, setSelectedDeposit, true), [selectedDeposit]);
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div><h1 className="m-0 text-2xl font-semibold tracking-tight">Cheque Deposit Slip</h1></div>
         <div className="flex flex-wrap items-center justify-end gap-2"><Button variant="outline" disabled={loading} onClick={() => void retrieve()}><RefreshCw size={15} /> Retrieve</Button><Button disabled={loading} onClick={() => void save()}><Save size={15} /> Save Deposit</Button><Button variant="secondary" onClick={() => window.print()}><Printer size={15} /> Print</Button></div>
