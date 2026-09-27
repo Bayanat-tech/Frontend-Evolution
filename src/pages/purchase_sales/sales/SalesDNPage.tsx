@@ -10,7 +10,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
+import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesDNEditor } from "./SalesDNeditor";
 import { SDN_CONFIG } from "./SalesOrdertypes";
