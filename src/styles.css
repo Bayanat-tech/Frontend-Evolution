@@ -163,7 +163,7 @@ body {
   --app-control-font-size: 12px;
   --app-table-font-size: 11.5px;
   --app-label-font-size: 11px;
-  color: #0a0d13;
+  color: #172033;
 }
 
 .vendor-compact section {
@@ -257,13 +257,13 @@ body {
 }
 
 .vendor-invoice-dialog-details {
-  width: min(96vw, 1420px) !important;  /* wider dialog only for Details tab */
+  width: min(96vw, 1430px) !important;  /* wider dialog only for Details tab */
   max-height: 92vh;
 }
 
 .vendor-invoice-dialog-details .vendor-detail-scroll {
-  height: min(68dvh, 680px);   /* taller detail table */
-  min-height: 420px;
+  height: min(72dvh, 780px);   /* taller detail table */
+  min-height: 450px;
 }
 
 .vendor-invoice-dialog.ui-dialog-content {

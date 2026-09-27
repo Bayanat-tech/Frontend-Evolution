@@ -356,26 +356,6 @@ useEffect(() => {
 
         {activeTab === "info" ? (
   <div className="grid gap-2">
-    {/* <FieldGroup title="Document Details" columns={4}>
-      <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
-      <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={infoReadOnly} />
-      <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={infoReadOnly} />
-      <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={infoReadOnly} />
-    </FieldGroup>
-
-    <FieldGroup title="Reference / Logistics" columns={4}>
-      <label className="grid gap-1 text-sm">
-        <span className="font-medium text-muted-foreground">Ref Doc No</span>
-        <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit} required>
-          <option value="">Select Ref Doc</option>
-          {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
-        </Select>
-      </label>
-      <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={infoReadOnly} />
-      <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={infoReadOnly} />
-      <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={infoReadOnly} />
-    </FieldGroup> */}
-
     <div className="vendor-field-group-row">
   <FieldGroup title="Document Details" icon={FileText} columns={2}>
     <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
@@ -533,18 +513,18 @@ function InvoiceDetailsTab({
     <col className="w-[4%]" />    {/* Sr No */}
     <col className="w-[20%]" />   {/* Description */}
     <col className="w-[5%]" />    {/* Qty */}
-    <col className="w-[5.5%]" />  {/* Org Qty */}
-    <col className="w-[6%]" />    {/* Rate */}
-    <col className="w-[6%]" />    {/* Amount */}
-    <col className="w-[5%]" />    {/* Currency */}
-    <col className="w-[5.5%]" />  {/* Ex Rate */}
+    <col className="w-[5%]" />  {/* Org Qty */}
+    <col className="w-[2%]" />    {/* Rate */}
+    <col className="w-[8%]" />    {/* Amount */}
+    <col className="w-[2%]" />    {/* Currency */}
+    <col className="w-[5%]" />  {/* Ex Rate */}
     <col className="w-[6%]" />    {/* Base Amt */}
-    <col className="w-[5%]" />    {/* Tax Code */}
+    <col className="w-[4%]" />    {/* Tax Code */}
     <col className="w-[4%]" />    {/* Tax % */}
     <col className="w-[7%]" />    {/* Tax Local Amt */}
     <col className="w-[6%]" />    {/* Final Amt */}
-    <col className="w-[10%]" />   {/* Item Remark */}
-    <col className="w-[3%]" />    {/* Attach */}
+    <col className="w-[18%]" />   {/* Item Remark */}
+    <col className="w-[2%]" />    {/* Attach */}
     <col className="w-[2%]" />    {/* Delete */}
   </colgroup>
 
@@ -1051,27 +1031,17 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose, readOnly }: { 
             {/* <table className="w-full min-w-[760px] text-sm">
               <thead className="sticky top-0 bg-muted text-xs text-muted-foreground"> */}
                <table className="w-full min-w-[760px] text-[11px]">
-  <thead className="vendor-detail-table-head sticky top-0 text-[10px] font-bold uppercase tracking-wide">
-                {/* <tr>
-                  <th className="px-3 py-2 text-left">SR. No</th>
-                  <th className="px-3 py-2 text-left">Line</th>
-                  <th className="px-3 py-2 text-left">File Name</th>
-                  <th className="px-3 py-2 text-left">File Type</th>
-                  <th className="px-3 py-2 text-right">Action</th>
-                </tr> */}
 
+              <thead className="vendor-detail-table-head sticky top-0 text-[10px] font-bold uppercase tracking-wide">
                 <tr>
-  <th className="w-10 p-2" />
-  <th className="w-[70px] p-2">Sr No</th>
-  <th className="w-[280px] p-2 ">Description</th>
-  <th className="w-[100px] p-2 text-right">Org Qty</th>
-  <th className="w-[120px] p-2 text-right">Rate</th>
-  <th className="w-[90px] p-2">Currency</th>
-  <th className="w-[120px] p-2 text-right">Ex Rate</th>
-  <th className="w-[120px] p-2 text-right">Base Amt</th>
-</tr>
-
+                  <th className="w-[70px] px-3 py-2 text-left">Sr No</th>
+                  <th className="w-[100px] px-3 py-2 text-left">Line</th>
+                  <th className="px-3 py-2 text-left">File Name</th>
+                  <th className="w-[100px] px-3 py-2 text-left">File Type</th>
+                  <th className="w-[120px] px-3 py-2 text-right">Action</th>
+                </tr>
               </thead>
+
               <tbody>
                 {files.map((file, index) => {
                   const srNoValue = getFileSrNo(file);

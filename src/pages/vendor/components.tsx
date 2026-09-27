@@ -231,43 +231,6 @@ function statusIcon(status?: VendorStatusKey) {
   return AlertCircle;
 }
 
-// export function FieldGroup({
-//   title,
-//   icon: Icon,
-//   columns = 4,
-//   children,
-// }: {
-//   title: string;
-//   icon?: LucideIcon;
-//   columns?: 1 | 2 | 3 | 4;
-//   children: ReactNode;
-// }) {
-  // return (
-  //   <div className="vendor-field-group">
-  //     <div className="vendor-field-group-title">{title}</div>
-  //     <div className={cn("vendor-field-group-grid", `vendor-field-group-grid-${columns}`)}>
-  //       {children}
-  //     </div>
-  //   </div>
-  // );
-//   return (
-//     <div className="vendor-field-group">
-//       <div className="vendor-field-group-title">
-//         {Icon && (
-//           <span className="vendor-field-group-icon">
-//             <Icon size={12} />
-//           </span>
-//         )}
-//         <span>{title}</span>
-//       </div>
-//       <div className={cn("vendor-field-group-grid", `vendor-field-group-grid-${columns}`)}>
-//         {children}
-//       </div>
-//     </div>
-//   );
-// }
-
-
 export function FieldGroup({
   title,
   icon: Icon,
@@ -278,7 +241,7 @@ export function FieldGroup({
   title: string;
   icon?: LucideIcon;
   columns?: 1 | 2 | 3 | 4;
-  gridClassName?: string;   // NEW
+  gridClassName?: string; 
   children: ReactNode;
 }) {
   return (
