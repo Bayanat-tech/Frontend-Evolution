@@ -1,6 +1,16 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, CheckCircle2, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  Printer,
+  RefreshCw,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -10,34 +20,50 @@ import { LookupField } from "../../../components/ui/LookupField";
 import { NoticeToast } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
 import {
+  // ── data + actions ──
   executeWmsInboundSql,
   createAdjDetail,
   editAdjDetail,
   deleteAdjDetail,
   processStockAdjustment,
   confirmStockAdjustment,
-  getAllStockAdjReports,
   getStockAdjustmentData,
+  // ── report fetchers (existing, GET-based) ──
+  getStockAdjusmentReportHtml,
+  getStockAdjusmentReportExcelDownload,
   getAdjConfirmReport,
   downloadAdjConfirmReportExcel,
-  getStockAdjusmentReportHtml,
-  getStockAdjusmentReportExcelDownload
 } from "../../../api/wms";
+
+// ─── Report viewer (mirrors OutboundJobDetail exactly) ────────────────────────
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type WmsRow = Record<string, unknown>;
 type NoticeState = { type: "success" | "error"; message: string } | null;
 
+type TReport = {
+  id: number;
+  reportTitle: string;
+  apiFn: (prinCode: string, adjNo: string) => Promise<string>;
+  excelFn?: (prinCode: string, adjNo: string) => Promise<void>;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function val(row: WmsRow, key: string) {
-  return String(row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()] ?? "");
+  return String(
+    row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()] ?? ""
+  );
 }
 
 function formatDateTime(input: string) {
   if (!input || input === "N/A") return "—";
   const d = new Date(input);
   if (isNaN(d.getTime())) return input;
-  return `${d.toLocaleDateString("en-GB")} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString("en-GB")} ${d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 }
 
 function toIsoDate(input: unknown): string | null {
@@ -52,7 +78,9 @@ function toIsoDate(input: unknown): string | null {
 
 function normalizeRow(row: WmsRow): WmsRow {
   const out: WmsRow = { ...row };
-  Object.entries(row).forEach(([k, v]) => { out[k.toLowerCase()] = v; });
+  Object.entries(row).forEach(([k, v]) => {
+    out[k.toLowerCase()] = v;
+  });
   return out;
 }
 
@@ -61,6 +89,22 @@ const TABS = [
   { label: "Create", value: "create" },
   { label: "Process", value: "process" },
   { label: "Confirm", value: "confirm" },
+];
+
+// ─── Report registry (mirrors REPORTS in OutboundJobDetail) ──────────────────
+const REPORTS: TReport[] = [
+  {
+    id: 1,
+    reportTitle: "Adjustment Confirm Report",
+    apiFn: getAdjConfirmReport,
+    excelFn: downloadAdjConfirmReportExcel,
+  },
+  {
+    id: 2,
+    reportTitle: "Stock Adjustment Report",
+    apiFn: getStockAdjusmentReportHtml,
+    excelFn: getStockAdjusmentReportExcelDownload,
+  },
 ];
 
 // ─── Adj Type badge ───────────────────────────────────────────────────────────
@@ -80,7 +124,15 @@ function AdjTypeBadge({ type }: { type: string }) {
 }
 
 // ─── Field helpers ────────────────────────────────────────────────────────────
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <label className="field">
       <span>
@@ -100,7 +152,13 @@ function ReadOnlyInput({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <fieldset className="rounded-md border border-border bg-card p-3">
       <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -110,30 +168,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </fieldset>
   );
 }
-
-type TReport = {
-  id:           number;
-  reportTitle:  string;
-  apiFn:        (prin_code: string, adj_no: string) => Promise<string>;
-  excelFn?:     (prin_code: string, adj_no: string) => Promise<void>;
-};
-
-const REPORTS: TReport[] = [
-  {
-    id:          1,
-    reportTitle: "Adjustment Confirm Report",
-    apiFn:       getAdjConfirmReport,
-    excelFn:     downloadAdjConfirmReportExcel,
-  },
-
-  {
-
-     id:          2,
-    reportTitle: "Stock Adjustment Report",
-    apiFn:       getStockAdjusmentReportHtml,
-    excelFn:     getStockAdjusmentReportExcelDownload,
-  }
-];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function StockAdjViewPage() {
@@ -150,32 +184,31 @@ export function StockAdjViewPage() {
   const prin_code = searchParams.get("principal_code") || "";
   const company_code = user?.company_code || "";
 
+  // ── Tab + data state ──
   const [selectedTab, setSelectedTab] = useState("create");
   const [allDetails, setAllDetails] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [selectedRows, setSelectedRows] = useState<WmsRow[]>([]);
 
+  // ── Create / Edit / Delete dialog state ──
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<WmsRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WmsRow | null>(null);
-  // const [printOpen, setPrintOpen] = useState(false);
 
   const [processing, setProcessing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-    // ── Report dialog state ───────────────────────────────────────────────────
-    const [listOpen,       setListOpen]       = useState(false);
-    const [reportOpen,     setReportOpen]     = useState(false);
-    const [selectedReport, setSelectedReport] = useState<TReport | null>(null);
-    const [reportHtml,     setReportHtml]     = useState<string>("");
-    const [reportLoading,  setReportLoading]  = useState(false);
-    const [reportError,    setReportError]    = useState<string>("");
-    const [excelLoading,   setExcelLoading]   = useState(false);
-  
-    const iframeRef = useRef<HTMLIFrameElement>(null);
+  // ── Report dialog state (mirrors OutboundJobDetail exactly) ──
+  const [listOpen, setListOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<TReport | null>(null);
+  const [reportHtml, setReportHtml] = useState<string>("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string>("");
+  const [excelLoading, setExcelLoading] = useState(false);
 
   // ── Load detail data ──
   const loadData = async (clearNotice = true) => {
@@ -200,16 +233,29 @@ export function StockAdjViewPage() {
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to load adjustment details.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load adjustment details.",
       });
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adj_no, prin_code]);
 
   useEffect(() => {
+    setSelectedRows([]);
+  }, [selectedTab]);
+
+  // ── Fetch HTML when a report is selected (mirrors OutboundJobDetail exactly) ──
+  useEffect(() => {
     if (!selectedReport) return;
+
     if (!prin_code) {
       setReportError("Principal code is not available for this adjustment.");
       return;
@@ -220,7 +266,7 @@ export function StockAdjViewPage() {
     setReportLoading(true);
 
     selectedReport
-      .apiFn(prin_code, adj_no)
+      .apiFn(String(prin_code), adj_no)
       .then((html) => setReportHtml(html))
       .catch((err) => {
         console.error("Report API error:", err);
@@ -229,14 +275,7 @@ export function StockAdjViewPage() {
       .finally(() => setReportLoading(false));
   }, [selectedReport]);
 
-
-  useEffect(() => { void loadData(); }, [adj_no, prin_code]);
-  useEffect(() => { setSelectedRows([]); }, [selectedTab]);
-
   // ── Client-side tab filtering ──
-  // Create tab  → all rows (edit/delete only if selected !== 'Y')
-  // Process tab → rows where selected !== 'Y'
-  // Confirm tab → rows where selected === 'Y' and confirmed !== 'Y'
   const createRows = allDetails;
 
   const processRows = useMemo(
@@ -245,7 +284,11 @@ export function StockAdjViewPage() {
   );
 
   const confirmRows = useMemo(
-    () => allDetails.filter((r) => val(r, "selected") === "Y" && val(r, "confirmed") !== "Y"),
+    () =>
+      allDetails.filter(
+        (r) =>
+          val(r, "selected") === "Y" && val(r, "confirmed") !== "Y"
+      ),
     [allDetails]
   );
 
@@ -276,10 +319,17 @@ export function StockAdjViewPage() {
           .filter(Boolean)
           .join(","),
       });
-      setNotice({ type: "success", message: "Stock adjustment processed successfully." });
+      setNotice({
+        type: "success",
+        message: "Stock adjustment processed successfully.",
+      });
       await loadData(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to process." });
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to process.",
+      });
     } finally {
       setProcessing(false);
     }
@@ -299,10 +349,17 @@ export function StockAdjViewPage() {
           .filter(Boolean)
           .join(","),
       });
-      setNotice({ type: "success", message: "Stock adjustment confirmed successfully." });
+      setNotice({
+        type: "success",
+        message: "Stock adjustment confirmed successfully.",
+      });
       await loadData(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to confirm." });
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to confirm.",
+      });
     } finally {
       setConfirming(false);
     }
@@ -323,23 +380,23 @@ export function StockAdjViewPage() {
       setDeleteTarget(null);
       await loadData(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete." });
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to delete.",
+      });
     } finally {
       setDeleting(false);
     }
   };
 
-  // ── Print ──
-    // ── Toolbar handlers ──────────────────────────────────────────────────────
-  const handlePrint = () => {
-    iframeRef.current?.contentWindow?.postMessage("print", "*");
-  };
-
+  // ── Report toolbar handlers (mirrors OutboundJobDetail exactly) ──
   const handleExcel = async () => {
-    if (!selectedReport?.excelFn || !prin_code) return;
+    if (!selectedReport?.excelFn) return;
+    if (!prin_code) return;
     setExcelLoading(true);
     try {
-      await selectedReport.excelFn(prin_code, adj_no);
+      await selectedReport.excelFn(String(prin_code), adj_no);
     } catch (err) {
       console.error("Excel export error:", err);
     } finally {
@@ -347,7 +404,59 @@ export function StockAdjViewPage() {
     }
   };
 
-  // ── Dialog helpers ────────────────────────────────────────────────────────
+  // Open the report HTML in a new browser tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger the browser print dialog (Save as PDF) for the current report
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "stock-adj-report-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
+  // ── Report dialog helpers (mirrors OutboundJobDetail exactly) ──
   const openListDialog = () => setListOpen(true);
 
   const selectReport = (rp: TReport) => {
@@ -363,14 +472,12 @@ export function StockAdjViewPage() {
     setReportError("");
   };
 
-  const reportReady   = !reportLoading && !reportError && !!reportHtml;
   const hasExcelExport = !!selectedReport?.excelFn;
 
-
-  // ── Checkbox column (shared between process & confirm tabs) ──
-  const selectColumn = (tab: string): ColumnDef<WmsRow> => ({
+  // ── Checkbox column ──
+  const selectColumn = (): ColumnDef<WmsRow> => ({
     id: "select",
-    header: ({ table }) => (
+    header: () => (
       <input
         type="checkbox"
         className="h-4 w-4 accent-primary"
@@ -392,8 +499,12 @@ export function StockAdjViewPage() {
           className="h-4 w-4 accent-primary"
           checked={checked}
           onChange={(e) => {
-            if (e.target.checked) setSelectedRows((prev) => [...prev, row.original]);
-            else setSelectedRows((prev) => prev.filter((r) => r._id !== row.original._id));
+            if (e.target.checked)
+              setSelectedRows((prev) => [...prev, row.original]);
+            else
+              setSelectedRows((prev) =>
+                prev.filter((r) => r._id !== row.original._id)
+              );
           }}
         />
       );
@@ -403,27 +514,102 @@ export function StockAdjViewPage() {
   // ── Base column defs ──
   const baseColumns: ColumnDef<WmsRow>[] = [
     { id: "row_no", header: "No", size: 52, cell: ({ row }) => row.index + 1 },
-    { accessorKey: "adj_no", header: "Adj No", size: 80, cell: ({ row }) => val(row.original, "adj_no") },
-    { accessorKey: "prod_code", header: "Product", size: 150, cell: ({ row }) => val(row.original, "prod_code") },
+    {
+      accessorKey: "adj_no",
+      header: "Adj No",
+      size: 80,
+      cell: ({ row }) => val(row.original, "adj_no"),
+    },
+    {
+      accessorKey: "prod_code",
+      header: "Product",
+      size: 150,
+      cell: ({ row }) => val(row.original, "prod_code"),
+    },
     {
       accessorKey: "adj_type",
       header: "Adj Type",
       size: 100,
       cell: ({ row }) => <AdjTypeBadge type={val(row.original, "adj_type")} />,
     },
-    { accessorKey: "key_number", header: "Key No", size: 130, cell: ({ row }) => val(row.original, "key_number") },
-    { accessorKey: "quantity", header: "Qty (Total)", size: 105, cell: ({ row }) => val(row.original, "quantity") },
-    { accessorKey: "qty_puom", header: "Qty PUOM", size: 100, cell: ({ row }) => val(row.original, "qty_puom") },
-    { accessorKey: "qty_luom", header: "Qty LUOM", size: 100, cell: ({ row }) => val(row.original, "qty_luom") },
-    { accessorKey: "p_uom", header: "P UOM", size: 80, cell: ({ row }) => val(row.original, "p_uom") },
-    { accessorKey: "l_uom", header: "L UOM", size: 80, cell: ({ row }) => val(row.original, "l_uom") },
-    { accessorKey: "location_code", header: "Location", size: 120, cell: ({ row }) => val(row.original, "location_code") },
-    { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => val(row.original, "job_no") },
-    { accessorKey: "batch_no", header: "Batch No", size: 110, cell: ({ row }) => val(row.original, "batch_no") },
-    { accessorKey: "mfg_date", header: "Mfg Date", size: 130, cell: ({ row }) => formatDateTime(val(row.original, "mfg_date")) },
-    { accessorKey: "exp_date", header: "Exp Date", size: 130, cell: ({ row }) => formatDateTime(val(row.original, "exp_date")) },
-    { accessorKey: "user_id", header: "User", size: 100, cell: ({ row }) => val(row.original, "user_id") },
-    { accessorKey: "user_dt", header: "User Date", size: 130, cell: ({ row }) => formatDateTime(val(row.original, "user_dt")) },
+    {
+      accessorKey: "key_number",
+      header: "Key No",
+      size: 130,
+      cell: ({ row }) => val(row.original, "key_number"),
+    },
+    {
+      accessorKey: "quantity",
+      header: "Qty (Total)",
+      size: 105,
+      cell: ({ row }) => val(row.original, "quantity"),
+    },
+    {
+      accessorKey: "qty_puom",
+      header: "Qty PUOM",
+      size: 100,
+      cell: ({ row }) => val(row.original, "qty_puom"),
+    },
+    {
+      accessorKey: "qty_luom",
+      header: "Qty LUOM",
+      size: 100,
+      cell: ({ row }) => val(row.original, "qty_luom"),
+    },
+    {
+      accessorKey: "p_uom",
+      header: "P UOM",
+      size: 80,
+      cell: ({ row }) => val(row.original, "p_uom"),
+    },
+    {
+      accessorKey: "l_uom",
+      header: "L UOM",
+      size: 80,
+      cell: ({ row }) => val(row.original, "l_uom"),
+    },
+    {
+      accessorKey: "location_code",
+      header: "Location",
+      size: 120,
+      cell: ({ row }) => val(row.original, "location_code"),
+    },
+    {
+      accessorKey: "job_no",
+      header: "Job No",
+      size: 120,
+      cell: ({ row }) => val(row.original, "job_no"),
+    },
+    {
+      accessorKey: "batch_no",
+      header: "Batch No",
+      size: 110,
+      cell: ({ row }) => val(row.original, "batch_no"),
+    },
+    {
+      accessorKey: "mfg_date",
+      header: "Mfg Date",
+      size: 130,
+      cell: ({ row }) => formatDateTime(val(row.original, "mfg_date")),
+    },
+    {
+      accessorKey: "exp_date",
+      header: "Exp Date",
+      size: 130,
+      cell: ({ row }) => formatDateTime(val(row.original, "exp_date")),
+    },
+    {
+      accessorKey: "user_id",
+      header: "User",
+      size: 100,
+      cell: ({ row }) => val(row.original, "user_id"),
+    },
+    {
+      accessorKey: "user_dt",
+      header: "User Date",
+      size: 130,
+      cell: ({ row }) => formatDateTime(val(row.original, "user_dt")),
+    },
   ];
 
   const createColumns = useMemo<ColumnDef<WmsRow>[]>(
@@ -435,7 +621,6 @@ export function StockAdjViewPage() {
         size: 90,
         enableColumnFilter: false,
         cell: ({ row }) => {
-          // Cannot edit/delete a row that has already been processed (selected=Y)
           if (val(row.original, "selected") === "Y") return null;
           return (
             <div className="flex items-center gap-1">
@@ -443,7 +628,10 @@ export function StockAdjViewPage() {
                 size="icon"
                 variant="ghost"
                 title="Edit"
-                onClick={() => { setEditingRow(row.original); setEditOpen(true); }}
+                onClick={() => {
+                  setEditingRow(row.original);
+                  setEditOpen(true);
+                }}
               >
                 <Pencil size={14} />
               </Button>
@@ -460,17 +648,19 @@ export function StockAdjViewPage() {
         },
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [allDetails]
   );
 
   const processColumns = useMemo<ColumnDef<WmsRow>[]>(
-    () => [selectColumn("process"), ...baseColumns],
+    () => [selectColumn(), ...baseColumns],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [selectedRows, processRows]
   );
 
   const confirmColumns = useMemo<ColumnDef<WmsRow>[]>(
     () => [
-      selectColumn("confirm"),
+      selectColumn(),
       ...baseColumns,
       {
         accessorKey: "app_keynumber",
@@ -479,6 +669,7 @@ export function StockAdjViewPage() {
         cell: ({ row }) => val(row.original, "app_keynumber"),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [selectedRows, confirmRows]
   );
 
@@ -497,7 +688,9 @@ export function StockAdjViewPage() {
           <Button
             size="icon"
             variant="outline"
-            onClick={() => navigate("/workspace/wms/wms/activity/request/stock_adj")}
+            onClick={() =>
+              navigate("/workspace/wms/wms/activity/request/stock_adj")
+            }
             title="Back"
           >
             <ArrowLeft size={16} />
@@ -506,13 +699,17 @@ export function StockAdjViewPage() {
             <p className="m-0 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               Stock Adjustment
             </p>
-            <h1 className="m-0 truncate text-2xl font-bold text-foreground">{adj_no}</h1>
+            <h1 className="m-0 truncate text-2xl font-bold text-foreground">
+              {adj_no}
+            </h1>
           </div>
           <div className="hidden items-center gap-1 rounded-md border bg-background px-3 py-1.5 sm:flex">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Principal
             </span>
-            <span className="ml-1.5 text-sm font-bold text-foreground">{prin_code || "—"}</span>
+            <span className="ml-1.5 text-sm font-bold text-foreground">
+              {prin_code || "—"}
+            </span>
           </div>
           {isAnyConfirmed && (
             <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
@@ -531,7 +728,11 @@ export function StockAdjViewPage() {
               size="sm"
               variant="outline"
               disabled={isAnyConfirmed}
-              title={isAnyConfirmed ? "Cannot add — a confirmed adjustment already exists" : ""}
+              title={
+                isAnyConfirmed
+                  ? "Cannot add — a confirmed adjustment already exists"
+                  : ""
+              }
               onClick={() => setCreateOpen(true)}
             >
               <Plus size={14} /> Create Detail
@@ -545,7 +746,9 @@ export function StockAdjViewPage() {
               onClick={handleProcess}
             >
               <CheckCircle2 size={14} />
-              {processing ? "Processing..." : `Process Selected (${selectedRows.length})`}
+              {processing
+                ? "Processing..."
+                : `Process Selected (${selectedRows.length})`}
             </Button>
           )}
 
@@ -557,7 +760,9 @@ export function StockAdjViewPage() {
                 onClick={handleConfirm}
               >
                 <CheckCircle2 size={14} />
-                {confirming ? "Confirming..." : `Confirm Adjustment (${selectedRows.length})`}
+                {confirming
+                  ? "Confirming..."
+                  : `Confirm Adjustment (${selectedRows.length})`}
               </Button>
               <Button size="sm" variant="outline" onClick={openListDialog}>
                 <Printer size={14} /> Print
@@ -587,7 +792,9 @@ export function StockAdjViewPage() {
       <DataTable
         columns={activeColumns}
         data={displayData}
-        subtitle={`${TABS.find((t) => t.value === selectedTab)?.label} — Adjustment Details`}
+        subtitle={`${
+          TABS.find((t) => t.value === selectedTab)?.label
+        } — Adjustment Details`}
         searchPlaceholder="Search product, location, key no..."
         loading={loading}
         height="calc(100vh - 320px)"
@@ -617,7 +824,10 @@ export function StockAdjViewPage() {
         onSuccess={() => {
           setCreateOpen(false);
           void loadData(false);
-          setNotice({ type: "success", message: "Adjustment detail created." });
+          setNotice({
+            type: "success",
+            message: "Adjustment detail created.",
+          });
         }}
         onError={(msg) => setNotice({ type: "error", message: msg })}
       />
@@ -628,12 +838,18 @@ export function StockAdjViewPage() {
           open={editOpen}
           row={editingRow}
           adj_no={adj_no}
-          onClose={() => { setEditOpen(false); setEditingRow(null); }}
+          onClose={() => {
+            setEditOpen(false);
+            setEditingRow(null);
+          }}
           onSuccess={() => {
             setEditOpen(false);
             setEditingRow(null);
             void loadData(false);
-            setNotice({ type: "success", message: "Adjustment detail updated." });
+            setNotice({
+              type: "success",
+              message: "Adjustment detail updated.",
+            });
           }}
           onError={(msg) => setNotice({ type: "error", message: msg })}
         />
@@ -652,7 +868,11 @@ export function StockAdjViewPage() {
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               <X size={14} /> Cancel
             </Button>
-            <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={handleDelete}
+            >
               <Trash2 size={14} /> {deleting ? "Deleting..." : "Delete"}
             </Button>
           </>
@@ -670,7 +890,7 @@ export function StockAdjViewPage() {
         </div>
       </Dialog>
 
-{/* ── Dialog 1: Report list ── */}
+      {/* ── Dialog 1: Report list (mirrors OutboundJobDetail exactly) ── */}
       <Dialog
         open={listOpen}
         title="Select Report"
@@ -691,60 +911,24 @@ export function StockAdjViewPage() {
         </div>
       </Dialog>
 
-      {/* ── Dialog 2: Report viewer ── */}
-      <Dialog
+      {/* ── Dialog 2: Report viewer (NewReportDialog, mirrors OutboundJobDetail exactly) ── */}
+      <NewReportDialog
         open={reportOpen}
-        title={selectedReport?.reportTitle ?? "Report"}
-        wide
         onClose={closeReportDialog}
-      >
-        <div className="flex flex-col" style={{ height: "75vh" }}>
-          {reportReady && (
-            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
-              <Button size="sm" variant="outline" onClick={handlePrint}>
-                <Printer size={13} /> Print / Save as PDF
-              </Button>
-
-              {hasExcelExport && (
-                <Button size="sm" variant="outline" onClick={handleExcel} disabled={excelLoading}>
-                  {excelLoading
-                    ? <RefreshCw size={13} className="animate-spin" />
-                    : <FileSpreadsheet size={13} />}
-                  {excelLoading ? "Exporting…" : "Export Excel"}
-                </Button>
-              )}
-            </div>
-          )}
-
-          {reportLoading && (
-            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-              <RefreshCw size={14} className="animate-spin" />
-              Loading report…
-            </div>
-          )}
-
-          {!reportLoading && reportError && (
-            <div className="flex flex-1 items-center justify-center text-sm text-red-600">
-              {reportError}
-            </div>
-          )}
-
-          {reportReady && (
-            <iframe
-              ref={iframeRef}
-              srcDoc={reportHtml}
-              title={selectedReport?.reportTitle}
-              className="flex-1 w-full rounded border-0"
-              style={{ minHeight: 0 }}
-            />
-          )}
-        </div>
-      </Dialog>
+        title={selectedReport?.reportTitle ?? "Report"}
+        htmlContent={reportHtml || null}
+        loading={reportLoading}
+        error={reportError || null}
+        onExportExcel={hasExcelExport ? handleExcel : undefined}
+        exportingExcel={excelLoading}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
     </section>
   );
 }
 
-// ─── Create Detail Dialog ─────────────────────────────────────────────────────
+// ─── Create Detail Dialog (unchanged) ─────────────────────────────────────────
 function CreateDetailDialog({
   open,
   adj_no,
@@ -781,24 +965,21 @@ function CreateDetailDialog({
     }
   }, [open]);
 
-  // UOM condition: if P_UOM === L_UOM (or UOM_COUNT = 1) → L UOM qty is disabled
   const pUom = selectedProduct ? val(selectedProduct, "P_UOM") : "";
   const lUom = selectedProduct ? val(selectedProduct, "L_UOM") : "";
-  const isSameUOM = !selectedProduct || pUom.toUpperCase() === lUom.toUpperCase();
-
-  // UOM_COUNT = how many loose units per primary unit
-  const uomCount = Number(selectedProduct ? val(selectedProduct, "UOM_COUNT") : 1) || 1;
+  const isSameUOM =
+    !selectedProduct || pUom.toUpperCase() === lUom.toUpperCase();
+  const uomCount =
+    Number(selectedProduct ? val(selectedProduct, "UOM_COUNT") : 1) || 1;
 
   const totalQty = isSameUOM
     ? Number(qtyPUOM) || 0
     : uomCount * (Number(qtyPUOM) || 0) + (Number(qtyLUOM) || 0);
 
   const qtyAvl = Number(selectedProduct ? val(selectedProduct, "QTY_AVL") : 0);
-
-  // Exceed check only when subtracting
   const isQtyExceeded = adjType === "-" && totalQty > qtyAvl;
-
-  const canSubmit = !!selectedProduct && totalQty > 0 && !isQtyExceeded && !saving;
+  const canSubmit =
+    !!selectedProduct && totalQty > 0 && !isQtyExceeded && !saving;
 
   const handleSubmit = async () => {
     if (!canSubmit || !selectedProduct) return;
@@ -833,7 +1014,11 @@ function CreateDetailDialog({
       await createAdjDetail(payload as any);
       onSuccess();
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Unable to create adjustment detail.");
+      onError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create adjustment detail."
+      );
     } finally {
       setSaving(false);
     }
@@ -850,7 +1035,6 @@ function CreateDetailDialog({
         className="grid max-h-[92vh] w-[min(96vw,720px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border bg-card shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b bg-card px-5 py-3.5">
           <div className="flex items-center gap-3">
             <span className="h-7 w-1 rounded-full bg-primary" />
@@ -858,7 +1042,9 @@ function CreateDetailDialog({
               <p className="m-0 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
                 Stock Adjustment
               </p>
-              <h2 className="m-0 text-lg font-bold text-foreground">Create Adjustment Detail</h2>
+              <h2 className="m-0 text-lg font-bold text-foreground">
+                Create Adjustment Detail
+              </h2>
             </div>
           </div>
           <button
@@ -871,11 +1057,8 @@ function CreateDetailDialog({
           </button>
         </div>
 
-        {/* Body */}
         <div className="min-h-0 overflow-y-auto bg-muted/20 p-4 text-sm">
           <div className="grid gap-4">
-
-            {/* Product section */}
             <Section title="Product">
               <div className="grid gap-2.5 md:grid-cols-[1fr_2fr]">
                 <LookupField
@@ -884,7 +1067,10 @@ function CreateDetailDialog({
                   value={selectedProduct ? val(selectedProduct, "PROD_CODE") : ""}
                   displayValue={
                     selectedProduct
-                      ? `${val(selectedProduct, "PROD_CODE")} — ${val(selectedProduct, "PROD_NAME")}`
+                      ? `${val(selectedProduct, "PROD_CODE")} — ${val(
+                          selectedProduct,
+                          "PROD_NAME"
+                        )}`
                       : ""
                   }
                   valueField="PROD_CODE"
@@ -926,31 +1112,64 @@ function CreateDetailDialog({
               {selectedProduct && (
                 <>
                   <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                    <ReadOnlyInput label="Site Code" value={val(selectedProduct, "SITE_CODE")} />
-                    <ReadOnlyInput label="Location Code" value={val(selectedProduct, "LOCATION_CODE")} />
+                    <ReadOnlyInput
+                      label="Site Code"
+                      value={val(selectedProduct, "SITE_CODE")}
+                    />
+                    <ReadOnlyInput
+                      label="Location Code"
+                      value={val(selectedProduct, "LOCATION_CODE")}
+                    />
                   </div>
                   <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                    <ReadOnlyInput label="Mfg Date" value={val(selectedProduct, "MFG_DATE") ? new Date(val(selectedProduct, "MFG_DATE")).toLocaleDateString("en-GB") : "—"} />
-                    <ReadOnlyInput label="Exp Date" value={val(selectedProduct, "EXP_DATE") ? new Date(val(selectedProduct, "EXP_DATE")).toLocaleDateString("en-GB") : "—"} />
+                    <ReadOnlyInput
+                      label="Mfg Date"
+                      value={
+                        val(selectedProduct, "MFG_DATE")
+                          ? new Date(
+                              val(selectedProduct, "MFG_DATE")
+                            ).toLocaleDateString("en-GB")
+                          : "—"
+                      }
+                    />
+                    <ReadOnlyInput
+                      label="Exp Date"
+                      value={
+                        val(selectedProduct, "EXP_DATE")
+                          ? new Date(
+                              val(selectedProduct, "EXP_DATE")
+                            ).toLocaleDateString("en-GB")
+                          : "—"
+                      }
+                    />
                   </div>
                   <div className="mt-2.5 grid grid-cols-4 gap-2.5">
-                    <ReadOnlyInput label="Batch No" value={val(selectedProduct, "BATCH_NO")} />
-                    <ReadOnlyInput label="Lot No" value={val(selectedProduct, "LOT_NO")} />
-                    <ReadOnlyInput label="Available Qty" value={val(selectedProduct, "QTY_AVL")} />
+                    <ReadOnlyInput
+                      label="Batch No"
+                      value={val(selectedProduct, "BATCH_NO")}
+                    />
+                    <ReadOnlyInput
+                      label="Lot No"
+                      value={val(selectedProduct, "LOT_NO")}
+                    />
+                    <ReadOnlyInput
+                      label="Available Qty"
+                      value={val(selectedProduct, "QTY_AVL")}
+                    />
                     <ReadOnlyInput label="Primary UOM" value={pUom} />
                   </div>
                 </>
               )}
             </Section>
 
-            {/* Qty & Adj Type section — only when product is selected */}
             {selectedProduct && (
               <Section title="Quantity & Adjustment Type">
-                <div className={`grid gap-2.5 ${isSameUOM ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
-                  <Field
-                    label={`P UOM Qty (${pUom})`}
-                    required
-                  >
+                <div
+                  className={`grid gap-2.5 ${
+                    isSameUOM ? "md:grid-cols-2" : "md:grid-cols-3"
+                  }`}
+                >
+                  <Field label={`P UOM Qty (${pUom})`} required>
                     <Input
                       type="number"
                       min={0}
@@ -960,7 +1179,6 @@ function CreateDetailDialog({
                     />
                   </Field>
 
-                  {/* L UOM qty — disabled when same UOM */}
                   {!isSameUOM && (
                     <Field label={`L UOM Qty (${lUom})`}>
                       <Input
@@ -977,7 +1195,9 @@ function CreateDetailDialog({
                     <select
                       className="ui-input h-9 w-full rounded-md"
                       value={adjType}
-                      onChange={(e) => setAdjType(e.target.value as "+" | "-")}
+                      onChange={(e) =>
+                        setAdjType(e.target.value as "+" | "-")
+                      }
                     >
                       <option value="+">+ (Add)</option>
                       <option value="-">- (Subtract)</option>
@@ -985,7 +1205,6 @@ function CreateDetailDialog({
                   </Field>
                 </div>
 
-                {/* Availability line */}
                 <p className="mt-2 text-xs text-muted-foreground">
                   Available:{" "}
                   <strong className="text-foreground">
@@ -996,10 +1215,10 @@ function CreateDetailDialog({
                       {" · "}Total:{" "}
                       <strong className="text-foreground">
                         {totalQty} {lUom}
-                      </strong>
-                      {" "}
+                      </strong>{" "}
                       <span className="text-muted-foreground">
-                        ({Number(qtyPUOM) || 0} {pUom} × {uomCount} + {Number(qtyLUOM) || 0} {lUom})
+                        ({Number(qtyPUOM) || 0} {pUom} × {uomCount} +{" "}
+                        {Number(qtyLUOM) || 0} {lUom})
                       </span>
                     </>
                   )}
@@ -1007,11 +1226,11 @@ function CreateDetailDialog({
 
                 {isQtyExceeded && (
                   <p className="mt-1 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                    ⚠ Total {totalQty} {lUom || pUom} exceeds available stock of {qtyAvl}
+                    ⚠ Total {totalQty} {lUom || pUom} exceeds available stock of{" "}
+                    {qtyAvl}
                   </p>
                 )}
 
-                {/* Summary bar */}
                 <div
                   className={`mt-2.5 flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
                     adjType === "+"
@@ -1024,7 +1243,8 @@ function CreateDetailDialog({
                     PUOM = <strong>{Number(qtyPUOM) || 0}</strong> {pUom}
                     {!isSameUOM && (
                       <>
-                        {" · "}LUOM = <strong>{Number(qtyLUOM) || 0}</strong> {lUom}
+                        {" · "}LUOM = <strong>{Number(qtyLUOM) || 0}</strong>{" "}
+                        {lUom}
                       </>
                     )}
                     {" · "}Total = <strong>{totalQty}</strong> {lUom || pUom}
@@ -1034,9 +1254,10 @@ function CreateDetailDialog({
                       adjType === "+" ? "text-emerald-700" : "text-red-700"
                     }`}
                   >
-                    {adjType === "+" ? "▲ Adding Stock" : "▼ Removing Stock"}
-                    {" "}
-                    <span className="text-xs font-normal opacity-70">(Avl: {qtyAvl} {lUom || pUom})</span>
+                    {adjType === "+" ? "▲ Adding Stock" : "▼ Removing Stock"}{" "}
+                    <span className="text-xs font-normal opacity-70">
+                      (Avl: {qtyAvl} {lUom || pUom})
+                    </span>
                   </span>
                 </div>
               </Section>
@@ -1044,7 +1265,6 @@ function CreateDetailDialog({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t bg-card px-5 py-3">
           <Button type="button" variant="outline" onClick={onClose}>
             <X size={15} /> Cancel
@@ -1058,7 +1278,7 @@ function CreateDetailDialog({
   );
 }
 
-// ─── Edit Detail Dialog ───────────────────────────────────────────────────────
+// ─── Edit Detail Dialog (unchanged) ───────────────────────────────────────────
 function EditDetailDialog({
   open,
   row,
@@ -1075,15 +1295,20 @@ function EditDetailDialog({
   onError: (msg: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const [adjType, setAdjType] = useState<"+" | "-">(val(row, "adj_type") === "-" ? "-" : "+");
-  const [qtyPUOM, setQtyPUOM] = useState(String(row.qty_puom ?? row.QTY_PUOM ?? "0"));
-  const [qtyLUOM, setQtyLUOM] = useState(String(row.qty_luom ?? row.QTY_LUOM ?? "0"));
+  const [adjType, setAdjType] = useState<"+" | "-">(
+    val(row, "adj_type") === "-" ? "-" : "+"
+  );
+  const [qtyPUOM, setQtyPUOM] = useState(
+    String(row.qty_puom ?? row.QTY_PUOM ?? "0")
+  );
+  const [qtyLUOM, setQtyLUOM] = useState(
+    String(row.qty_luom ?? row.QTY_LUOM ?? "0")
+  );
 
   const pUom = val(row, "p_uom");
   const lUom = val(row, "l_uom");
   const isSameUOM = pUom.toUpperCase() === lUom.toUpperCase();
 
-  // Fix: proper parentheses for precedence
   const totalQty = isSameUOM
     ? Number(qtyPUOM) || 0
     : (Number(qtyPUOM) || 0) + (Number(qtyLUOM) || 0);
@@ -1112,7 +1337,11 @@ function EditDetailDialog({
       });
       onSuccess();
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Unable to update adjustment detail.");
+      onError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update adjustment detail."
+      );
     } finally {
       setSaving(false);
     }
@@ -1129,7 +1358,6 @@ function EditDetailDialog({
         className="grid max-h-[92vh] w-[min(96vw,620px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border bg-card shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b bg-card px-5 py-3.5">
           <div className="flex items-center gap-3">
             <span className="h-7 w-1 rounded-full bg-primary" />
@@ -1152,7 +1380,6 @@ function EditDetailDialog({
           </button>
         </div>
 
-        {/* Body */}
         <div className="min-h-0 overflow-y-auto bg-muted/20 p-4 text-sm">
           <div className="grid gap-4">
             <Section title="Product">
@@ -1163,7 +1390,10 @@ function EditDetailDialog({
               </div>
               <div className="mt-2.5 grid grid-cols-2 gap-2.5">
                 <ReadOnlyInput label="Site Code" value={val(row, "site_code")} />
-                <ReadOnlyInput label="Location Code" value={val(row, "location_code")} />
+                <ReadOnlyInput
+                  label="Location Code"
+                  value={val(row, "location_code")}
+                />
               </div>
             </Section>
 
@@ -1183,7 +1413,9 @@ function EditDetailDialog({
                     min={0}
                     value={isSameUOM ? "0" : qtyLUOM}
                     disabled={isSameUOM}
-                    onChange={(e) => { if (!isSameUOM) setQtyLUOM(e.target.value); }}
+                    onChange={(e) => {
+                      if (!isSameUOM) setQtyLUOM(e.target.value);
+                    }}
                   />
                 </Field>
                 <Field label="Adjustment Type" required>
@@ -1206,7 +1438,6 @@ function EditDetailDialog({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t bg-card px-5 py-3">
           <Button type="button" variant="outline" onClick={onClose}>
             <X size={15} /> Cancel
