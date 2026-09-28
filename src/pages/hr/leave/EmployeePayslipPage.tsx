@@ -1,15 +1,15 @@
 import { ArrowRight, FileText, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getHrEmployees, type HrEmployee } from "../../../api/hr";
+import {  getHrEmployees,getPayslipreport , type HrEmployee } from "../../../api/hr";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { Select } from "../../../components/ui/Select";
 import { Input } from "../../../components/ui/Input";
 import { useAuth } from "../../../state/AuthContext";
+import { openPayslipReport } from "./payslipPreviewStore";
+import { PayslipReportPreview } from "./PayslipReportPreview";
 
 export function EmployeePayslipPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
   const [employees, setEmployees] = useState<HrEmployee[]>([]);
   const [employeeId, setEmployeeId] = useState("");
@@ -41,13 +41,30 @@ export function EmployeePayslipPage() {
       .finally(() => setLoading(false));
   }, [loginId]);
 
-  const viewPayslip = () => {
+  const viewPayslip = async () => {
     if (!employeeId || !period) {
       setNotice({ type: "error", message: "Select employee and pay period" });
       return;
     }
     const [year, month] = period.split("-");
-    navigate(`/workspace/ems/ems/activity/request/employee_payslip_view/${employeeId}/${month}/${year}`);
+
+    const preview = openPayslipReport("Employee Payslip");
+    const filename = `Payslip_${employeeId}_${month}_${year}`;
+    setLoading(true);
+    try {
+      const html = await getPayslipreport({ loginid: loginId, employeeId, month, year, embed: true });
+      preview.ready({ html, filename, orientation: "portrait" });
+    } catch (error: any) {
+      const body = error?.response?.data;
+      let message = error instanceof Error ? error.message : "Unable to generate payslip.";
+      if (typeof body === "string" && body.trimStart().startsWith("{")) {
+        try { message = JSON.parse(body).message || message; } catch { /* keep default */ }
+      }
+      setNotice({ type: "error", message });
+      preview.fail(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -120,6 +137,7 @@ export function EmployeePayslipPage() {
           <ArrowRight size={14} />
         </button>
       </div>
+      <PayslipReportPreview />
     </section>
   );
 }
