@@ -5,6 +5,7 @@ import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow } fro
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
+import { DivisionPickerDialog } from "../../components/ui/DivisionPickerDialog";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
 import { AddAssetRegisterForm } from "./AddAssetRegisterForm";
@@ -314,50 +315,14 @@ export function AssetRegisterPage() {
         getRowId={(row, index) => `${row.asset_id || "new"}_${index}`}
       />
 
-      {/* ===================== DIVISION SELECT DIALOG ===================== */}
-      <div className="[&_.w-\\[min\\(96vw\\,560px\\)\\]]:!w-[min(96vw,600px)] [&_.w-\\[min\\(96vw\\,560px\\)\\]]:!max-w-[600px]">
-        <Dialog
-          open={divisionOpen}
-          title="Select Division"
-          description="Choose a division to create a new asset."
-          onClose={() => setDivisionOpen(false)}
-          footer={
-            <Button variant="outline" onClick={() => setDivisionOpen(false)}>
-              Cancel
-            </Button>
-          }
-        >
-          <div className="grid gap-3">
-            <Input
-              placeholder="Search division..."
-              value={divisionSearch}
-              onChange={(e) => setDivisionSearch(e.target.value)}
-            />
-            <div className="grid max-h-72 gap-1 overflow-y-auto rounded-md border bg-muted/30 p-1">
-              {loadingDivisions ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">Loading divisions...</div>
-              ) : filteredDivisions.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">No divisions found</div>
-              ) : (
-                filteredDivisions.map((div) => (
-                  <button
-                    key={div.div_code}
-                    type="button"
-                    onClick={() => handleSelectDivision(div)}
-                    className="flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    <div>
-                      <span className="font-medium">{div.div_name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{div.div_code}</span>
-                    </div>
-                    <Building2 size={14} className="shrink-0 text-muted-foreground" />
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </Dialog>
-      </div>
+      <DivisionPickerDialog
+        open={divisionOpen}
+        divisions={divisions}
+        loading={loadingDivisions}
+        description="Choose a division to create a new asset."
+        onSelect={(div) => handleSelectDivision(div)}
+        onClose={() => setDivisionOpen(false)}
+      />
 
       {/* ===================== ADD / EDIT / VIEW FORM DIALOG ===================== */}
       {popup.open && (
