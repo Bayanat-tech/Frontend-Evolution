@@ -17,6 +17,7 @@ import "./styles.css";
 import "./freight-bisc.css";
 import "./finance-document-bisc.css";
 import "./finance-utility-bisc.css";
+import "./support-center.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const queryClient = new QueryClient({
