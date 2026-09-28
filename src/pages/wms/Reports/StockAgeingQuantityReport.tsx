@@ -135,6 +135,7 @@ const DEFAULT_PARAMS: Params = {
     prin_code: ["All"], dept_code: ["All"], prod_code: ["All"],
     age1: "30", age2: "60", age3: "90", age4: "120", age5: "150",
     group_by: "product_group",
+    
 };
 
 export default function StockAgeingQuantityReport() {
@@ -254,8 +255,8 @@ export default function StockAgeingQuantityReport() {
     });
 
     const groupByOptions: ReportOption[] = [
-        { value: "product_group", label: "Stock Ageing (Quantity) Detail" },
-        { value: "principal", label: "Stock Ageing (Quantity) Summary" },
+    { value: "product_group", label: "Detailed (Product Group)" },
+    { value: "principal", label: "Summary (Principal)" },
     ];
 
     // ── Fetch the report HTML and feed it into NewReportDialog ───────────────
@@ -410,13 +411,14 @@ export default function StockAgeingQuantityReport() {
             loading: optLoading,
         },
         {
-            key: "group_by",
-            label: "Group By",
-            type: "select",
-            options: groupByOptions,
-            loading: optLoading,
-            placeholder: groupByOptions[0].label,
-        },
+        key: "group_by",
+        label: "Group By",
+        type: "select",
+        options: groupByOptions,
+        loading: optLoading,
+        // Use a generic placeholder to avoid duplication
+        placeholder: "Select Group By", 
+    },
     ];
 
     return (
