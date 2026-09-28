@@ -1,0 +1,148 @@
+/* Opt-in BISC styling for finance setup, registers and utilities.
+   Reports and the completed transaction screens do not use this class. */
+.finance-utility-page,
+.finance-utility-editor {
+  --utility-blue: #00378c;
+  --utility-surface: #fff;
+  --utility-soft: #f8fafc;
+  --utility-border: #cbd5e1;
+  --utility-text: #0f172a;
+  --utility-muted: #64748b;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--utility-text);
+  min-width: 0;
+  gap: 10px;
+}
+.app.dark :is(.finance-utility-page, .finance-utility-editor) {
+  --utility-surface: #132139;
+  --utility-soft: #182941;
+  --utility-border: #354760;
+  --utility-text: #e2e8f0;
+  --utility-muted: #a5b4c8;
+}
+.finance-utility-page > :first-child:has(h1) {
+  padding: 10px 12px;
+  border: 1px solid var(--utility-border);
+  border-radius: 8px;
+  background: var(--utility-surface);
+  gap: 8px;
+}
+.finance-utility-page h1 { font-size: 18px; line-height: 1.3; letter-spacing: -.02em; }
+.finance-utility-page :is(h2, h3), .finance-utility-editor :is(h2, h3) {
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+.finance-utility-page .eyebrow { font-size: 10px; margin: 0 0 2px; }
+:is(.finance-utility-page, .finance-utility-editor) :is(.gap-4, .gap-5, .gap-6) { gap: 10px; }
+:is(.finance-utility-page, .finance-utility-editor) :is(.p-4, .p-5, .p-6) { padding: 12px; }
+:is(.finance-utility-page, .finance-utility-editor) .text-sm { font-size: 12px; }
+:is(.finance-utility-page, .finance-utility-editor) .field { gap: 4px; min-width: 0; }
+:is(.finance-utility-page, .finance-utility-editor) .field > span:first-child {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+:is(.finance-utility-page, .finance-utility-editor) :is(.ui-input, .ui-select, select, .lookup-field-trigger) {
+  height: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  border-color: var(--utility-border);
+}
+:is(.finance-utility-page, .finance-utility-editor) textarea {
+  min-height: 64px;
+  font: inherit;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+:is(.finance-utility-page, .finance-utility-editor) .ui-button {
+  min-height: 30px;
+  height: auto;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: none;
+}
+:is(.finance-utility-page, .finance-utility-editor) .ui-button-icon {
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  flex-shrink: 0;
+}
+:is(.finance-utility-page, .finance-utility-editor) .ui-button-default {
+  background: var(--utility-blue);
+  color: white;
+}
+:is(.finance-utility-page, .finance-utility-editor) .ui-button-default:hover:not(:disabled) { background: #002b70; }
+:is(.finance-utility-page, .finance-utility-editor) .ui-card {
+  border-color: var(--utility-border);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+}
+:is(.finance-utility-page, .finance-utility-editor) .ui-card-header {
+  padding: 8px 12px;
+  background: var(--utility-soft);
+  border-bottom: 1px solid var(--utility-border);
+}
+:is(.finance-utility-page, .finance-utility-editor) .ui-card-content { padding: 12px; }
+/* Reuse the completed listings' density, with compact surrounding controls. */
+.finance-utility-page .data-table-header { border-radius: 8px !important; padding: 8px 10px !important; }
+.finance-utility-page .data-table-shell { border-radius: 8px !important; }
+.finance-utility-page .data-table-search-input { height: 32px; border-radius: 6px; font-size: 12px; }
+.finance-utility-page .data-table-pagination { padding: 6px 10px !important; }
+:is(.finance-utility-page, .finance-utility-editor) table { font-family: inherit; font-size: 12px; }
+:is(.finance-utility-page, .finance-utility-editor) th { font-size: 11px; line-height: 1.4; }
+:is(.finance-utility-page, .finance-utility-editor) td { line-height: 1.4; }
+:is(.finance-utility-page, .finance-utility-editor) :is(th, td) { padding-top: 6px; padding-bottom: 6px; }
+:is(.finance-utility-page, .finance-utility-editor) [role="tablist"] { gap: 4px; flex-wrap: wrap; }
+:is(.finance-utility-page, .finance-utility-editor) [role="tab"] { min-height: 32px; font-size: 12px; white-space: nowrap; }
+/* Dialogs remain scrollable; smaller controls must never reduce their body to zero. */
+.finance-utility-page .fixed > .grid:has(> .overflow-y-auto) { border-radius: 10px; }
+.finance-utility-page .fixed > .grid > .border-b:has(h2) {
+  padding: 10px 12px;
+  background: var(--utility-soft);
+}
+.finance-utility-page .fixed > .grid > .border-t { padding: 8px 12px; flex-wrap: wrap; }
+.finance-pl-setup { background: var(--utility-soft); padding: 0; }
+.finance-pl-setup input { min-height: 30px; font-family: inherit !important; }
+.finance-pl-setup button { font-family: inherit; border-radius: 6px !important; }
+.finance-pl-setup thead th { background: #00378c !important; color: white !important; }
+@media (max-width: 767px) {
+  .finance-utility-page h1 { font-size: 16px; }
+  .finance-utility-page > :first-child:has(h1) { align-items: flex-start; }
+  .finance-utility-page .data-table-search { width: 100%; max-width: none; }
+  .finance-utility-page .fixed.inset-0 { padding: 8px; }
+}
+@media print {
+  .finance-utility-page .data-table-scroll { max-height: none !important; overflow: visible !important; }
+}
+
+.finance-utility-editor > .border-b:has(h2) {
+  padding: 8px 12px;
+  background: var(--utility-blue);
+  color: white;
+  border-radius: 6px 6px 0 0;
+}
+.finance-utility-editor > .border-b:has(h2) :is(h2, .eyebrow, .text-muted-foreground) { color: white; }
+.finance-utility-editor > form { padding-top: 12px; padding-bottom: 12px; }
+.app.dark .finance-utility-page :is(.data-table-shell, .data-table-header, .data-table-scroll, .data-table-pagination) {
+  background: var(--utility-surface) !important;
+  border-color: var(--utility-border) !important;
+  color: var(--utility-text) !important;
+}
+.app.dark .finance-utility-page .data-table-scroll :is(th, td) {
+  background: var(--utility-surface) !important;
+  color: var(--utility-text) !important;
+  border-color: var(--utility-border) !important;
+}
+.app.dark .finance-utility-page .data-table-scroll tbody tr:hover td { background: var(--utility-soft) !important; }
+@media (max-width: 640px) {
+  .finance-utility-editor form .grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
+  .finance-utility-editor form .col-span-2 { grid-column: auto; }
+}

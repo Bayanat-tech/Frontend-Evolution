@@ -269,7 +269,7 @@ export function AddAssetTransferForm({
 
   // ===================== RENDER =====================
   return (
-    <div className="flex flex-col w-full">
+    <div className="finance-utility-editor flex flex-col w-full">
       {/* Doc number info */}
       <div className="mb-3 flex items-center justify-between">
         <div>

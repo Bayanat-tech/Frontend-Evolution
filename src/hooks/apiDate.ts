@@ -30,3 +30,17 @@ export function toApiDateInput(value: unknown): string {
     day: "2-digit",
   }).format(date);
 }
+
+export const toBackendDate = (isoDate?: string | null): string => {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-");
+  if (!y || !m || !d) return "";
+  return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+};
+
+export const toInputDate = (backendDate?: string | null): string => {
+  if (!backendDate) return "";
+  const [d, m, y] = backendDate.split("-");
+  if (!d || !m || !y) return "";
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+};

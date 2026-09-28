@@ -176,7 +176,7 @@ export function AccountWiseBudgetPage() {
   };
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="eyebrow">Finance Master</p>
@@ -298,7 +298,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
   };
 
   return (
-    <div className="flex min-h-[560px] flex-col">
+    <div className="finance-utility-editor flex min-h-0 flex-col">
       <div className="border-b pb-3">
         <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
         <div className="flex items-end justify-between gap-3">

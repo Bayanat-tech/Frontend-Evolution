@@ -681,7 +681,18 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       const nextRows = (response.data.data || []).map(normalizeRow);
       setRows(nextRows);
       setMessage(nextRows.length ? `${nextRows.length} records in the report.` : "No records found for selected filters.");
-      preview.ready({ html: reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), false, companyLogoUrl), filename: config.title, orientation: "landscape" });
+      const companyResponse = await api.get<{ data?: Record<string, string> }>("/api/freight/company-logo", { params: { company_code: companyCode } });
+      const companyRow = companyResponse.data.data || {};
+      const company = {
+        name: companyRow.COMPANY_NAME || String(userRecord.company_name || userRecord.COMPANY_NAME || companyCode),
+        logo: companyRow.COMPANY_LOGO || companyRow.COMPANY_LOGO_AWSURL || "",
+        address: [companyRow.ADDRESS1, companyRow.ADDRESS2, companyRow.ADDRESS3, [companyRow.CITY, companyRow.COUNTRY].filter(Boolean).join(", ")].filter(Boolean),
+      };
+      // Prioritize portrait first; switch to landscape only when columns exceed 9
+      // Columns > 6 will cut in portrait (e.g. Job List has 9 cols), so default to landscape! Narrow reports (Revenue, Expense) default to portrait.
+      const isLandscape = config.columns.filter((c) => !["PRIN_CODE", "PRIN_NAME"].includes(c.key.toUpperCase())).length > 6;
+      const orientation: "portrait" | "landscape" = isLandscape ? "landscape" : "portrait";
+      preview.ready({ company, html: reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), false, companyLogoUrl, orientation), filename: config.title, orientation });
     } catch (error: any) {
       setRows([]);
       const errorMessage = error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.";
@@ -1504,42 +1515,45 @@ function reportHtml(
   totals: { label: string; value: number }[],
   interactive = false,
   companyLogoUrl = "",
+  orientation: "portrait" | "landscape" = "portrait",
 ) {
   const body = reportBodyHtml(config, rows);
   const logoUrl = companyLogoUrl || `${window.location.origin}/bayanat-logo.png`;
-  const generatedAt = formatReportDateTime(new Date());
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(config.title)}</title><style>
-    @page{size:landscape;margin:14mm}
-    body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
+    @page{size:${orientation};margin:12mm}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
     .viewerbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid #dbe3ef;padding:10px 18px}
-    .viewerbar h1{margin:0;font-size:16px}.viewerbar p{margin:2px 0 0;color:#64748b;font-size:12px}
+    .viewerbar h1{margin:0;font-size:16px;color:#00378c;font-weight:700}.viewerbar p{margin:2px 0 0;color:#64748b;font-size:12px}
     .actions{display:flex;gap:8px}.actions button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;font-weight:700;padding:0 13px;cursor:pointer}
-    .actions button.primary{background:#0b4ca1;border-color:#0b4ca1;color:white}
-    .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:1280px;margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}
-    .logo{height:54px;border-bottom:1px solid #94a3b8;display:flex;align-items:center;justify-content:space-between}
+    .actions button.primary{background:#00378c;border-color:#00378c;color:white}
+    .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:${orientation === "landscape" ? "1280px" : "850px"};margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}
+    .logo{height:54px;border-bottom:1.5px solid #00378c;display:flex;align-items:center;justify-content:space-between}
     .brand-wrap{display:flex;align-items:center;gap:10px}.brand-wrap img{width:36px;height:36px;object-fit:contain}
-    .brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#0b4ca1;text-transform:uppercase}
-    .top{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;border-bottom:1px solid #94a3b8;padding:8px 0}
-    .title{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0}.sub{font-size:11px;color:#64748b;margin-top:2px}
-    .meta{margin-left:auto;display:grid;grid-template-columns:max-content 1fr;column-gap:6px;font-size:11px;color:#334155;line-height:1.45}
-    .meta>div{display:contents}.meta b{color:#0f172a}
-    .params{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border-bottom:1px solid #cbd5e1;padding:7px 0;font-size:11px;color:#334155}.params b{color:#0f172a}
-    .group{margin-top:10px}.group-title{background:#f1f5f9;padding:4px 6px;font-size:13px;font-weight:800}
-    table{border-collapse:collapse;width:100%;font-size:10.5px;margin-top:3px}
-    th{background:#f1f5f9;color:#0f172a;font-size:10px;border-top:1px solid #475569;border-bottom:1px solid #475569;padding:6px 5px;text-align:center;font-weight:700}
-    td{padding:4px 5px;vertical-align:top}.right{text-align:right}.center{text-align:center}.primary-text{color:#0b4ca1;font-weight:800}
+    .brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#00378c;text-transform:uppercase}
+    .top{border-bottom:1.5px solid #00378c;padding:10px 0 6px 0}
+    .title{font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0;color:#00378c}
+    .group{margin-top:14px}
+    .group-title{background:#eaf0f8;padding:5px 8px;font-size:11px;font-weight:700;color:#00378c;border-left:3px solid #00378c;border-radius:2px}
+    table{border-collapse:collapse;width:100%;font-size:9.5px;margin-top:4px}
+    th{background:#00378c;color:#ffffff;font-size:9.5px;border:1px solid #00378c;padding:5px 6px;text-align:center;font-weight:700;letter-spacing:.02em}
+    td{padding:4px 6px;vertical-align:top;border-bottom:1px solid #e2e8f0;font-size:9.5px}.right{text-align:right}.center{text-align:center}.primary-text{color:#00378c;font-weight:700}
+    .subtotal-row{background:#f8fafc;font-weight:700;color:#00378c}
+    .subtotal-row td{border-top:1px solid #94a3b8;border-bottom:1px solid #94a3b8;padding:5px 6px;font-weight:700;color:#00378c}
+    .grand-total-wrap{margin-top:18px}
+    .grand-total-title{background:#00378c;color:#ffffff;border-left:none;font-weight:800;font-size:11px;padding:6px 8px}
+    .grand-total-row{background:#e2e8f0;font-weight:800;color:#00378c;font-size:10px}
+    .grand-total-row td{border-top:2px solid #00378c;border-bottom:2px solid #00378c;padding:6px 6px;font-weight:800;color:#00378c}
+    .font-bold{font-weight:700}
     .empty{border:1px dashed #cbd5e1;background:#f8fafc;text-align:center;padding:56px;margin-top:14px;color:#64748b;font-weight:700}
-    .footer{margin-top:14px;border-top:1px solid #94a3b8;padding-top:6px;text-align:center;font-size:11px;font-weight:700}
+    .footer{margin-top:18px;border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:10px;font-weight:600;color:#64748b}
     @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
   </style></head><body>${
     interactive
-      ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(generatedAt)}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>`
+      ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>`
       : ""
   }<div class="sheet"><div class="paper">
     <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Company logo"><div class="brand">Bayanat Technology</div></div></div>
-    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">| Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
-    <div class="meta"><div><b>Date:</b> ${escapeHtml(generatedAt)}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
-    <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
+    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div></div></div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
     <div class="footer">End of report</div>
   </div></div></body></html>`;
@@ -1550,22 +1564,75 @@ function reportBodyHtml(config: ReportConfig, rows: LookupRow[]) {
   if (config.title === "Freight Profit") return financeReportHtml(rows, "profit");
   if (config.title === "Freight Expense") return financeReportHtml(rows, "expense");
   if (config.title === "Freight Revenue") return financeReportHtml(rows, "revenue");
+
   const groups = groupRows(rows, config.title === "Freight Brokerage" ? ["BROKER_CODE", "BROKER_NAME", "PRIN_CODE", "PRIN_NAME"] : ["PRIN_CODE", "PRIN_NAME"]);
-  return groups.map((group) => `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div>${simpleTableHtml(group.rows, config.columns)}</div>`).join("");
+  const filteredColumns = config.columns.filter((column) => !["PRIN_CODE", "PRIN_NAME"].includes(column.key.toUpperCase()));
+
+  const groupsHtml = groups
+    .map((group) => `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div>${simpleTableHtml(group.rows, filteredColumns, group.label)}</div>`)
+    .join("");
+
+  const grandTotalHtml = renderSimpleGrandTotal(rows, filteredColumns);
+  return groupsHtml + grandTotalHtml;
 }
 
 function commercialReportHtml(config: ReportConfig, rows: LookupRow[]) {
-  return groupRows(rows, ["PRIN_CODE", "PRIN_NAME"])
-    .map(
-      (group) =>
-        `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr><th>Enquiry Nr.</th><th>Date</th><th>Type</th><th>Mode</th><th>Origin Port</th><th>Destination Port</th><th>Cargo Detail</th><th>Commodity</th><th>Dimension</th><th class="right">Gross Wt</th><th class="right">Volume</th></tr></thead><tbody>${group.rows
-          .map(
-            (row) =>
-              `<tr><td class="primary-text center">${escapeHtml(textFrom(row, config.title === "RFQ List" ? ["RFQ_NO", "ENQUIRY_NR"] : ["ENQUIRY_NR"]))}</td><td>${escapeHtml(dateFrom(row, ["RFQ_DATE", "ENQUIRY_DATE"]))}</td><td class="center">${escapeHtml(typeLabel(textFrom(row, ["JOB_TYPE"])))}</td><td class="center">${escapeHtml(modeLabel(textFrom(row, ["TRANSPORT_MODE"])))}</td><td>${escapeHtml(textFrom(row, ["ORIGIN_PORT", "PORT_CODE"]))}</td><td>${escapeHtml(textFrom(row, ["DESTINATION_PORT"]))}</td><td>${escapeHtml(textFrom(row, ["CARGO_DETAIL", "REMARKS"]))}</td><td>${escapeHtml(textFrom(row, ["COMMODITY"]))}</td><td>${escapeHtml(textFrom(row, ["DIMENSION"]))}</td><td class="right">${amountFrom(row, ["GROSS_WT", "WEIGHT"])}</td><td class="right">${amountFrom(row, ["VOLUME"])}</td></tr>`,
-          )
-          .join("")}</tbody></table></div>`,
-    )
+  const groups = groupRows(rows, ["PRIN_CODE", "PRIN_NAME"]);
+  const headers = ["Enquiry Nr.", "Date", "Type", "Mode", "Origin Port", "Destination Port", "Cargo Detail", "Commodity", "Dimension", "Gross Wt", "Volume"];
+  if (config.title === "RFQ List") headers[0] = "RFQ No";
+  const hasAmounts = config.amountFields.length > 0;
+
+  const groupsHtml = groups
+    .map((group) => {
+      let groupGrossWt = 0;
+      let groupVolume = 0;
+
+      const rowsHtml = group.rows
+        .map((row) => {
+          const wt = numFrom(row, ["GROSS_WT", "WEIGHT"]);
+          const vol = numFrom(row, ["VOLUME"]);
+          groupGrossWt += wt;
+          groupVolume += vol;
+
+          return `<tr><td class="primary-text center">${escapeHtml(textFrom(row, config.title === "RFQ List" ? ["RFQ_NO", "ENQUIRY_NR"] : ["ENQUIRY_NR"]))}</td><td>${escapeHtml(dateFrom(row, ["RFQ_DATE", "ENQUIRY_DATE"]))}</td><td class="center">${escapeHtml(typeLabel(textFrom(row, ["JOB_TYPE"])))}</td><td class="center">${escapeHtml(modeLabel(textFrom(row, ["TRANSPORT_MODE"])))}</td><td>${escapeHtml(textFrom(row, ["ORIGIN_PORT", "PORT_CODE"]))}</td><td>${escapeHtml(textFrom(row, ["DESTINATION_PORT"]))}</td><td>${escapeHtml(textFrom(row, ["CARGO_DETAIL", "REMARKS"]))}</td><td>${escapeHtml(textFrom(row, ["COMMODITY"]))}</td><td>${escapeHtml(textFrom(row, ["DIMENSION"]))}</td><td class="right">${formatAmount(wt)}</td><td class="right">${formatAmount(vol)}</td></tr>`;
+        })
+        .join("");
+
+      const subtotalRow = hasAmounts
+        ? `<tr class="subtotal-row"><td colspan="9" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td><td class="right font-bold">${formatAmount(groupGrossWt)}</td><td class="right font-bold">${formatAmount(groupVolume)}</td></tr>`
+        : "";
+
+      return `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr>${headers.map((h, i) => `<th class="${i >= 9 ? "right" : i < 4 ? "center" : ""}">${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rowsHtml}${subtotalRow}</tbody></table></div>`;
+    })
     .join("");
+
+  if (!hasAmounts) return groupsHtml;
+
+  let grandGrossWt = 0;
+  let grandVolume = 0;
+  rows.forEach((row) => {
+    grandGrossWt += numFrom(row, ["GROSS_WT", "WEIGHT"]);
+    grandVolume += numFrom(row, ["VOLUME"]);
+  });
+
+  const grandTotalHtml = `
+    <div class="group grand-total-wrap">
+      <div class="group-title grand-total-title">Report Grand Total</div>
+      <table>
+        <thead>
+          <tr>${headers.map((h, i) => `<th class="${i >= 9 ? "right" : i < 4 ? "center" : ""}">${escapeHtml(h)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          <tr class="grand-total-row">
+            <td colspan="9" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td>
+            <td class="right font-bold">${formatAmount(grandGrossWt)}</td>
+            <td class="right font-bold">${formatAmount(grandVolume)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  return groupsHtml + grandTotalHtml;
 }
 
 function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "revenue") {
@@ -1575,36 +1642,212 @@ function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "r
       : variant === "expense"
         ? ["Date", "Job No", "Remarks", "Customs Duty", "Expense"]
         : ["Date", "Job No", "Remarks", "Invoice No", "Customs Duty", "Revenue"];
-  return groupRows(rows, ["PRIN_CODE", "PRIN_NAME"])
-    .map(
-      (group) =>
-        `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr>${headers
-          .map((header) => `<th class="${/cost|revenue|profit|duty|demurrage|expense/i.test(header) ? "right" : ""}">${escapeHtml(header)}</th>`)
-          .join("")}</tr></thead><tbody>${group.rows
-          .map((row) => {
-            const common = `<td>${escapeHtml(dateFrom(row, ["INVOICE_DATE", "JOB_DATE"]))}</td><td class="primary-text">${escapeHtml(textFrom(row, ["JOB_NO"]))}</td><td>${escapeHtml(textFrom(row, ["REMARKS", "ACTIVITY"]))}</td>`;
-            if (variant === "profit")
-              return `<tr>${common}<td class="right">${amountFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"])}</td><td class="right">${amountFrom(row, ["FFDEM_BILL", "DEMURRAGE"])}</td><td class="right">${amountFrom(row, ["ACTUAL_COST", "COST_RATE", "EXPENSE"])}</td><td class="right">${amountFrom(row, ["PARTNERS_PRICE", "PARTNER_COST"])}</td><td class="right">${amountFrom(row, ["TRANSPORT_PRICE", "TRANSPORT_COST"])}</td><td class="right">${amountFrom(row, ["BILL_RATE", "REVENUE"])}</td><td class="right">${amountFrom(row, ["PROFIT"])}</td></tr>`;
-            if (variant === "expense")
-              return `<tr>${common}<td class="right">${amountFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"])}</td><td class="right">${amountFrom(row, ["ACTUAL_COST", "EXPENSE", "COST_RATE"])}</td></tr>`;
-            return `<tr>${common}<td>${escapeHtml(textFrom(row, ["CONSOLIDATED_INVNO", "INVOICE_NO"]))}</td><td class="right">${amountFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"])}</td><td class="right">${amountFrom(row, ["BILL_RATE", "REVENUE"])}</td></tr>`;
-          })
-          .join("")}</tbody></table></div>`,
-    )
+
+  const groups = groupRows(rows, ["PRIN_CODE", "PRIN_NAME"]);
+
+  const groupsHtml = groups
+    .map((group) => {
+      let groupDuty = 0;
+      let groupDemurrage = 0;
+      let groupCost = 0;
+      let groupPartner = 0;
+      let groupTransport = 0;
+      let groupRevenue = 0;
+      let groupProfit = 0;
+      let groupExpense = 0;
+
+      const rowsHtml = group.rows
+        .map((row) => {
+          const duty = numFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"]);
+          const demurrage = numFrom(row, ["FFDEM_BILL", "DEMURRAGE"]);
+          const cost = numFrom(row, ["ACTUAL_COST", "COST_RATE", "EXPENSE"]);
+          const partner = numFrom(row, ["PARTNERS_PRICE", "PARTNER_COST"]);
+          const transport = numFrom(row, ["TRANSPORT_PRICE", "TRANSPORT_COST"]);
+          const rev = numFrom(row, ["BILL_RATE", "REVENUE"]);
+          const prof = numFrom(row, ["PROFIT"]);
+          const exp = numFrom(row, ["ACTUAL_COST", "EXPENSE", "COST_RATE"]);
+
+          groupDuty += duty;
+          groupDemurrage += demurrage;
+          groupCost += cost;
+          groupPartner += partner;
+          groupTransport += transport;
+          groupRevenue += rev;
+          groupProfit += prof;
+          groupExpense += exp;
+
+          const common = `<td class="center">${escapeHtml(dateFrom(row, ["INVOICE_DATE", "JOB_DATE"]))}</td><td class="primary-text center font-semibold">${escapeHtml(textFrom(row, ["JOB_NO"]))}</td><td>${escapeHtml(textFrom(row, ["REMARKS", "ACTIVITY"]))}</td>`;
+
+          if (variant === "profit") {
+            return `<tr>${common}<td class="right">${formatAmount(duty)}</td><td class="right">${formatAmount(demurrage)}</td><td class="right">${formatAmount(cost)}</td><td class="right">${formatAmount(partner)}</td><td class="right">${formatAmount(transport)}</td><td class="right">${formatAmount(rev)}</td><td class="right">${formatAmount(prof)}</td></tr>`;
+          }
+          if (variant === "expense") {
+            return `<tr>${common}<td class="right">${formatAmount(duty)}</td><td class="right">${formatAmount(exp)}</td></tr>`;
+          }
+          return `<tr>${common}<td>${escapeHtml(textFrom(row, ["CONSOLIDATED_INVNO", "INVOICE_NO"]))}</td><td class="right">${formatAmount(duty)}</td><td class="right">${formatAmount(rev)}</td></tr>`;
+        })
+        .join("");
+
+      let subtotalRow = "";
+      if (variant === "profit") {
+        subtotalRow = `<tr class="subtotal-row"><td colspan="3" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td><td class="right font-bold">${formatAmount(groupDuty)}</td><td class="right font-bold">${formatAmount(groupDemurrage)}</td><td class="right font-bold">${formatAmount(groupCost)}</td><td class="right font-bold">${formatAmount(groupPartner)}</td><td class="right font-bold">${formatAmount(groupTransport)}</td><td class="right font-bold">${formatAmount(groupRevenue)}</td><td class="right font-bold">${formatAmount(groupProfit)}</td></tr>`;
+      } else if (variant === "expense") {
+        subtotalRow = `<tr class="subtotal-row"><td colspan="3" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td><td class="right font-bold">${formatAmount(groupDuty)}</td><td class="right font-bold">${formatAmount(groupExpense)}</td></tr>`;
+      } else {
+        subtotalRow = `<tr class="subtotal-row"><td colspan="4" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td><td class="right font-bold">${formatAmount(groupDuty)}</td><td class="right font-bold">${formatAmount(groupRevenue)}</td></tr>`;
+      }
+
+      return `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr>${headers.map((h, i) => `<th class="${/cost|revenue|profit|duty|demurrage|expense/i.test(h) ? "right" : (i < 2 ? "center" : "")}">${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rowsHtml}${subtotalRow}</tbody></table></div>`;
+    })
     .join("");
+
+  let grandDuty = 0;
+  let grandDemurrage = 0;
+  let grandCost = 0;
+  let grandPartner = 0;
+  let grandTransport = 0;
+  let grandRevenue = 0;
+  let grandProfit = 0;
+  let grandExpense = 0;
+
+  rows.forEach((row) => {
+    grandDuty += numFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"]);
+    grandDemurrage += numFrom(row, ["FFDEM_BILL", "DEMURRAGE"]);
+    grandCost += numFrom(row, ["ACTUAL_COST", "COST_RATE", "EXPENSE"]);
+    grandPartner += numFrom(row, ["PARTNERS_PRICE", "PARTNER_COST"]);
+    grandTransport += numFrom(row, ["TRANSPORT_PRICE", "TRANSPORT_COST"]);
+    grandRevenue += numFrom(row, ["BILL_RATE", "REVENUE"]);
+    grandProfit += numFrom(row, ["PROFIT"]);
+    grandExpense += numFrom(row, ["ACTUAL_COST", "EXPENSE", "COST_RATE"]);
+  });
+
+  let grandTotalRow = "";
+  if (variant === "profit") {
+    grandTotalRow = `<tr class="grand-total-row"><td colspan="3" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td><td class="right font-bold">${formatAmount(grandDuty)}</td><td class="right font-bold">${formatAmount(grandDemurrage)}</td><td class="right font-bold">${formatAmount(grandCost)}</td><td class="right font-bold">${formatAmount(grandPartner)}</td><td class="right font-bold">${formatAmount(grandTransport)}</td><td class="right font-bold">${formatAmount(grandRevenue)}</td><td class="right font-bold">${formatAmount(grandProfit)}</td></tr>`;
+  } else if (variant === "expense") {
+    grandTotalRow = `<tr class="grand-total-row"><td colspan="3" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td><td class="right font-bold">${formatAmount(grandDuty)}</td><td class="right font-bold">${formatAmount(grandExpense)}</td></tr>`;
+  } else {
+    grandTotalRow = `<tr class="grand-total-row"><td colspan="4" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td><td class="right font-bold">${formatAmount(grandDuty)}</td><td class="right font-bold">${formatAmount(grandRevenue)}</td></tr>`;
+  }
+
+  const grandTotalHtml = `
+    <div class="group grand-total-wrap">
+      <div class="group-title grand-total-title">Report Grand Total</div>
+      <table>
+        <thead>
+          <tr>${headers.map((h, i) => `<th class="${/cost|revenue|profit|duty|demurrage|expense/i.test(h) ? "right" : (i < 2 ? "center" : "")}">${escapeHtml(h)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${grandTotalRow}
+        </tbody>
+      </table>
+    </div>`;
+
+  return groupsHtml + grandTotalHtml;
 }
 
-function simpleTableHtml(rows: LookupRow[], columns: ReportColumn[]) {
-  return `<table><thead><tr>${columns
-    .map((column) => `<th class="${column.kind === "amount" ? "right" : ""}">${escapeHtml(column.label)}</th>`)
-    .join("")}</tr></thead><tbody>${rows
+function simpleTableHtml(rows: LookupRow[], columns: ReportColumn[], groupLabel?: string) {
+  const thead = `<thead><tr>${columns
+    .map((column) => {
+      let alignClass = "";
+      if (column.kind === "amount") alignClass = "right";
+      else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
+      return `<th class="${alignClass}">${escapeHtml(column.label)}</th>`;
+    })
+    .join("")}</tr></thead>`;
+
+  const tbodyRows = rows
     .map(
       (row) =>
         `<tr>${columns
-          .map((column) => `<td class="${column.kind === "amount" ? "right" : ""}">${escapeHtml(formatPrintValue(row, column))}</td>`)
+          .map((column) => {
+            let alignClass = "";
+            if (column.kind === "amount") alignClass = "right";
+            else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
+            const isDoc = /job_no|quotation_no|invoice_no|rfq_no|enquiry/i.test(column.key);
+            const extraClass = isDoc ? " primary-text center font-semibold" : "";
+            return `<td class="${alignClass}${extraClass}">${escapeHtml(formatPrintValue(row, column))}</td>`;
+          })
           .join("")}</tr>`,
     )
-    .join("")}</tbody></table>`;
+    .join("");
+
+  let subtotalRow = "";
+  const firstAmountIdx = columns.findIndex((c) => c.kind === "amount");
+  // Only render subtotal row if the report has numeric amount columns
+  if (groupLabel && firstAmountIdx >= 0) {
+    const colSums = columns.map((col) => {
+      if (col.kind === "amount") {
+        return rows.reduce((sum, r) => sum + (Number(firstExisting(r, col.key) || 0) || 0), 0);
+      }
+      return null;
+    });
+
+    if (firstAmountIdx > 0) {
+      const spanCell = `<td colspan="${firstAmountIdx}" class="right"><b>Sub Total (${escapeHtml(groupLabel)}):</b></td>`;
+      const amountCells = columns.slice(firstAmountIdx).map((col, idx) => {
+        const colSum = colSums[firstAmountIdx + idx];
+        if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+        return `<td></td>`;
+      }).join("");
+      subtotalRow = `<tr class="subtotal-row">${spanCell}${amountCells}</tr>`;
+    } else {
+      const cells = columns.map((col, idx) => {
+        const colSum = colSums[idx];
+        if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+        return `<td></td>`;
+      }).join("");
+      subtotalRow = `<tr class="subtotal-row">${cells}</tr>`;
+    }
+  }
+
+  return `<table>${thead}<tbody>${tbodyRows}${subtotalRow}</tbody></table>`;
+}
+
+function renderSimpleGrandTotal(rows: LookupRow[], columns: ReportColumn[]) {
+  const firstAmountIdx = columns.findIndex((c) => c.kind === "amount");
+  // If report has no amount columns (like Freight Job List, Tracking, Query, etc.), do NOT show grand total
+  if (firstAmountIdx < 0) return "";
+
+  const thead = `<thead><tr>${columns
+    .map((column) => {
+      let alignClass = "";
+      if (column.kind === "amount") alignClass = "right";
+      else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
+      return `<th class="${alignClass}">${escapeHtml(column.label)}</th>`;
+    })
+    .join("")}</tr></thead>`;
+
+  const colSums = columns.map((col) => {
+    if (col.kind === "amount") {
+      return rows.reduce((sum, r) => sum + (Number(firstExisting(r, col.key) || 0) || 0), 0);
+    }
+    return null;
+  });
+
+  let grandTotalRow = "";
+  if (firstAmountIdx > 0) {
+    const spanCell = `<td colspan="${firstAmountIdx}" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td>`;
+    const amountCells = columns.slice(firstAmountIdx).map((col, idx) => {
+      const colSum = colSums[firstAmountIdx + idx];
+      if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+      return `<td></td>`;
+    }).join("");
+    grandTotalRow = `<tr class="grand-total-row">${spanCell}${amountCells}</tr>`;
+  } else {
+    const cells = columns.map((col, idx) => {
+      const colSum = colSums[idx];
+      if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+      return `<td></td>`;
+    }).join("");
+    grandTotalRow = `<tr class="grand-total-row">${cells}</tr>`;
+  }
+
+  return `
+    <div class="group grand-total-wrap">
+      <div class="group-title grand-total-title">Report Grand Total</div>
+      <table>${thead}<tbody>${grandTotalRow}</tbody></table>
+    </div>`;
 }
 
 function groupRows(rows: LookupRow[], keys: string[]) {
@@ -1626,16 +1869,23 @@ function textFrom(row: LookupRow, keys: string[]) {
   return "";
 }
 
+function numFrom(row: LookupRow, keys: string[]) {
+  for (const key of keys) {
+    const value = firstExisting(row, key);
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      const num = Number(value);
+      if (!isNaN(num)) return num;
+    }
+  }
+  return 0;
+}
+
 function dateFrom(row: LookupRow, keys: string[]) {
   return formatCellDate(textFrom(row, keys));
 }
 
 function amountFrom(row: LookupRow, keys: string[]) {
-  for (const key of keys) {
-    const value = Number(firstExisting(row, key) || 0);
-    if (value !== 0) return formatAmount(value);
-  }
-  return formatAmount(0);
+  return formatAmount(numFrom(row, keys));
 }
 
 function formatPrintValue(row: LookupRow, column: ReportColumn) {

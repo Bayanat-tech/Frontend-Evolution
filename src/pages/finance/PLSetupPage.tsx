@@ -268,15 +268,15 @@ const PLSetupPage: React.FC = () => {
   const dirtyCount = items.filter((r) => r.isDirty).length;
 
   return (
-    <div style={{ background: "#f3f4f6", padding: "4px 8px", fontFamily: "system-ui, sans-serif" }}>
+    <div className="finance-utility-page finance-pl-setup">
       <style>{`
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        tbody tr:last-child td { border-bottom: none !important; }
-        tbody tr:hover td { background: #f9fafb; }
-        .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
-        .action-btn-danger:hover { background: #fef2f2 !important; border-color: #dc2626 !important; color: #dc2626 !important; }
-        .cell-input:focus { border-color: #185FA5 !important; background: #fff !important; outline: none; }
-        .add-row-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; }
+        .finance-pl-setup table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .finance-pl-setup tbody tr:last-child td { border-bottom: none !important; }
+        .finance-pl-setup tbody tr:hover td { background: #f9fafb; }
+        .finance-pl-setup .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
+        .finance-pl-setup .action-btn-danger:hover { background: #fef2f2 !important; border-color: #dc2626 !important; color: #dc2626 !important; }
+        .finance-pl-setup .cell-input:focus { border-color: #185FA5 !important; background: #fff !important; outline: none; }
+        .finance-pl-setup .add-row-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; }
       `}</style>
 
       <div style={{ margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
