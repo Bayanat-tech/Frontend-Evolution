@@ -44,6 +44,7 @@ import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
 import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { NewReportDialog } from "../../../components/new_report_format";
+import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 
 
 export type { PurchaseOrderEditorState };
@@ -492,40 +493,29 @@ export function PurchaseGRNEditor({
   return (
     <>
       <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+        className={`finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
         onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <div>
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase GRN" : "New Purchase GRN"}
-                </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase GRN</h2>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal)}</strong>
-              </div>
-              {form.ac_code && (
-                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">A/c Code</span>
-                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
-                </div>
-              )}
-            </div>
+            <FinanceDocumentIdentity
+              title="Purchase GRN"
+              documentNo={form.doc_no}
+              documentDate={form.doc_date}
+              total={formatAmount(finalTotal)}
+              divCode={form.div_code}
+              divName={form.div_name}
+              onBack={onClose}
+            // headerExpanded={showHeaderDetails}
+            //   onToggleHeader={() => setShowHeaderDetails(value => !value)}
+            />
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
+                  {/* <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
                     {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
-                  </Button>
+                  </Button> */}
                   <Button
                     aria-label="Excel"
                     type="button"
@@ -561,9 +551,9 @@ export function PurchaseGRNEditor({
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase GRN...</div>
           ) : (
-            <div className="grid gap-3">
+               <div className="grid gap-3 w-full self-start">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
-
+<div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
               <PurchaseGrnHeaderForm
                 form={form}
                 docType={PO_DOC_TYPE.GRN}
@@ -576,7 +566,7 @@ export function PurchaseGRNEditor({
                 loginid={user?.loginid || user?.username}
                 setdetails={setRows}
               />
-
+</div>
               <PurchaseGrnDetailsTable
                 rows={rows}
                 form={form}
@@ -594,67 +584,58 @@ export function PurchaseGRNEditor({
             </div>
           )}
         </CardContent>
+    <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
+              <span className="text-[11px] font-medium text-slate-500">Total Amount</span>
+              <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal)}</strong>
+            </div>
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            {isPendingTab && (
-              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-              </Button>
-            )}
-
-            {isPendingTab && (
-              <div className="relative">
-                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                </Button>
-                {showSubmitConfirm && (
-                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-                    <p className="mb-2 text-sm text-gray-700">Submit this Purchase Grn?</p>
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
-                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
-                {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-              </Button>
-            )}
-
-            {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
-                {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-              </Button>
-            )}
-            {isPendingTab &&
-              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-              </Button>}
+         
           </div>
+
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrintGrn} disabled={actionDisabled || printing}>
-              {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
-            </Button>
-            <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button
-              aria-label="Download"
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleExportGrnExcel}
-              disabled={actionDisabled || exportingExcel}
-              title="Download Excel"
-            >
-              {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>Close</Button>
+              {isPendingTab && (
+                <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15}  />}
+                  {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <div className="relative">
+                  <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy}>
+                    {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                  </Button>
+                  {showSubmitConfirm && (
+                    <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                        <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                </Button>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                </Button>
+              )}
+          
           </div>
         </div>
       </form>

@@ -275,6 +275,7 @@ export interface PurchaseOrderForm {
   discount_scoope: "PO" | "ITEM";
   tx_compntcat_name_1: string;
   tx_cat_name_1: string;
+  detail:PurchaseOrderLineRow[]
 
 }
 

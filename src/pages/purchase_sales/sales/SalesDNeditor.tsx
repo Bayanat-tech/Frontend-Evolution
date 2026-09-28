@@ -60,7 +60,7 @@ export function SalesDNEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() =>
+  const [rows, setRows] = useState<SalesOrderLineRow[]>(() =>
     editMode ? [] : [emptyLineRow(form.div_code)],
   );
   const [loading, setLoading] = useState(Boolean(editMode));

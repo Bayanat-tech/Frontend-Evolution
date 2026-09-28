@@ -92,7 +92,7 @@ type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" 
 
 
 
-export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
+export function PurchaseOrderPage({ onClose , }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
