@@ -18,31 +18,6 @@ export function PurchaseReportPreview() {
 
   useEffect(() => { closePurchaseReportPreview(); }, [location.pathname]);
 
-  // useEffect(() => {
-  //   if (request?.document?.orientation) {
-  //     setOrientation(request.document.orientation);
-  //   }
-  // }, [request?.id, request?.document?.orientation]);
-
-  // useEffect(() => {
-  //   let cancelled = false;
-  //   let url = "";
-  //   setPdfUrl(""); setError(""); setExporting(false);
-  //   if (request?.document) {
-  //     identity.current = {
-  //       title: request.title,
-  //       company: user?.company_name || user?.COMPANY_NAME || user?.company_code || "Company",
-  //       user: user?.username || user?.USERNAME || user?.loginid || "User",
-  //       generatedAt: new Date().toLocaleString(),
-  //     };
-  //     const doc = { ...request.document, orientation };
-  //     createPurchasePdf(doc, identity.current).then((blob) => {
-  //       if (cancelled) return;
-  //       url = URL.createObjectURL(blob); setPdfUrl(url);
-  //     }).catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to prepare PDF."); });
-  //   }
-  //   return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
-  // }, [request, orientation, user]);
 
 
 const userToggledRef = useRef(false);

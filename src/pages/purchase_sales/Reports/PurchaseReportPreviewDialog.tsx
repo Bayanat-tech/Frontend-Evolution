@@ -33,7 +33,7 @@ export function PurchaseReportPreviewDialog({
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = document.activeElement as HTMLElement | null;  
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     panel.current?.focus();
