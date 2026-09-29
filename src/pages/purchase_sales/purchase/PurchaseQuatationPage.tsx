@@ -5,7 +5,7 @@ import { Division, getDivisions } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
-import { Dialog } from "../../../components/ui/Dialog";
+// import { Dialog } from "../../../components/ui/Dialog";
 import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 
@@ -15,6 +15,7 @@ import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
 import { PQA_CONFIG } from "./Purchaseordertypes";
 import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
+import { Dialog } from "../../../components/mms_ui";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -312,42 +313,36 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       )}
 
-      <DivisionPickerDialog
-        open={divisionPicker}
-        divisions={divisions}
-        description="Choose the division before opening the Purchase Quotation form."
-        onSelect={(division) => openCreateForDivision(division)}
-        onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
+    <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
+  <div className="grid max-h-[420px] gap-2 overflow-auto">
+    {divisions.map((division) => (
+      <button
+        key={division.div_code}
+        className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
+        onClick={() => openCreateForDivision(division)}
+        type="button"
       >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-     </DivisionPickerDialog>
+        <span className="font-medium">{division.div_name}</span>
+        <span className="text-muted-foreground">{division.div_code}</span>
+      </button>
+    ))}
+  </div>
+  <div className="mt-4 flex justify-end">
+    <Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>
+  </div>
+</Dialog>
       {printTarget && (
-  <PurchaseQuotationPrintDialog
-    open={!!printTarget}
-    onClose={() => setPrintTarget(null)}
-    form={printTarget as any}
-    companyCode={user?.company_code || ""}
-    docType="PQA"
-  />
-)}
-      
+        <PurchaseQuotationPrintDialog
+          open={!!printTarget}
+          onClose={() => setPrintTarget(null)}
+          form={printTarget as any}
+          companyCode={user?.company_code || ""}
+          docType="PQA"
+        />
+      )}
     </section>
   );
 }
-
 function formatDate(value: unknown) {
   if (!value) return "";
   const date = new Date(String(value));
