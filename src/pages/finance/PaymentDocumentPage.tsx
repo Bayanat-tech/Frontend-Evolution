@@ -943,7 +943,7 @@ function PaymentDocumentEditor({
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button disabled={saving} aria-label="Close" type="button" variant="secondary" onClick={onClose}><X size={14} /> Close</Button>
           </div>
         </div>
       </CardHeader>
@@ -1442,9 +1442,9 @@ function PaymentDocumentEditor({
                         </tr>
 
                         {expandedRowIds[detail.id] && (
-                          <tr key={`${detail.id}_alloc`} className="bg-slate-50/70 border-b border-blue-200/60">
-                            <td colSpan={showAllColumns ? 15 : 9} className="p-0 pl-8 pr-3 pb-2 pt-1">
-                              <div className="sticky left-0 max-w-[calc(100vw-60px)]">
+                          <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
+                            <td colSpan={showAllColumns ? 15 : 9} className="finance-allocation-cell">
+                              <div className="finance-allocation-branch">
                                 <SmartInlineAllocationTable
                                   detail={detail}
                                   rows={(form.children[detail.id] || []) as TransactionChildRow[]}
@@ -1493,17 +1493,9 @@ function PaymentDocumentEditor({
         <div className="text-sm text-muted-foreground">
           Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
         </div>
-        <div className="flex items-center gap-2">
-          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button
-            disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError}
-            type="submit"
-          >
-            <Save size={15} /> {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
+
       </div>
-      <AttachmentDialog
+<AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}

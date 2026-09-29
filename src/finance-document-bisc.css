@@ -1202,3 +1202,51 @@
   font-weight: 700 !important;
 }
 
+
+/* Allocations belong to the preceding detail line, not to the main line grid. */
+.finance-document-editor .finance-allocation-cell {
+  padding: 2px 20px 12px 44px !important;
+  background: #eff6ff !important;
+  border-bottom: 1px solid #bfdbfe !important;
+}
+.finance-document-editor .finance-lines-table > tbody > tr:has(+ .finance-allocation-row) > td {
+  background: #eff6ff !important;
+  border-bottom-color: #bfdbfe !important;
+}
+.finance-document-editor .finance-allocation-branch {
+  position: relative;
+  width: min(100%, 1100px);
+  max-width: calc(100cqw - 72px);
+  margin: 0;
+  border-left: 2px solid #93b4e1;
+  padding-left: 14px;
+}
+.finance-document-editor .finance-allocation-branch::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 0;
+  width: 13px;
+  border-top: 2px solid #93b4e1;
+}
+.finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
+.finance-document-editor .finance-allocation-panel {
+  border: 1px solid #aac7ed;
+  border-radius: 6px;
+  background: #f8fbff;
+  box-shadow: none;
+}
+.finance-document-editor .finance-allocation-panel > div:first-child {
+  background: #dbeafe;
+  background-image: none;
+}
+.finance-document-editor .finance-allocation-panel :is(th, td) { padding: 4px 8px !important; font-size: 11px !important; }
+.finance-document-editor .finance-allocation-panel tbody td { background: #f8fbff !important; }
+.finance-document-editor .finance-allocation-panel tbody tr:hover td { background: #e8f1ff !important; }
+.finance-document-editor .finance-allocation-panel :is(input, select, .lookup-field-trigger) { min-height: 26px !important; height: 26px !important; font-size: 11px !important; }
+.finance-document-editor .commercial-sticky-footer { justify-content: flex-end; }
+.finance-document-editor .commercial-command-header .ui-button[aria-label="Close"] { width: auto !important; gap: 5px; }
+@media (max-width: 768px) {
+  .finance-document-editor .finance-allocation-cell { padding-left: 16px !important; padding-right: 8px !important; }
+  .finance-document-editor .finance-allocation-branch { max-width: calc(100cqw - 40px); padding-left: 10px; }
+}

@@ -89,7 +89,7 @@ export function SmartInlineAllocationTable({
         : ["#", "Expense Type", "Expense Subtype", "Description", "Job No", "Amount", ""];
 
   return (
-    <div className="my-1.5 rounded-lg border border-blue-200/90 bg-white shadow-sm overflow-hidden text-xs">
+    <div className="finance-allocation-panel my-1.5 rounded-lg border border-blue-200/90 bg-white shadow-sm overflow-hidden text-xs">
       {/* Sub-toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-sky-50/50 to-white px-3 py-1.5">
         <div className="flex items-center gap-2 flex-wrap">

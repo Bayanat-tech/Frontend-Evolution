@@ -772,7 +772,7 @@ function CommercialEditor({
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button disabled={saving} aria-label="Close" type="button" variant="secondary" onClick={onClose}><X size={14} /> Close</Button>
           </div>
         </div>
       </CardHeader>
@@ -1577,12 +1577,9 @@ function CommercialEditor({
   <span>Tax <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong></span>
   <span>Net Total <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong></span>
 </div> */}
-        <div className="flex items-center gap-2">
-        <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-        <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-        </div>
+
       </div>
-      <AttachmentDialog
+<AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}

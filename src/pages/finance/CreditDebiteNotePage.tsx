@@ -928,7 +928,14 @@ function PaymentDocumentEditor({
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button
+            disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError}
+            title={hasInvoiceExceedError ? "Amount is greater than outstanding" : undefined}
+            type="submit"
+          >
+            <Save size={15} /> {saving ? "Saving..." : "Save"}
+          </Button>
+            <Button disabled={saving} aria-label="Close" type="button" variant="secondary" onClick={onClose}><X size={14} /> Close</Button>
           </div>
         </div>
       </CardHeader>
@@ -1462,8 +1469,9 @@ function PaymentDocumentEditor({
                           <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                         </tr>
                         {expandedRowIds[detail.id] && (
-                          <tr key={`${detail.id}_alloc`} className="bg-slate-50/70 border-b border-blue-200/60">
-                            <td colSpan={showAllColumns ? 15 : 9} className="p-0 pl-10 pr-3 pb-2 pt-0.5">
+                          <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
+                            <td colSpan={showAllColumns ? 15 : 9} className="finance-allocation-cell">
+                              <div className="finance-allocation-branch">
                               <SmartInlineAllocationTable
                                 detail={detail}
                                 rows={(form.children[detail.id] || []) as TransactionChildRow[]}
@@ -1478,6 +1486,7 @@ function PaymentDocumentEditor({
                                 onInvNoBlur={handleInvNoBlur}
                                 onClose={() => toggleRowExpanded(detail.id)}
                               />
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -1511,18 +1520,9 @@ function PaymentDocumentEditor({
         <div className="text-sm text-muted-foreground">
           Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
         </div>
-        <div className="flex items-center gap-2">
-          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button
-            disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError}
-            title={hasInvoiceExceedError ? "Amount is greater than outstanding" : undefined}
-            type="submit"
-          >
-            <Save size={15} /> {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
+
       </div>
-      <AttachmentDialog
+<AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}
