@@ -30,6 +30,12 @@ const PAGE_SIZE: Record<Orientation, { w: number; h: number }> = {
 const DEFAULT_PAGE_MARGIN_MM = 8;
 
 /**
+ * Single font size (CSS px) forced on all report text inside the dialog
+ * (headings h1–h6 keep their own sizes). Change this one value to resize every report.
+ */
+const REPORT_FONT_PX = 9;
+
+/**
  * Detect orientation from the report's @page rule,
  * e.g. `@page { size: A4 landscape; }` → "landscape"
  */
@@ -139,8 +145,12 @@ export function NewReportDialog({
     overflow-x: hidden !important;
     overflow-y: visible !important;
     font-family: Arial, sans-serif !important;
-    font-size: 10px !important;
+    font-size: ${REPORT_FONT_PX}px !important;
     color: #000 !important;
+  }
+  /* One constant font size for all report text (headings excluded) */
+  body *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(script):not(style):not(.company-name):not(.group-title) {
+    font-size: ${REPORT_FONT_PX}px !important;
   }
   .sheet {
     width: ${contentW}px !important;
@@ -155,7 +165,7 @@ export function NewReportDialog({
   table {
     width: 100% !important;
     max-width: 100% !important;
-    font-size: 9px !important;
+    font-size: ${REPORT_FONT_PX}px !important;
     border-collapse: collapse !important;
   }
   th, td {
@@ -172,7 +182,7 @@ export function NewReportDialog({
     html, body {
       background: white !important;
       overflow: visible !important;
-      font-size: 10px !important;
+      font-size: ${REPORT_FONT_PX}px !important;
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
@@ -184,7 +194,7 @@ export function NewReportDialog({
       padding: ${pageMarginMm}mm !important;
       overflow: visible !important;
     }
-    table { font-size: 9px !important; }
+    table { font-size: ${REPORT_FONT_PX}px !important; }
     th, td { white-space: nowrap !important; }
   }
 </style>`;
