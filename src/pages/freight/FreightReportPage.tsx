@@ -692,7 +692,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       // Columns > 6 will cut in portrait (e.g. Job List has 9 cols), so default to landscape! Narrow reports (Revenue, Expense) default to portrait.
       const isLandscape = config.columns.filter((c) => !["PRIN_CODE", "PRIN_NAME"].includes(c.key.toUpperCase())).length > 6;
       const orientation: "portrait" | "landscape" = isLandscape ? "landscape" : "portrait";
-      preview.ready({ company, html: reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), false, companyLogoUrl, orientation), filename: config.title, orientation });
+      preview.ready({ company, html: reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), false, companyLogoUrl, orientation, company), filename: config.title, orientation });
     } catch (error: any) {
       setRows([]);
       const errorMessage = error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.";
@@ -1505,6 +1505,138 @@ function buildTotals(rows: LookupRow[], amountFields: string[]) {
     .slice(0, 3);
 }
 
+function buildFilterSummaryHtml(config: ReportConfig, filters: ReportFilters, principalText: string) {
+  const items: { label: string; value: string }[] = [];
+  const adv = config.advancedFilters || [];
+  const flt = config.filters || [];
+
+  // 1. Period / Date
+  if (flt.includes("date")) {
+    const from = toDisplayDate(filters.from_date);
+    const to = toDisplayDate(filters.to_date);
+    if (from && to) items.push({ label: "Period", value: `${from} – ${to}` });
+    else if (from) items.push({ label: "Period", value: `From ${from}` });
+    else if (to) items.push({ label: "Period", value: `Up to ${to}` });
+    else items.push({ label: "Period", value: "All Dates" });
+  }
+
+  // 2. Principal (show if in filters or advancedFilters)
+  if (flt.includes("principal") || adv.includes("principalRange")) {
+    let pVal = "All";
+    if (principalText && principalText !== "All") pVal = principalText;
+    else if (filters.prin_code_from && filters.prin_code_from !== "All") pVal = filters.prin_code_from;
+    else if (filters.prin_code && filters.prin_code !== "All") pVal = filters.prin_code;
+    items.push({ label: "Principal", value: pVal });
+  }
+
+  // 3. Job No (show if in filters or advancedFilters)
+  if (flt.includes("job") || adv.includes("jobRange")) {
+    const jVal = [filters.job_no, filters.job_no_from].filter((v) => v && v !== "All").join(" – ");
+    items.push({ label: "Job No", value: jVal || "All" });
+  }
+
+  // 4. Department
+  if (adv.includes("departmentRange")) {
+    items.push({ label: "Department", value: (filters.dept_code_from && filters.dept_code_from !== "All") ? filters.dept_code_from : "All" });
+  }
+
+  // 5. Mode
+  if (flt.includes("mode")) {
+    items.push({ label: "Mode", value: filters.transport_mode ? optionLabel(modeOptions, filters.transport_mode) : "All" });
+  }
+
+  // 6. Type
+  if (flt.includes("type")) {
+    items.push({ label: "Type", value: filters.job_type ? optionLabel(jobTypeOptions, filters.job_type) : "All" });
+  }
+
+  // 7. Status
+  if (flt.includes("status")) {
+    const opts = config.title === "ETA Report" || config.title === "ETD Report" ? shipmentHealthStatusOptions : statusOptions;
+    items.push({ label: "Status", value: filters.status ? optionLabel(opts, filters.status) : "All" });
+  }
+
+  // 8. Confirm Date
+  if (adv.includes("confirmDate")) {
+    const from = toDisplayDate(filters.confirm_from_date);
+    const to = toDisplayDate(filters.confirm_to_date);
+    if (from && to) items.push({ label: "Confirm", value: `${from} – ${to}` });
+    else if (from) items.push({ label: "Confirm", value: `From ${from}` });
+    else if (to) items.push({ label: "Confirm", value: `Up to ${to}` });
+    else items.push({ label: "Confirm", value: "All" });
+  }
+
+  // 9. Variant
+  if (adv.includes("variant")) {
+    items.push({ label: "Variant", value: filters.report_variant ? optionLabel(reportVariantOptions, filters.report_variant) : "Standard" });
+  }
+
+  // 10. Document / Enquiry / RFQ / Quotation No
+  if (adv.includes("documentRange")) {
+    const docLabel = config.title === "RFQ List" ? "RFQ No" : config.title === "Quotation List" ? "Quotation No" : "Doc No";
+    const docVal = [filters.doc_no_from, filters.doc_no_to].filter((v) => v && v !== "All").join(" – ");
+    items.push({ label: docLabel, value: docVal || "All" });
+  }
+
+  // 11. Port Range
+  if (adv.includes("portRange")) {
+    items.push({ label: "Origin Port", value: (filters.origin_port && filters.origin_port !== "All") ? filters.origin_port : "All" });
+    items.push({ label: "Destination Port", value: (filters.destination_port && filters.destination_port !== "All") ? filters.destination_port : "All" });
+  }
+
+  // 12. Division
+  if (adv.includes("division")) {
+    items.push({ label: "Division", value: (filters.div_code && filters.div_code !== "All") ? filters.div_code : "All" });
+  }
+
+  // 13. Other date ranges
+  if (adv.includes("scheduleDate")) {
+    const from = toDisplayDate(filters.schedule_from_date);
+    const to = toDisplayDate(filters.schedule_to_date);
+    items.push({ label: "Schedule", value: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All" });
+  }
+  if (adv.includes("collectionDate")) {
+    const from = toDisplayDate(filters.collection_from_date);
+    const to = toDisplayDate(filters.collection_to_date);
+    items.push({ label: "Collection", value: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All" });
+  }
+  if (adv.includes("depositDate")) {
+    const from = toDisplayDate(filters.deposit_from_date);
+    const to = toDisplayDate(filters.deposit_to_date);
+    items.push({ label: "Deposit", value: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All" });
+  }
+  if (adv.includes("expiryDate")) {
+    const from = toDisplayDate(filters.expiry_from_date);
+    const to = toDisplayDate(filters.expiry_to_date);
+    items.push({ label: "Expiry", value: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All" });
+  }
+  if (adv.includes("etaDate")) {
+    const from = toDisplayDate(filters.eta_from_date);
+    const to = toDisplayDate(filters.eta_to_date);
+    items.push({ label: "ETA", value: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All" });
+  }
+  if (adv.includes("ataDate")) {
+    const from = toDisplayDate(filters.ata_from_date);
+    const to = toDisplayDate(filters.ata_to_date);
+    items.push({ label: "ATA", value: from && to ? `${from} – ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All" });
+  }
+
+  // 14. Document / Tracking text fields if present
+  if (filters.invoice_no) items.push({ label: "Invoice No", value: filters.invoice_no });
+  if (filters.container_no) items.push({ label: "Container", value: filters.container_no });
+  if (filters.bl_no) items.push({ label: "BL No", value: filters.bl_no });
+  if (filters.vessel_name || filters.voyage_no) {
+    items.push({ label: "Vessel/Voyage", value: [filters.vessel_name, filters.voyage_no].filter(Boolean).join(" / ") });
+  }
+  if (filters.search) items.push({ label: "Search", value: filters.search });
+
+  if (!items.length) return "";
+
+  return `<div class="filter-summary"><span class="filter-header"><strong>Applied Filters:</strong></span> ${items
+    .map((item) => `<span class="filter-item"><strong>${escapeHtml(item.label)}:</strong> ${escapeHtml(item.value)}</span>`)
+    .join(` <span class="filter-pipe">|</span> `)}</div>`;
+}
+
 function reportHtml(
   config: ReportConfig,
   companyCode: string,
@@ -1516,9 +1648,11 @@ function reportHtml(
   interactive = false,
   companyLogoUrl = "",
   orientation: "portrait" | "landscape" = "portrait",
+  companyInfo?: { name: string; address: string[]; logo: string },
 ) {
   const body = reportBodyHtml(config, rows);
-  const logoUrl = companyLogoUrl || `${window.location.origin}/bayanat-logo.png`;
+  const logoUrl = companyInfo?.logo || companyLogoUrl || `${window.location.origin}/bayanat-logo.png`;
+  const filterSummary = buildFilterSummaryHtml(config, filters, principalText);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(config.title)}</title><style>
     @page{size:${orientation};margin:12mm}
     body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
@@ -1527,20 +1661,22 @@ function reportHtml(
     .actions{display:flex;gap:8px}.actions button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;font-weight:700;padding:0 13px;cursor:pointer}
     .actions button.primary{background:#00378c;border-color:#00378c;color:white}
     .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:${orientation === "landscape" ? "1280px" : "850px"};margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}
-    .logo{height:54px;border-bottom:1.5px solid #00378c;display:flex;align-items:center;justify-content:space-between}
-    .brand-wrap{display:flex;align-items:center;gap:10px}.brand-wrap img{width:36px;height:36px;object-fit:contain}
-    .brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#00378c;text-transform:uppercase}
-    .top{border-bottom:1.5px solid #00378c;padding:10px 0 6px 0}
-    .title{font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0;color:#00378c}
-    .group{margin-top:14px}
-    .group-title{background:#eaf0f8;padding:5px 8px;font-size:11px;font-weight:700;color:#00378c;border-left:3px solid #00378c;border-radius:2px}
-    table{border-collapse:collapse;width:100%;font-size:9.5px;margin-top:4px}
+    .logo{border-bottom:1.5px solid #00378c;padding-bottom:8px;display:flex;align-items:flex-start;justify-content:space-between}
+    .brand-wrap{display:flex;align-items:center;gap:10px}.brand-wrap img{height:46px;max-width:160px;object-fit:contain}
+    .brand{font-size:12px;font-weight:800;letter-spacing:.15em;color:#00378c;text-transform:uppercase}
+    .top{border-bottom:1px solid #cbd5e1;padding:4px 0 4px 0}
+    .title{font-size:16px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0 0 2px 0;color:#00378c}
+    .filter-summary{font-size:8px;color:#475569;margin:3px 0 3px 0;line-height:1.35;padding:4px 8px;background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #00378c;border-radius:4px}
+    .filter-summary .filter-header strong{color:#00378c;font-weight:800;margin-right:4px}
+    .filter-summary .filter-item strong{color:#1e293b;font-weight:700}
+    .filter-pipe{color:#cbd5e1;margin:0 4px}
+    table{border-collapse:collapse;width:100%;font-size:9.5px;margin-top:5px}
     th{background:#00378c;color:#ffffff;font-size:9.5px;border:1px solid #00378c;padding:5px 6px;text-align:center;font-weight:700;letter-spacing:.02em}
     td{padding:4px 6px;vertical-align:top;border-bottom:1px solid #e2e8f0;font-size:9.5px}.right{text-align:right}.center{text-align:center}.primary-text{color:#00378c;font-weight:700}
+    .group-header-row td{background:#eaf0f8;color:#00378c;font-weight:700;padding:5px 8px;border-top:1.5px solid #00378c;border-bottom:1px solid #cbd5e1;font-size:10px}
+    .group-banner{font-size:10px;font-weight:700;color:#00378c}
     .subtotal-row{background:#f8fafc;font-weight:700;color:#00378c}
     .subtotal-row td{border-top:1px solid #94a3b8;border-bottom:1px solid #94a3b8;padding:5px 6px;font-weight:700;color:#00378c}
-    .grand-total-wrap{margin-top:18px}
-    .grand-total-title{background:#00378c;color:#ffffff;border-left:none;font-weight:800;font-size:11px;padding:6px 8px}
     .grand-total-row{background:#e2e8f0;font-weight:800;color:#00378c;font-size:10px}
     .grand-total-row td{border-top:2px solid #00378c;border-bottom:2px solid #00378c;padding:6px 6px;font-weight:800;color:#00378c}
     .font-bold{font-weight:700}
@@ -1552,8 +1688,19 @@ function reportHtml(
       ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>`
       : ""
   }<div class="sheet"><div class="paper">
-    <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Company logo"><div class="brand">Bayanat Technology</div></div></div>
-    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div></div></div>
+    <div class="logo">
+      <div class="brand-wrap">
+        <img src="${escapeHtml(logoUrl)}" alt="Company logo">
+        <div class="brand">${escapeHtml(companyInfo?.name || "Bayanat Technology")}</div>
+      </div>
+      ${companyInfo?.address?.length ? `<div style="text-align:right;font-size:8px;color:#64748b;line-height:1.3">${companyInfo.address.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}</div>` : ""}
+    </div>
+    <div class="top">
+      <div>
+        <div class="title">${escapeHtml(config.title)}</div>
+        ${filterSummary}
+      </div>
+    </div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
     <div class="footer">End of report</div>
   </div></div></body></html>`;
@@ -1567,13 +1714,100 @@ function reportBodyHtml(config: ReportConfig, rows: LookupRow[]) {
 
   const groups = groupRows(rows, config.title === "Freight Brokerage" ? ["BROKER_CODE", "BROKER_NAME", "PRIN_CODE", "PRIN_NAME"] : ["PRIN_CODE", "PRIN_NAME"]);
   const filteredColumns = config.columns.filter((column) => !["PRIN_CODE", "PRIN_NAME"].includes(column.key.toUpperCase()));
+  const colCount = filteredColumns.length;
 
-  const groupsHtml = groups
-    .map((group) => `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div>${simpleTableHtml(group.rows, filteredColumns, group.label)}</div>`)
+  const thead = `<thead><tr>${filteredColumns
+    .map((column) => {
+      let alignClass = "";
+      if (column.kind === "amount") alignClass = "right";
+      else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
+      return `<th class="${alignClass}">${escapeHtml(column.label)}</th>`;
+    })
+    .join("")}</tr></thead>`;
+
+  const firstAmountIdx = filteredColumns.findIndex((c) => c.kind === "amount");
+
+  const tbodyRows = groups
+    .map((group) => {
+      const bannerRow = `<tr class="group-header-row"><td colspan="${colCount}" class="group-banner"><b>${escapeHtml(group.label)}</b></td></tr>`;
+
+      const rowsHtml = group.rows
+        .map(
+          (row) =>
+            `<tr>${filteredColumns
+              .map((column) => {
+                let alignClass = "";
+                if (column.kind === "amount") alignClass = "right";
+                else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
+                const isDoc = /job_no|quotation_no|invoice_no|rfq_no|enquiry/i.test(column.key);
+                const extraClass = isDoc ? " primary-text center font-semibold" : "";
+                return `<td class="${alignClass}${extraClass}">${escapeHtml(formatPrintValue(row, column))}</td>`;
+              })
+              .join("")}</tr>`,
+        )
+        .join("");
+
+      let subtotalRow = "";
+      if (firstAmountIdx >= 0) {
+        const colSums = filteredColumns.map((col) => {
+          if (col.kind === "amount") {
+            return group.rows.reduce((sum, r) => sum + (Number(firstExisting(r, col.key) || 0) || 0), 0);
+          }
+          return null;
+        });
+
+        if (firstAmountIdx > 0) {
+          const spanCell = `<td colspan="${firstAmountIdx}" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td>`;
+          const amountCells = filteredColumns.slice(firstAmountIdx).map((col, idx) => {
+            const colSum = colSums[firstAmountIdx + idx];
+            if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+            return `<td></td>`;
+          }).join("");
+          subtotalRow = `<tr class="subtotal-row">${spanCell}${amountCells}</tr>`;
+        } else {
+          const cells = filteredColumns.map((col, idx) => {
+            const colSum = colSums[idx];
+            if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+            return `<td></td>`;
+          }).join("");
+          subtotalRow = `<tr class="subtotal-row">${cells}</tr>`;
+        }
+      }
+
+      return bannerRow + rowsHtml + subtotalRow;
+    })
     .join("");
 
-  const grandTotalHtml = renderSimpleGrandTotal(rows, filteredColumns);
-  return groupsHtml + grandTotalHtml;
+  let grandTotalRow = "";
+  if (firstAmountIdx >= 0) {
+    const colSums = filteredColumns.map((col) => {
+      if (col.kind === "amount") {
+        return rows.reduce((sum, r) => sum + (Number(firstExisting(r, col.key) || 0) || 0), 0);
+      }
+      return null;
+    });
+
+    if (firstAmountIdx > 0) {
+      const spanCell = `<td colspan="${firstAmountIdx}" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td>`;
+      const amountCells = filteredColumns.slice(firstAmountIdx).map((col, idx) => {
+        const colSum = colSums[firstAmountIdx + idx];
+        if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+        return `<td></td>`;
+      }).join("");
+      grandTotalRow = `<tr class="grand-total-row">${spanCell}${amountCells}</tr>`;
+    } else {
+      const cells = filteredColumns.map((col, idx) => {
+        const colSum = colSums[idx];
+        if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
+        return `<td></td>`;
+      }).join("");
+      grandTotalRow = `<tr class="grand-total-row">${cells}</tr>`;
+    }
+  } else {
+    grandTotalRow = `<tr class="grand-total-row"><td colspan="${colCount}" class="right font-bold"><b>Total: ${rows.length} Record${rows.length === 1 ? "" : "s"}</b></td></tr>`;
+  }
+
+  return `<table>${thead}<tbody>${tbodyRows}${grandTotalRow}</tbody></table>`;
 }
 
 function commercialReportHtml(config: ReportConfig, rows: LookupRow[]) {
@@ -1582,10 +1816,14 @@ function commercialReportHtml(config: ReportConfig, rows: LookupRow[]) {
   if (config.title === "RFQ List") headers[0] = "RFQ No";
   const hasAmounts = config.amountFields.length > 0;
 
-  const groupsHtml = groups
+  const thead = `<thead><tr>${headers.map((h, i) => `<th class="${i >= 9 ? "right" : i < 4 ? "center" : ""}">${escapeHtml(h)}</th>`).join("")}</tr></thead>`;
+
+  const tbodyRows = groups
     .map((group) => {
       let groupGrossWt = 0;
       let groupVolume = 0;
+
+      const bannerRow = `<tr class="group-header-row"><td colspan="11" class="group-banner"><b>${escapeHtml(group.label)}</b></td></tr>`;
 
       const rowsHtml = group.rows
         .map((row) => {
@@ -1602,37 +1840,30 @@ function commercialReportHtml(config: ReportConfig, rows: LookupRow[]) {
         ? `<tr class="subtotal-row"><td colspan="9" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td><td class="right font-bold">${formatAmount(groupGrossWt)}</td><td class="right font-bold">${formatAmount(groupVolume)}</td></tr>`
         : "";
 
-      return `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr>${headers.map((h, i) => `<th class="${i >= 9 ? "right" : i < 4 ? "center" : ""}">${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rowsHtml}${subtotalRow}</tbody></table></div>`;
+      return bannerRow + rowsHtml + subtotalRow;
     })
     .join("");
 
-  if (!hasAmounts) return groupsHtml;
+  let grandTotalRow = "";
+  if (hasAmounts) {
+    let grandGrossWt = 0;
+    let grandVolume = 0;
+    rows.forEach((row) => {
+      grandGrossWt += numFrom(row, ["GROSS_WT", "WEIGHT"]);
+      grandVolume += numFrom(row, ["VOLUME"]);
+    });
 
-  let grandGrossWt = 0;
-  let grandVolume = 0;
-  rows.forEach((row) => {
-    grandGrossWt += numFrom(row, ["GROSS_WT", "WEIGHT"]);
-    grandVolume += numFrom(row, ["VOLUME"]);
-  });
+    grandTotalRow = `
+      <tr class="grand-total-row">
+        <td colspan="9" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td>
+        <td class="right font-bold">${formatAmount(grandGrossWt)}</td>
+        <td class="right font-bold">${formatAmount(grandVolume)}</td>
+      </tr>`;
+  } else {
+    grandTotalRow = `<tr class="grand-total-row"><td colspan="11" class="right font-bold"><b>Total: ${rows.length} Record${rows.length === 1 ? "" : "s"}</b></td></tr>`;
+  }
 
-  const grandTotalHtml = `
-    <div class="group grand-total-wrap">
-      <div class="group-title grand-total-title">Report Grand Total</div>
-      <table>
-        <thead>
-          <tr>${headers.map((h, i) => `<th class="${i >= 9 ? "right" : i < 4 ? "center" : ""}">${escapeHtml(h)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          <tr class="grand-total-row">
-            <td colspan="9" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td>
-            <td class="right font-bold">${formatAmount(grandGrossWt)}</td>
-            <td class="right font-bold">${formatAmount(grandVolume)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>`;
-
-  return groupsHtml + grandTotalHtml;
+  return `<table>${thead}<tbody>${tbodyRows}${grandTotalRow}</tbody></table>`;
 }
 
 function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "revenue") {
@@ -1643,9 +1874,12 @@ function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "r
         ? ["Date", "Job No", "Remarks", "Customs Duty", "Expense"]
         : ["Date", "Job No", "Remarks", "Invoice No", "Customs Duty", "Revenue"];
 
+  const colCount = headers.length;
   const groups = groupRows(rows, ["PRIN_CODE", "PRIN_NAME"]);
 
-  const groupsHtml = groups
+  const thead = `<thead><tr>${headers.map((h, i) => `<th class="${/cost|revenue|profit|duty|demurrage|expense/i.test(h) ? "right" : (i < 2 ? "center" : "")}">${escapeHtml(h)}</th>`).join("")}</tr></thead>`;
+
+  const tbodyRows = groups
     .map((group) => {
       let groupDuty = 0;
       let groupDemurrage = 0;
@@ -1655,6 +1889,8 @@ function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "r
       let groupRevenue = 0;
       let groupProfit = 0;
       let groupExpense = 0;
+
+      const bannerRow = `<tr class="group-header-row"><td colspan="${colCount}" class="group-banner"><b>${escapeHtml(group.label)}</b></td></tr>`;
 
       const rowsHtml = group.rows
         .map((row) => {
@@ -1697,7 +1933,7 @@ function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "r
         subtotalRow = `<tr class="subtotal-row"><td colspan="4" class="right"><b>Sub Total (${escapeHtml(group.label)}):</b></td><td class="right font-bold">${formatAmount(groupDuty)}</td><td class="right font-bold">${formatAmount(groupRevenue)}</td></tr>`;
       }
 
-      return `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr>${headers.map((h, i) => `<th class="${/cost|revenue|profit|duty|demurrage|expense/i.test(h) ? "right" : (i < 2 ? "center" : "")}">${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rowsHtml}${subtotalRow}</tbody></table></div>`;
+      return bannerRow + rowsHtml + subtotalRow;
     })
     .join("");
 
@@ -1730,124 +1966,7 @@ function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "r
     grandTotalRow = `<tr class="grand-total-row"><td colspan="4" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td><td class="right font-bold">${formatAmount(grandDuty)}</td><td class="right font-bold">${formatAmount(grandRevenue)}</td></tr>`;
   }
 
-  const grandTotalHtml = `
-    <div class="group grand-total-wrap">
-      <div class="group-title grand-total-title">Report Grand Total</div>
-      <table>
-        <thead>
-          <tr>${headers.map((h, i) => `<th class="${/cost|revenue|profit|duty|demurrage|expense/i.test(h) ? "right" : (i < 2 ? "center" : "")}">${escapeHtml(h)}</th>`).join("")}</tr>
-        </thead>
-        <tbody>
-          ${grandTotalRow}
-        </tbody>
-      </table>
-    </div>`;
-
-  return groupsHtml + grandTotalHtml;
-}
-
-function simpleTableHtml(rows: LookupRow[], columns: ReportColumn[], groupLabel?: string) {
-  const thead = `<thead><tr>${columns
-    .map((column) => {
-      let alignClass = "";
-      if (column.kind === "amount") alignClass = "right";
-      else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
-      return `<th class="${alignClass}">${escapeHtml(column.label)}</th>`;
-    })
-    .join("")}</tr></thead>`;
-
-  const tbodyRows = rows
-    .map(
-      (row) =>
-        `<tr>${columns
-          .map((column) => {
-            let alignClass = "";
-            if (column.kind === "amount") alignClass = "right";
-            else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
-            const isDoc = /job_no|quotation_no|invoice_no|rfq_no|enquiry/i.test(column.key);
-            const extraClass = isDoc ? " primary-text center font-semibold" : "";
-            return `<td class="${alignClass}${extraClass}">${escapeHtml(formatPrintValue(row, column))}</td>`;
-          })
-          .join("")}</tr>`,
-    )
-    .join("");
-
-  let subtotalRow = "";
-  const firstAmountIdx = columns.findIndex((c) => c.kind === "amount");
-  // Only render subtotal row if the report has numeric amount columns
-  if (groupLabel && firstAmountIdx >= 0) {
-    const colSums = columns.map((col) => {
-      if (col.kind === "amount") {
-        return rows.reduce((sum, r) => sum + (Number(firstExisting(r, col.key) || 0) || 0), 0);
-      }
-      return null;
-    });
-
-    if (firstAmountIdx > 0) {
-      const spanCell = `<td colspan="${firstAmountIdx}" class="right"><b>Sub Total (${escapeHtml(groupLabel)}):</b></td>`;
-      const amountCells = columns.slice(firstAmountIdx).map((col, idx) => {
-        const colSum = colSums[firstAmountIdx + idx];
-        if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
-        return `<td></td>`;
-      }).join("");
-      subtotalRow = `<tr class="subtotal-row">${spanCell}${amountCells}</tr>`;
-    } else {
-      const cells = columns.map((col, idx) => {
-        const colSum = colSums[idx];
-        if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
-        return `<td></td>`;
-      }).join("");
-      subtotalRow = `<tr class="subtotal-row">${cells}</tr>`;
-    }
-  }
-
-  return `<table>${thead}<tbody>${tbodyRows}${subtotalRow}</tbody></table>`;
-}
-
-function renderSimpleGrandTotal(rows: LookupRow[], columns: ReportColumn[]) {
-  const firstAmountIdx = columns.findIndex((c) => c.kind === "amount");
-  // If report has no amount columns (like Freight Job List, Tracking, Query, etc.), do NOT show grand total
-  if (firstAmountIdx < 0) return "";
-
-  const thead = `<thead><tr>${columns
-    .map((column) => {
-      let alignClass = "";
-      if (column.kind === "amount") alignClass = "right";
-      else if (column.kind === "date" || column.kind === "mode" || column.kind === "type" || column.kind === "status") alignClass = "center";
-      return `<th class="${alignClass}">${escapeHtml(column.label)}</th>`;
-    })
-    .join("")}</tr></thead>`;
-
-  const colSums = columns.map((col) => {
-    if (col.kind === "amount") {
-      return rows.reduce((sum, r) => sum + (Number(firstExisting(r, col.key) || 0) || 0), 0);
-    }
-    return null;
-  });
-
-  let grandTotalRow = "";
-  if (firstAmountIdx > 0) {
-    const spanCell = `<td colspan="${firstAmountIdx}" class="right"><b>GRAND TOTAL (${rows.length} Records):</b></td>`;
-    const amountCells = columns.slice(firstAmountIdx).map((col, idx) => {
-      const colSum = colSums[firstAmountIdx + idx];
-      if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
-      return `<td></td>`;
-    }).join("");
-    grandTotalRow = `<tr class="grand-total-row">${spanCell}${amountCells}</tr>`;
-  } else {
-    const cells = columns.map((col, idx) => {
-      const colSum = colSums[idx];
-      if (colSum !== null) return `<td class="right font-bold">${formatAmount(colSum)}</td>`;
-      return `<td></td>`;
-    }).join("");
-    grandTotalRow = `<tr class="grand-total-row">${cells}</tr>`;
-  }
-
-  return `
-    <div class="group grand-total-wrap">
-      <div class="group-title grand-total-title">Report Grand Total</div>
-      <table>${thead}<tbody>${grandTotalRow}</tbody></table>
-    </div>`;
+  return `<table>${thead}<tbody>${tbodyRows}${grandTotalRow}</tbody></table>`;
 }
 
 function groupRows(rows: LookupRow[], keys: string[]) {

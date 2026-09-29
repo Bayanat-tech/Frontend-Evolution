@@ -522,7 +522,7 @@ function statusBadgeClass(status: string, tabKey: string): string {
 
 function formatDate(value: unknown): string {
   if (!value) return "-";
-  const str = String(value);
+  const str = String(value);  
   const date = new Date(str);
   if (Number.isNaN(date.getTime())) return str;
   return date.toLocaleDateString("en-GB");
