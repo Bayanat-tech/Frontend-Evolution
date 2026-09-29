@@ -61,8 +61,43 @@ const detectPageMarginMm = (html: string): number => {
 const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
 
 /**
+ * Paint a Portrait/Landscape pill directly on the element with !important.
+ * Inline !important beats every stylesheet rule (Tailwind preflight, theme
+ * globals, MUI, etc.), so the active pill is always navy #00378c / white text.
+ */
+const paintPill = (el: HTMLButtonElement | null, active: boolean, disabled: boolean) => {
+  if (!el) return;
+  const s = el.style;
+  s.setProperty("background-color", active ? "#00378c" : "transparent", "important");
+  s.setProperty("background-image", "none", "important");
+  // Shape: compact pill like the freight preview (no stray borders/margins/heights)
+  s.setProperty("border", "0", "important");
+  s.setProperty("margin", "0", "important");
+  s.setProperty("height", "28px", "important");
+  s.setProperty("min-width", "0", "important");
+  s.setProperty("padding", "0 16px", "important");
+  s.setProperty("border-radius", "5px", "important");
+  s.setProperty("font-size", "13px", "important");
+  s.setProperty("font-weight", active ? "600" : "500", "important");
+  s.setProperty("line-height", "1", "important");
+  s.setProperty("display", "inline-flex", "important");
+  s.setProperty("align-items", "center", "important");
+  s.setProperty("justify-content", "center", "important");
+  s.setProperty(
+    "color",
+    active ? "#ffffff" : disabled ? "#94a3b8" : "#475569",
+    "important"
+  );
+  s.setProperty("box-shadow", active ? "0 1px 2px rgba(0, 55, 140, 0.25)" : "none", "important");
+  s.setProperty("opacity", disabled && active ? "0.6" : "1", "important");
+};
+
+/**
  * Report preview modal with:
  * - Orientation auto-detected from the report HTML (@page size rule)
+ * - Portrait / Landscape segmented control on the LEFT of the header
+ *   · Active pill always navy #00378c with white text, via the .nr-orient-btn
+ *     CSS class (real !important, so no global button reset can win)
  * - Real page breaks based on HTML content height
  * - Toolbar page indicator + left thumbnails driven by page count
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
@@ -468,6 +503,12 @@ export function NewReportDialog({
   /** True when the user has manually overridden the auto-detected orientation */
   const orientationOverridden = orientation !== autoOrientation;
 
+  /** Guard so the toggle can't be clicked while loading or before HTML is ready */
+  const setOrientationSafe = (next: Orientation) => {
+    if (loading || !htmlContent) return;
+    setOrientation(next);
+  };
+
   return (
     <div
       role="dialog"
@@ -516,7 +557,15 @@ export function NewReportDialog({
             gap: 12,
           }}
         >
-          <div style={{ minWidth: 0 }}>
+          {/* LEFT: REPORT PREVIEW label, then title + segmented orientation on one row */}
+          <div
+            style={{
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
             <div
               style={{
                 fontSize: 10,
@@ -524,112 +573,136 @@ export function NewReportDialog({
                 letterSpacing: "0.08em",
                 color: "#64748b",
                 textTransform: "uppercase",
-                marginBottom: 2,
               }}
             >
               Report Preview
             </div>
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: 600,
-                color: "#0f172a",
-                lineHeight: 1.25,
-              }}
-            >
-              {title}
-            </div>
-          </div>
 
-          {/* Orientation dropdown — top right of header area */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <label
+            <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                color: "#64748b",
-                fontWeight: 500,
+                gap: 10,
+                flexWrap: "wrap",
               }}
             >
-              View
-              <select
-                value={orientation}
-                onChange={(e) => setOrientation(e.target.value as Orientation)}
-                disabled={loading || !htmlContent}
-                title={`Auto-detected from report: ${autoOrientation}`}
+              <div
                 style={{
-                  height: 32,
-                  padding: "0 28px 0 10px",
-                  fontSize: 13,
-                  fontWeight: 500,
+                  fontSize: 16,
+                  fontWeight: 600,
                   color: "#0f172a",
-                  background: "#fff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 8px center",
+                  lineHeight: 1.25,
                 }}
               >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-            </label>
+                {title}
+              </div>
 
-            {/* UX touch: show "Auto" state, and a reset button when overridden */}
-            {!loading && htmlContent && (
-              <>
-                <span
-                  title={`Auto-detected from report @page rule: ${autoOrientation}`}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                    color: orientationOverridden ? "#d97706" : "#059669",
-                    background: orientationOverridden ? "#fffbeb" : "#ecfdf5",
-                    border: `1px solid ${orientationOverridden ? "#fcd34d" : "#a7f3d0"}`,
-                    borderRadius: 4,
-                    padding: "3px 7px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {orientationOverridden ? "Manual" : "Auto"}
-                </span>
-                {orientationOverridden && (
-                  <button
-                    type="button"
-                    onClick={() => setOrientation(autoOrientation)}
-                    title={`Reset to auto-detected (${autoOrientation})`}
+              {/* Portrait / Landscape segmented toggle.
+                  Colours come from the .nr-orient-btn class (defined in the <style>
+                  block at the bottom) because inline styles cannot use !important
+                  and lose to global button resets. */}
+              <div
+                role="tablist"
+                aria-label="Page orientation"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 0,
+                  padding: 2,
+                  borderRadius: 7,
+                  background: "#f1f5f9",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                {(["portrait", "landscape"] as Orientation[]).map((o) => {
+                  const active = orientation === o;
+                  const disabled = loading || !htmlContent;
+                  return (
+                    <button
+                      key={o}
+                      ref={(el) => paintPill(el, active, disabled)}
+                      type="button"
+                      role="tab"
+                      className="nr-orient-btn"
+                      data-active={active ? "true" : "false"}
+                      aria-selected={active}
+                      disabled={disabled}
+                      onClick={() => setOrientationSafe(o)}
+                      title={
+                        o === autoOrientation
+                          ? `Auto-detected from report (${o})`
+                          : `Switch to ${o}`
+                      }
+                      style={{
+                        letterSpacing: "0.01em",
+                        cursor: disabled ? "not-allowed" : "pointer",
+                        transition:
+                          "background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease",
+                        textTransform: "capitalize",
+                        textAlign: "center",
+                        outline: "none",
+                      }}
+                    >
+                      {o === "portrait" ? "Portrait" : "Landscape"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Auto / Manual badge + Reset */}
+              {!loading && htmlContent && (
+                <>
+                  <span
+                    title={`Auto-detected from report @page rule: ${autoOrientation}`}
                     style={{
-                      height: 32,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#0b4ca1",
-                      background: "#eff6ff",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: 6,
-                      padding: "0 10px",
-                      cursor: "pointer",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: orientationOverridden ? "#d97706" : "#059669",
+                      background: orientationOverridden ? "#fffbeb" : "#ecfdf5",
+                      border: `1px solid ${
+                        orientationOverridden ? "#fcd34d" : "#a7f3d0"
+                      }`,
+                      borderRadius: 4,
+                      padding: "3px 7px",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    <RotateCcw size={12} strokeWidth={2.5} />
-                    Reset
-                  </button>
-                )}
-              </>
-            )}
+                    {orientationOverridden ? "Manual" : "Auto"}
+                  </span>
+                  {orientationOverridden && (
+                    <button
+                      type="button"
+                      onClick={() => setOrientation(autoOrientation)}
+                      title={`Reset to auto-detected (${autoOrientation})`}
+                      style={{
+                        height: 26,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#00378c",
+                        background: "#eff6ff",
+                        border: "1px solid #bfdbfe",
+                        borderRadius: 6,
+                        padding: "0 10px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <RotateCcw size={12} strokeWidth={2.5} />
+                      Reset
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
 
+          {/* RIGHT: Close button only */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <button
               type="button"
               onClick={onClose}
