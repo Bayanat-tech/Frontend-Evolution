@@ -1,7 +1,7 @@
 import { AlertCircle, Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
 import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue } from "../../api/lookups";
-import { Input } from "../ui/Input";
+import { BiscDatePicker } from "../ui/BiscDatePicker";
 import { LookupField } from "../ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
@@ -90,7 +90,7 @@ export function SmartInlineAllocationTable({
       ? [
           { key: "sr", header: "#", width: 28, align: "center" },
           { key: "inv_no", header: "Invoice No", width: 130, align: "left" },
-          { key: "inv_date", header: "Invoice Date", width: 105, align: "left" },
+          { key: "inv_date", header: "Invoice Date", width: 120, align: "left" },
           { key: "inv_amt", header: "Invoice Amount", width: 100, align: "right" },
           { key: "outstanding", header: "Outstanding", width: 100, align: "right" },
           { key: "allocated", header: "Allocated Amount", width: 120, align: "right" },
@@ -123,7 +123,7 @@ export function SmartInlineAllocationTable({
       <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-slate-100/90 px-2 py-1 text-xs">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Compact Child Type Badge */}
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1e293b] text-white text-[10px] font-semibold uppercase tracking-wide shadow-2xs">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#173f6c] text-white text-[10px] font-semibold uppercase tracking-wide shadow-2xs">
             {childTable === "invoice" ? (
               <FileText size={10} />
             ) : childTable === "job" ? (
@@ -237,7 +237,7 @@ export function SmartInlineAllocationTable({
           {childTable && (
             <button
               type="button"
-              className="inline-flex items-center h-5 px-2 text-[10px] font-bold rounded bg-[#1e293b] text-white hover:bg-slate-700 shadow-2xs cursor-pointer transition-colors"
+              className="inline-flex items-center h-5 px-2 text-[10px] font-bold rounded bg-[#173f6c] text-white hover:bg-[#1f5087] shadow-2xs cursor-pointer transition-colors"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -265,7 +265,7 @@ export function SmartInlineAllocationTable({
         </div>
       </div>
 
-      {/* Sub-table Body: Compact height, fixed width with Deep Slate Header */}
+      {/* Sub-table Body: Compact height, fixed width with Steel Navy Header */}
       <div className="max-h-[160px] overflow-auto">
         <table
           className="table-fixed text-xs border-collapse"
@@ -276,12 +276,12 @@ export function SmartInlineAllocationTable({
               <col key={i} style={{ width: `${col.width}px` }} />
             ))}
           </colgroup>
-          <thead className="sticky top-0 bg-[#1e293b] text-white shadow-2xs z-10">
+          <thead className="sticky top-0 bg-[#173f6c] text-white shadow-2xs z-10">
             <tr>
               {colConfigs.map((col, i) => (
                 <th
                   key={i}
-                  className={`px-1.5 py-1 text-[10.5px] font-semibold text-white tracking-wider border-r border-slate-700/80 last:border-r-0 ${
+                  className={`px-1.5 py-1 text-[10.5px] font-semibold text-white tracking-wider border-r border-[#26538c]/70 last:border-r-0 ${
                     col.align === "right"
                       ? "text-right"
                       : col.align === "center"
@@ -314,7 +314,7 @@ export function SmartInlineAllocationTable({
               rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+                  className="border-b border-slate-100 hover:bg-blue-50/30 transition-colors"
                 >
                   {/* # Column */}
                   <td className="px-1 py-0.5 text-center font-mono text-[10.5px] text-slate-500">
@@ -326,7 +326,7 @@ export function SmartInlineAllocationTable({
                       {/* Invoice No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
@@ -342,20 +342,13 @@ export function SmartInlineAllocationTable({
                         />
                       </td>
 
-                      {/* Invoice Date */}
+                      {/* Invoice Date with compact BiscDatePicker */}
                       <td className="px-1 py-0.5">
-                        <Input
-                          className="h-[22px] text-[11px] px-1 py-0"
+                        <BiscDatePicker
+                          compact
                           disabled={disabled}
-                          type="date"
                           value={dateInput(row.inv_date)}
-                          onChange={(e) => onChange(row.id, { inv_date: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
+                          onChange={(val) => onChange(row.id, { inv_date: val })}
                         />
                       </td>
 
@@ -373,7 +366,7 @@ export function SmartInlineAllocationTable({
                       <td className="px-1 py-0.5">
                         <div className="flex items-center gap-1">
                           <input
-                            className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                            className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#173f6c] focus:outline-none"
                             disabled={disabled}
                             type="number"
                             step="0.001"
@@ -437,7 +430,7 @@ export function SmartInlineAllocationTable({
                       {/* Doc Ref */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           value={text(row.doc_refno)}
                           onChange={(e) => onChange(row.id, { doc_refno: e.target.value })}
@@ -453,7 +446,7 @@ export function SmartInlineAllocationTable({
                       {/* Doc Ref 2 */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           value={text(row.doc_refno_2)}
                           onChange={(e) => onChange(row.id, { doc_refno_2: e.target.value })}
@@ -469,7 +462,7 @@ export function SmartInlineAllocationTable({
                       {/* Amount */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           type="number"
                           step="0.001"
@@ -569,7 +562,7 @@ export function SmartInlineAllocationTable({
                       {/* Description */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           value={text(row.exp_description)}
                           onChange={(e) => onChange(row.id, { exp_description: e.target.value })}
@@ -585,7 +578,7 @@ export function SmartInlineAllocationTable({
                       {/* Job No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           value={text(row.job_no)}
                           onChange={(e) => onChange(row.id, { job_no: e.target.value })}
@@ -601,7 +594,7 @@ export function SmartInlineAllocationTable({
                       {/* Amount */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#173f6c] focus:outline-none"
                           disabled={disabled}
                           type="number"
                           step="0.001"
