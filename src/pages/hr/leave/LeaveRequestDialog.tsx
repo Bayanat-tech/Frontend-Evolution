@@ -9,6 +9,7 @@ import {
   validateHrLeave,
   type HrEmployee,
   type HrLeaveEntitlement,
+  getleavedaycount,
 } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
 import { LmsDialog } from "../../../components/ui/LmsDialog";
@@ -110,18 +111,20 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const [requestNumber, setRequestNumber] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
+  const [fetchingLeaveDays, setFetchingLeaveDays] = useState(false);
 
   const loginId = String( user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
   const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
-  const tenantName = String(user?.tenant_name || user?.TENANT_NAME || "");
+  const LOGINUSER = String(user?.LOGINID || user?.loginid || "")
+  const tenantName = /[A-Za-z]/.test(LOGINUSER.trim()) ? "MHDL" : "ALMS";
   const isCreator =initialRow?.CREATED_BY === user?.loginid1 || initialRow?.CREATED_BY === undefined || initialRow?.CREATED_BY === null || initialRow?.CREATED_BY === '';
   const createMode = !requestNumber;
   const fieldsDisabled = readOnly || !isCreator;
 
   useEffect(() => {
-    // console.log('user',user);
+    console.log('user',user);
     if (!open) return;
     const initialRequestNumber = getRowString(initialRow, "REQUEST_NUMBER", "requestNumber");
     setForm(initialRow ? formFromRow(initialRow) : { ...initialForm, requestDate: today() });
@@ -185,7 +188,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     }
   };
 
-  console.log('initialRow',initialRow);
+  // console.log('initialRow',initialRow);
 
   useEffect(() => {
     if (!form.employeeCode) {
@@ -210,6 +213,45 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const supervisorName = getApproverDisplay2(approverInfo, "SUPERVISOR_NAME", form.supervisor);
   const deptHeadName = getApproverDisplay2(approverInfo, "DEPT_HEAD_NAME", form.deptHead);
   const hodName = getApproverDisplay2(approverInfo, "MANAGER_NAME", form.hod);
+
+    useEffect(() => {
+    if (!open) return;
+    if (!form.leaveStartDate || !form.leaveEndDate || !form.employeeCode || !form.leaveType) {
+      return;
+    }
+
+    let cancelled = false;setFetchingLeaveDays(true);
+
+    getleavedaycount(
+      {
+        leaveStartDate: toBackendDate(form.leaveStartDate),
+        leaveEndDate: toBackendDate(form.leaveEndDate),
+        leaveType: form.leaveType,
+        company_code: companyCode,
+        employee_code: form.employeeCode,
+        half_day: form.halfDay,
+      },
+      tenantName,
+    )
+      .then((response) => {
+        if (cancelled) return;
+        const days = extractLeaveDays(response);
+        if (days !== null) {
+          setForm((current) => ({ ...current, leaveDays: String(days) }));
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn("getleavedaycount failed, using local calculation", error);
+      })
+      .finally(() => {
+        if (!cancelled) setFetchingLeaveDays(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open,form.leaveStartDate,form.leaveEndDate,form.employeeCode, form.leaveType,form.halfDay,companyCode,tenantName,]);
 
   const handleEmployeeChange = (employeeCode: string, sourceEmployees = employees) => {
     const employee = sourceEmployees.find((item) => getEmployeeCode(item) === employeeCode);
@@ -734,18 +776,17 @@ function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
 }
 
 async function loadEmployees(loginId: string) {
-  let rows = await getHrEmployees(loginId);
-  if (!rows.length) {
-    rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
-  }
+  // let rows = await getHrEmployees(loginId);
+   const rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
+  // }
   return uniqueBy(rows, getEmployeeCode).sort((a, b) => getEmployeeName(a).localeCompare(getEmployeeName(b)));
 }
 
 async function loadLeaveEntitlement(employeeId: string) {
-  let rows = await getHrLeaveEntitlement(employeeId);
-  if (!rows.length) {
-    rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
-  }
+  // let rows = await getHrLeaveEntitlement(employeeId);
+  // if (!rows.length) {
+    const rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
+  // }
   return uniqueBy(rows, (row) => String(row.LEAVE_TYPE || "")).filter((row) => row.LEAVE_TYPE);
 }
 
@@ -889,6 +930,32 @@ function getStatusRemark(row: Record<string, unknown> | null | undefined) {
   );
 }
 
+function extractLeaveDays(response: unknown): number | null {
+  if (response === null || response === undefined) return null;
+  if (typeof response === "number") return Number.isFinite(response) ? response : null;
+  if (typeof response === "string") {
+    const parsed = Number(response);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof response === "object") {
+    const record = response as Record<string, unknown>;
+    const raw =
+      record.leaveDays ??
+      record.LEAVE_DAYS ??
+      record.leave_days ??
+      record.days ??
+      record.DAYS ??
+      record.count ??
+      record.COUNT ??
+      record.data;
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === "object") return extractLeaveDays(raw);
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
 // function getDateInputValue(value: string) {
 //   if (!value) return "";
 //   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
@@ -902,12 +969,12 @@ function getYesNoValue(value: string): "N" | "Y" | "" {
   return normalized === "Y" || normalized === "N" ? normalized : "";
 }
 
-function getValidationToneClass(text: string) {
-  const lower = text.toLowerCase();
-  if (!text) return "";
-  if (lower.includes("insufficient") || lower.includes("failed") || lower.includes("error")) return "is-error";
-  return "is-success";
-}
+// function getValidationToneClass(text: string) {
+//   const lower = text.toLowerCase();
+//   if (!text) return "";
+//   if (lower.includes("insufficient") || lower.includes("failed") || lower.includes("error")) return "is-error";
+//   return "is-success";
+// }
 
   function getApproverDisplay2(row: Record<string, unknown> | null, nameKey: string, fallbackId: string) {
     const name = row ? String(row[nameKey] || "").trim() : "";
@@ -915,29 +982,29 @@ function getValidationToneClass(text: string) {
     return fallbackId || "";
   }
 
-function parseValidationMessage(response: unknown) {
-  if (typeof response === "string") return parseValidationString(response);
-  if (response && typeof response === "object") {
-    const record = response as Record<string, unknown>;
-    const raw = record.validationResult ?? record.message ?? record.data;
-    if (typeof raw === "string") return parseValidationString(raw);
-    if (record.success === false) return String(record.message || "Leave validation failed");
-  }
-  return "Leave validation passed";
-}
+// function parseValidationMessage(response: unknown) {
+//   if (typeof response === "string") return parseValidationString(response);
+//   if (response && typeof response === "object") {
+//     const record = response as Record<string, unknown>;
+//     const raw = record.validationResult ?? record.message ?? record.data;
+//     if (typeof raw === "string") return parseValidationString(raw);
+//     if (record.success === false) return String(record.message || "Leave validation failed");
+//   }
+//   return "Leave validation passed";
+// }
 
 function hasActualResumeDate(row: Record<string, unknown> | null | undefined) {
   const value = getRowString(row, "ACTUAL_RESUME_DATE", "actualResumeDate").trim();
   return Boolean(value) && value !== "0000-00-00";
 }
 
-function parseValidationString(value: string) {
-  if (value.includes("$$$")) {
-    const [status, balance] = value.split("$$$");
-    return status.toUpperCase().startsWith("S") ? `Available balance: ${balance} days` : `Leave validation failed: ${balance}`;
-  }
-  return value || "Leave validation passed";
-}
+// function parseValidationString(value: string) {
+//   if (value.includes("$$$")) {
+//     const [status, balance] = value.split("$$$");
+//     return status.toUpperCase().startsWith("S") ? `Available balance: ${balance} days` : `Leave validation failed: ${balance}`;
+//   }
+//   return value || "Leave validation passed";
+// }
 
 function getUuid() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
