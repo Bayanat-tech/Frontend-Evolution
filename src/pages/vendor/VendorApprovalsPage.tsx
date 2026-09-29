@@ -6,19 +6,46 @@ import { DataTable } from "../../components/ui/DataTable";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { bulkVendorApproval, executeVendorSql, getVendorRequest, type VendorRequestPayload } from "../../api/vendor";
 import { useAuth } from "../../state/AuthContext";
-import { makeVendorColumns, StatusBadge, TabStrip, VendorPageHeader } from "./components";
+import { makeVendorColumns, StatusBadge, TabStrip, VendorPageHeader, vendorCol, money, lastReason, fmtDate } from "./components";
 import { vendorApprovalSql } from "./vendorSql";
 import type { Notice, VendorTableRow } from "./vendorTypes";
 import { VendorActionDialog } from "./VendorActionDialog";
 import { VendorRequestDialog } from "./VendorRequestDialog";
 
-type ApprovalTab = "pending" | "inProgress" | "rejected" | "closed";
+// type ApprovalTab = "pending" | "inProgress" | "rejected" | "closed";
+
+// const tabActions: Record<ApprovalTab, string[]> = {
+//   pending: ["PENDING", "SUBMITTED"],
+//   inProgress: ["IN_PROGRESS", "INPROGRESS"],
+//   rejected: ["REJECTED"],
+//   closed: ["APPROVED", "CLOSED"],
+// };
+
+type ApprovalTab = "pending" | "sentBack" | "inProgress" | "rejected" | "closed";
 
 const tabActions: Record<ApprovalTab, string[]> = {
   pending: ["PENDING", "SUBMITTED"],
+  sentBack: ["SENTBACK"],
   inProgress: ["IN_PROGRESS", "INPROGRESS"],
   rejected: ["REJECTED"],
   closed: ["APPROVED", "CLOSED"],
+};
+
+const tabExtraColumns = (tab: ApprovalTab): ColumnDef<VendorTableRow>[] => {
+  const vendor = vendorCol("ACC_NAME", "Vendor");
+  const amount = vendorCol("AMOUNT", "Amount", (r) => money(r.AMOUNT));
+  switch (tab) {
+    case "pending":    return [];
+    case "sentBack":   return [
+      // vendorCol("TO_LEVEL", "Sent To Level"),
+      vendorCol("SENDBACK_HISTORY", "Sentback History", (r) => lastReason(r.SENDBACK_HISTORY)),
+      // vendorCol("ACTION_DATE", "Date", (r) => fmtDate(r.ACTION_DATE))
+    ];
+    case "inProgress": return [];
+    case "rejected":   return [
+      vendorCol("REJECT_HISTORY", "REJECTED HISTORY", (r) => lastReason(r.REJECT_HISTORY))];
+    case "closed":     return [ vendorCol("ERP_DOC_NO", "ERP Doc")];
+  }
 };
 
 export function VendorApprovalsPage() {
@@ -59,7 +86,7 @@ export function VendorApprovalsPage() {
   type ApprovalBuckets = Record<ApprovalTab, VendorTableRow[]>;
 
 const [buckets, setBuckets] = useState<ApprovalBuckets>({
-  pending: [], inProgress: [], rejected: [], closed: [],
+  pending: [], sentBack: [], inProgress: [], rejected: [], closed: [],
 });
 
 const loadRows = useCallback(async () => {
@@ -69,12 +96,12 @@ const loadRows = useCallback(async () => {
   if (!company || !loginid) return;
   setLoading(true);
   try {
-    const [pending, inProgress, rejected, closed] = await Promise.all(
+    const [pending, sentBack, inProgress, rejected, closed] = await Promise.all(
       (Object.keys(tabActions) as ApprovalTab[]).map((key) =>
         executeVendorSql(vendorApprovalSql(company, loginid, tabActions[key], approverLoginid))
       )
     );
-    setBuckets({ pending, inProgress, rejected, closed });
+    setBuckets({ pending, sentBack, inProgress, rejected, closed });
     setSelected(new Set());
   } catch (err) {
     setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to load approval queue" });
@@ -88,6 +115,7 @@ useEffect(() => { void loadRows(); }, [loadRows]);
 const rows = buckets[tab];
 const tabCounts = useMemo(() => ({
   pending: buckets.pending.length,
+  sentBack: buckets.sentBack.length,
   inProgress: buckets.inProgress.length,
   rejected: buckets.rejected.length,
   closed: buckets.closed.length,
@@ -169,17 +197,19 @@ const tabCounts = useMemo(() => ({
 
   const baseColumns = useMemo<ColumnDef<VendorTableRow>[]>(() => {
   const cols = makeVendorColumns([
+      ...tabExtraColumns(tab),
     {
       id: "actions",
-      header: "Approval",
+      header: "Actions",
       enableSorting: false,
       cell: ({ row }) => {
         const docNo = String(row.original.DOC_NO || "");
         const flowLevel = row.original.FLOW_LEVEL as string | number | undefined;
+        const locked = tab !== "pending";
         return (
           <div className="flex items-center gap-1">
             <Button size="icon" variant="ghost" title="View header/details" onClick={() => void openViewer(row.original)}><Eye size={15} /></Button>
-            <Button size="icon" variant="ghost" title="Edit / approve" disabled={tab === "inProgress"} onClick={() => void openEditor(row.original)}><Pencil size={15} /></Button>
+            <Button size="icon" variant="ghost" title="Edit / approve" disabled={locked} onClick={() => void openEditor(row.original)}><Pencil size={15} /></Button>
             <Button size="icon" variant="ghost" title="Send back" disabled={tab === "inProgress"} onClick={() => setAction({ docNo, action: "SENTBACK", flowLevel })}><RotateCcw size={15} /></Button>
             <Button size="icon" variant="ghost" title="Reject" disabled={tab === "inProgress"} onClick={() => setAction({ docNo, action: "REJECTED", flowLevel })}><XCircle size={15} /></Button>
           </div>
@@ -265,26 +295,17 @@ const tabCounts = useMemo(() => ({
       <VendorPageHeader title="Vendor Approval" />
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-      {/* <TabStrip
+      <TabStrip
         value={tab}
         onChange={setTab}
         tabs={[
-          { label: "Pending", value: "pending"},
-          { label: "In Progress", value: "inProgress" },
-          { label: "Rejected", value: "rejected" },
-          { label: "Closed", value: "closed" },
+          { label: "Pending", value: "pending", count: tabCounts.pending },
+          { label: "Sent Back", value: "sentBack", count: tabCounts.sentBack },
+          { label: "In Progress", value: "inProgress", count: tabCounts.inProgress },
+          { label: "Rejected", value: "rejected", count: tabCounts.rejected },
+          { label: "Closed", value: "closed", count: tabCounts.closed },
         ]}
-      /> */}
-      <TabStrip
-  value={tab}
-  onChange={setTab}
-  tabs={[
-    { label: "Pending", value: "pending", count: tabCounts.pending },
-    { label: "In Progress", value: "inProgress", count: tabCounts.inProgress },
-    { label: "Rejected", value: "rejected", count: tabCounts.rejected },
-    { label: "Closed", value: "closed", count: tabCounts.closed },
-  ]}
-/>
+      />
     <div className={tab === "pending" ? "vendor-selection-table" : ""}>
       <DataTable
         columns={columns}

@@ -86,7 +86,8 @@ export function VendorActionDialog({
       await updateVendorLpoStatus({
         doc_no: docNo,
         company_code: user?.company_code || "",
-        flow_level: isReject ? 0 : selectedLevel || toSelectValue(flowLevel) || 0,
+        // flow_level: isReject ? 0 : selectedLevel || toSelectValue(flowLevel) || 0,
+        flow_level: isReject ? Number(flowLevel) || 0 : selectedLevel || toSelectValue(flowLevel) || 0,
         remarks: remarksWithUser,
         action,
       });

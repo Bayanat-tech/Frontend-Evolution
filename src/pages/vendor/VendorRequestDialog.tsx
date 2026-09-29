@@ -218,12 +218,22 @@ useEffect(() => {
   const save = async (event: FormEvent | undefined, action: VendorRequestSaveAction) => {
     event?.preventDefault();
     setError("");
-    if (!formRef.current?.reportValidity()) return;
-    const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
+     if (!formRef.current?.reportValidity()) return;
+    // const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
     if (!form.REF_DOC_NO && !isEdit) return setError("Ref Doc No is required.");
-    if (!form.INVOICE_NUMBER) return setError("Invoice No is required.");
-    if (!form.INVOICE_DATE) return setError("Invoice Date is required.");
-    if (action !== "SAVEASDRAFT" && totalQty <= 0) return setError("Total quantity cannot be 0.");
+    // if (!form.INVOICE_NUMBER) return setError("Invoice No is required.");
+    // if (!form.INVOICE_DATE) return setError("Invoice Date is required.");
+    // if (action !== "SAVEASDRAFT" && totalQty <= 0) return setError("Total quantity cannot be 0.");
+
+
+    const fail = (tab: "info" | "details", msg: string) => { setActiveTab(tab); setError(msg); };
+    const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
+
+    if (!form.REF_DOC_NO && !isEdit) return fail("info", "Ref Doc No is required.");
+    if (!form.INVOICE_NUMBER) return fail("info", "Invoice No is required.");
+    if (!form.INVOICE_DATE) return fail("info", "Invoice Date is required.");
+    if (totalQty <= 0) return fail("details", "Qty is required. Enter a quantity greater than 0 for at least one item.");
+    if (activeTab === "info" && !formRef.current?.reportValidity()) return;
 
     const filteredItems = action === "SAVEASDRAFT" ? items : items.filter((item) => Number(item.QTY || 0) > 0);
     try {
@@ -358,7 +368,7 @@ useEffect(() => {
   <div className="grid gap-2">
     <div className="vendor-field-group-row">
   <FieldGroup title="Document Details" icon={FileText} columns={2}>
-    <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
+    <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} placeholder="Auto generated" readOnly />
     <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={infoReadOnly} />
     <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={infoReadOnly} />
     <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={infoReadOnly} />
@@ -432,7 +442,7 @@ useEffect(() => {
             onItemsChange={setItems}
             onAddPending={() => setPendingOpen(true)}
             onOpenAttachment={(srNo) => setFilesOpen({ srNo, title: `Attachments for Serial No: ${srNo}` })}
-            readOnly={readOnly}
+            readOnly={readOnly || (approvalMode && Number(approvalFlowLevel) > 1)}
             attachmentsLocked={attachmentsLocked}
           />
         )}
@@ -1188,14 +1198,14 @@ function TabButton({ active, children, onClick }: { active: boolean; children: s
     onClick={onClick}>{children}</button>;
 }
 
-function FormInput({ label, value, onChange, type = "text", readOnly, required, className, inputClassName,}: { label: string; value: string; onChange?: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string; inputClassName?: string }) {
+function FormInput({ label, value, placeholder, onChange, type = "text", readOnly, required, className, inputClassName,}: { label: string; value: string; placeholder?: string; onChange?: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string; inputClassName?: string }) {
   return (
     // <label className={cn("grid gap-0.5 text-[11px]  leading-tight", className)}>
         <label className={cn("grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground leading-tight", className)}>
        <span className="font-semibold text-muted-foreground">
          {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
        </span>
-      <Input className={cn("h-7 text-[11px] w-full", inputClassName)} value={value} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)}
+      <Input className={cn("h-7 text-[11px] w-full", inputClassName)} value={value} placeholder={placeholder} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")} />
     </label>

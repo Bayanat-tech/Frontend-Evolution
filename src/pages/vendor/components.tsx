@@ -201,6 +201,9 @@ export function TabStrip<T extends string>({
 //   ];
 // }
 
+export const money = (v: unknown) =>
+  Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+
 export function makeVendorColumns(extra?: ColumnDef<VendorTableRow>[]): ColumnDef<VendorTableRow>[] {
   return [
     {
@@ -212,6 +215,7 @@ export function makeVendorColumns(extra?: ColumnDef<VendorTableRow>[]): ColumnDe
     { accessorKey: "REF_DOC_NO", header: "Ref Doc No", cell: ({ getValue }) => <span className="text-[11.5px] text-foreground font-medium">{String(getValue() || "")}</span> },
     { accessorKey: "INVOICE_NUMBER", header: "Invoice No", cell: ({ getValue }) => <span className="text-[11.5px] text-foreground font-medium">{String(getValue() || "")}</span> },
     { accessorKey: "INVOICE_DATE", header: "Invoice Date", cell: ({ getValue }) => <span className="text-[11.5px] text-foreground">{String(getValue() || "")}</span> },
+    {  accessorKey: "AMOUNT", header: "Amount", cell: ({ getValue }) => <span className="text-[11.5px] text-foreground">{String(getValue() || "")}</span> },
     { accessorKey: "REMARKS", header: "Remarks", cell: ({ getValue }) => <span className="text-[11.5px] text-foreground">{String(getValue() || "")}</span> },
     {
       accessorKey: "LAST_ACTION",
@@ -256,3 +260,19 @@ export function FieldGroup({
     </div>
   );
 }
+
+export const lastReason = (v: unknown) => String(v ?? "").split(" | ").pop()?.trim() || "";
+
+export const fmtDate = (v: unknown) => {
+  if (!v) return "";
+  const d = new Date(String(v));
+  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("en-GB").replace(/\//g, "-");
+};
+
+const txt = (t: unknown) => <span className="text-[11.5px] text-foreground">{String(t ?? "")}</span>;
+
+export const vendorCol = (accessorKey: string, header: string, render?: (row: VendorTableRow) => unknown): ColumnDef<VendorTableRow> => ({
+  accessorKey,
+  header,
+  cell: ({ row }) => txt(render ? render(row.original) : row.original[accessorKey]),
+});

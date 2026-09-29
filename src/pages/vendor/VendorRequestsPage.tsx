@@ -6,17 +6,38 @@ import { Button } from "../../components/ui/Button";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { executeVendorSql, getVendorRequest, type VendorRequestPayload } from "../../api/vendor";
 import { useAuth } from "../../state/AuthContext";
-import { makeVendorColumns, TabStrip, VendorPageHeader } from "./components";
+import { makeVendorColumns, TabStrip, VendorPageHeader, vendorCol, money, lastReason, fmtDate } from "./components";
 import { vendorRequestSql } from "./vendorSql";
 import type { Notice, VendorTableRow } from "./vendorTypes";
 import { VendorRequestDialog } from "./VendorRequestDialog";
 
-type RequestTab = "DRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED";
+type RequestTab = "DRAFT" | "SENTBACK" | "SUBMITTED" | "REJECTED" | "CLOSED";
+
+const tabExtraColumns = (tab: RequestTab): ColumnDef<VendorTableRow>[] => {
+  // const amount = vendorCol("AMOUNT", "Amount", (r) => money(r.AMOUNT));
+  switch (tab) {
+   case "DRAFT": return [];
+    case "SENTBACK":  return [
+      vendorCol("SENDBACK_HISTORY", "Reason", (r) => lastReason(r.SENDBACK_HISTORY)),
+      // vendorCol("ACTION_BY", "Sent By"),
+      // vendorCol("ACTION_DATE", "Date", (r) => fmtDate(r.ACTION_DATE))
+    ];
+    case "SUBMITTED": return [];
+    case "REJECTED": return [
+      vendorCol("REJECT_HISTORY", "Reject Reason", (r) => lastReason(r.REJECT_HISTORY)),
+      // vendorCol("ACTION_BY", "Rejected By"),
+      // vendorCol("ACTION_DATE", "Date", (r) => fmtDate(r.ACTION_DATE))
+    ];
+    case "CLOSED": return [
+      vendorCol("ERP_DOC_NO", "ERP Doc"),
+      // vendorCol("ACTION_DATE", "Approved Date", (r) => fmtDate(r.ACTION_DATE))
+    ];
+  }
+};
 
 export function VendorRequestsPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<RequestTab>("DRAFT");
-  // rows are derived from allRows based on selected tab
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -86,37 +107,83 @@ useEffect(() => {
 //   }, [loadRows]);
     
 // after
-const rows = useMemo(() => {
-  return allRows.filter((r) => {
-    const action = String(r.LAST_ACTION || "").trim().toUpperCase();
-    if (tab === "DRAFT") return !action || action === "SAVEASDRAFT" || action === "SENTBACK";
+// const rows = useMemo(() => {
+//   return allRows.filter((r) => {
+//     const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+//     if (tab === "DRAFT") return !action || action === "SAVEASDRAFT" || action === "SENTBACK";
+// // const rows = useMemo(() => {
+// //   return allRows.filter((r) => {
+// //     const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+// //     if (tab === "DRAFT") return !action || action === "SAVEASDRAFT";
+//     if (tab === "SUBMITTED") return ["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"].includes(action);
+//     if (tab === "REJECTED") return action === "REJECTED";
+//     if (tab === "CLOSED") return action === "CLOSED";
+//     return action === tab;
+//   });
+// }, [allRows, tab]);
+
 // const rows = useMemo(() => {
 //   return allRows.filter((r) => {
 //     const action = String(r.LAST_ACTION || "").trim().toUpperCase();
 //     if (tab === "DRAFT") return !action || action === "SAVEASDRAFT";
-    if (tab === "SUBMITTED") return ["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"].includes(action);
-    if (tab === "REJECTED") return action === "REJECTED";
-    if (tab === "CLOSED") return action === "CLOSED";
-    return action === tab;
-  });
-}, [allRows, tab]);
+//     if (tab === "SENTBACK") return action === "SENTBACK";
+//     if (tab === "SUBMITTED") return ["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"].includes(action);
+//     if (tab === "REJECTED") return action === "REJECTED";
+//     if (tab === "CLOSED") return action === "CLOSED";
+//     return action === tab;
+//   });
+// }, [allRows, tab]);
 
+const bucketOf = (r: VendorTableRow): RequestTab => {
+  const a = String(r.LAST_ACTION || "").trim().toUpperCase();
+  if (a === "REJECTED") return "REJECTED";
+  if (String(r.FINAL_APPROVED || "").toUpperCase() === "YES") return "CLOSED";
+  if (a === "SENTBACK") return Number(r.FLOW_LEVEL) === 0 ? "SENTBACK" : "SUBMITTED";
+  if (!a || a === "SAVEASDRAFT") return "DRAFT";
+  return "SUBMITTED";
+};
+
+const rows = useMemo(() => allRows.filter((r) => bucketOf(r) === tab), [allRows, tab]);
 const tabCounts = useMemo(() => {
-  const countByStatus = (status: string | string[]) => {
-    const statuses = Array.isArray(status) ? status : [status];
-    return allRows.filter((r) => statuses.includes(String(r.LAST_ACTION || "").trim().toUpperCase())).length;
-  };
-
-  return {
-    DRAFT: allRows.filter((r) => {
-      const action = String(r.LAST_ACTION || "").trim().toUpperCase();
-      return !action || action === "SAVEASDRAFT" || action === "SENTBACK";;
-    }).length,
-    SUBMITTED: countByStatus(["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"]),
-    REJECTED: countByStatus("REJECTED"),
-    CLOSED: countByStatus("CLOSED"),
-  };
+  const c = { DRAFT: 0, SENTBACK: 0, SUBMITTED: 0, REJECTED: 0, CLOSED: 0 };
+  allRows.forEach((r) => { c[bucketOf(r)]++; });
+  return c;
 }, [allRows]);
+
+// const tabCounts = useMemo(() => {
+//   const countByStatus = (status: string | string[]) => {
+//     const statuses = Array.isArray(status) ? status : [status];
+//     return allRows.filter((r) => statuses.includes(String(r.LAST_ACTION || "").trim().toUpperCase())).length;
+//   };
+
+//   return {
+//     DRAFT: allRows.filter((r) => {
+//       const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+//       return !action || action === "SAVEASDRAFT" || action === "SENTBACK";;
+//     }).length,
+//     SUBMITTED: countByStatus(["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"]),
+//     REJECTED: countByStatus("REJECTED"),
+//     CLOSED: countByStatus("CLOSED"),
+//   };
+// }, [allRows]);
+
+// const tabCounts = useMemo(() => {
+//   const countByStatus = (status: string | string[]) => {
+//     const statuses = Array.isArray(status) ? status : [status];
+//     return allRows.filter((r) => statuses.includes(String(r.LAST_ACTION || "").trim().toUpperCase())).length;
+//   };
+
+//   return {
+//     DRAFT: allRows.filter((r) => {
+//       const action = String(r.LAST_ACTION || "").trim().toUpperCase();
+//       return !action || action === "SAVEASDRAFT";
+//     }).length,
+//     SENTBACK: countByStatus("SENTBACK"),
+//     SUBMITTED: countByStatus(["SUBMITTED", "IN_PROGRESS", "PENDING", "APPROVED"]),
+//     REJECTED: countByStatus("REJECTED"),
+//     CLOSED: countByStatus("CLOSED"),
+//   };
+// }, [allRows]);
 
 const openExisting = async (row: VendorTableRow) => {
     const rawDocNo = String(row.DOC_NO || "");
@@ -132,6 +199,7 @@ const openExisting = async (row: VendorTableRow) => {
   };
 
   const columns = useMemo<ColumnDef<VendorTableRow>[]>(() => makeVendorColumns([
+      ...tabExtraColumns(tab),
     {
       id: "actions",
       header: "Actions",
@@ -154,7 +222,7 @@ const openExisting = async (row: VendorTableRow) => {
         // actions={<><RefreshButton loading={loading} onClick={() => void loadRows()} /><Button size="sm" onClick={() => setEditor(null)}><Plus size={14} /> New Request</Button></>}
       />
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-      <TabStrip
+      {/* <TabStrip
         value={tab}
         onChange={setTab}
         tabs={[
@@ -163,7 +231,18 @@ const openExisting = async (row: VendorTableRow) => {
           { label: "Reject", value: "REJECTED" ,count: tabCounts.REJECTED},
           { label: "Closed", value: "CLOSED" ,count: tabCounts.CLOSED},
         ]}
-      />
+      /> */}
+      <TabStrip
+  value={tab}
+  onChange={setTab}
+  tabs={[
+    { label: "Draft", value: "DRAFT" ,count: tabCounts.DRAFT},
+    { label: "Sent Back", value: "SENTBACK" ,count: tabCounts.SENTBACK},
+    { label: "In Progress", value: "SUBMITTED" ,count: tabCounts.SUBMITTED},
+    { label: "Reject", value: "REJECTED" ,count: tabCounts.REJECTED},
+    { label: "Closed", value: "CLOSED" ,count: tabCounts.CLOSED},
+  ]}
+/>
       <DataTable
         columns={columns}
         data={rows}
