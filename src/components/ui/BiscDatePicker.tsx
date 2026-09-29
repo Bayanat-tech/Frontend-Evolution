@@ -12,7 +12,6 @@ export type BiscDatePickerProps = {
   maxYear?: number;
   error?: boolean;
   required?: boolean;
-  compact?: boolean;
 };
 
 const MONTH_NAMES = [
@@ -31,7 +30,6 @@ export function BiscDatePicker({
   minYear = 1950,
   maxYear = 2050,
   error = false,
-  compact = false,
 }: BiscDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -287,17 +285,15 @@ export function BiscDatePicker({
         type="button"
         disabled={disabled}
         onClick={handleToggle}
-        className={`bisc-date-picker-trigger w-full ${
-          compact ? "h-[22px] px-1.5 py-0 rounded-[3px] text-[11px]" : "h-[28px] px-2 rounded-[6px] text-xs"
-        } border ${
+        className={`bisc-date-picker-trigger w-full h-[28px] px-2 rounded-[6px] border ${
           error ? "border-destructive ring-1 ring-destructive/40" : "border-[#94a3b8]"
-        } bg-white text-foreground flex items-center justify-between transition-all cursor-pointer select-none
+        } bg-white text-foreground text-xs flex items-center justify-between transition-all cursor-pointer select-none
           ${disabled ? "opacity-60 cursor-not-allowed bg-slate-50" : "hover:border-[#64748b] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30 shadow-2xs"}`}
       >
-        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-[11px]" : "text-[12px]"} tracking-tight` : `text-slate-400 ${compact ? "text-[11px]" : "text-[12px]"}`}>
-          {formattedDisplay || (compact ? "DD/MM/YYYY" : placeholder)}
+        <span className={formattedDisplay ? "text-[#0f172a] font-medium text-[12px] tracking-tight" : "text-slate-400 text-[12px]"}>
+          {formattedDisplay || placeholder}
         </span>
-        <CalendarIcon className={`${compact ? "w-3 h-3 ml-0.5" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />
+        <CalendarIcon className="w-3.5 h-3.5 text-slate-500 shrink-0 ml-1" />
       </button>
 
       {/* Portaled Interactive Calendar Popover */}

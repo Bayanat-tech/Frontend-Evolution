@@ -166,7 +166,10 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
       cell: ({ row }) => (
         <button
           type="button"
-          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
@@ -217,7 +220,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
             <Edit2 size={15} />
           </Button>
           <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
@@ -237,6 +240,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
   ], [docType, columnFilters]);
 
   const openCreateForDivision = (division: Division) => {
+    setNotice(null);
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
@@ -331,7 +335,10 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           <JVDocument
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -890,7 +897,19 @@ function JVDocument({
             <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
-            <Button disabled={saving} aria-label="Close" type="button" variant="secondary" onClick={onClose}><X size={14} /> Close</Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
       </CardHeader>

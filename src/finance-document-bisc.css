@@ -1199,9 +1199,9 @@
 }
 
 
-/* Allocations belong to the preceding detail line, nested directly below the Account column */
+/* Allocations belong to the preceding detail line, nested compactly */
 .finance-document-editor .finance-allocation-cell {
-  padding: 2px 8px 4px 44px !important;
+  padding: 2px 10px 4px 32px !important;
   background: #f8fafc !important;
   border-bottom: 1px solid #cbd5e1 !important;
 }
@@ -1214,16 +1214,16 @@
   width: fit-content !important;
   max-width: 100% !important;
   margin: 0 !important;
-  border-left: 2px solid #00378C !important;
-  padding-left: 10px !important;
+  border-left: 2px solid #475569 !important;
+  padding-left: 8px !important;
 }
 .finance-document-editor .finance-allocation-branch::before {
   content: "";
   position: absolute;
   top: 13px;
   left: 0;
-  width: 9px;
-  border-top: 2px solid #00378C;
+  width: 7px;
+  border-top: 2px solid #475569;
 }
 .finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
 .finance-document-editor .finance-allocation-panel {
@@ -1236,17 +1236,17 @@
   margin: 1px 0 !important;
 }
 .finance-document-editor .finance-allocation-panel > div:first-child {
-  background: #f0f4f9 !important;
-  border-bottom: 1px solid #cbd5e1 !important;
+  background: #f1f5f9 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
   padding: 2px 6px !important;
 }
 .finance-document-editor .finance-allocation-panel thead th {
-  background: #173f6c !important;
+  background: #1e293b !important;
   color: #ffffff !important;
   padding: 3px 6px !important;
   font-size: 10.5px !important;
   font-weight: 600 !important;
-  border-right: 1px solid #28548a !important;
+  border-right: 1px solid #334155 !important;
 }
 .finance-document-editor .finance-allocation-panel tbody td {
   background: #ffffff !important;

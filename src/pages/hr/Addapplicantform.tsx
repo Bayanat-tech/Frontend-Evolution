@@ -320,7 +320,7 @@ export function AddApplicantForm({ mode, existingData, onClose }: Props) {
       {/* ── Actions ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
         <Button variant="outline" onClick={() => onClose(false)}>
-          <X size={15} /> {readonly ? "Close" : "Cancel"}
+          {readonly ? "Close" : "Cancel"}
         </Button>
         {!readonly && (
           <>

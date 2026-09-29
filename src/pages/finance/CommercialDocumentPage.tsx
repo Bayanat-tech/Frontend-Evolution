@@ -252,7 +252,10 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       cell: ({ row, getValue }) => (
         <button
           type="button"
-          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${String(getValue() || "")}`}
         >
@@ -307,7 +310,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       header: () => <div className="text-center w-full">Actions</div>,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
           <Button size="icon" variant="ghost" 
           onClick={() =>
             void handleOpenReport(
@@ -398,7 +401,10 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           <CommercialEditor
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -412,6 +418,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         open={divisionPicker}
         divisions={divisions}
         onSelect={(division) => {
+          setNotice(null);
           setEditor({ mode: "create", div: division });
         }}
         onClose={() => setDivisionPicker(false)}
@@ -772,7 +779,19 @@ function CommercialEditor({
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-            <Button disabled={saving} aria-label="Close" type="button" variant="secondary" onClick={onClose}><X size={14} /> Close</Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
       </CardHeader>
