@@ -6,6 +6,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
+import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { NewReportDialog } from "../../../components/new_report_format";
 
@@ -414,27 +415,13 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
         exportingExcel={reportPreviewExporting}
       />
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
+        divisions={divisions}
         description="Choose the division before opening the purchase order form."
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+      />
     </section>
   );
 }

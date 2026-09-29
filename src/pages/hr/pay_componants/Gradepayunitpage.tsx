@@ -4,6 +4,7 @@ import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup } from '../../../api/lookups';
 import { Button } from '../../../components/ui/Button';
 import { Dialog } from '../../../components/ui/Dialog';
+import { DivisionPickerDialog } from '../../../components/ui/DivisionPickerDialog';
 import AddGradePayUnitForm from './AddGradePayUnitForm';
 
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
@@ -23,7 +24,7 @@ const GradePayUnitPage = () => {
   const [selectedDiv, setSelectedDiv] = useState<{ div_code: string; div_name: string } | null>(null);
 
   // ===================== FETCH DIVISION =====================
-  const { data: divisionData } = useQuery({
+  const { data: divisionData, isLoading: isLoadingDivision } = useQuery({
     queryKey: ['division', companyCode],
     queryFn: async () => {
       const response = await getDynamicLookup({
@@ -56,27 +57,14 @@ const GradePayUnitPage = () => {
         <span className="text-foreground">Grade Pay Unit</span>
       </nav>
 
-      <Dialog
+      <DivisionPickerDialog
         open={openDivision}
-        title="Select Division"
+        divisions={divisionData?.tableData ?? []}
+        loading={isLoadingDivision}
+        description="Choose a division to continue."
+        onSelect={(item, code, name) => handleSelectDivision(code || item.DIV_CODE || item.div_code, name || item.DIV_NAME || item.div_name)}
         onClose={() => setOpenDivision(false)}
-      >
-        <div className="flex h-[60vh] w-full flex-col">
-          <div className="flex-1 overflow-y-auto">
-            {(divisionData?.tableData ?? []).map((item: any, index: number) => (
-              <div
-                key={index}
-                className="mb-0.5 flex items-center justify-between rounded-lg border border-gray-200 p-2 hover:bg-blue-50 cursor-pointer"
-              >
-                <h5 className="text-base font-medium text-[#082a89]">{item.DIV_NAME}</h5>
-                <Button type="button" onClick={() => handleSelectDivision(item.DIV_CODE, item.DIV_NAME)} variant="outline">
-                  Select
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Dialog>
+      />
 
       {selectedDiv && (
         <AddGradePayUnitForm

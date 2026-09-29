@@ -30,6 +30,12 @@ const PAGE_SIZE: Record<Orientation, { w: number; h: number }> = {
 const DEFAULT_PAGE_MARGIN_MM = 8;
 
 /**
+ * Single font size (CSS px) forced on all report text inside the dialog
+ * (headings h1–h6 keep their own sizes). Change this one value to resize every report.
+ */
+const REPORT_FONT_PX = 9;
+
+/**
  * Detect orientation from the report's @page rule,
  * e.g. `@page { size: A4 landscape; }` → "landscape"
  */
@@ -60,6 +66,7 @@ const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
  * - Real page breaks based on HTML content height
  * - Toolbar page indicator + left thumbnails driven by page count
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
+ * - 100% zoom = page fits the full width of the preview area (no side gutters)
  */
 export function NewReportDialog({
   open,
@@ -77,6 +84,7 @@ export function NewReportDialog({
 }: NewReportDialogProps) {
   const measureRef = useRef<HTMLIFrameElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const pageSheetRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [zoom, setZoom] = useState(100);
   const [page, setPage] = useState(1);
@@ -85,6 +93,10 @@ export function NewReportDialog({
   const [measuring, setMeasuring] = useState(false);
   /** Left page-thumb navbar visible */
   const [navOpen, setNavOpen] = useState(true);
+  /** Width of the scrollable preview area (px) — used to fit the page edge to edge */
+  const [viewW, setViewW] = useState(0);
+  /** Unscaled layout height of the pages wrapper (px) — used to size scroll area after scaling */
+  const [layoutH, setLayoutH] = useState(0);
 
   /** Orientation the report HTML actually declares (auto-detected) */
   const autoOrientation = useMemo<Orientation>(
@@ -104,6 +116,11 @@ export function NewReportDialog({
   /** Content area inside the report's own print margins */
   const contentW = pageW - pageMarginPx * 2;
   const contentH = pageH - pageMarginPx * 2;
+
+  /** Scale that makes the A4 sheet exactly as wide as the preview area */
+  const baseScale = viewW > 0 ? viewW / pageW : 1;
+  /** Final scale applied to the pages (100% zoom = fit width) */
+  const scale = baseScale * (zoom / 100);
 
   /**
    * Build HTML for preview that mirrors browser Print layout:
@@ -128,8 +145,12 @@ export function NewReportDialog({
     overflow-x: hidden !important;
     overflow-y: visible !important;
     font-family: Arial, sans-serif !important;
-    font-size: 10px !important;
+    font-size: ${REPORT_FONT_PX}px !important;
     color: #000 !important;
+  }
+  /* One constant font size for all report text (headings excluded) */
+  body *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(script):not(style):not(.company-name):not(.group-title) {
+    font-size: ${REPORT_FONT_PX}px !important;
   }
   .sheet {
     width: ${contentW}px !important;
@@ -144,7 +165,7 @@ export function NewReportDialog({
   table {
     width: 100% !important;
     max-width: 100% !important;
-    font-size: 9px !important;
+    font-size: ${REPORT_FONT_PX}px !important;
     border-collapse: collapse !important;
   }
   th, td {
@@ -161,7 +182,7 @@ export function NewReportDialog({
     html, body {
       background: white !important;
       overflow: visible !important;
-      font-size: 10px !important;
+      font-size: ${REPORT_FONT_PX}px !important;
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
@@ -173,7 +194,7 @@ export function NewReportDialog({
       padding: ${pageMarginMm}mm !important;
       overflow: visible !important;
     }
-    table { font-size: 9px !important; }
+    table { font-size: ${REPORT_FONT_PX}px !important; }
     th, td { white-space: nowrap !important; }
   }
 </style>`;
@@ -236,6 +257,32 @@ export function NewReportDialog({
       setNavOpen(true);
     }
   }, [open]);
+
+  // Track the width of the scrollable preview area so the page can fit it edge to edge
+  useEffect(() => {
+    if (!open) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    setViewW(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setViewW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
+
+  // Track the unscaled layout height of the pages wrapper (transform does not affect it)
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    setLayoutH(el.offsetHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setLayoutH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, loading, error, preparedHtml, totalPages]);
 
   // When htmlContent changes (e.g. drill-down navigation), reset page +
   // auto-detect orientation from the new HTML, then remeasure
@@ -400,17 +447,20 @@ export function NewReportDialog({
   const goPrev = () => goToPage(page - 1);
   const goNext = () => goToPage(page + 1);
 
-  /** Update active page from scroll position */
+  /**
+   * Update active page from scroll position.
+   * Uses on-screen rects (not offsetTop) because the pages are CSS-scaled.
+   */
   const onScrollPreview = () => {
     const root = scrollRef.current;
     if (!root || totalPages < 1) return;
-    const scrollTop = root.scrollTop + 40;
+    const rootTop = root.getBoundingClientRect().top;
     const sheets = pageSheetRefs.current;
     let best = 1;
     for (let i = 0; i < sheets.length; i++) {
       const el = sheets[i];
       if (!el) continue;
-      if (el.offsetTop <= scrollTop) best = i + 1;
+      if (el.getBoundingClientRect().top - rootTop <= 40) best = i + 1;
     }
     if (best !== page) setPage(best);
   };
@@ -775,7 +825,7 @@ export function NewReportDialog({
                 const thumbW = orientation === "portrait" ? 72 : 108;
                 const thumbH = orientation === "portrait" ? 102 : 76;
                 // Scale full A4 page into the thumb
-                const scale = thumbW / pageW;
+                const thumbScale = thumbW / pageW;
                 const offsetY = -(n - 1) * contentH;
                 const isLast = n === totalPages;
                 const remaining =
@@ -819,7 +869,7 @@ export function NewReportDialog({
                           style={{
                             width: pageW,
                             height: pageH,
-                            transform: `scale(${scale})`,
+                            transform: `scale(${thumbScale})`,
                             transformOrigin: "top left",
                             pointerEvents: "none",
                             overflow: "hidden",
@@ -895,15 +945,17 @@ export function NewReportDialog({
               })}
           </div>
 
-          {/* Scrollable multi-page preview */}
+          {/* Scrollable multi-page preview — no horizontal padding so the page touches both sides */}
           <div
             ref={scrollRef}
             onScroll={onScrollPreview}
             style={{
               flex: 1,
-              overflow: "auto",
+              minWidth: 0,
+              overflowY: "auto",
+              overflowX: zoom > 100 ? "auto" : "hidden",
               background: "#374151",
-              padding: "20px 24px 40px",
+              padding: "0 0 40px",
             }}
           >
             {loading && (
@@ -934,15 +986,16 @@ export function NewReportDialog({
 
             {!loading && !error && preparedHtml && (
               <div
+                ref={wrapperRef}
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  transform: `scale(${zoom / 100})`,
+                  transform: `scale(${scale})`,
                   transformOrigin: "top center",
                   transition: "transform 0.15s ease",
-                  // Keep scroll height correct after CSS scale
-                  marginBottom: `${Math.max(0, (zoom / 100 - 1) * (Math.max(contentHeight, contentH) + totalPages * 24 + pageH))}px`,
+                  // Keep scroll height correct after CSS scale (based on real unscaled layout height)
+                  marginBottom: `${Math.max(0, (scale - 1) * layoutH)}px`,
                 }}
               >
                 {/*

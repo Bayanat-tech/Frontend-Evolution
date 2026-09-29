@@ -8578,28 +8578,19 @@ freight-dense-form .freight-form-card {
   box-shadow: inset 3px 0 0 #4d8fda !important;
 }
 
-/* Full-page add/edit editors should own the screen. Keep the route context in
-   the background, but hide the workspace chrome so large forms are not squeezed
-   by the sidebar tree or header. */
+/* Full-page add/edit editors own the content area while keeping the sidebar tree visible globally. */
 .workspace-content .fixed.inset-0.z-50.bg-background {
-  position: fixed !important;
+  position: absolute !important;
   inset: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 80 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 40 !important;
   overflow: hidden !important;
 }
 
-.workspace:has(.workspace-content .fixed.inset-0.z-50.bg-background) .sidebar,
 .workspace:has(.workspace-content .fixed.inset-0.z-50.bg-background) .mobile-appbar,
-.workspace:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-header,
 .workspace:has(.workspace-content .fixed.inset-0.z-50.bg-background) .breadcrumb {
   display: none !important;
-}
-
-.workspace:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-main {
-  flex-basis: 100%;
-  width: 100vw;
 }
 
 .workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
