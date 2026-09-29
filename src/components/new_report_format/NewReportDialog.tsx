@@ -500,9 +500,6 @@ export function NewReportDialog({
     if (best !== page) setPage(best);
   };
 
-  /** True when the user has manually overridden the auto-detected orientation */
-  const orientationOverridden = orientation !== autoOrientation;
-
   /** Guard so the toggle can't be clicked while loading or before HTML is ready */
   const setOrientationSafe = (next: Orientation) => {
     if (loading || !htmlContent) return;
@@ -648,56 +645,6 @@ export function NewReportDialog({
                   );
                 })}
               </div>
-
-              {/* Auto / Manual badge + Reset */}
-              {!loading && htmlContent && (
-                <>
-                  <span
-                    title={`Auto-detected from report @page rule: ${autoOrientation}`}
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      color: orientationOverridden ? "#d97706" : "#059669",
-                      background: orientationOverridden ? "#fffbeb" : "#ecfdf5",
-                      border: `1px solid ${
-                        orientationOverridden ? "#fcd34d" : "#a7f3d0"
-                      }`,
-                      borderRadius: 4,
-                      padding: "3px 7px",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {orientationOverridden ? "Manual" : "Auto"}
-                  </span>
-                  {orientationOverridden && (
-                    <button
-                      type="button"
-                      onClick={() => setOrientation(autoOrientation)}
-                      title={`Reset to auto-detected (${autoOrientation})`}
-                      style={{
-                        height: 26,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#00378c",
-                        background: "#eff6ff",
-                        border: "1px solid #bfdbfe",
-                        borderRadius: 6,
-                        padding: "0 10px",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <RotateCcw size={12} strokeWidth={2.5} />
-                      Reset
-                    </button>
-                  )}
-                </>
-              )}
             </div>
           </div>
 
