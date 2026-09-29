@@ -1748,7 +1748,13 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
     tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
     print_letter_head: !!header.print_letter_head,
-    detail: detailRaw.map((raw, index) => {
+    detail: (detailRaw.filter((raw) => {
+      const sn = Number(lowerRecord(raw).serial_no || 0);
+      return sn === 0 || sn < 9000;
+    }).length > 0 ? detailRaw.filter((raw) => {
+      const sn = Number(lowerRecord(raw).serial_no || 0);
+      return sn === 0 || sn < 9000;
+    }) : detailRaw).map((raw, index) => {
       const row = lowerRecord(raw);
       const lineCurrCode = text(row.curr_code) || text(header.curr_code);
       const lineCurrName = text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name) || text(nested(headerRaw, ["Currency", "curr_name"]) ?? header.curr_name);
