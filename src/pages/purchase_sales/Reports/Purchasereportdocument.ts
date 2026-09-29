@@ -95,7 +95,7 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     header.replaceWith(bannerTable);
   });
 
-  // ".grand-total-box" (flex divs) → right-aligned two-column totals table
+
   doc.querySelectorAll(".grand-total-box").forEach((box) => {
     const totals = doc.createElement("table");
     totals.className = "grand-total-table";
@@ -108,6 +108,30 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
       const value = tr.insertCell();
       value.className = "right";
       value.textContent = spans[1]?.textContent?.trim() || "";
+    });
+    box.replaceWith(totals);
+  });
+
+  doc.querySelectorAll(".totals-box").forEach((box) => {
+    const totals = doc.createElement("table");
+    totals.className = "grand-total-table";
+    box.querySelectorAll(".row").forEach((row) => {
+      const spans = Array.from(row.children); // <span>label</span><span>value</span>
+      const isGrand = row.classList.contains("grand");
+      const tr = totals.insertRow();
+      const label = tr.insertCell();
+      label.className = "right";
+      label.textContent = spans[0]?.textContent?.trim() || "";
+      const value = tr.insertCell();
+      value.className = "right";
+      value.textContent = spans[1]?.textContent?.trim() || "";
+      if (isGrand) {
+        [label, value].forEach((cell) => {
+          cell.style.backgroundColor = "#00378c";
+          cell.style.color = "#ffffff";
+          cell.style.fontWeight = "bold";
+        });
+      }
     });
     box.replaceWith(totals);
   });
@@ -143,6 +167,13 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
           if (/^inv(oice)?\s*(no\.?)?$/.test(text)) return 95;
           if (/(value|amount|profit|cost|total|price)/.test(text)) return 68;
         }
+        if (/(vat\s*%|tax\s*amount|amount\s*\(inc)/.test(text)) return 62;
+        if (/^unit\s*rate$/.test(text)) return 45;
+        if (/^amount$/.test(text)) return 55;
+        if (/^s\.?no\.?$/.test(text)) return 32;
+        if (/^unit$/.test(text)) return 40;
+
+
         if (/^(sr\s*no|line|#)$/.test(text)) return 26;
         if (/^uom$/.test(text)) return 34;
         if (/date/.test(text)) return 58;
@@ -263,13 +294,17 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
     header: {
       margin: [28, 14, 28, 0],
       stack: [
-        { columns: [
-          logo ? { image: logo, fit: [155, 58], width: 170 } : { text: "", width: 170 },
-          { stack: [
-            { text: companyName, bold: true, fontSize: 14, color: "#172033", margin: [0, 0, 0, 4] },
-            ...address.map((line) => ({ text: line, fontSize: 8, color: "#64748b", margin: [0, 0, 0, 2] as [number, number, number, number] })),
-          ], alignment: "right" },
-        ] },
+        {
+          columns: [
+            logo ? { image: logo, fit: [155, 58], width: 170 } : { text: "", width: 170 },
+            {
+              stack: [
+                { text: companyName, bold: true, fontSize: 14, color: "#172033", margin: [0, 0, 0, 4] },
+                ...address.map((line) => ({ text: line, fontSize: 8, color: "#64748b", margin: [0, 0, 0, 2] as [number, number, number, number] })),
+              ], alignment: "right"
+            },
+          ]
+        },
         { canvas: [{ type: "line", x1: 0, y1: 8, x2: pageWidth - 56, y2: 8, lineWidth: 1.3, lineColor: "#1455a3" }] },
       ],
     },
@@ -277,10 +312,12 @@ export async function buildPurchasePdfDefinition(report: PurchaseReportDocument,
       margin: [28, 4, 28, 0], fontSize: 6.5, color: "#64748b",
       stack: [
         { canvas: [{ type: "line", x1: 0, y1: 0, x2: pageWidth - 56, y2: 0, lineWidth: 0.5, lineColor: "#cbd5e1" }], margin: [0, 0, 0, 5] },
-        { columns: [
-          { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
-          { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
-        ] },
+        {
+          columns: [
+            { text: "Print: " + identity.generatedAt + " | User: " + identity.user },
+            { text: "Report: " + identity.title + " | Powered by Bayanat Technology", alignment: "right" },
+          ]
+        },
         { text: "Page " + page + " of " + count, alignment: "right", margin: [0, 3, 0, 0] },
       ],
     }),
@@ -372,10 +409,10 @@ export async function downloadPurchaseExcel(report: PurchaseReportDocument, iden
   const groups = Array.from(doc.querySelectorAll(".po-group"));
   const sections: Section[] = groups.length
     ? groups.flatMap((group) => {
-        const table = group.querySelector<HTMLTableElement>("table:not(.group-header-banner)");
-        if (!table) return [];
-        return [{ title: group.querySelector(".group-header-banner")?.textContent?.trim(), table }];
-      })
+      const table = group.querySelector<HTMLTableElement>("table:not(.group-header-banner)");
+      if (!table) return [];
+      return [{ title: group.querySelector(".group-header-banner")?.textContent?.trim(), table }];
+    })
     : Array.from(doc.querySelectorAll<HTMLTableElement>("table.data-table")).map((table) => ({ table }));
   const totals = Array.from(doc.querySelectorAll<HTMLTableElement>("table.grand-total-table"));
 
