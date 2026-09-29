@@ -811,6 +811,7 @@ function PaymentDocumentEditor({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const removeChildRow = (childId: string, targetDetailId?: string) => {
@@ -829,6 +830,7 @@ function PaymentDocumentEditor({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const submit = async (event: FormEvent) => {

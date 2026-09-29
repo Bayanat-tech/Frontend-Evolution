@@ -785,7 +785,10 @@ function PaymentDocumentEditor({
 
   const addChildRow = (targetDetail?: TransactionDetail) => {
     const activeDetail = targetDetail || selectedDetail;
-    if (!activeDetail?.child_table) return;
+    if (!activeDetail) return;
+    if (!activeDetail.child_table) {
+      updateDetail(activeDetail.id, { child_table: "job" });
+    }
     setForm((current) => {
       const currentRows = ((current.children[activeDetail.id] || []) as TransactionChildRow[]);
       const nextRows = [
@@ -794,6 +797,7 @@ function PaymentDocumentEditor({
       ];
       return { ...current, children: { ...current.children, [activeDetail.id]: nextRows } };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [activeDetail.id]: true }));
   };
 
   const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>, targetDetailId?: string) => {
@@ -812,6 +816,7 @@ function PaymentDocumentEditor({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [parentDetailId]: true }));
   };
 
   const removeChildRow = (childId: string, targetDetailId?: string) => {
@@ -830,6 +835,7 @@ function PaymentDocumentEditor({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [parentDetailId]: true }));
   };
 
   const submit = async (event: FormEvent) => {

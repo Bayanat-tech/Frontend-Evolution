@@ -725,6 +725,7 @@ function PettyCashPaymentDocument({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const removeChildRow = (childId: string, targetDetailId?: string) => {
@@ -743,6 +744,7 @@ function PettyCashPaymentDocument({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const submit = async (event: FormEvent) => {
