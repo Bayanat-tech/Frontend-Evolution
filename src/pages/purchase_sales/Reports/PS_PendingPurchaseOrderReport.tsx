@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import {
   getDynamicLookupaccount,
@@ -6,8 +6,11 @@ import {
 } from "../../../api/lookups";
 import { api } from "../../../api/client";
 import { NewReportPage } from "../../../components/new_report_format/NewReportPage";
-import { NewReportDialog } from "../../../components/new_report_format";
+// import { PurchaseReportPreview } from "../../../components/purchase/PurchaseReportPreview";
+// import { openPurchaseReport } from "../../../components/purchase/purchaseReportPreviewStore";
 import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -78,6 +81,19 @@ function uppercaseKeys<T>(row: Record<string, any>): T {
   return out as T;
 }
 
+// With responseType "text", error bodies arrive as a (JSON) string
+const errorMessage = (e: any, fallback: string): string => {
+  const data = e?.response?.data;
+  if (typeof data === "string") {
+    try {
+      return JSON.parse(data)?.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return data?.message || e?.message || fallback;
+};
+
 // Rows with a code + name pair → { value: "code::name", label: "code - name" }.
 // The option value is a unique composite of code+name, mirroring the pattern
 // used for principal/department/product options in the stock ageing report,
@@ -128,19 +144,14 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   const { user } = useAuth();
   const loginid = (user as any)?.loginid ?? "";
   const companyCode: string = ((user as any)?.company_code as string)?.trim() || "All";
+  const companyName: string =
+    (user as any)?.company_name || (user as any)?.COMPANY_NAME || companyCode;
 
   const [params, setParams] = useState<Params>(DEFAULT_PARAMS);
-  const [appliedParams, setAppliedParams] = useState<Params>(DEFAULT_PARAMS);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
-
-  // ── Report preview dialog state (raw HTML, no blob URL) ──
-  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState<string | null>(null);
-  const [reportPreviewError, setReportPreviewError] = useState("");
-  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
   // ── Lookup options ──
   const [supplierOptions, setSupplierOptions] = useState<ReportOption[]>([]);
@@ -233,78 +244,56 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     };
   };
 
-  // ── Fetch the report HTML and show it in the local NewReportDialog popup ──
+  // ── Fetch the report HTML (existing /html route) and hand it to the preview ──
+  // PurchaseReportPreview turns the HTML into a real PDF in the browser.
   const handleGenerateReport = async () => {
     if (!dateRangeValid) {
       setError("Date From must be on or before Date To.");
       return;
     }
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-
-    setLoading(true);
     setError("");
+    const preview = openPurchaseReport("Pending Purchase Order Report");
+    setLoading(true);
 
     try {
-      const body = buildBody(params);
-      setAppliedParams({ ...params });
-
-      const res = await api.post("/api/purchase-sales/reports/pending-po/html", body, {
+      const res = await api.post("/api/purchase-sales/reports/pending-po/html", buildBody(params), {
         responseType: "text",
         headers: { Accept: "text/html" },
       });
+      const raw = typeof res.data === "string" ? res.data : String(res.data);
 
-      const htmlContent = typeof res.data === "string" ? res.data : String(res.data);
-      setReportHtml(htmlContent);
+      // Backend answers "no data" with 200 + JSON instead of HTML
+      const contentType = String(res.headers?.["content-type"] ?? "");
+      if (contentType.includes("application/json")) {
+        let message = "No data found for the selected filters.";
+        try {
+          message = JSON.parse(raw)?.message || message;
+        } catch {
+          /* keep default message */
+        }
+        preview.fail(new Error(message));
+        return;
+      }
+
+      preview.ready({
+        html: raw,
+        filename: `pending_po_${params.reportType.toLowerCase()}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: params.reportType === "Summary" ? "landscape" : "portrait",
+        company: logoUrl ? { name: companyName, address: [], logo: logoUrl } : undefined,
+      });
       setHasGeneratedReport(true);
     } catch (e: any) {
-      const failure = e?.response?.data?.message || e?.message || "Failed to generate report";
-      setError(failure);
-      setReportPreviewError(failure);
+      preview.fail(new Error(errorMessage(e, "Failed to generate report")));
     } finally {
       setLoading(false);
     }
   };
 
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
-
-  // ── Excel export for the currently generated report ──
-  const handleExportExcel = useCallback(async () => {
-    setReportPreviewExporting(true);
-    try {
-      const body = buildBody(appliedParams);
-      const res = await api.post("/api/purchase-sales/reports/pending-po/excel", body, {
-        responseType: "blob",
-      });
-      const blob = new Blob([res.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `pending_po_${body.report_type}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setReportPreviewError(e?.response?.data?.message || e?.message || "Unable to export report");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  }, [appliedParams, logoUrl]);
-
   const setParam = (key: string, val: any) => setParams((prev) => ({ ...prev, [key]: val }));
 
   const handleReset = () => {
     setParams(DEFAULT_PARAMS);
-    setAppliedParams(DEFAULT_PARAMS);
     setHasGeneratedReport(false);
     setError("");
     setOptError("");
@@ -445,16 +434,8 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
         )}
       </NewReportPage>
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title="Pending Purchase Order Report"
-        htmlContent={reportHtml}
-        loading={loading}
-        error={reportPreviewError || null}
-        onExportExcel={handleExportExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+      {/* Mount once. If other purchase reports will share this viewer, move it to the layout instead. */}
+      <PurchaseReportPreview />
     </>
   );
 };

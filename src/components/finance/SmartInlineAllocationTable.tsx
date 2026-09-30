@@ -1,9 +1,9 @@
-import { AlertCircle, Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, X, Zap } from "lucide-react";
+import { Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
 import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
-import { Button } from "../ui/Button";
+import { getDynamicLookup, getLookupValue } from "../../api/lookups";
 import { Input } from "../ui/Input";
 import { LookupField } from "../ui/LookupField";
+import { BiscDatePicker } from "../ui/BiscDatePicker";
 import { useAuth } from "../../state/AuthContext";
 
 function text(value: unknown) {
@@ -56,7 +56,9 @@ export function SmartInlineAllocationTable({
   const diff = parentAmount - totalAllocated;
   const isMatched = Math.abs(diff) < 0.001;
 
-  const handleAllocateAll = () => {
+  const handleAllocateAll = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     rows.forEach((r) => {
       const maxAmt = Number(r.c_bal_amt_org || r.inv_amt || 0);
       if (maxAmt > 0) {
@@ -65,7 +67,9 @@ export function SmartInlineAllocationTable({
     });
   };
 
-  const handleFillDiff = () => {
+  const handleFillDiff = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (diff <= 0) return;
     let remaining = diff;
     for (const r of rows) {
@@ -81,67 +85,85 @@ export function SmartInlineAllocationTable({
     }
   };
 
-  const headers =
+  // Define compact column configs with fixed widths
+  const colConfigs =
     childTable === "invoice"
-      ? ["#", "Invoice No", "Invoice Date", "Invoice Amount", "Outstanding", "Allocated Amount", ""]
+      ? [
+          { key: "sr", header: "#", width: 24, align: "center" },
+          { key: "inv_no", header: "Invoice No", width: 105, align: "left" },
+          { key: "inv_date", header: "Invoice Date", width: 96, align: "left" },
+          { key: "inv_amt", header: "Invoice Amount", width: 92, align: "right" },
+          { key: "outstanding", header: "Outstanding", width: 92, align: "right" },
+          { key: "allocated", header: "Allocated", width: 110, align: "right" },
+          { key: "action", header: "", width: 24, align: "center" },
+        ]
       : childTable === "job"
-        ? ["#", "Job No", "Doc Ref", "Doc Ref 2", "Amount", ""]
-        : ["#", "Expense Type", "Expense Subtype", "Description", "Job No", "Amount", ""];
+        ? [
+            { key: "sr", header: "#", width: 24, align: "center" },
+            { key: "job_no", header: "Job No", width: 125, align: "left" },
+            { key: "doc_refno", header: "Doc Ref", width: 100, align: "left" },
+            { key: "doc_refno_2", header: "Doc Ref 2", width: 100, align: "left" },
+            { key: "amount", header: "Amount", width: 92, align: "right" },
+            { key: "action", header: "", width: 24, align: "center" },
+          ]
+        : [
+            { key: "sr", header: "#", width: 24, align: "center" },
+            { key: "exp_type", header: "Expense Type", width: 110, align: "left" },
+            { key: "exp_subtype", header: "Subtype", width: 110, align: "left" },
+            { key: "description", header: "Description", width: 115, align: "left" },
+            { key: "job_no", header: "Job No", width: 85, align: "left" },
+            { key: "amount", header: "Amount", width: 92, align: "right" },
+            { key: "action", header: "", width: 24, align: "center" },
+          ];
+
+  const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <div className="my-1.5 rounded-lg border border-blue-200/90 bg-white shadow-sm overflow-hidden text-xs">
-      {/* Sub-toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-sky-50/50 to-white px-3 py-1.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00378C] text-white">
+    <div className="finance-allocation-panel my-0.5 w-fit max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
+      {/* Sub-toolbar: Ultra-compact, no unwanted verbose titles */}
+      <div className="finance-allocation-toolbar flex flex-wrap items-center justify-between gap-1 border-b px-1.5 py-0.5 text-xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Compact Child Type Badge */}
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1e293b] text-white text-[10px] font-semibold uppercase tracking-wide shadow-2xs">
             {childTable === "invoice" ? (
-              <FileText size={11} />
+              <FileText size={10} />
             ) : childTable === "job" ? (
-              <Briefcase size={11} />
+              <Briefcase size={10} />
             ) : (
-              <Receipt size={11} />
+              <Receipt size={10} />
             )}
-          </span>
-          <span className="font-bold text-[#00378C] tracking-wide uppercase text-[11px]">
-            {childTable === "invoice"
-              ? "Invoice Allocations"
-              : childTable === "job"
-                ? "Job Allocations"
-                : childTable === "expense"
-                  ? "Expense Allocations"
-                  : "Line Allocations"}
-          </span>
-          <span className="text-slate-500 font-medium">
-            (Line #{detail.serial_no}: <strong className="text-slate-800">{detail.ac_code}</strong> {detail.ac_name ? `- ${detail.ac_name}` : ""})
+            <span>
+              {childTable === "invoice"
+                ? "Invoices"
+                : childTable === "job"
+                  ? "Job"
+                  : childTable === "expense"
+                    ? "Expense"
+                    : "Allocations"}
+            </span>
           </span>
 
           {childTable && (
-            <div className="flex items-center gap-1.5 ml-2">
-              <span className="inline-flex items-center rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[11px] font-mono text-slate-700 shadow-2xs">
-                Allocated: <strong className="ml-1 text-[#00378C]">{formatAmount(totalAllocated)}</strong>
+            <div className="flex items-center gap-1 flex-wrap">
+              <span
+                className="inline-flex items-center rounded border border-[#bfd1e8] bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#244467] shadow-2xs"
+                title={`Allocated ${formatAmount(totalAllocated)} of ${formatAmount(parentAmount)}`}
+              >
+                {formatAmount(totalAllocated)}
                 <span className="mx-1 text-slate-300">/</span>
-                Line: <strong className="ml-1 text-slate-900">{formatAmount(parentAmount)}</strong>
+                {formatAmount(parentAmount)}
               </span>
 
-              {isMatched ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  <CheckCircle2 size={11} /> Matched
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                  <AlertCircle size={11} /> Diff: {formatAmount(Math.abs(diff))}
-                </span>
-              )}
-
+              {/* Action Buttons: Auto-Fill & Allocate All */}
               {childTable === "invoice" && rows.length > 0 && !isMatched && diff > 0 && (
                 <button
                   type="button"
                   onClick={handleFillDiff}
                   disabled={disabled}
-                  className="inline-flex items-center gap-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 text-[10px] font-semibold cursor-pointer transition-colors"
+                  className="inline-flex items-center gap-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-1.5 py-0.5 text-[9.5px] font-semibold cursor-pointer transition-colors"
                   title="Allocate remaining difference to invoice lines"
                 >
-                  <Zap size={10} /> Auto-Fill Diff ({formatAmount(diff)})
+                  <Zap size={9} /> Fill Diff ({formatAmount(diff)})
                 </button>
               )}
 
@@ -150,76 +172,116 @@ export function SmartInlineAllocationTable({
                   type="button"
                   onClick={handleAllocateAll}
                   disabled={disabled}
-                  className="inline-flex items-center gap-1 rounded bg-blue-50 hover:bg-blue-100 text-[#00378C] border border-blue-200 px-2 py-0.5 text-[10px] font-semibold cursor-pointer transition-colors"
+                  className="inline-flex items-center gap-1 rounded bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 px-1.5 py-0.5 text-[9.5px] font-semibold cursor-pointer transition-colors"
                   title="Allocate full outstanding balance to all invoices"
                 >
-                  <CheckCircle2 size={10} /> Allocate All
+                  <CheckCircle2 size={9} /> Allocate All
                 </button>
               )}
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Right-side actions: Add, Reload, Collapse */}
+        <div className="flex items-center gap-1">
           {!childTable && onSetChildTable && (
             <div className="flex items-center gap-1">
-              <span className="text-[11px] text-slate-500">Attach:</span>
-              <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 text-[#00378C]" onClick={() => onSetChildTable("job")} disabled={disabled}>
+              <span className="text-[10px] text-slate-500">Attach:</span>
+              <button
+                type="button"
+                className="h-5 px-1.5 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                onClick={() => onSetChildTable("job")}
+                disabled={disabled}
+              >
                 + Job
-              </Button>
-              <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 text-[#00378C]" onClick={() => onSetChildTable("expense")} disabled={disabled}>
+              </button>
+              <button
+                type="button"
+                className="h-5 px-1.5 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                onClick={() => onSetChildTable("expense")}
+                disabled={disabled}
+              >
                 + Expense
-              </Button>
-              <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 text-[#00378C]" onClick={() => onSetChildTable("invoice")} disabled={disabled}>
+              </button>
+              <button
+                type="button"
+                className="h-5 px-1.5 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                onClick={() => onSetChildTable("invoice")}
+                disabled={disabled}
+              >
                 + Invoices
-              </Button>
+              </button>
             </div>
           )}
 
           {childTable === "invoice" && onRefreshInvoices && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 px-2 text-[11px] text-slate-600 hover:text-[#00378C]"
+            <button
+              type="button"
+              className="inline-flex items-center h-5 px-1.5 text-[10px] font-medium rounded border border-slate-300 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer"
               onClick={onRefreshInvoices}
               disabled={disabled || loading}
               title="Reload outstanding invoices from server"
             >
-              <RefreshCw size={11} className={`mr-1 ${loading ? "animate-spin" : ""}`} /> Reload
-            </Button>
+              <RefreshCw size={10} className={`mr-1 ${loading ? "animate-spin" : ""}`} /> Reload
+            </button>
           )}
 
           {childTable && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 px-2.5 text-[11px] font-semibold text-[#00378C] border-[#00378C]/40 hover:bg-blue-50"
-              onClick={onAdd}
+            <button
+              type="button"
+              className="inline-flex items-center h-5 px-2 text-[10px] font-bold rounded bg-[#1e293b] text-white hover:bg-slate-700 shadow-2xs cursor-pointer transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAdd();
+              }}
               disabled={disabled}
+              title="Add a new allocation row"
             >
-              <Plus size={12} className="mr-1" /> Add Row
-            </Button>
+              <Plus size={10} className="mr-0.5" /> Add Row
+            </button>
           )}
 
           <button
             type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center h-6 w-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 ml-1 cursor-pointer"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            className="inline-flex items-center justify-center h-5 w-5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer"
             title="Collapse allocation table"
           >
-            <ChevronUp size={14} />
+            <ChevronUp size={12} />
           </button>
         </div>
       </div>
 
-      {/* Sub-table Body */}
-      <div className="max-h-[220px] overflow-auto">
-        <table className="w-full min-w-[760px] text-xs border-collapse">
-          <thead className="sticky top-0 bg-[#00378C] text-white shadow-2xs z-10">
+      {/* Compact child grid with a lighter header to distinguish it from accounting lines. */}
+      <div className="finance-allocation-grid max-h-[132px] overflow-auto">
+        <table
+          className="finance-allocation-table table-fixed border-collapse text-xs"
+          style={{ width: `${totalTableWidth}px` }}
+        >
+          <colgroup>
+            {colConfigs.map((col, i) => (
+              <col key={i} style={{ width: `${col.width}px` }} />
+            ))}
+          </colgroup>
+          <thead className="finance-allocation-thead sticky top-0 z-10 shadow-2xs">
             <tr>
-              {headers.map((h, i) => (
-                <th key={i} className={`px-2.5 py-1.5 font-semibold text-[11px] text-left text-white ${h === "Allocated Amount" || h === "Amount" || h === "Outstanding" || h === "Invoice Amount" ? "text-right" : ""}`}>
-                  {h}
+              {colConfigs.map((col, i) => (
+                <th
+                  key={i}
+                  className={`border-r border-[#b9cee4] px-1.5 py-0.5 text-[10px] font-bold text-[#163a63] last:border-r-0 ${
+                    col.align === "right"
+                      ? "text-right"
+                      : col.align === "center"
+                        ? "text-center"
+                        : "text-left"
+                  }`}
+                >
+                  {col.header}
                 </th>
               ))}
             </tr>
@@ -227,27 +289,36 @@ export function SmartInlineAllocationTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={headers.length} className="px-3 py-6 text-center text-slate-400">
-                  <span className="inline-flex items-center gap-1.5"><RefreshCw size={13} className="animate-spin text-[#00378C]" /> Loading allocations...</span>
+                <td colSpan={colConfigs.length} className="px-2 py-4 text-center text-slate-400">
+                  <span className="inline-flex items-center gap-1 text-[11px]">
+                    <RefreshCw size={11} className="animate-spin text-slate-600" /> Loading allocations...
+                  </span>
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={headers.length} className="px-3 py-6 text-center text-slate-500">
-                  <p className="font-semibold text-xs text-slate-600">No allocation lines found for this line.</p>
-                  <span className="text-[11px] text-slate-400">Click &quot;Add Row&quot; above to add an allocation.</span>
+                <td colSpan={colConfigs.length} className="px-2 py-3 text-center text-slate-500 bg-white">
+                  <p className="font-medium text-[11px] text-slate-600">No allocation lines found.</p>
+                  <span className="text-[10px] text-slate-400">Click &quot;+ Add Row&quot; above to add an allocation.</span>
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.id} className="border-b border-slate-100 hover:bg-blue-50/40 transition-colors">
-                  <td className="w-8 px-2 py-1 font-mono text-[11px] text-slate-500">{row.dtl_sr_no}</td>
+                <tr
+                  key={row.id}
+                  className="border-b border-[#dce7f2] bg-white hover:bg-[#f1f7fd] transition-colors"
+                >
+                  {/* # Column */}
+                  <td className="px-1 py-0.5 text-center font-mono text-[10.5px] text-slate-500">
+                    {row.dtl_sr_no}
+                  </td>
 
                   {childTable === "invoice" ? (
                     <>
-                      <td className="w-48 px-2 py-1">
+                      {/* Invoice No */}
+                      <td className="px-1 py-0.5">
                         <input
-                          className="h-6 w-full rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#00378C] focus:outline-none"
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
@@ -256,42 +327,68 @@ export function SmartInlineAllocationTable({
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
+                              e.stopPropagation();
                               onInvNoBlur?.(row.id, (e.target as HTMLInputElement).value, detail.id);
                             }
                           }}
                         />
                       </td>
-                      <td className="w-32 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs"
+
+                      {/* Invoice Date */}
+                      <td className="px-1 py-0.5">
+                        <BiscDatePicker
+                          compact
                           disabled={disabled}
-                          type="date"
                           value={dateInput(row.inv_date)}
-                          onChange={(e) => onChange(row.id, { inv_date: e.target.value })}
+                          onChange={(val) => onChange(row.id, { inv_date: val })}
                         />
                       </td>
-                      <td className="w-28 px-2 py-1 text-right font-mono text-[11px] text-slate-600">
-                        {row.inv_amt != null ? formatAmount(Number(row.inv_amt)) : "-"}
+
+                      {/* Invoice Amount */}
+                      <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] text-slate-600 truncate">
+                        {row.inv_amt != null && Number(row.inv_amt) > 0
+                          ? formatAmount(Number(row.inv_amt))
+                          : Number(row.amount || 0) > 0
+                            ? formatAmount(Number(row.amount || 0))
+                            : "-"}
                       </td>
-                      <td className="w-28 px-2 py-1 text-right font-mono text-[11px] font-semibold text-slate-800">
-                        {row.c_bal_amt_org != null ? formatAmount(Number(row.c_bal_amt_org)) : "-"}
+
+                      {/* Outstanding */}
+                      <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] font-semibold text-slate-800 truncate">
+                        {row.c_bal_amt_org != null && Number(row.c_bal_amt_org) > 0
+                          ? formatAmount(Number(row.c_bal_amt_org))
+                          : Number(row.amount || 0) > 0
+                            ? formatAmount(Number(row.amount || 0))
+                            : "-"}
                       </td>
-                      <td className="w-44 px-2 py-1">
+
+                      {/* Allocated Amount with compact Full button */}
+                      <td className="px-1 py-0.5">
                         <div className="flex items-center gap-1">
-                          <Input
-                            className="h-6 text-xs font-mono flex-1 commercial-number-input finance-money-input"
+                          <input
+                            className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
                             disabled={disabled}
                             type="number"
                             step="0.001"
                             value={Number(row.amount || 0)}
                             onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
                           />
                           {Number(row.c_bal_amt_org || row.inv_amt || 0) > 0 && (
                             <button
                               type="button"
                               disabled={disabled}
-                              onClick={() => onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) })}
-                              className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 hover:bg-blue-50 hover:text-[#00378C] border border-slate-200 text-slate-600 transition-colors cursor-pointer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) });
+                              }}
+                              className="h-[20px] px-1 text-[9px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
                               title="Allocate full outstanding amount"
                             >
                               Full
@@ -302,7 +399,8 @@ export function SmartInlineAllocationTable({
                     </>
                   ) : childTable === "job" ? (
                     <>
-                      <td className="w-48 px-2 py-1">
+                      {/* Job No */}
+                      <td className="px-1 py-0.5">
                         <LookupField
                           label="Job No"
                           compact
@@ -328,36 +426,61 @@ export function SmartInlineAllocationTable({
                           onChange={(value) => onChange(row.id, { job_no: value })}
                         />
                       </td>
-                      <td className="w-36 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs"
+
+                      {/* Doc Ref */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.doc_refno)}
                           onChange={(e) => onChange(row.id, { doc_refno: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
                         />
                       </td>
-                      <td className="w-36 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs"
+
+                      {/* Doc Ref 2 */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.doc_refno_2)}
                           onChange={(e) => onChange(row.id, { doc_refno_2: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
                         />
                       </td>
-                      <td className="w-36 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs font-mono commercial-number-input finance-money-input"
+
+                      {/* Amount */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           type="number"
                           step="0.001"
                           value={Number(row.amount || 0)}
                           onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
                         />
                       </td>
                     </>
                   ) : (
                     <>
-                      <td className="w-44 px-2 py-1">
+                      {/* Expense Type */}
+                      <td className="px-1 py-0.5">
                         <LookupField
                           label="Expense Type"
                           compact
@@ -373,7 +496,7 @@ export function SmartInlineAllocationTable({
                             { field: "exp_description", header: "Expense Type Description" },
                           ]}
                           valueField="exp_type_code"
-                          displayFields={["exp_type_code", "exp_type_description"]}
+                          displayFields={["exp_type_code", "exp_description"]}
                           loadOptions={() =>
                             getDynamicLookup({
                               parameter: "AC_BP_BR_EXP_TYPE_CODE",
@@ -394,7 +517,9 @@ export function SmartInlineAllocationTable({
                           }
                         />
                       </td>
-                      <td className="w-44 px-2 py-1">
+
+                      {/* Expense Subtype */}
+                      <td className="px-1 py-0.5">
                         <LookupField
                           key={`subtype-${row.id}-${row.exp_type_code || "none"}`}
                           label="Expense Subtype"
@@ -433,44 +558,73 @@ export function SmartInlineAllocationTable({
                           }
                         />
                       </td>
-                      <td className="w-36 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs"
+
+                      {/* Description */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.exp_description)}
                           onChange={(e) => onChange(row.id, { exp_description: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
                         />
                       </td>
-                      <td className="w-28 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs"
+
+                      {/* Job No */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.job_no)}
                           onChange={(e) => onChange(row.id, { job_no: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
                         />
                       </td>
-                      <td className="w-32 px-2 py-1">
-                        <Input
-                          className="h-6 text-xs font-mono commercial-number-input finance-money-input"
+
+                      {/* Amount */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           type="number"
                           step="0.001"
                           value={Number(row.amount || 0)}
                           onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                          }}
                         />
                       </td>
                     </>
                   )}
 
-                  <td className="w-8 px-2 py-1 text-center">
+                  {/* Action Column */}
+                  <td className="px-1 py-0.5 text-center">
                     <button
                       type="button"
                       disabled={disabled}
-                      onClick={() => onRemove(row.id)}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onRemove(row.id);
+                      }}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                       title="Remove allocation row"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={11} />
                     </button>
                   </td>
                 </tr>
@@ -482,4 +636,3 @@ export function SmartInlineAllocationTable({
     </div>
   );
 }
-

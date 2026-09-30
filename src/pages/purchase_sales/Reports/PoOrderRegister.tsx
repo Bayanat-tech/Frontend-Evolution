@@ -8,12 +8,13 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Input } from "../../../components/ui/Input";
 import { Button } from "../../../components/ui/Button";
-import { NewReportDialog } from "../../../components/new_report_format";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import {
     getPoOrderRegisterReportHtml,
     getPoOrderRegisterReportExcel,
 } from "../../../api/transactions";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
 
 interface PoOrderRegisterParams {
     loginid: string;
@@ -302,12 +303,7 @@ export default function PoOrderRegisterPage() {
     const [message, setMessage] = useState("Select filters and run the report.");
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
-
-    // ── Report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
-    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-    const [reportHtml, setReportHtml] = useState<string | null>(null);
-    const [reportPreviewError, setReportPreviewError] = useState("");
-    const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
+    
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
@@ -324,47 +320,53 @@ export default function PoOrderRegisterPage() {
     });
 
     const runReport = useCallback(async () => {
-        if (!dateRangeValid) return;
-        const params = buildRequestParams();
-        lastRequestRef.current = params;
+  if (!dateRangeValid) return;
+  const params = buildRequestParams();
+  lastRequestRef.current = params;
 
-        setReportHtml(null);
-        setReportPreviewError("");
-        setReportPreviewOpen(true);
-        setLoading(true);
-        setMessage("");
+  setLoading(true);
+  setMessage("");
 
-        try {
-            const html = await getPoOrderRegisterReportHtml(params);
-            setReportHtml(html);
-            setMessage("Report generated.");
-        } catch (err: any) {
-            const errorMessage = err?.response?.data?.details || err?.message || "Failed to load report. Please try again.";
-            setReportPreviewError(errorMessage);
-            setMessage(errorMessage);
-        } finally {
-            setLoading(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
+  const preview = openPurchaseReport("PO Order Register");
 
-    const closeReportPreview = () => {
-        setReportPreviewOpen(false);
-        setReportHtml(null);
-        setReportPreviewError("");
-    };
+  try {
+    const html = await getPoOrderRegisterReportHtml(params);
+    preview.ready({
+      html,
+      filename: `po_order_register_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "landscape",
+      onExcel: async () => {
+        await getPoOrderRegisterReportExcel(params);
+      },
+    });
+    setMessage("Report generated.");
+  } catch (err: any) {
+    const errorMessage = err?.response?.data?.details || err?.message || "Failed to load report. Please try again.";
+    preview.fail(new Error(errorMessage));
+    setMessage(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
 
-    const handleReportPreviewExcel = async () => {
-        if (!lastRequestRef.current) return;
-        setReportPreviewExporting(true);
-        try {
-            await getPoOrderRegisterReportExcel(lastRequestRef.current);
-        } catch (exportError: any) {
-            setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
-        } finally {
-            setReportPreviewExporting(false);
-        }
-    };
+    // const closeReportPreview = () => {
+    //     setReportPreviewOpen(false);
+    //     setReportHtml(null);
+    //     setReportPreviewError("");
+    // };
+
+    // const handleReportPreviewExcel = async () => {
+    //     if (!lastRequestRef.current) return;
+    //     setReportPreviewExporting(true);
+    //     try {
+    //         await getPoOrderRegisterReportExcel(lastRequestRef.current);
+    //     } catch (exportError: any) {
+    //         setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
+    //     } finally {
+    //         setReportPreviewExporting(false);
+    //     }
+    // };
 
     function resetFilters() {
         setFromDateIso(""); setToDateIso("");
@@ -486,16 +488,7 @@ export default function PoOrderRegisterPage() {
                 {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
             </div>
 
-            <NewReportDialog
-                open={reportPreviewOpen}
-                onClose={closeReportPreview}
-                title="PO Order Register"
-                htmlContent={reportHtml}
-                loading={loading}
-                error={reportPreviewError || null}
-                onExportExcel={handleReportPreviewExcel}
-                exportingExcel={reportPreviewExporting}
-            />
+            <PurchaseReportPreview />
         </section>
     );
 }
