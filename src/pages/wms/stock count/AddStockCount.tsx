@@ -285,7 +285,7 @@ export function StockCountForm({ mode, editRowData, onClose }: StockCountFormPro
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onClose(isSubmitted || isEditMode)}>
-            <X size={14} /> {isSubmitted || isEditMode ? "Close" : "Cancel"}
+            {isSubmitted || isEditMode ? "Close" : "Cancel"}
           </Button>
           <Button type="button" size="sm" disabled={saving} onClick={handleSubmit}>
             <Save size={14} /> {saving ? "Submitting..." : "Submit"}

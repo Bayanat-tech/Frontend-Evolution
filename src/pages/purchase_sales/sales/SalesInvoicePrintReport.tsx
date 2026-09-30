@@ -313,7 +313,7 @@ export function SalesInvoicePrintDialog({
             padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer",
             display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
           }}>
-            <X size={13} /> Close
+            Close
           </button>
           <button
             onClick={handleExcel}
