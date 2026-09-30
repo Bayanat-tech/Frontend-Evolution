@@ -585,7 +585,7 @@ export function AddHrManpowerForm({ mode, existingData, onClose }: Props) {
         </Button>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => onClose(false)}>
-            <X size={15} /> {readonly ? "Close" : "Cancel"}
+            {readonly ? "Close" : "Cancel"}
           </Button>
           {activeStep < STEPS.length - 1 && (
             <Button

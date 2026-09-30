@@ -138,7 +138,10 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
       cell: ({ row }) => (
         <button
           type="button"
-          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
@@ -189,7 +192,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
             <Edit2 size={15} />
           </Button>
           <Button size="icon" variant="ghost" onClick={() => window.print()} title="Print">
@@ -209,6 +212,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
   ], [docType, columnFilters]);
 
   const openCreateForDivision = (division: Division) => {
+    setNotice(null);
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
@@ -315,7 +319,10 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           <PettyCashPaymentDocument
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -725,6 +732,7 @@ function PettyCashPaymentDocument({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const removeChildRow = (childId: string, targetDetailId?: string) => {
@@ -743,6 +751,7 @@ function PettyCashPaymentDocument({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const submit = async (event: FormEvent) => {
@@ -815,7 +824,22 @@ function PettyCashPaymentDocument({
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
+            <Save size={15} /> {saving ? "Saving..." : "Save"}
+          </Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -1273,8 +1297,9 @@ function PettyCashPaymentDocument({
                           <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                         </tr>
                         {expandedRowIds[detail.id] && (
-                          <tr key={`${detail.id}_alloc`} className="bg-slate-50/70 border-b border-blue-200/60">
-                            <td colSpan={showAllColumns ? 17 : 10} className="p-0 pl-10 pr-3 pb-2 pt-0.5">
+                          <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
+                            <td colSpan={showAllColumns ? 17 : 10} className="finance-allocation-cell">
+                              <div className="finance-allocation-branch">
                               <SmartInlineAllocationTable
                                 detail={detail}
                                 rows={(form.children[detail.id] || []) as TransactionChildRow[]}
@@ -1289,6 +1314,7 @@ function PettyCashPaymentDocument({
                                 onInvNoBlur={handleInvNoBlur}
                                 onClose={() => toggleRowExpanded(detail.id)}
                               />
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -1322,14 +1348,9 @@ function PettyCashPaymentDocument({
         <div className="text-sm text-muted-foreground">
           Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
         </div>
-        <div className="flex items-center gap-2">
-          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
-            <Save size={15} /> {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
+
       </div>
-      <AttachmentDialog
+<AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}
@@ -1759,7 +1780,13 @@ function mapExistingDocument(
   childrenRaw: { invoice?: Record<string, unknown>[]; job?: Record<string, unknown>[]; expense?: Record<string, unknown>[] } = {},
 ): TransactionHeader {
   const header = lowerRecord(headerRaw);
-  const detail = detailRaw.map((raw, index) => {
+  // Exclude system-generated balancing rows (e.g. 9010 Tax row, 9001 Control row) so tax is not double-counted
+  const userRows = detailRaw.filter((raw) => {
+    const sn = Number(lowerRecord(raw).serial_no || 0);
+    return sn === 0 || sn < 9000;
+  });
+  const detailToMap = userRows.length > 0 ? userRows : detailRaw;
+  const detail = detailToMap.map((raw, index) => {
     const row = lowerRecord(raw);
     const serialNo = Number(row.serial_no || index + 1);
     const table = inferChildTable(serialNo, childrenRaw);
