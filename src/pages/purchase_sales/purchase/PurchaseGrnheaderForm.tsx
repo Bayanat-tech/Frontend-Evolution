@@ -84,12 +84,7 @@ export function PurchaseGrnHeaderForm({
     return (
        <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
             {/* HEADER SECTION - HEIGHT UNCHANGED */}
-            <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
-                <div>
-                    <p className="eyebrow m-0 text-[9px] leading-tight uppercase opacity-70 font-semibold">Header</p>
-                    <h3 className="m-0 text-sm font-bold leading-tight"></h3>
-                </div>
-            </div>
+         
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 items-start">
        <div className="flex flex-col gap-2">
         <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">

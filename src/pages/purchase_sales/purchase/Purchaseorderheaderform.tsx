@@ -92,12 +92,12 @@ export function PurchaseOrderHeaderForm({
   return (
     <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
       {/* HEADER SECTION - HEIGHT UNCHANGED */}
-      <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
+      {/* <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
         <div>
           <p className="eyebrow m-0 text-[9px] leading-tight uppercase opacity-70 font-semibold">Header</p>
           <h3 className="m-0 text-sm font-bold leading-tight"></h3>
         </div>
-      </div>
+      </div> */}
 
       {/* EXPLICIT TWO-COLUMN LAYOUT: left = Document & Party (tallest block),
           right = Order & Currency + Tax Configuration stacked so heights balance
@@ -109,14 +109,14 @@ export function PurchaseOrderHeaderForm({
           <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
             {editMode && <CField label="Doc No"><Input className="h-7 text-xs" disabled value={form.doc_no || ""} /></CField>}
             <CField label="Doc Date " required>
-              <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+              <Input className="h-7 text-xs w-18" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
             </CField>
 
             {(String(docType ?? "").trim().toUpperCase() === "SO" && <CField label="Quotation No">
               <Input className="h-7 text-xs" type="Quotation No" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(e) => updateField("ref_no", e.target.value)} />
             </CField>)}
             {(String(docType ?? "").trim().toUpperCase() === "LPO" &&
-              <div>
+               <div className="col-span-2">
                 <label className="text-[9px] font-semibold text-foreground/75 leading-none">Quotation No</label>
                 <LookupField
                   label="Quotation No"
@@ -343,20 +343,15 @@ export function PurchaseOrderHeaderForm({
             <CField label="Tel"><Input className="h-7 text-xs text-right" disabled={headerAndLineDisabled} value={form.party_phone} onChange={(e) => updateField("party_phone", e.target.value)} /></CField>
             <CField label="Fax"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.party_fax} onChange={(e) => updateField("party_fax", e.target.value)} /></CField>
             <CField label="Address" className="col-span-3"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.party_address} onChange={(e) => updateField("party_address", e.target.value)} /></CField>
-            <CField label="Pay Terms" className="col-span-3">
-              <Input
-                className="h-7 text-xs "
-                disabled={headerAndLineDisabled}
-                value={form.payment_terms}
-                onChange={(e) =>
-                  updateField("payment_terms", e.target.value)
-                }
-              />
+        <CField label="Expense A/c Post" className="col-span-2">
+              <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
+                {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </Select>
             </CField>
             {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
               <>
-                <CField label="Buyer" className="col-span-3"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
-                <CField label="WO No" className="col-span-3"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
+                <CField label="Buyer" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
+                <CField label="WO No" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
               </>
             ))}
           </HeaderBlock>
@@ -368,7 +363,7 @@ export function PurchaseOrderHeaderForm({
 
         {/* RIGHT COLUMN — Order & Currency, then Tax Configuration underneath */}
         <div className="flex flex-col gap-2">
-          <HeaderBlock label="Order & Currency" icon={<Percent size={11} />} gridCols="grid-cols-4">
+          <HeaderBlock label="Discount Scope & Delivery Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
             {/* Discount Scope */}
             <div className="col-span-4 flex items-center gap-6 border-b border-gray-100 pb-1 mb-0.5">
               <span className="text-[9px] font-semibold text-foreground/75">
@@ -459,12 +454,17 @@ export function PurchaseOrderHeaderForm({
             </CField>
 
 
-
-            <CField label="Expense A/c Post" className="col-span-2">
-              <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
-                {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </Select>
+    <CField label="Pay Terms" className="col-span-2">
+              <Input
+                className="h-7 text-xs "
+                disabled={headerAndLineDisabled}
+                value={form.payment_terms}
+                onChange={(e) =>
+                  updateField("payment_terms", e.target.value)
+                }
+              />
             </CField>
+            
 
             {/* LPO fields */}
             {String(docType ?? "").trim().toUpperCase() === "LPO" && (

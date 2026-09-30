@@ -142,10 +142,10 @@ export function PurchaseInvoiceLinesTable({
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
-  const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
   const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-  const grandTotal = totalAmount - TotalDiscAmount(rows);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const discountScope = form.discount_scoope || "ITEM";
   const [lineSearch, setLineSearch] = useState("");
@@ -580,9 +580,16 @@ export function PurchaseInvoiceLinesTable({
           </tbody>
         </table>
       </div>
-      <div
-        className="commercial-lines-footer flex flex-wrap items-center justify-end gap-x-6 gap-y-1 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 text-xs"
-        style={{ height: "auto", minHeight: 40, overflow: "visible", flexShrink: 0 }}
+       <div
+        className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
+        style={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 10,
+          backgroundColor: "#f8fafc",
+          boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
+          fontSize:14
+        }}
       >
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Puom)</span>
@@ -593,8 +600,8 @@ export function PurchaseInvoiceLinesTable({
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Base Total Amount</span>
-          <strong className="text-emerald-600">{formatAmount(totalAmount)}</strong>
+          <span className="text-muted-foreground">Amount Before Discount</span>
+          <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>

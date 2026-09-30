@@ -90,13 +90,7 @@ export function PurchaseInvoiceHeaderForm({
     const discountScope = form.discount_scoope || "ITEM";
     return (
         <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
-            {/* HEADER SECTION - HEIGHT UNCHANGED */}
-            <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
-                <div>
-                    <p className="eyebrow m-0 text-[9px] leading-tight uppercase opacity-70 font-semibold">Header</p>
-                    <h3 className="m-0 text-sm font-bold leading-tight"></h3>
-                </div>
-            </div>
+        
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 items-start">
 
                 {/* LEFT COLUMN — Document Details, then Party Details */}
@@ -293,7 +287,7 @@ export function PurchaseInvoiceHeaderForm({
                         </CField>
                         {editMode && <CField label="Doc No"><Input disabled value={form.pi_doc_no || ""} /></CField>}
                         <CField label="Doc Date *">
-                            <Input type="date" disabled={headerAndLineDisabled} required value={form.pi_doc_date} onChange={(event) => updateField("pi_doc_date", event.target.value)} />
+                            <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                         </CField>
                                           <div className="col-span-2">
                             <LookupField
@@ -408,24 +402,11 @@ export function PurchaseInvoiceHeaderForm({
                                 onChange={(event) => updateField("po_party_fax", event.target.value)}
                             />
                         </CField>
-
-                        <CField label="Address" className="col-span-3">
-                            <Input
-                                disabled={headerAndLineDisabled}
-                                value={form.po_party_address}
-                                onChange={(event) => updateField("po_party_address", event.target.value)}
-                            />
+                              <CField label="Expense A/c Post" className="col-span-1">
+                            <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
+                                {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </Select>
                         </CField>
-                        <CField label="Pay Terms" className="col-span-3">
-                            <Input
-                                disabled={headerAndLineDisabled}
-                                value={form.po_payment_terms}
-                                onChange={(event) =>
-                                    updateField("po_payment_terms", event.target.value)
-                                }
-                            />
-                        </CField>
-
                         <CField label="Buyer">
                             <Input
                                 className="text-right"
@@ -444,6 +425,17 @@ export function PurchaseInvoiceHeaderForm({
                                 onChange={(event) => updateField("po_wo_number", event.target.value)}
                             />
                         </CField>
+
+                        <CField label="Address" className="col-span-4">
+                            <Input
+                                disabled={headerAndLineDisabled}
+                                value={form.po_party_address}
+                                onChange={(event) => updateField("po_party_address", event.target.value)}
+                            />
+                        </CField>
+                     
+
+                        
                         <CField label="Remarks" className="col-span-4">
                             <Input
                                 disabled={headerAndLineDisabled}
@@ -458,7 +450,7 @@ export function PurchaseInvoiceHeaderForm({
 
                 {/* RIGHT COLUMN — Order & Currency, Tax, Project, Delivery */}
                 <div className="flex flex-col gap-2">
-                    <HeaderBlock label="Order & Currency" icon={<Percent size={11} />} gridCols="grid-cols-4">
+                    <HeaderBlock label="Discount Scope & Delivery Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
                         {/* Discount Scope */}
                         <div className="col-span-4 flex items-center gap-6 border-b border-gray-100 pb-1 mb-0.5">
                             <span className="text-[9px] font-semibold text-foreground/75">
@@ -552,15 +544,18 @@ export function PurchaseInvoiceHeaderForm({
                             />
                         </CField>
 
-                        <CField label="Expense A/c Post" className="col-span-2">
-                            <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
-                                {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                            </Select>
+                    
+                         <CField label="Pay Terms" className="col-span-2">
+                            <Input
+                                disabled={headerAndLineDisabled}
+                                value={form.po_payment_terms}
+                                onChange={(event) =>
+                                    updateField("po_payment_terms", event.target.value)
+                                }
+                            />
                         </CField>
 
-                        {/* LPO fields */}
-                        {String(docType ?? "").trim().toUpperCase() === "LPO" && (
-                            <>
+                      
                                 <CField label="Delivery Contact Person">
                                     <Input
                                         className="h-7 text-xs"
@@ -604,8 +599,8 @@ export function PurchaseInvoiceHeaderForm({
                                         }
                                     />
                                 </CField>
-                            </>
-                        )}
+                     
+                      
                     </HeaderBlock>
 
                     <HeaderBlock label="Tax Configuration" icon={<Receipt size={11} />} gridCols="grid-cols-3">
@@ -677,48 +672,7 @@ export function PurchaseInvoiceHeaderForm({
                         <CField label="Scope of Work"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
                     </HeaderBlock>
 
-                    <HeaderBlock label="Delivery Details" icon={<Truck size={11} />} gridCols="grid-cols-4">
-                        <CField label="Delivery Contact">
-                            <Input
-                                disabled={headerAndLineDisabled}
-                                value={form.po_dlvr_contact}
-                                onChange={(event) =>
-                                    updateField("po_dlvr_contact", event.target.value)
-                                }
-                            />
-                        </CField>
-
-                        <CField label="Delivery Tel">
-                            <Input
-                                disabled={headerAndLineDisabled}
-                                value={form.po_dlvr_mobile}
-                                onChange={(event) =>
-                                    updateField("po_dlvr_mobile", event.target.value)
-                                }
-                            />
-                        </CField>
-
-                        <CField label="Delivery Email" className="col-span-1">
-                            <Input
-                                disabled={headerAndLineDisabled}
-                                type="email"
-                                value={form.po_dlvr_email}
-                                onChange={(event) =>
-                                    updateField("po_dlvr_email", event.target.value)
-                                }
-                            />
-                        </CField>
-
-                                    <CField label="Delivery Term" className="col-span-1">
-                        <Input
-                            disabled={headerAndLineDisabled}
-                            value={form.po_dlvr_term}
-                            onChange={(event) =>
-                                updateField("po_dlvr_term", event.target.value)
-                            }
-                        />
-                    </CField>
-                    </HeaderBlock>
+            
                 </div>
             </div>
         </div>

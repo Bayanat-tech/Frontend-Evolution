@@ -137,10 +137,10 @@ export function PurchaseOrderLinesTable({
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
-  const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
   const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-  const grandTotal = totalAmount - TotalDiscAmount(rows);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const discountScope = form.discount_scoope || "ITEM";
@@ -162,7 +162,7 @@ export function PurchaseOrderLinesTable({
 
   return (
     <div
-      className="commercial-lines-card rounded-md border bg-card"
+      className="commercial-lines-card rounded-md border bg-card min-w-0"
       style={{ height: "auto", minHeight: 0, maxHeight: "none", overflow: "visible", display: "block" }}
     >
       <div className="finance-line-actions">
@@ -214,7 +214,7 @@ export function PurchaseOrderLinesTable({
           </Button>
         </div>
       </div>
-      <div className="commercial-lines-scroll max-h-[43vh] overflow-auto" >
+      <div className="commercial-lines-scroll max-h-[43vh] overflow-auto min-w-0">
         <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
           <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
             <tr>
@@ -253,8 +253,10 @@ export function PurchaseOrderLinesTable({
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-    ) : filteredRows.map((row, index) => {
+              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 26 : 16}>No detail lines yet — click "Add Line" to get started</td></tr>
+            ) : filteredRows.length === 0 ? (
+              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 26 : 16}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+            ) : filteredRows.map((row, index) => {
               const qtyPuomNum = numberOrZero(row.qty_puom);
               const qtyLuomNum = numberOrZero(row.qty_luom);
               const upppNum = numberOrZero(row.uppp);
@@ -688,7 +690,17 @@ export function PurchaseOrderLinesTable({
           </tbody>
         </table>
       </div>
-      <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
+      <div
+        className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
+        style={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 10,
+          backgroundColor: "#f8fafc",
+          boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
+          fontSize:14
+        }}
+      >
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Puom)</span>
           <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
@@ -698,8 +710,8 @@ export function PurchaseOrderLinesTable({
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Base Total Amount</span>
-          <strong className="text-emerald-600">{formatAmount(totalAmount)}</strong>
+          <span className="text-muted-foreground">Amount Before Discount</span>
+          <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>

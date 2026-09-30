@@ -164,11 +164,11 @@ export function PurchaseGrnDetailsTable({
         </div>
             </div>
             <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[1500px] text-sm" style={{ tableLayout: "fixed" }}>
-                    <thead className="text-xs text-primary-foreground">
+        <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
+          <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                         <tr>
                             <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(0.5)}>SNo</th>
-                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(1)}>Div</th>
+                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(5)}>Div</th>
                             <th className="finance-sticky-col px-2 py-2 text-center" style={plainHeaderStyle(50)}>Product Code</th>
                             <th className="finance-amount-cell px-2 py-2 text-center w-64" style={plainHeaderStyle(5)}>P Uom</th>
                             <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Qty Puom</th>
