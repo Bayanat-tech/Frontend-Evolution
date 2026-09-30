@@ -433,7 +433,7 @@ export function AddAssetTransferForm({
       {/* ===================== FOOTER ACTIONS ===================== */}
       <div className="mt-4 flex items-center justify-end gap-2 border-t pt-4">
         <Button variant="outline" onClick={onClose}>
-          <X size={15} /> Close
+          Close
         </Button>
         {!isReadOnly && (
           <Button disabled={saving} type="submit" form="asset-transfer-form">
