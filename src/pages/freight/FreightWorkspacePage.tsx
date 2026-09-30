@@ -6,6 +6,8 @@ import {
   FileSpreadsheet,
   FileText,
   Loader2,
+  LayoutDashboard,
+  PanelsTopLeft,
   RefreshCw,
   Search,
   X,
@@ -16,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { useAuth } from "../../state/AuthContext";
+import { FreightDashboardPanel } from "./FreightDashboardPanel";
 
 type FreightProcess = "enquiry" | "rfq" | "quotation";
 
@@ -53,7 +56,37 @@ type WorkspaceSummary = {
   [key: string]: unknown;
 };
 
-export function FreightWorkspacePage({ target: _target }: { target?: FreightWorkspaceTarget }) {
+export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarget }) {
+  const [activeView, setActiveView] = useState<"dashboard" | "control-center">("dashboard");
+
+  return (
+    <section className="freight-workspace-home">
+      <div className="freight-workspace-tabs" role="tablist" aria-label="Freight workspace views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "dashboard"}
+          className={activeView === "dashboard" ? "is-active" : ""}
+          onClick={() => setActiveView("dashboard")}
+        >
+          <LayoutDashboard size={15} /> Dashboard
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "control-center"}
+          className={activeView === "control-center" ? "is-active" : ""}
+          onClick={() => setActiveView("control-center")}
+        >
+          <PanelsTopLeft size={15} /> Control Center
+        </button>
+      </div>
+      {activeView === "dashboard" ? <FreightDashboardPanel /> : <FreightControlCenter target={target} />}
+    </section>
+  );
+}
+
+function FreightControlCenter({ target: _target }: { target?: FreightWorkspaceTarget }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [smartSearch, setSmartSearch] = useState("");

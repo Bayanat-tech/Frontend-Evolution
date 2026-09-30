@@ -2061,3 +2061,232 @@ input[tabindex="-1"].opacity-0,
   box-shadow: 0 1px 2px rgba(0, 55, 140, 0.2) !important;
 }
 
+/* Freight workspace dashboard */
+.freight-workspace-home {
+  --fd-blue: #06479b;
+  --fd-border: #cfd8e5;
+  color: #172033;
+}
+
+.freight-workspace-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 4px;
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  background: #eef3f8;
+}
+
+.freight-workspace-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #607089;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.freight-workspace-tabs button.is-active {
+  background: #fff;
+  color: var(--fd-blue);
+  box-shadow: 0 1px 4px rgb(15 23 42 / 12%);
+}
+
+.freight-dashboard {
+  padding-bottom: 24px;
+}
+
+.freight-dashboard-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 2px 0 17px;
+  border-bottom: 1px solid #aebaca;
+}
+
+.freight-dashboard-header h1 {
+  margin: 0;
+  color: #111827;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+
+.freight-dashboard-header p {
+  margin: 4px 0 0;
+  color: #718096;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.freight-dashboard-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.freight-dashboard-filters label {
+  display: grid;
+  gap: 5px;
+}
+
+.freight-dashboard-filters label > span {
+  color: #7b879a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.freight-dashboard-filters strong,
+.freight-dashboard-filters select,
+.freight-dashboard-filters > button {
+  height: 36px;
+  border: 1px solid #bac6d5;
+  border-radius: 8px;
+  background: #fff;
+  color: #263247;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.freight-dashboard-filters strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 240px;
+  padding: 0 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.freight-dashboard-filters select { min-width: 112px; padding: 0 30px 0 11px; cursor: pointer; }
+.freight-dashboard-filters label:nth-child(3) select { min-width: 145px; }
+.freight-dashboard-filters > button { display: grid; width: 36px; place-items: center; color: var(--fd-blue); cursor: pointer; }
+.freight-dashboard-filters > button:hover { background: #eef6ff; }
+
+.freight-dashboard-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #b42318;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.freight-dashboard-error button { margin-left: auto; border: 0; background: transparent; color: #06479b; font-weight: 750; cursor: pointer; }
+.freight-dashboard-section { margin-top: 14px; }
+.freight-dashboard-section-title { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 11px; margin-bottom: 10px; }
+.freight-dashboard-section-title span { height: 1px; background: #b6c1d0; }
+.freight-dashboard-section-title h2 { margin: 0; color: #168ac1; font-size: 10px; font-weight: 850; letter-spacing: .16em; text-transform: uppercase; }
+
+.freight-dashboard-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.freight-dashboard-kpis-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.freight-dashboard-kpi {
+  min-width: 0;
+  padding: 11px 12px 9px;
+  border: 1px solid var(--fd-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(15 23 42 / 8%);
+}
+.freight-dashboard-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.freight-dashboard-kpi-top > span { overflow: hidden; color: #6f7c90; font-size: 9px; font-weight: 800; letter-spacing: .055em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.freight-dashboard-kpi-top i { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border-radius: 7px; background: #eff6ff; color: #06479b; }
+.freight-dashboard-kpi > strong { display: block; min-height: 26px; margin-top: 1px; color: #172033; font-size: 19px; font-weight: 850; line-height: 1.35; }
+.freight-dashboard-kpi-foot { display: flex; min-height: 19px; align-items: flex-end; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid #d9e0e9; color: #778397; font-size: 9.5px; }
+.freight-dashboard-kpi-foot b { display: inline-flex; align-items: center; gap: 2px; font-weight: 800; }
+.freight-dashboard-kpi-foot .is-up { color: #079669; }
+.freight-dashboard-kpi-foot .is-down { color: #ed3a5f; }
+.freight-dashboard-kpi.tone-violet .freight-dashboard-kpi-top i { background: #f5f1ff; color: #7c3aed; }
+.freight-dashboard-kpi.tone-teal .freight-dashboard-kpi-top i { background: #ecfdf8; color: #0f927a; }
+.freight-dashboard-kpi.tone-amber .freight-dashboard-kpi-top i { background: #fff7e8; color: #c87600; }
+.freight-dashboard-kpi.tone-green .freight-dashboard-kpi-top i { background: #edfbf5; color: #07885f; }
+.freight-dashboard-kpi.tone-red .freight-dashboard-kpi-top i { background: #fff0f1; color: #dc3555; }
+.freight-dashboard-skeleton { display: block; width: 56px; height: 15px; margin: 6px 0; border-radius: 5px; background: linear-gradient(90deg, #eef2f6 25%, #dae2eb 50%, #eef2f6 75%); background-size: 200% 100%; animation: freight-dashboard-shimmer 1.2s infinite; }
+@keyframes freight-dashboard-shimmer { to { background-position: -200% 0; } }
+
+.freight-dashboard-chart-grid,
+.freight-dashboard-panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.freight-dashboard-card { min-width: 0; overflow: hidden; border: 1px solid var(--fd-border); border-radius: 11px; background: #fff; box-shadow: 0 2px 5px rgb(15 23 42 / 7%); }
+.freight-dashboard-card-head { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; border-bottom: 1px solid #e0e6ee; }
+.freight-dashboard-card-head h3 { display: flex; align-items: center; gap: 7px; margin: 0; color: #1d2638; font-size: 12px; font-weight: 800; }
+.freight-dashboard-card-head > span { color: #8490a1; font-size: 9.5px; font-weight: 600; }
+.freight-dashboard-card-head > div { display: flex; flex-wrap: wrap; gap: 12px; color: #637086; font-size: 9.5px; font-weight: 650; }
+.freight-dashboard-card-head > div span { display: flex; align-items: center; gap: 5px; }
+.freight-dashboard-card-head > div i { width: 7px; height: 7px; border-radius: 50%; }
+.freight-dashboard-chart svg { display: block; width: 100%; height: 250px; padding: 8px 8px 0; }
+.freight-dashboard-chart .chart-gridline { stroke: #e8edf3; stroke-width: 1; }
+.freight-dashboard-chart .chart-axis { fill: #7c8899; font-size: 9px; }
+.freight-dashboard-chart-loading,
+.freight-dashboard-list-loading { display: grid; min-height: 250px; place-items: center; color: #06479b; }
+
+.freight-dashboard-ranking { padding: 8px 14px 12px; }
+.freight-dashboard-rank { display: grid; grid-template-columns: 25px 1fr; gap: 9px; padding: 7px 0; }
+.freight-dashboard-rank > b { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: #eef3f8; color: #607089; font-size: 10px; }
+.freight-dashboard-rank > div > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.freight-dashboard-rank strong { overflow: hidden; color: #263247; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.freight-dashboard-rank span { flex: 0 0 auto; color: #34425a; font-size: 10px; font-weight: 750; }
+.freight-dashboard-rank i { display: block; height: 5px; margin-top: 5px; overflow: hidden; border-radius: 6px; background: #eaf0f5; }
+.freight-dashboard-rank i span { display: block; height: 100%; border-radius: inherit; background: #19a9e6; }
+.freight-dashboard-rank small { color: #8793a3; font-size: 8.5px; }
+.freight-dashboard-attention { padding: 5px 12px 10px; }
+.freight-dashboard-attention > div { display: grid; grid-template-columns: 30px minmax(0, 1fr) 54px 62px; align-items: center; gap: 8px; min-height: 43px; border-bottom: 1px solid #edf1f5; }
+.freight-dashboard-attention > div:last-child { border-bottom: 0; }
+.freight-dashboard-attention > div > span { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; background: #eff6ff; color: #06479b; }
+.freight-dashboard-attention .mode-sea { background: #ecfdf8; color: #0f927a; }
+.freight-dashboard-attention .mode-road { background: #fff7e8; color: #c87600; }
+.freight-dashboard-attention strong { display: block; color: #1f2b40; font-size: 10.5px; }
+.freight-dashboard-attention small { display: block; overflow: hidden; color: #7b8798; font-size: 8.8px; text-overflow: ellipsis; white-space: nowrap; }
+.freight-dashboard-attention time { color: #536177; font-size: 9.5px; font-weight: 650; }
+.freight-dashboard-attention > div > b { justify-self: end; padding: 3px 6px; border: 1px solid #bce8dc; border-radius: 10px; background: #edfbf6; color: #087a5b; font-size: 8.5px; }
+.freight-dashboard-attention > div > b.is-overdue { border-color: #fecaca; background: #fff1f2; color: #d62f4f; }
+.freight-dashboard-empty { display: flex; min-height: 185px !important; align-items: center; justify-content: center; gap: 8px; color: #728096; font-size: 11px; font-weight: 600; }
+
+@media (max-width: 1100px) {
+  .freight-dashboard-header { align-items: flex-start; flex-direction: column; }
+  .freight-dashboard-filters { width: 100%; flex-wrap: wrap; }
+  .freight-dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 780px) {
+  .freight-dashboard-chart-grid, .freight-dashboard-panel-grid { grid-template-columns: 1fr; }
+  .freight-dashboard-filters label:first-child { width: 100%; }
+  .freight-dashboard-filters strong { max-width: none; }
+}
+@media (max-width: 520px) {
+  .freight-dashboard-kpis, .freight-dashboard-kpis-three { grid-template-columns: 1fr; }
+  .freight-workspace-tabs { display: flex; }
+  .freight-workspace-tabs button { flex: 1; justify-content: center; }
+}
+
+.dark .freight-dashboard-header h1,
+.dark .freight-dashboard-kpi > strong,
+.dark .freight-dashboard-card-head h3,
+.dark .freight-dashboard-attention strong { color: #edf4ff; }
+.dark .freight-dashboard-kpi,
+.dark .freight-dashboard-card,
+.dark .freight-dashboard-filters strong,
+.dark .freight-dashboard-filters select,
+.dark .freight-dashboard-filters > button,
+.dark .freight-workspace-tabs button.is-active { border-color: #334155; background: #111c2e; color: #dce8f8; }
+.dark .freight-workspace-tabs { border-color: #334155; background: #0c1626; }
+.dark .freight-dashboard-header,
+.dark .freight-dashboard-section-title span { border-color: #405068; }
+.dark .freight-dashboard-card-head,
+.dark .freight-dashboard-kpi-foot,
+.dark .freight-dashboard-attention > div { border-color: #26364b; }
+
