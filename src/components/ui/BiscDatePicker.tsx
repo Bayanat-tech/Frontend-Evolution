@@ -298,10 +298,10 @@ export function BiscDatePicker({
         } bg-white text-foreground flex items-center justify-between transition-all cursor-pointer select-none
           ${disabled ? "opacity-60 cursor-not-allowed bg-slate-50" : "hover:border-[#64748b] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30 shadow-2xs"}`}
       >
-        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-[10.5px] font-mono tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-[10px]" : "text-[12px]"} text-slate-400`}>
+        <span className={`truncate mr-1 ${formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-[10.5px] font-mono tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-[10px]" : "text-[12px]"} text-slate-400`}`}>
           {formattedDisplay || placeholder || defaultPlaceholder}
         </span>
-        <CalendarIcon className={`${compact ? "w-3 h-3 ml-0.5" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />
+        <CalendarIcon className={`${compact ? "text-[#00378C]" : "text-slate-500"} shrink-0`} style={compact ? { width: 12, height: 12, minWidth: 12 } : { width: 14, height: 14, minWidth: 14 }} />
       </button>
 
       {/* Portaled Interactive Calendar Popover */}
