@@ -45,6 +45,7 @@ import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -69,6 +70,7 @@ export function PurchaseQuotationEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+    const [printOpen, setPrintOpen] = useState(false);
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 
@@ -524,7 +526,9 @@ export function PurchaseQuotationEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                    <Printer size={15} /> Print
+                  </Button>
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
@@ -630,7 +634,10 @@ export function PurchaseQuotationEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+           <Button aria-label="Print" type="button" variant="outline" size="icon"
+              disabled={actionDisabled} onClick={() => setPrintOpen(true)}>
+              <Printer size={15} />
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
@@ -679,6 +686,15 @@ export function PurchaseQuotationEditor({
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
       />
+
+
+       <PurchaseQuotationPrintDialog
+              open={printOpen}
+              onClose={() => setPrintOpen(false)}
+              form={form}
+              companyCode={user?.company_code || ""}
+              docType={PO_DOC_TYPE.PQA}
+            />
     </>
   );
 }

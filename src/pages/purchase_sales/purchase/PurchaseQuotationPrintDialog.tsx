@@ -2,26 +2,24 @@
 
 import React, { useState } from "react";
 import { Download, FileText, Loader2, Printer, X } from "lucide-react";
-// import { PurchaseOrderForm } from "../../purchase_sales/purchase/Purchaseordertypes";
+import { PurchaseOrderForm } from "./Purchaseordertypes";
 import {
-  getSalesInvoiceReportHtml,
-  getSalesInvoiceReportExcel,
-  getSalesInvoiceTaxReportHtml,
-  getSalesInvoiceTaxReportExcel,
-  getSalesAccountDetailsReportHtml,
-  getSalesAccountDetailsReportExcel,
+  getPurchaseQuotationReportHtml,
+  getPurchaseQuotationReportExcel,
+  getPurchaseQuotationWithRatesReportHtml,
+  getPurchaseQuotationWithRatesReportExcel,
+  getPurchaseQuotationCompareReportHtml,
+  getPurchaseQuotationCompareReportExcel,
 } from "../../../api/transactions";
-import { PurchaseOrderForm } from "./SalesOrdertypes";
-import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
-import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 // The 3 report types available in the dropdown/radio group.
-type SalesPrintReportType = "SI" | "SI_TAX" | "ACCOUNT";
+type PurchaseQuotationPrintReportType = "QUOTATION" | "QUOTATION_WITH_RATES" | "COMPARE_QUOTATION";
 
-const REPORT_OPTIONS: { displayValue: string; dataValue: SalesPrintReportType }[] = [
-  { displayValue: "Sales Invoice", dataValue: "SI" },
-  { displayValue: "Sales Invoice Tax", dataValue: "SI_TAX" },
-  { displayValue: "Sales Account Details", dataValue: "ACCOUNT" },
+const REPORT_OPTIONS: { displayValue: string; dataValue: PurchaseQuotationPrintReportType }[] = [
+  { displayValue: "Quotation", dataValue: "QUOTATION" },
+  { displayValue: "Quotation With Rates", dataValue: "QUOTATION_WITH_RATES" },
+  { displayValue: "Compare Quotation", dataValue: "COMPARE_QUOTATION" },
 ];
 
 function formatDate(value: unknown) {
@@ -79,12 +77,32 @@ const RadioGroup: React.FC<{
   onChange: (v: string) => void;
   options: { displayValue: string; dataValue: string }[];
 }> = ({ value, onChange, options }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", padding: "8px 10px" }}>
+  <div
+    style={{
+      display: "flex",
+      flexWrap: "nowrap",
+      alignItems: "center",
+      gap: 20,
+      padding: "8px 10px",
+      overflowX: "auto",
+    }}
+  >
     {options.map((opt) => (
       <label
         key={opt.dataValue}
         onClick={() => onChange(opt.dataValue)}
-        style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 500, color: "#172033", cursor: "pointer", whiteSpace: "nowrap" }}
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          cursor: "pointer",
+          userSelect: "none",
+          whiteSpace: "nowrap",
+          fontSize: 12,
+          fontWeight: 500,
+          color: "#172033",
+        }}
       >
         <span
           style={{
@@ -95,7 +113,6 @@ const RadioGroup: React.FC<{
             height: 16,
             borderRadius: "999px",
             border: `2px solid ${value === opt.dataValue ? "#1d4ed8" : "#9ca3af"}`,
-            transition: "border-color 0.15s ease",
             flexShrink: 0,
           }}
         >
@@ -111,30 +128,35 @@ const RadioGroup: React.FC<{
   </div>
 );
 
-export function SalesInvoicePrintDialog({
+export function PurchaseQuotationPrintDialog({
   open,
   onClose,
   form,
   companyCode,
   docType,
-  defaultReportType = "SI",
+  defaultReportType = "QUOTATION",
 }: {
   open: boolean;
   onClose: () => void;
   form: PurchaseOrderForm;
   companyCode: string;
   docType: string;
-  defaultReportType?: SalesPrintReportType;
+  defaultReportType?: PurchaseQuotationPrintReportType;
 }) {
-  const [reportType, setReportType] = useState<SalesPrintReportType>(defaultReportType);
+  const [reportType, setReportType] = useState<PurchaseQuotationPrintReportType>(defaultReportType);
   const [loadingAction, setLoadingAction] = useState<"print" | "excel" | null>(null);
   const [reportError, setReportError] = useState("");
 
-  
+  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL / new tab) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
   if (!open) return null;
 
-  const docNo = String(form.doc_no || (form as any).si_doc_no || "");
+  const docNo = String(form.doc_no || "");
 
   const buildApiParams = () => ({
     company_code: companyCode,
@@ -143,49 +165,45 @@ export function SalesInvoicePrintDialog({
   });
 
   const getHtmlFn = () =>
-    reportType === "SI_TAX" ? getSalesInvoiceTaxReportHtml :
-      reportType === "ACCOUNT" ? getSalesAccountDetailsReportHtml :
-        getSalesInvoiceReportHtml;
+    reportType === "QUOTATION_WITH_RATES" ? getPurchaseQuotationWithRatesReportHtml :
+    reportType === "COMPARE_QUOTATION" ? getPurchaseQuotationCompareReportHtml :
+    getPurchaseQuotationReportHtml;
 
   const getExcelFn = () =>
-    reportType === "SI_TAX" ? getSalesInvoiceTaxReportExcel :
-      reportType === "ACCOUNT" ? getSalesAccountDetailsReportExcel :
-        getSalesInvoiceReportExcel;
+    reportType === "QUOTATION_WITH_RATES" ? getPurchaseQuotationWithRatesReportExcel :
+    reportType === "COMPARE_QUOTATION" ? getPurchaseQuotationCompareReportExcel :
+    getPurchaseQuotationReportExcel;
 
   // ── Print now opens the in-app preview dialog instead of a new window ───
- const handlePrint = async () => {
-  if (!docNo) {
-    setReportError("Doc No is missing — cannot fetch the report.");
-    return;
-  }
-  setReportError("");
-  setLoadingAction("print");
+  const handlePrint = async () => {
+    if (!docNo) {
+      setReportError("Doc No is missing — cannot fetch the report.");
+      return;
+    }
+    setReportError("");
 
-  const reportLabel = REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue || "Sales Invoice";
-  const preview = openPurchaseReport(`${reportLabel} ${docNo}`.trim());
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+    setReportPreviewLoading(true);
+    setLoadingAction("print");
 
-  try {
-    const html = await getHtmlFn()(buildApiParams());
-    preview.ready({
-      html,
-      filename: `${reportType.toLowerCase()}_${docNo}_${new Date().toISOString().slice(0, 10)}`,
-    orientation: reportType === "SI" ? "portrait" : "landscape",
-      onExcel: async () => {
-        await getExcelFn()(buildApiParams());
-      },
-    });
-  } catch (err: any) {
-    preview.fail(new Error(err?.message || "Failed to load report."));
-  } finally {
-    setLoadingAction(null);
-  }
-};
+    try {
+      const html = await getHtmlFn()(buildApiParams());
+      setReportHtml(html);
+    } catch (err: any) {
+      setReportPreviewError(err?.message || "Failed to load report.");
+    } finally {
+      setReportPreviewLoading(false);
+      setLoadingAction(null);
+    }
+  };
 
-  // const closeReportPreview = () => {
-  //   setReportPreviewOpen(false);
-  //   setReportHtml(null);
-  //   setReportPreviewError("");
-  // };
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+  };
 
   const handleExcel = async () => {
     if (!docNo) {
@@ -204,17 +222,17 @@ export function SalesInvoicePrintDialog({
   };
 
   // Excel button inside the report-preview dialog itself
-  // const handleReportPreviewExcel = async () => {
-  //   if (!docNo) return;
-  //   setReportPreviewExporting(true);
-  //   try {
-  //     await getExcelFn()(buildApiParams());
-  //   } catch (err: any) {
-  //     setReportPreviewError(err?.message || "Excel export failed.");
-  //   } finally {
-  //     setReportPreviewExporting(false);
-  //   }
-  // };
+  const handleReportPreviewExcel = async () => {
+    if (!docNo) return;
+    setReportPreviewExporting(true);
+    try {
+      await getExcelFn()(buildApiParams());
+    } catch (err: any) {
+      setReportPreviewError(err?.message || "Excel export failed.");
+    } finally {
+      setReportPreviewExporting(false);
+    }
+  };
 
   return (
     <div style={{
@@ -223,8 +241,8 @@ export function SalesInvoicePrintDialog({
       fontFamily: "system-ui, sans-serif",
     }}>
       <style>{`
-        .si-print-btn-primary:hover { background: #002e76 !important; }
-        .si-print-btn-outline:hover { background: #EBF4FF !important; border-color: #00449b !important; color: #00449b !important; }
+        .pq-print-btn-primary:hover { background: #002e76 !important; }
+        .pq-print-btn-outline:hover { background: #EBF4FF !important; border-color: #00449b !important; color: #00449b !important; }
       `}</style>
 
       <div style={{
@@ -250,7 +268,7 @@ export function SalesInvoicePrintDialog({
 
         {/* Scrollable content */}
         <div style={{ overflow: "auto", padding: "10px 16px 16px" }}>
-          {/* Field-row: header details, same look as PurchaseInvoicePrintDialog */}
+          {/* Field-row: header details, same look as SalesInvoicePrintDialog */}
           <div style={{ background: BG, borderRadius: 8, padding: "10px 12px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div style={{ minWidth: 0 }}>
@@ -276,7 +294,7 @@ export function SalesInvoicePrintDialog({
             <div style={{ marginTop: 12 }}>
               <FloatLabel label="Print Type" bgColor={BG}>
                 <div style={{ border: `1px solid ${BORDER}`, borderRadius: 7, background: "#fff", boxSizing: "border-box" }}>
-                  <RadioGroup value={reportType} onChange={(v) => setReportType(v as SalesPrintReportType)} options={REPORT_OPTIONS} />
+                  <RadioGroup value={reportType} onChange={(v) => setReportType(v as PurchaseQuotationPrintReportType)} options={REPORT_OPTIONS} />
                 </div>
               </FloatLabel>
             </div>
@@ -309,16 +327,16 @@ export function SalesInvoicePrintDialog({
 
         {/* Action bar */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: `1px solid ${BORDER}` }}>
-          <button onClick={onClose} className="si-print-btn-outline" style={{
+          <button onClick={onClose} className="pq-print-btn-outline" style={{
             padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer",
             display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
           }}>
-            Close
+            <X size={13} /> Close
           </button>
           <button
             onClick={handleExcel}
             disabled={loadingAction !== null}
-            className="si-print-btn-outline"
+            className="pq-print-btn-outline"
             style={{
               padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff",
               cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.6 : 1,
@@ -331,7 +349,7 @@ export function SalesInvoicePrintDialog({
           <button
             onClick={handlePrint}
             disabled={loadingAction !== null}
-            className="si-print-btn-primary"
+            className="pq-print-btn-primary"
             style={{
               padding: "7px 16px", border: "1px solid #00449b", background: "#00449b",
               cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.8 : 1,
@@ -345,7 +363,16 @@ export function SalesInvoicePrintDialog({
         </div>
       </div>
 
-      <PurchaseReportPreview />
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={`Purchase Quotation ${docNo}`.trim()}
+        htmlContent={reportHtml}
+        loading={reportPreviewLoading}
+        error={reportPreviewError || null}
+        onExportExcel={handleReportPreviewExcel}
+        exportingExcel={reportPreviewExporting}
+      />
     </div>
   );
 }

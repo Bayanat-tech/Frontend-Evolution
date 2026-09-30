@@ -44,3 +44,23 @@ export const toInputDate = (backendDate?: string | null): string => {
   if (!d || !m || !y) return "";
   return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
 };
+
+// YYYY-MM-DD  ->  DD/MM/YYYY   (safe: passes through existing DD/MM/YYYY)
+export const toDisplayDate =(value: string): string => {
+  if (!value) return "";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+  if (dmy) return `${dmy[1].padStart(2, "0")}/${dmy[2].padStart(2, "0")}/${dmy[3]}`;
+  return value;
+}
+
+// DD/MM/YYYY  ->  YYYY-MM-DD   (safe: accepts ISO too, returns "" on garbage)
+export const toIsoDate =(value: string): string => {
+  if (!value) return "";
+  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  return "";
+}
