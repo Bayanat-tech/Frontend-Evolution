@@ -184,17 +184,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     ? moduleMeta.fullForm.replace(/Management System/i, "").trim()
     : (activeApp?.title ? titleCase(activeApp.title) : "Module");
 
-  // useEffect(() => {
-  //   setExpanded(collectExpandedPath(activeMenuPath));
-  // }, [activeApp?.id, activeApp?.title, location.pathname]);
-
   useEffect(() => {
-    setExpanded((current) => ({
-      ...(isFinanceModule ? current : {}),
-      ...collectDefaultExpanded(activeApp?.children || [], 1),
-      ...collectExpandedPath(activeMenuPath),
-    }));
-  }, [activeApp?.id, activeApp?.title, location.pathname, isFinanceModule]);
+    setExpanded(collectExpandedPath(activeMenuPath));
+  }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
     if (!isMobile && keepSidebarOpen) {
@@ -210,11 +202,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     setCollapsed((value) => {
       const nextCollapsed = !value;
       if (!nextCollapsed) {
-        // setExpanded(collectExpandedPath(activeMenuPath));
-         setExpanded({
-          ...collectDefaultExpanded(activeApp?.children || [], 1),
-          ...collectExpandedPath(activeMenuPath),
-        });
+        setExpanded(collectExpandedPath(activeMenuPath));
       }
       return nextCollapsed;
     });
@@ -539,17 +527,6 @@ function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
   nodes.slice(0, -1).forEach((node) => {
     if (node.children?.length) {
       expanded[node.id || node.title] = true;
-    }
-  });
-  return expanded;
-}
-
-function collectDefaultExpanded(nodes: MenuNode[], maxLevel: number, level = 1): Record<string, boolean> {
-  const expanded: Record<string, boolean> = {};
-  nodes.forEach((node) => {
-    if (node.children?.length && level <= maxLevel) {
-      expanded[node.id || node.title] = true;
-      Object.assign(expanded, collectDefaultExpanded(node.children, maxLevel, level + 1));
     }
   });
   return expanded;

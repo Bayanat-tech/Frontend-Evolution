@@ -140,7 +140,7 @@ export function AddProductBrandForm({ mode, existingData, onClose }: Props) {
 
       <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
         <Button variant="outline" onClick={() => onClose(false)}>
-          <X size={15} /> {readonly ? "Close" : "Cancel"}
+          {readonly ? "Close" : "Cancel"}
         </Button>
         {!readonly && (
           <Button disabled={saving} type="submit" form="brand-master-form">

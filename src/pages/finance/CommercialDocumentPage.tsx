@@ -252,7 +252,10 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       cell: ({ row, getValue }) => (
         <button
           type="button"
-          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${String(getValue() || "")}`}
         >
@@ -307,7 +310,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       header: () => <div className="text-center w-full">Actions</div>,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
           <Button size="icon" variant="ghost" 
           onClick={() =>
             void handleOpenReport(
@@ -398,7 +401,10 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           <CommercialEditor
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -412,6 +418,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         open={divisionPicker}
         divisions={divisions}
         onSelect={(division) => {
+          setNotice(null);
           setEditor({ mode: "create", div: division });
         }}
         onClose={() => setDivisionPicker(false)}
@@ -736,7 +743,7 @@ function CommercialEditor({
 };
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -772,7 +779,19 @@ function CommercialEditor({
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -1567,21 +1586,6 @@ function CommercialEditor({
           </div>
         )}
       </CardContent>
-      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + taxTotal)}</strong>
-        </div>
-
-        {/* <div className="text-sm text-muted-foreground flex items-center gap-4">
-  <span>Total Amt <strong className="text-emerald-600">{formatAmount(total)}</strong></span>
-  <span>Tax <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong></span>
-  <span>Net Total <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong></span>
-</div> */}
-        <div className="flex items-center gap-2">
-        <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-        <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-        </div>
-      </div>
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
@@ -1732,7 +1736,13 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
     tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
     print_letter_head: !!header.print_letter_head,
-    detail: detailRaw.map((raw, index) => {
+    detail: (detailRaw.filter((raw) => {
+      const sn = Number(lowerRecord(raw).serial_no || 0);
+      return sn === 0 || sn < 9000;
+    }).length > 0 ? detailRaw.filter((raw) => {
+      const sn = Number(lowerRecord(raw).serial_no || 0);
+      return sn === 0 || sn < 9000;
+    }) : detailRaw).map((raw, index) => {
       const row = lowerRecord(raw);
       const lineCurrCode = text(row.curr_code) || text(header.curr_code);
       const lineCurrName = text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name) || text(nested(headerRaw, ["Currency", "curr_name"]) ?? header.curr_name);
