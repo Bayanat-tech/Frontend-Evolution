@@ -743,7 +743,7 @@ function CommercialEditor({
 };
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1586,19 +1586,7 @@ function CommercialEditor({
           </div>
         )}
       </CardContent>
-      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + taxTotal)}</strong>
-        </div>
-
-        {/* <div className="text-sm text-muted-foreground flex items-center gap-4">
-  <span>Total Amt <strong className="text-emerald-600">{formatAmount(total)}</strong></span>
-  <span>Tax <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong></span>
-  <span>Net Total <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong></span>
-</div> */}
-
-      </div>
-<AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}

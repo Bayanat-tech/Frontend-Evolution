@@ -3,6 +3,7 @@ import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue } from "../../api/lookups";
 import { Input } from "../ui/Input";
 import { LookupField } from "../ui/LookupField";
+import { BiscDatePicker } from "../ui/BiscDatePicker";
 import { useAuth } from "../../state/AuthContext";
 
 function text(value: unknown) {
@@ -90,10 +91,10 @@ export function SmartInlineAllocationTable({
       ? [
           { key: "sr", header: "#", width: 28, align: "center" },
           { key: "inv_no", header: "Invoice No", width: 130, align: "left" },
-          { key: "inv_date", header: "Invoice Date", width: 105, align: "left" },
-          { key: "inv_amt", header: "Invoice Amount", width: 100, align: "right" },
-          { key: "outstanding", header: "Outstanding", width: 100, align: "right" },
-          { key: "allocated", header: "Allocated Amount", width: 120, align: "right" },
+          { key: "inv_date", header: "Invoice Date", width: 115, align: "left" },
+          { key: "inv_amt", header: "Invoice Amount", width: 105, align: "right" },
+          { key: "outstanding", header: "Outstanding", width: 105, align: "right" },
+          { key: "allocated", header: "Allocated Amount", width: 125, align: "right" },
           { key: "action", header: "", width: 27, align: "center" },
         ]
       : childTable === "job"
@@ -276,12 +277,12 @@ export function SmartInlineAllocationTable({
               <col key={i} style={{ width: `${col.width}px` }} />
             ))}
           </colgroup>
-          <thead className="sticky top-0 bg-[#1e293b] text-white shadow-2xs z-10">
+          <thead className="sticky top-0 bg-[#00378C] text-white shadow-2xs z-10">
             <tr>
               {colConfigs.map((col, i) => (
                 <th
                   key={i}
-                  className={`px-1.5 py-1 text-[10.5px] font-semibold text-white tracking-wider border-r border-slate-700/80 last:border-r-0 ${
+                  className={`px-1.5 py-1 text-[10.5px] font-semibold text-white tracking-wider border-r border-blue-900/60 last:border-r-0 ${
                     col.align === "right"
                       ? "text-right"
                       : col.align === "center"
@@ -326,7 +327,7 @@ export function SmartInlineAllocationTable({
                       {/* Invoice No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#00378C] focus:outline-none"
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
@@ -344,29 +345,30 @@ export function SmartInlineAllocationTable({
 
                       {/* Invoice Date */}
                       <td className="px-1 py-0.5">
-                        <Input
-                          className="h-[22px] text-[11px] px-1 py-0"
+                        <BiscDatePicker
+                          compact
                           disabled={disabled}
-                          type="date"
                           value={dateInput(row.inv_date)}
-                          onChange={(e) => onChange(row.id, { inv_date: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
+                          onChange={(val) => onChange(row.id, { inv_date: val })}
                         />
                       </td>
 
                       {/* Invoice Amount */}
                       <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] text-slate-600 truncate">
-                        {row.inv_amt != null ? formatAmount(Number(row.inv_amt)) : "-"}
+                        {row.inv_amt != null && Number(row.inv_amt) > 0
+                          ? formatAmount(Number(row.inv_amt))
+                          : Number(row.amount || 0) > 0
+                            ? formatAmount(Number(row.amount || 0))
+                            : "-"}
                       </td>
 
                       {/* Outstanding */}
                       <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] font-semibold text-slate-800 truncate">
-                        {row.c_bal_amt_org != null ? formatAmount(Number(row.c_bal_amt_org)) : "-"}
+                        {row.c_bal_amt_org != null && Number(row.c_bal_amt_org) > 0
+                          ? formatAmount(Number(row.c_bal_amt_org))
+                          : Number(row.amount || 0) > 0
+                            ? formatAmount(Number(row.amount || 0))
+                            : "-"}
                       </td>
 
                       {/* Allocated Amount with compact Full button */}

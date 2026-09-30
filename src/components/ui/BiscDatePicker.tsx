@@ -12,6 +12,7 @@ export type BiscDatePickerProps = {
   maxYear?: number;
   error?: boolean;
   required?: boolean;
+  compact?: boolean;
 };
 
 const MONTH_NAMES = [
@@ -24,12 +25,13 @@ const WEEKDAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 export function BiscDatePicker({
   value = "",
   onChange,
-  placeholder = "DD / MM / YYYY",
+  placeholder,
   disabled = false,
   className = "",
   minYear = 1950,
   maxYear = 2050,
   error = false,
+  compact = false,
 }: BiscDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -89,7 +91,9 @@ export function BiscDatePicker({
     setCoords({ top, left });
   };
 
-  const handleToggle = () => {
+  const handleToggle = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
     if (disabled) return;
     if (!isOpen) {
       updatePosition();
@@ -269,14 +273,16 @@ export function BiscDatePicker({
     setIsOpen(false);
   };
 
-  // Format display string e.g. "01 / 09 / 2026"
+  // Format display string e.g. "01 / 09 / 2026" or "01/09/2026"
   const formattedDisplay = useMemo(() => {
     if (!parsedDate) return "";
     const dStr = String(parsedDate.getDate()).padStart(2, "0");
     const mStr = String(parsedDate.getMonth() + 1).padStart(2, "0");
     const yStr = String(parsedDate.getFullYear());
-    return `${dStr} / ${mStr} / ${yStr}`;
-  }, [parsedDate]);
+    return compact ? `${dStr}/${mStr}/${yStr}` : `${dStr} / ${mStr} / ${yStr}`;
+  }, [parsedDate, compact]);
+
+  const defaultPlaceholder = compact ? "DD/MM/YYYY" : "DD / MM / YYYY";
 
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
@@ -285,15 +291,17 @@ export function BiscDatePicker({
         type="button"
         disabled={disabled}
         onClick={handleToggle}
-        className={`bisc-date-picker-trigger w-full h-[28px] px-2 rounded-[6px] border ${
+        className={`bisc-date-picker-trigger w-full ${
+          compact ? "h-[22px] px-1.5 py-0 text-[10.5px] rounded" : "h-[28px] px-2 rounded-[6px] text-xs"
+        } border ${
           error ? "border-destructive ring-1 ring-destructive/40" : "border-[#94a3b8]"
-        } bg-white text-foreground text-xs flex items-center justify-between transition-all cursor-pointer select-none
+        } bg-white text-foreground flex items-center justify-between transition-all cursor-pointer select-none
           ${disabled ? "opacity-60 cursor-not-allowed bg-slate-50" : "hover:border-[#64748b] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30 shadow-2xs"}`}
       >
-        <span className={formattedDisplay ? "text-[#0f172a] font-medium text-[12px] tracking-tight" : "text-slate-400 text-[12px]"}>
-          {formattedDisplay || placeholder}
+        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-[10.5px] font-mono tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-[10px]" : "text-[12px]"} text-slate-400`}>
+          {formattedDisplay || placeholder || defaultPlaceholder}
         </span>
-        <CalendarIcon className="w-3.5 h-3.5 text-slate-500 shrink-0 ml-1" />
+        <CalendarIcon className={`${compact ? "w-3 h-3 ml-0.5" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />
       </button>
 
       {/* Portaled Interactive Calendar Popover */}

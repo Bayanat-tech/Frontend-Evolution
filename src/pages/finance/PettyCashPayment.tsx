@@ -418,7 +418,7 @@ function PettyCashPaymentDocument({
                     try {
                       const resp = await getFinanceOutstanding(mapped.div_code, invNo);
                       const balance = resp?.balances?.[0];
-                      if (balance) {
+                      if (balance && !balance.error && balance.original_amount > 0) {
                         childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
                       }
                     } catch {
@@ -663,11 +663,11 @@ function PettyCashPaymentDocument({
               if (!invNo) return m;
               const resp = await getFinanceOutstanding(divCode, invNo);
               const balance = resp?.balances?.[0];
-              if (balance && balance.outstanding_amount != null) {
+              if (balance && !balance.error && balance.original_amount > 0) {
                 return {
                   ...m,
-                  inv_amt: balance.original_amount ?? m.inv_amt,
-                  c_bal_amt_org: balance.outstanding_amount ?? m.c_bal_amt_org,
+                  inv_amt: balance.original_amount,
+                  c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
               return m;
@@ -799,7 +799,7 @@ function PettyCashPaymentDocument({
     }
     void fetchOutstanding(invNo).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance) return;
+      if (!balance || balance.error || !(balance.original_amount > 0)) return;
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
@@ -815,10 +815,10 @@ function PettyCashPaymentDocument({
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   return (
-    <form data-header-expanded={showHeaderDetails} className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)]" onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-12 items-center justify-between gap-4">
-          <FinanceDocumentIdentity title={DOCUMENT_META[docType].title} documentNo={form.doc_no} documentDate={form.doc_date} total={formatAmount(total)} onBack={onClose} headerExpanded={showHeaderDetails} onToggleHeader={() => setShowHeaderDetails(value => !value)} />
+          <FinanceDocumentIdentity title={DOCUMENT_META[docType].title} documentNo={form.doc_no} documentDate={form.doc_date} total={formatAmount(total + totalTax)} onBack={onClose} headerExpanded={showHeaderDetails} onToggleHeader={() => setShowHeaderDetails(value => !value)} />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -1344,13 +1344,7 @@ function PettyCashPaymentDocument({
         )}
       </CardContent>
 
-      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
-        </div>
-
-      </div>
-<AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}

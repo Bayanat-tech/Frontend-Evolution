@@ -476,7 +476,7 @@ function PaymentDocumentEditor({
                     try {
                       const resp = await getFinanceOutstanding(mapped.div_code, invNo);
                       const balance = resp?.balances?.[0];
-                      if (balance) {
+                      if (balance && !balance.error && balance.original_amount > 0) {
                         childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
                       }
                     } catch {
@@ -754,11 +754,11 @@ function PaymentDocumentEditor({
               if (!invNo) return m;
               const resp = await getFinanceOutstanding(divCode, invNo);
               const balance = resp?.balances?.[0];
-              if (balance && balance.outstanding_amount != null) {
+              if (balance && !balance.error && balance.original_amount > 0) {
                 return {
                   ...m,
-                  inv_amt: balance.original_amount ?? m.inv_amt,
-                  c_bal_amt_org: balance.outstanding_amount ?? m.c_bal_amt_org,
+                  inv_amt: balance.original_amount,
+                  c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
               return m;
@@ -891,7 +891,7 @@ function PaymentDocumentEditor({
     }
     void fetchOutstanding(invNo).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance) return;
+      if (!balance || balance.error || !(balance.original_amount > 0)) return;
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
@@ -907,7 +907,7 @@ function PaymentDocumentEditor({
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1541,13 +1541,7 @@ function PaymentDocumentEditor({
         )}
       </CardContent>
 
-      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
-        </div>
-
-      </div>
-<AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no || ""}
