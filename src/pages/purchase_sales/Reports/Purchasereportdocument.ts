@@ -146,23 +146,34 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
     grid.replaceWith(table);
   }
 
+  doc.querySelectorAll("table.grn-two-col").forEach((table) => {
+  table.setAttribute("data-pdfmake", JSON.stringify({
+    widths: ["50%", "50%"],
+    layout: "noBorders",
+  }));
+});
+
   let maxColumns = 0;
-  doc.querySelectorAll("table").forEach((table) => {
-    if (table.classList.contains("group-header-banner")) return;
-    const isTotals = table.classList.contains("grand-total-table");
-    const columns = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
-    const details = table.classList.contains("report-details-table") || isTotals;
-    if (!details) maxColumns = Math.max(maxColumns, columns);
+doc.querySelectorAll("table").forEach((table) => {
+  if (table.classList.contains("group-header-banner")) return;
+  if (table.classList.contains("grn-two-col")) return;
+  const isTotals = table.classList.contains("grand-total-table");
+  const columns = Math.max(1, ...Array.from(table.rows).map((row) => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
+  const details = table.classList.contains("report-details-table") || isTotals;
+  if (!details) maxColumns = Math.max(maxColumns, columns);
 
     // Column widths based on header text
-    let widths: (string | number)[] = Array(columns).fill("*");
-    if (isTotals) {
-      widths = ["*", 80];
-    } else if (!details && table.rows[0]) {
+     let widths: (string | number)[] = Array(columns).fill("*");
+  if (isTotals) {
+    widths = ["*", 80];
+  } else if (!details && table.rows[0]) {
+    const isGrnKvTable = !!table.closest(".grn-two-col");
+    if (isGrnKvTable) {
+      widths = ["30%", 12, "*"];
+    } else {
       const headerCells = Array.from(table.rows[0].cells);
       widths = headerCells.map((cell) => {
         const text = cell.textContent?.trim().toLowerCase() || "";
-        // Opt-in (stripChrome) reports: lamb invoice no ani amount columns sathi fixed width
         if (options.stripChrome) {
           if (/^inv(oice)?\s*(no\.?)?$/.test(text)) return 95;
           if (/(value|amount|profit|cost|total|price)/.test(text)) return 68;
@@ -172,8 +183,6 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
         if (/^amount$/.test(text)) return 55;
         if (/^s\.?no\.?$/.test(text)) return 32;
         if (/^unit$/.test(text)) return 40;
-
-
         if (/^(sr\s*no|line|#)$/.test(text)) return 26;
         if (/^uom$/.test(text)) return 34;
         if (/date/.test(text)) return 58;
@@ -181,19 +190,18 @@ export function prepareReportHtml(html: string, browserWindow: Window = window, 
         if (/(qty|quantity|items)/.test(text)) return 64;
         return "*";
       });
-      // Ensure at least one column is '*' so the table spans full width
       if (!widths.includes("*") && widths.length > 0) {
         widths[widths.length - 1] = "*";
       }
     }
+  }
 
     table.setAttribute("data-pdfmake", JSON.stringify({
-      widths,
-      headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
-      dontBreakRows: true,
-      layout: details ? "noBorders" : "biscReportTable",
-    }));
-
+    widths,
+    headerRows: table.tHead?.rows.length || (table.rows[0]?.querySelector("th") ? 1 : 0),
+    dontBreakRows: true,
+    layout: details ? "noBorders" : "biscReportTable",
+  }));
     table.querySelectorAll("th").forEach((cell) => {
       cell.style.backgroundColor = "#eaf0f8";
       cell.style.color = "#00378c";
