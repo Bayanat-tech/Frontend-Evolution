@@ -180,6 +180,18 @@ export async function getleavedaycount(payload:Record<string,unknown>,tenantName
     }
   }
 
+  export async function getRequestFlowUsers (payload:Record<string,unknown>,tenantName?:string){
+    if(tenantName === 'ALMS'){
+      console.log('hit Alms getRequestFlowUsers',payload,tenantName)
+      const response = await withHrFallback((prefix)=> api.get(`${prefix}/gm/getRequestFlowUsers`,{params:payload,}))
+      return response.data;
+    }else{
+      console.log('hit Alms mhgetRequestFlowUsers',payload,tenantName)
+      const response = await withHrFallback((prefix)=> api.get(`${prefix}/gm/mhgetRequestFlowUsers`,{params:payload,}))
+      return response.data;
+    }
+  }
+
   export async function getPayslipreport(params: {loginid: string |undefined , employeeId: string; month: string; year: string; embed?: boolean }) {
     const response = await withHrFallback((prefix) =>
       api.get<string>(`${prefix}/gm/reports/payslip`, {
