@@ -30,6 +30,12 @@ const PAGE_SIZE: Record<Orientation, { w: number; h: number }> = {
 const DEFAULT_PAGE_MARGIN_MM = 8;
 
 /**
+ * Single font size (CSS px) forced on all report text inside the dialog
+ * (headings h1–h6 keep their own sizes). Change this one value to resize every report.
+ */
+const REPORT_FONT_PX = 9;
+
+/**
  * Detect orientation from the report's @page rule,
  * e.g. `@page { size: A4 landscape; }` → "landscape"
  */
@@ -55,11 +61,47 @@ const detectPageMarginMm = (html: string): number => {
 const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
 
 /**
+ * Paint a Portrait/Landscape pill directly on the element with !important.
+ * Inline !important beats every stylesheet rule (Tailwind preflight, theme
+ * globals, MUI, etc.), so the active pill is always navy #00378c / white text.
+ */
+const paintPill = (el: HTMLButtonElement | null, active: boolean, disabled: boolean) => {
+  if (!el) return;
+  const s = el.style;
+  s.setProperty("background-color", active ? "#00378c" : "transparent", "important");
+  s.setProperty("background-image", "none", "important");
+  // Shape: compact pill like the freight preview (no stray borders/margins/heights)
+  s.setProperty("border", "0", "important");
+  s.setProperty("margin", "0", "important");
+  s.setProperty("height", "28px", "important");
+  s.setProperty("min-width", "0", "important");
+  s.setProperty("padding", "0 16px", "important");
+  s.setProperty("border-radius", "5px", "important");
+  s.setProperty("font-size", "13px", "important");
+  s.setProperty("font-weight", active ? "600" : "500", "important");
+  s.setProperty("line-height", "1", "important");
+  s.setProperty("display", "inline-flex", "important");
+  s.setProperty("align-items", "center", "important");
+  s.setProperty("justify-content", "center", "important");
+  s.setProperty(
+    "color",
+    active ? "#ffffff" : disabled ? "#94a3b8" : "#475569",
+    "important"
+  );
+  s.setProperty("box-shadow", active ? "0 1px 2px rgba(0, 55, 140, 0.25)" : "none", "important");
+  s.setProperty("opacity", disabled && active ? "0.6" : "1", "important");
+};
+
+/**
  * Report preview modal with:
  * - Orientation auto-detected from the report HTML (@page size rule)
+ * - Portrait / Landscape segmented control on the LEFT of the header
+ *   · Active pill always navy #00378c with white text, via the .nr-orient-btn
+ *     CSS class (real !important, so no global button reset can win)
  * - Real page breaks based on HTML content height
  * - Toolbar page indicator + left thumbnails driven by page count
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
+ * - 100% zoom = page fits the full width of the preview area (no side gutters)
  */
 export function NewReportDialog({
   open,
@@ -77,6 +119,7 @@ export function NewReportDialog({
 }: NewReportDialogProps) {
   const measureRef = useRef<HTMLIFrameElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const pageSheetRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [zoom, setZoom] = useState(100);
   const [page, setPage] = useState(1);
@@ -85,6 +128,10 @@ export function NewReportDialog({
   const [measuring, setMeasuring] = useState(false);
   /** Left page-thumb navbar visible */
   const [navOpen, setNavOpen] = useState(true);
+  /** Width of the scrollable preview area (px) — used to fit the page edge to edge */
+  const [viewW, setViewW] = useState(0);
+  /** Unscaled layout height of the pages wrapper (px) — used to size scroll area after scaling */
+  const [layoutH, setLayoutH] = useState(0);
 
   /** Orientation the report HTML actually declares (auto-detected) */
   const autoOrientation = useMemo<Orientation>(
@@ -104,6 +151,11 @@ export function NewReportDialog({
   /** Content area inside the report's own print margins */
   const contentW = pageW - pageMarginPx * 2;
   const contentH = pageH - pageMarginPx * 2;
+
+  /** Scale that makes the A4 sheet exactly as wide as the preview area */
+  const baseScale = viewW > 0 ? viewW / pageW : 1;
+  /** Final scale applied to the pages (100% zoom = fit width) */
+  const scale = baseScale * (zoom / 100);
 
   /**
    * Build HTML for preview that mirrors browser Print layout:
@@ -128,8 +180,12 @@ export function NewReportDialog({
     overflow-x: hidden !important;
     overflow-y: visible !important;
     font-family: Arial, sans-serif !important;
-    font-size: 10px !important;
+    font-size: ${REPORT_FONT_PX}px !important;
     color: #000 !important;
+  }
+  /* One constant font size for all report text (headings excluded) */
+  body *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(script):not(style):not(.company-name):not(.group-title) {
+    font-size: ${REPORT_FONT_PX}px !important;
   }
   .sheet {
     width: ${contentW}px !important;
@@ -144,7 +200,7 @@ export function NewReportDialog({
   table {
     width: 100% !important;
     max-width: 100% !important;
-    font-size: 9px !important;
+    font-size: ${REPORT_FONT_PX}px !important;
     border-collapse: collapse !important;
   }
   th, td {
@@ -161,7 +217,7 @@ export function NewReportDialog({
     html, body {
       background: white !important;
       overflow: visible !important;
-      font-size: 10px !important;
+      font-size: ${REPORT_FONT_PX}px !important;
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
@@ -173,7 +229,7 @@ export function NewReportDialog({
       padding: ${pageMarginMm}mm !important;
       overflow: visible !important;
     }
-    table { font-size: 9px !important; }
+    table { font-size: ${REPORT_FONT_PX}px !important; }
     th, td { white-space: nowrap !important; }
   }
 </style>`;
@@ -236,6 +292,32 @@ export function NewReportDialog({
       setNavOpen(true);
     }
   }, [open]);
+
+  // Track the width of the scrollable preview area so the page can fit it edge to edge
+  useEffect(() => {
+    if (!open) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    setViewW(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setViewW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
+
+  // Track the unscaled layout height of the pages wrapper (transform does not affect it)
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    setLayoutH(el.offsetHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setLayoutH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, loading, error, preparedHtml, totalPages]);
 
   // When htmlContent changes (e.g. drill-down navigation), reset page +
   // auto-detect orientation from the new HTML, then remeasure
@@ -400,23 +482,29 @@ export function NewReportDialog({
   const goPrev = () => goToPage(page - 1);
   const goNext = () => goToPage(page + 1);
 
-  /** Update active page from scroll position */
+  /**
+   * Update active page from scroll position.
+   * Uses on-screen rects (not offsetTop) because the pages are CSS-scaled.
+   */
   const onScrollPreview = () => {
     const root = scrollRef.current;
     if (!root || totalPages < 1) return;
-    const scrollTop = root.scrollTop + 40;
+    const rootTop = root.getBoundingClientRect().top;
     const sheets = pageSheetRefs.current;
     let best = 1;
     for (let i = 0; i < sheets.length; i++) {
       const el = sheets[i];
       if (!el) continue;
-      if (el.offsetTop <= scrollTop) best = i + 1;
+      if (el.getBoundingClientRect().top - rootTop <= 40) best = i + 1;
     }
     if (best !== page) setPage(best);
   };
 
-  /** True when the user has manually overridden the auto-detected orientation */
-  const orientationOverridden = orientation !== autoOrientation;
+  /** Guard so the toggle can't be clicked while loading or before HTML is ready */
+  const setOrientationSafe = (next: Orientation) => {
+    if (loading || !htmlContent) return;
+    setOrientation(next);
+  };
 
   return (
     <div
@@ -466,7 +554,15 @@ export function NewReportDialog({
             gap: 12,
           }}
         >
-          <div style={{ minWidth: 0 }}>
+          {/* LEFT: REPORT PREVIEW label, then title + segmented orientation on one row */}
+          <div
+            style={{
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
             <div
               style={{
                 fontSize: 10,
@@ -474,112 +570,86 @@ export function NewReportDialog({
                 letterSpacing: "0.08em",
                 color: "#64748b",
                 textTransform: "uppercase",
-                marginBottom: 2,
               }}
             >
               Report Preview
             </div>
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: 600,
-                color: "#0f172a",
-                lineHeight: 1.25,
-              }}
-            >
-              {title}
-            </div>
-          </div>
 
-          {/* Orientation dropdown — top right of header area */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <label
+            <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                color: "#64748b",
-                fontWeight: 500,
+                gap: 10,
+                flexWrap: "wrap",
               }}
             >
-              View
-              <select
-                value={orientation}
-                onChange={(e) => setOrientation(e.target.value as Orientation)}
-                disabled={loading || !htmlContent}
-                title={`Auto-detected from report: ${autoOrientation}`}
+              <div
                 style={{
-                  height: 32,
-                  padding: "0 28px 0 10px",
-                  fontSize: 13,
-                  fontWeight: 500,
+                  fontSize: 16,
+                  fontWeight: 600,
                   color: "#0f172a",
-                  background: "#fff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 8px center",
+                  lineHeight: 1.25,
                 }}
               >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-            </label>
+                {title}
+              </div>
 
-            {/* UX touch: show "Auto" state, and a reset button when overridden */}
-            {!loading && htmlContent && (
-              <>
-                <span
-                  title={`Auto-detected from report @page rule: ${autoOrientation}`}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                    color: orientationOverridden ? "#d97706" : "#059669",
-                    background: orientationOverridden ? "#fffbeb" : "#ecfdf5",
-                    border: `1px solid ${orientationOverridden ? "#fcd34d" : "#a7f3d0"}`,
-                    borderRadius: 4,
-                    padding: "3px 7px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {orientationOverridden ? "Manual" : "Auto"}
-                </span>
-                {orientationOverridden && (
-                  <button
-                    type="button"
-                    onClick={() => setOrientation(autoOrientation)}
-                    title={`Reset to auto-detected (${autoOrientation})`}
-                    style={{
-                      height: 32,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#0b4ca1",
-                      background: "#eff6ff",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: 6,
-                      padding: "0 10px",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <RotateCcw size={12} strokeWidth={2.5} />
-                    Reset
-                  </button>
-                )}
-              </>
-            )}
+              {/* Portrait / Landscape segmented toggle.
+                  Colours come from the .nr-orient-btn class (defined in the <style>
+                  block at the bottom) because inline styles cannot use !important
+                  and lose to global button resets. */}
+              <div
+                role="tablist"
+                aria-label="Page orientation"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 0,
+                  padding: 2,
+                  borderRadius: 7,
+                  background: "#f1f5f9",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                {(["portrait", "landscape"] as Orientation[]).map((o) => {
+                  const active = orientation === o;
+                  const disabled = loading || !htmlContent;
+                  return (
+                    <button
+                      key={o}
+                      ref={(el) => paintPill(el, active, disabled)}
+                      type="button"
+                      role="tab"
+                      className="nr-orient-btn"
+                      data-active={active ? "true" : "false"}
+                      aria-selected={active}
+                      disabled={disabled}
+                      onClick={() => setOrientationSafe(o)}
+                      title={
+                        o === autoOrientation
+                          ? `Auto-detected from report (${o})`
+                          : `Switch to ${o}`
+                      }
+                      style={{
+                        letterSpacing: "0.01em",
+                        cursor: disabled ? "not-allowed" : "pointer",
+                        transition:
+                          "background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease",
+                        textTransform: "capitalize",
+                        textAlign: "center",
+                        outline: "none",
+                      }}
+                    >
+                      {o === "portrait" ? "Portrait" : "Landscape"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
+          {/* RIGHT: Close button only */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <button
               type="button"
               onClick={onClose}
@@ -775,7 +845,7 @@ export function NewReportDialog({
                 const thumbW = orientation === "portrait" ? 72 : 108;
                 const thumbH = orientation === "portrait" ? 102 : 76;
                 // Scale full A4 page into the thumb
-                const scale = thumbW / pageW;
+                const thumbScale = thumbW / pageW;
                 const offsetY = -(n - 1) * contentH;
                 const isLast = n === totalPages;
                 const remaining =
@@ -819,7 +889,7 @@ export function NewReportDialog({
                           style={{
                             width: pageW,
                             height: pageH,
-                            transform: `scale(${scale})`,
+                            transform: `scale(${thumbScale})`,
                             transformOrigin: "top left",
                             pointerEvents: "none",
                             overflow: "hidden",
@@ -895,15 +965,17 @@ export function NewReportDialog({
               })}
           </div>
 
-          {/* Scrollable multi-page preview */}
+          {/* Scrollable multi-page preview — no horizontal padding so the page touches both sides */}
           <div
             ref={scrollRef}
             onScroll={onScrollPreview}
             style={{
               flex: 1,
-              overflow: "auto",
+              minWidth: 0,
+              overflowY: "auto",
+              overflowX: zoom > 100 ? "auto" : "hidden",
               background: "#374151",
-              padding: "20px 24px 40px",
+              padding: "0 0 40px",
             }}
           >
             {loading && (
@@ -934,15 +1006,16 @@ export function NewReportDialog({
 
             {!loading && !error && preparedHtml && (
               <div
+                ref={wrapperRef}
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  transform: `scale(${zoom / 100})`,
+                  transform: `scale(${scale})`,
                   transformOrigin: "top center",
                   transition: "transform 0.15s ease",
-                  // Keep scroll height correct after CSS scale
-                  marginBottom: `${Math.max(0, (zoom / 100 - 1) * (Math.max(contentHeight, contentH) + totalPages * 24 + pageH))}px`,
+                  // Keep scroll height correct after CSS scale (based on real unscaled layout height)
+                  marginBottom: `${Math.max(0, (scale - 1) * layoutH)}px`,
                 }}
               >
                 {/*
