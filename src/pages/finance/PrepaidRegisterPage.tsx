@@ -158,8 +158,8 @@ export function PrepaidRegisterPage() {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "view", row: row.original })}><Eye size={15} /></Button>
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "view", row: row.original }); }}><Eye size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
           <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)}><Trash2 size={15} /></Button>
         </div>
       ),
@@ -192,7 +192,7 @@ export function PrepaidRegisterPage() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Create Prepaid</Button>
+          <Button onClick={() => { setNotice(null); setEditor({ mode: "create" }); }}><Plus size={15} /> Create Prepaid</Button>
         </div>
       </div>
 
@@ -220,13 +220,19 @@ export function PrepaidRegisterPage() {
           wide
           title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} Prepaid Record`}
           description="Prepaid details"
-          onClose={() => setEditor(null)}
+          onClose={() => {
+            setNotice(null);
+            setEditor(null);
+          }}
         >
           <PrepaidEditor
             editor={editor}
             companyCode={companyCode}
             loginId={loginId}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Prepaid record saved successfully" });
