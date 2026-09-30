@@ -295,6 +295,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
               enablePagination
               manualPagination
               manualFiltering
+              enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
                   <Button

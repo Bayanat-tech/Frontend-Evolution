@@ -370,6 +370,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         density="grid"
         enablePagination
         manualPagination
+        enableExport={false}
         actionButton={
           <div className="flex items-center gap-2">
             <Button

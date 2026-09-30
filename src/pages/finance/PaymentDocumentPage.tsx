@@ -307,6 +307,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
           density="grid"
           enablePagination
           manualPagination
+          enableExport={false}
           actionButton={
             <div className="flex items-center gap-2">
               <Button

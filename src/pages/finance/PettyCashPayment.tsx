@@ -281,6 +281,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
               enablePagination
               manualPagination
               manualFiltering
+              enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
                   <Button
