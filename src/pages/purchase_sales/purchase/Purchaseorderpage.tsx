@@ -15,6 +15,8 @@ import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
 import { LPO_CONFIG } from "./Purchaseordertypes";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -236,53 +238,32 @@ useEffect(() => {
 ]);
 
   // ── Row-level print handler ───────────────────────────────────────────────
-  const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
-    if (!row.doc_no) return;
+ const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
+  if (!row.doc_no) return;
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewDocNo(row.doc_no);
-    setReportPreviewRow(row);
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-
-    try {
-      const html = await getPoOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: row.doc_type,
-        doc_no: row.doc_no,
-      });
-      setReportHtml(html);
-    } catch (error) {
-      setReportPreviewError(error instanceof Error ? error.message : "Unable to load report");
-    } finally {
-      setReportPreviewLoading(false);
-    }
+  const params = {
+    company_code: user?.company_code,
+    doc_type: row.doc_type,
+    doc_no: row.doc_no,
   };
+  const preview = openPurchaseReport(`Purchase Order ${row.doc_no}`.trim());
 
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewDocNo("");
-    setReportPreviewRow(null);
-  };
+  try {
+    const html = await getPoOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `purchase_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getPoOrderReportExcel(params);
+      },
+    });
+  } catch (error) {
+    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+  }
+};
 
-  const handleReportPreviewExcel = async () => {
-    if (!reportPreviewRow) return;
-    setReportPreviewExporting(true);
-    try {
-      await getPoOrderReportExcel({
-        company_code: user?.company_code,
-        doc_type: reportPreviewRow.doc_type,
-        doc_no: reportPreviewRow.doc_no,
-      });
-    } catch (error) {
-      setReportPreviewError(error instanceof Error ? error.message : "Unable to export report");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  };
+ 
 
   const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
     try {
@@ -533,16 +514,7 @@ useEffect(() => {
         </div>
       )}
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Purchase Order ${reportPreviewDocNo}`.trim()}
-        htmlContent={reportHtml}
-        loading={reportPreviewLoading}
-        error={reportPreviewError || null}
-        onExportExcel={handleReportPreviewExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+      <PurchaseReportPreview />
 
       <DivisionPickerDialog
         open={divisionPicker}

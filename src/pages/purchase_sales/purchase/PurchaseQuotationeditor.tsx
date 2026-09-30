@@ -48,6 +48,7 @@ import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -72,6 +73,7 @@ export function PurchaseQuotationEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+    const [printOpen, setPrintOpen] = useState(false);
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 

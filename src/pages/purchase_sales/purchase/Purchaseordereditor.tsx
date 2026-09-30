@@ -55,6 +55,9 @@ import { NewReportDialog } from "../../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
 
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+
 
 export type { PurchaseOrderEditorState };
 
@@ -100,10 +103,8 @@ export function PurchaseOrderEditor({
 
 
   // ---- Report Preview state ----
-  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  
   const [reportPreviewError, setReportPreviewError] = useState("");
-  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
@@ -399,35 +400,30 @@ export function PurchaseOrderEditor({
 
   // ---- Report Preview ----
   const handlePrint = async () => {
-    if (!form.doc_no) return;
+  if (!form.doc_no) return;
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-
-    try {
-      const html = await getPoOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: PO_DOC_TYPE.LPO,
-        doc_no: form.doc_no,
-      });
-
-      setReportHtml(html);
-    } catch (error) {
-      setReportPreviewError(
-        error instanceof Error ? error.message : "Unable to load report"
-      );
-    } finally {
-      setReportPreviewLoading(false);
-    }
+  const params = {
+    company_code: user?.company_code,
+    doc_type: PO_DOC_TYPE.LPO,
+    doc_no: form.doc_no,
   };
+  const preview = openPurchaseReport(`Purchase Order ${form.doc_no}`.trim());
 
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
+  try {
+    const html = await getPoOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `purchase_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getPoOrderReportExcel(params);
+      },
+    });
+  } catch (error) {
+    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+  }
+};
+  
 
   const handleReportPreviewExcel = async () => {
     if (!form.doc_no) return;
@@ -920,16 +916,7 @@ export function PurchaseOrderEditor({
       />
 
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Purchase Order ${form.doc_no}`.trim()}
-        htmlContent={reportHtml}
-        loading={reportPreviewLoading}
-        error={reportPreviewError || null}
-        onExportExcel={handleReportPreviewExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+     <PurchaseReportPreview />
     </>
   );
 }

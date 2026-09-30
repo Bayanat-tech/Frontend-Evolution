@@ -16,6 +16,8 @@ import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchase
 import { SalesOrderEditor } from "./SalesOrdereditor";
 import { SDN_CONFIG, SO_CONFIG } from "./SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -217,52 +219,33 @@ const loadRows = async (clearNotice = true) => {
 
   // ── Row-level print handler ───────────────────────────────────────────────
   const handlePrintSalesOrder = async (row: SalesOrderRow) => {
-    if (!row.doc_no) return;
+  if (!row.doc_no) return;
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewDocNo(row.doc_no);
-    setReportPreviewRow(row);
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-
-    try {
-      const html = await getSOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: row.doc_type,
-        doc_no: row.doc_no,
-      });
-      setReportHtml(html);
-    } catch (error) {
-      setReportPreviewError(error instanceof Error ? error.message : "Unable to load report");
-    } finally {
-      setReportPreviewLoading(false);
-    }
+  const params = {
+    company_code: user?.company_code,
+    doc_type: row.doc_type,
+    doc_no: row.doc_no,
   };
+  const preview = openPurchaseReport(`Sales Order ${row.doc_no}`.trim());
 
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewDocNo("");
-    setReportPreviewRow(null);
-  };
+  try {
+    const html = await getSOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `sales_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getSoOrderReportExcel(params);
+      },
+    });
+  } catch (error) {
+    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+  }
+};
 
-  const handleReportPreviewExcel = async () => {
-    if (!reportPreviewRow) return;
-    setReportPreviewExporting(true);
-    try {
-      await getSoOrderReportExcel({
-        company_code: user?.company_code,
-        doc_type: reportPreviewRow.doc_type,
-        doc_no: reportPreviewRow.doc_no,
-      });
-    } catch (error) {
-      setReportPreviewError(error instanceof Error ? error.message : "Unable to export report");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  };
+
+
+  
 
   useEffect(() => {
     if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
@@ -502,16 +485,7 @@ const loadRows = async (clearNotice = true) => {
         </div>
       )}
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Sales Order ${reportPreviewDocNo}`.trim()}
-        htmlContent={reportHtml}
-        loading={reportPreviewLoading}
-        error={reportPreviewError || null}
-        onExportExcel={handleReportPreviewExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+      <PurchaseReportPreview />
 
       <DivisionPickerDialog
         open={divisionPicker}

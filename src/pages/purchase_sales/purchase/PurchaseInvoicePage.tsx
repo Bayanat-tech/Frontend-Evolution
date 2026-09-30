@@ -333,11 +333,11 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-        { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
       </div> */}
             <div className="finance-list-title">
@@ -388,6 +388,25 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
             );
           })}
       </div>
+      <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={
+          approvalLevel === 0
+            ? [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+            ]
+            : [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+              { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+            ]
+        }
+      />
 
       <div className="min-h-[650px]">
         <DataTable

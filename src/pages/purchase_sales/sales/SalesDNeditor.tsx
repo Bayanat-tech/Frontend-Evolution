@@ -36,13 +36,15 @@ import {
   lineTaxAmount,
   runWorkflow,
 } from "./SalesOrderutils";
-import ReportDialogPage from "../../../components/ReportDialogPage";
-import { SalesDNReport, downloadSalesDNExcel } from "./SalesDNReport";
+
 import { SalesDNHeaderForm } from "./SaleDNHeaderfrom";
 import { SalesDnDetailsTable } from "./salesDNDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
 
 export type { PurchaseOrderEditorState };
 
@@ -91,25 +93,31 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
   const [rejectError, setRejectError] = useState("");
  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   // ---- Report dialog state ----
-  const [reportOpen, setReportOpen] = useState(false);
-
-  const reportValues = form.doc_no
-    ? {
-      company_code: user?.company_code,
-      doc_type: SO_DOC_TYPE.SDN,
-      doc_no: form.doc_no,
-    }
-    : null;
-
-  const openReport = () => {
+  const openReport = async () => {
     if (!form.doc_no) {
       setError("Save the document before printing");
       return;
     }
-    setReportOpen(true);
+    const params = {
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.SDN,
+      doc_no: form.doc_no,
+    };
+    const preview = openPurchaseReport(`Delivery Note - ${form.doc_no}`);
+    try {
+      const html = await getSalesDNReportHtml(params);
+      preview.ready({
+        html,
+        filename: `delivery_note_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await downloadSalesDNExcel(params);
+        },
+      });
+    } catch (e) {
+      preview.fail(e instanceof Error ? e : new Error("Unable to load Delivery Note report"));
+    }
   };
-
-  const closeReport = () => setReportOpen(false);
 
   const handleExcel = async () => {
     if (!form.doc_no) {
@@ -805,16 +813,10 @@ setShowSubmitConfirm(true);
       />
 
       {/* Report dialog — Print icon opens this; Excel uses same required_values */}
-      {reportOpen && reportValues && (
-        <ReportDialogPage
-          Report={SalesDNReport}
-          required_values={reportValues}
-          title={`Delivery Note - ${reportValues.doc_no}`}
-          onClose={closeReport}
-          excel={() => void handleExcel()}
-        />
 
-      )}
+
+      <PurchaseReportPreview />
+
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}

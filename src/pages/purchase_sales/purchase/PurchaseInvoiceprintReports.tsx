@@ -12,6 +12,8 @@ import {
   getPurchaseInvoiceAccountDetailsReportExcel,
 } from "../../../api/transactions";
 import { NewReportDialog } from "../../../components/new_report_format";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // The 3 report types available in the dropdown.
 type PrintReportType = "PI" | "PI_TAX" | "ACCOUNT";
@@ -157,35 +159,63 @@ export function PurchaseInvoicePrintDialog({
         getPurchaseInvoiceReportExcel;
 
   // ── Print now opens the in-app preview dialog instead of a new window ───
+  // const handlePrint = async () => {
+  //   if (!docNo) {
+  //     setReportError("Doc No is missing — cannot fetch the report.");
+  //     return;
+  //   }
+  //   setReportError("");
+
+  //   setReportHtml(null);
+  //   setReportPreviewError("");
+  //   setReportPreviewOpen(true);
+  //   setReportPreviewLoading(true);
+  //   setLoadingAction("print");
+
+  //   try {
+  //     const html = await getHtmlFn()(buildApiParams());
+  //     setReportHtml(html);
+  //   } catch (err: any) {
+  //     setReportPreviewError(err?.message || "Failed to load report.");
+  //   } finally {
+  //     setReportPreviewLoading(false);
+  //     setLoadingAction(null);
+  //   }
+  // };
+
   const handlePrint = async () => {
-    if (!docNo) {
-      setReportError("Doc No is missing — cannot fetch the report.");
-      return;
-    }
-    setReportError("");
+  if (!docNo) {
+    setReportError("Doc No is missing — cannot fetch the report.");
+    return;
+  }
+  setReportError("");
+  setLoadingAction("print");
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-    setLoadingAction("print");
+  const reportLabel = REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue || "Purchase Invoice";
+  const preview = openPurchaseReport(`${reportLabel} ${docNo}`.trim());
 
-    try {
-      const html = await getHtmlFn()(buildApiParams());
-      setReportHtml(html);
-    } catch (err: any) {
-      setReportPreviewError(err?.message || "Failed to load report.");
-    } finally {
-      setReportPreviewLoading(false);
-      setLoadingAction(null);
-    }
-  };
+  try {
+    const html = await getHtmlFn()(buildApiParams());
+    preview.ready({
+      html,
+      filename: `${reportType.toLowerCase()}_${docNo}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: reportType === "PI" ? "portrait" : "landscape",
+      onExcel: async () => {
+        await getExcelFn()(buildApiParams());
+      },
+    });
+  } catch (err: any) {
+    preview.fail(new Error(err?.message || "Failed to load report."));
+  } finally {
+    setLoadingAction(null);
+  }
+};
 
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
+  // const closeReportPreview = () => {
+  //   setReportPreviewOpen(false);
+  //   setReportHtml(null);
+  //   setReportPreviewError("");
+  // };
 
   const handleExcel = async () => {
     if (!docNo) {
@@ -204,17 +234,17 @@ export function PurchaseInvoicePrintDialog({
   };
 
   // Excel button inside the report-preview dialog itself
-  const handleReportPreviewExcel = async () => {
-    if (!docNo) return;
-    setReportPreviewExporting(true);
-    try {
-      await getExcelFn()(buildApiParams());
-    } catch (err: any) {
-      setReportPreviewError(err?.message || "Excel export failed.");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  };
+  // const handleReportPreviewExcel = async () => {
+  //   if (!docNo) return;
+  //   setReportPreviewExporting(true);
+  //   try {
+  //     await getExcelFn()(buildApiParams());
+  //   } catch (err: any) {
+  //     setReportPreviewError(err?.message || "Excel export failed.");
+  //   } finally {
+  //     setReportPreviewExporting(false);
+  //   }
+  // };
 
   return (
     <div style={{
@@ -361,16 +391,7 @@ export function PurchaseInvoicePrintDialog({
         </div>
       </div>
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Purchase Invoice ${docNo}`.trim()}
-        htmlContent={reportHtml}
-        loading={reportPreviewLoading}
-        error={reportPreviewError || null}
-        onExportExcel={handleReportPreviewExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+      <PurchaseReportPreview />
     </div>
   );
 }

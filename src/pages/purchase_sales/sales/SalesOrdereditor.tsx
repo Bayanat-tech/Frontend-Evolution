@@ -7,7 +7,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
-import { NewReportDialog } from "../../../components/new_report_format";
+
 
 import {
   ActionKey,
@@ -44,6 +44,8 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 
 export type { PurchaseOrderEditorState };
@@ -354,36 +356,34 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
-    if (!form.doc_no) {
-      setError("Save the Sales Order before printing");
-      return;
-    }
+  if (!form.doc_no) {
+    setError("Save the Sales Order before printing");
+    return;
+  }
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-
-    try {
-      const html = await getSOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: SO_DOC_TYPE.SO,
-        doc_no: form.doc_no,
-      });
-      setReportHtml(html);
-    } catch (printError) {
-      setReportPreviewError(printError instanceof Error ? printError.message : "Unable to load report");
-    } finally {
-      setReportPreviewLoading(false);
-    }
+  const params = {
+    company_code: user?.company_code,
+    doc_type: SO_DOC_TYPE.SO,
+    doc_no: form.doc_no,
   };
+  const preview = openPurchaseReport(`Sales Order ${form.doc_no}`.trim());
 
-  const closeReportPreview = () => {
-    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
+  try {
+    const html = await getSOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `sales_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getSoOrderReportExcel(params);
+      },
+    });
+  } catch (printError) {
+    preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
+  }
+};
+
+  
 
   const handleExportExcel = async () => {
     if (!form.doc_no) {
@@ -816,16 +816,7 @@ if (rect) {
         </form>
       </div>
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Sales Order ${form.doc_no || ""}`.trim()}
-        htmlContent={reportHtml}
-        loading={reportPreviewLoading}
-        error={reportPreviewError || null}
-        onExportExcel={handleExportExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+      <PurchaseReportPreview />
 
       <SendBackDialog
         open={sendBackDialogOpen}

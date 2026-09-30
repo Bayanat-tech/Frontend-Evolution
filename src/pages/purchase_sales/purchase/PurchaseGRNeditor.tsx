@@ -46,6 +46,8 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { NewReportDialog } from "../../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 
 
 export type { PurchaseOrderEditorState };
@@ -310,42 +312,44 @@ export function PurchaseGRNEditor({
     }, "Purchase GRN cancelled");
 
   // ── Print opens the in-app NewReportDialog preview ───────────────────────
+  
+
+
+
   const handlePrintGrn = async () => {
-    if (!form.doc_no) {
-      setError("Save the GRN before printing");
-      return;
-    }
+  if (!form.doc_no) {
+    setError("Save the GRN before printing");
+    return;
+  }
+  const params = {
+    parameter: "GRN_Print",
+    loginid: user?.loginid || user?.username || "ADMIN",
+    company_code: user?.company_code,
+    doc_type: PO_DOC_TYPE.GRN,
+    doc_no: form.doc_no,
+  } as any;
+  setPrinting(true);
+  setError("");
+  const preview = openPurchaseReport(`Purchase GRN ${form.doc_no}`.trim());
+  try {
+    const url = await getGrnPrintReportPreviewUrl(params);
+    const html = await fetchHtmlFromPreviewUrl(url);
+    preview.ready({
+      html,
+      filename: `purchase_grn_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await exportGrnPrintReportExcel(params);
+      },
+    });
+  } catch (printError) {
+    preview.fail(printError instanceof Error ? printError : new Error("Error while generating report"));
+  } finally {
+    setPrinting(false);
+  }
+};
 
-    // Open the dialog immediately so its spinner shows while we fetch.
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-
-    setPrinting(true);
-    setError("");
-    try {
-      const url = await getGrnPrintReportPreviewUrl({
-        parameter: "GRN_Print",
-        loginid: user?.loginid || user?.username || "ADMIN",
-        company_code: user?.company_code,
-        doc_type: PO_DOC_TYPE.GRN,
-        doc_no: form.doc_no,
-      } as any);
-      const html = await fetchHtmlFromPreviewUrl(url);
-      setReportHtml(html);
-    } catch (printError) {
-      setReportPreviewError(printError instanceof Error ? printError.message : "Error while generating report");
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  const closeReportPreview = () => {
-    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
+ 
 
   const handleExportGrnExcel = async () => {
     if (!form.doc_no) {
@@ -366,58 +370,6 @@ export function PurchaseGRNEditor({
       setError(exportError instanceof Error ? exportError.message : "Error while exporting to Excel");
     } finally {
       setExportingExcel(false);
-    }
-  };
-
-  // Open the report HTML in a new browser tab
-  const handleOpenReportInNewWindow = () => {
-    if (!reportHtml) return;
-    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
-    if (win) {
-      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-    } else {
-      window.URL.revokeObjectURL(url);
-    }
-  };
-
-  // Trigger the browser print dialog (Save as PDF) for the current report
-  const handleDownloadReportPdf = () => {
-    if (!reportHtml) return;
-    const PRINT_IFRAME_ID = "grn-editor-print-iframe";
-    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
-
-    if (!iframe) {
-      iframe = document.createElement("iframe");
-      iframe.id = PRINT_IFRAME_ID;
-      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
-      iframe.style.cssText =
-        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
-      document.body.appendChild(iframe);
-    }
-
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(reportHtml);
-    doc.close();
-
-    const doPrint = () => {
-      try {
-        iframe?.contentWindow?.focus();
-        iframe?.contentWindow?.print();
-      } catch {
-        /* ignore */
-      }
-    };
-
-    if (iframe.contentDocument?.readyState === "complete") {
-      setTimeout(doPrint, 300);
-    } else {
-      iframe.onload = () => setTimeout(doPrint, 300);
-      setTimeout(doPrint, 700);
     }
   };
 
@@ -749,24 +701,7 @@ export function PurchaseGRNEditor({
       </div>
 
       {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Purchase GRN ${form.doc_no || ""}`.trim()}
-        htmlContent={reportHtml}
-        loading={printing}
-        error={reportPreviewError || null}
-        meta={{
-          companyName: user?.company_code || "",
-          user: user?.loginid || user?.username || "ADMIN",
-          status: form.canceled === "Y" ? "Cancelled" : "Active",
-          generatedAt: new Date().toLocaleString(),
-        }}
-        onExportExcel={handleExportGrnExcel}
-        exportingExcel={exportingExcel}
-        onOpenInNewWindow={handleOpenReportInNewWindow}
-        onDownloadPdf={handleDownloadReportPdf}
-      />
+       <PurchaseReportPreview />
 
       <SendBackDialog
         open={sendBackDialogOpen}
