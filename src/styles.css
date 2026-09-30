@@ -8292,13 +8292,13 @@ freight-dense-form .freight-form-card {
   box-shadow: 0 8px 22px rgba(0, 55, 140, 0.22);
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) {
   width: 132px;
   min-width: 112px;
   max-width: 148px;
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] .ui-button-icon {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) .ui-button-icon {
   width: 26px;
   height: 26px;
   min-height: 26px;
@@ -8310,7 +8310,7 @@ freight-dense-form .freight-form-card {
   box-shadow: none;
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] .ui-button-icon:hover {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) .ui-button-icon:hover {
   color: #00378c;
   border-color: #bfdbfe;
   background: #eff6ff;
@@ -8318,7 +8318,7 @@ freight-dense-form .freight-form-card {
   box-shadow: none;
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] .ui-button-icon svg {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) .ui-button-icon svg {
   width: 14px;
   height: 14px;
   stroke-width: 1.8;
@@ -8603,6 +8603,18 @@ freight-dense-form .freight-form-card {
 
 .app.dark .workspace-content .data-table-pagination strong {
   color: #f8fafc !important;
+}
+
+.app.dark .workspace-content .data-table-pagination .data-table-page-button.is-active {
+  border-color: #4d8fda !important;
+  background: #2563a9 !important;
+  color: #ffffff !important;
+}
+
+.app.dark .workspace-content .data-table-pagination .data-table-page-size {
+  border-color: #33415d !important;
+  background: #111827 !important;
+  color: #e2e8f0 !important;
 }
 
 .app.dark .data-table-filter-popover {
@@ -10386,9 +10398,13 @@ freight-dense-form .freight-form-card {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
-.workspace .sidebar-nav > .nav-group { margin-bottom: 3px; }
-.workspace .nav-item.nav-level-1 { min-height: 38px; border-radius: 8px; padding: 8px 10px; }
-.workspace .nav-item.nav-level-2 { min-height: 32px; border-radius: 6px; }
+.workspace .sidebar-nav > .nav-group { margin-bottom: 1px; }
+.workspace .nav-item.nav-level-1 { min-height: 34px; border-radius: 7px; padding: 6px 9px; }
+.workspace .nav-item.nav-level-2 { min-height: 26px; border-radius: 5px; padding-block: 3px; }
+.workspace .nav-item.nav-level-3,
+.workspace .nav-item.nav-level-4,
+.workspace .nav-item.nav-level-5 { min-height: 24px; padding-block: 2px; }
+.workspace .nav-children { margin-left: 10px; }
 .workspace .sidebar .nav-item.active,
 .workspace .sidebar .nav-item.active:hover { background: #e8f8f0; color: #087443; font-weight: 600; }
 .workspace .sidebar .nav-item.active .nav-bullet { background: #087443; box-shadow: none; }

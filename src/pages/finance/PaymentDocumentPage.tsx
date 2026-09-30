@@ -2152,12 +2152,12 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     div_code: row.div_code || originalForm.div_code,
   }));
 
+  const seenDetailSerials = new Set<number>();
   const uniqueDetails = details.map((row, index) => {
-    const seen = new Set<number>();
     const raw = Number(row.serial_no ?? index + 1);
-    let next = Number.isFinite(raw) && raw > 0 && !seen.has(raw) ? raw : index + 1;
-    while (seen.has(next)) next = index + 1 + seen.size;
-    seen.add(next);
+    let next = Number.isFinite(raw) && raw > 0 && !seenDetailSerials.has(raw) ? raw : index + 1;
+    while (seenDetailSerials.has(next)) next += 1;
+    seenDetailSerials.add(next);
     return { ...row, serial_no: next };
   });
 
@@ -2189,7 +2189,7 @@ function groupChildren(form: TransactionHeader) {
     if (!detail.child_table || !["invoice", "job", "expense"].includes(detail.child_table)) return;
     const table = detail.child_table as "invoice" | "job" | "expense";
     const rows = (form.children?.[detail.id] || []) as TransactionChildRow[];
-    rows.forEach((row) => {
+    rows.forEach((row, childIndex) => {
       if (table === "invoice" && Number(row.amount || 0) === 0) return;
       const cleaned: Record<string, unknown> = { ...row };
       delete cleaned.id;
@@ -2202,7 +2202,7 @@ function groupChildren(form: TransactionHeader) {
       cleaned.doc_type = form.doc_type;
       cleaned.doc_no = form.doc_no || cleaned.doc_no || "1";
       cleaned.serial_no = detail.serial_no;
-      cleaned.dtl_sr_no = Number(cleaned.dtl_sr_no || grouped[table].length + 1);
+      cleaned.dtl_sr_no = childIndex + 1;
       cleaned.doc_date = form.doc_date;
       cleaned.div_code = form.div_code;
       cleaned.ac_code = detail.ac_code;

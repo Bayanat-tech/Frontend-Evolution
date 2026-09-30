@@ -1229,43 +1229,78 @@
 .finance-document-editor .finance-allocation-panel {
   width: fit-content !important;
   max-width: 100% !important;
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 4px !important;
+  border: 1px solid #9fcfc4 !important;
+  border-radius: 8px !important;
+  background: #fbfefd !important;
+  box-shadow: 0 2px 7px rgba(15, 118, 110, 0.09) !important;
+  margin: 1px 0 2px !important;
+  overflow: hidden !important;
+}
+.finance-document-editor .finance-allocation-panel > .finance-allocation-toolbar {
+  min-height: 25px !important;
+  background: linear-gradient(180deg, #f1faf8 0%, #e6f5f1 100%) !important;
+  border-bottom: 1px solid #b8ddd5 !important;
+  padding: 2px 5px !important;
+  gap: 3px !important;
+}
+.finance-document-editor .finance-allocation-panel .finance-allocation-table {
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  min-width: 0 !important;
   background: #ffffff !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
-  margin: 1px 0 !important;
 }
-.finance-document-editor .finance-allocation-panel > div:first-child {
-  background: #f1f5f9 !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-  padding: 2px 6px !important;
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead,
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead tr,
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead th {
+  background: #dff2ed !important;
+  background-color: #dff2ed !important;
+  color: #14554e !important;
 }
-.finance-document-editor .finance-allocation-panel thead th {
-  background: #00378C !important;
-  color: #ffffff !important;
-  padding: 3px 6px !important;
-  font-size: 10.5px !important;
-  font-weight: 600 !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead th {
+  height: 23px !important;
+  min-height: 23px !important;
+  padding: 2px 4px !important;
+  font-size: 9.5px !important;
+  line-height: 1.05 !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.01em !important;
+  border-right: 1px solid #b7d9d1 !important;
+  border-bottom: 1px solid #9fcfc4 !important;
+  white-space: nowrap !important;
 }
 .finance-document-editor .finance-allocation-panel tbody td {
   background: #ffffff !important;
-  padding: 2px 4px !important;
-  font-size: 11px !important;
-  border-bottom: 1px solid #f1f5f9 !important;
+  height: 25px !important;
+  padding: 1px 3px !important;
+  font-size: 10px !important;
+  line-height: 1.05 !important;
+  border-right: 1px solid #e2efec !important;
+  border-bottom: 1px solid #deebe8 !important;
 }
 .finance-document-editor .finance-allocation-panel tbody tr:hover td {
-  background: #f8fafc !important;
+  background: #f0faf7 !important;
 }
 .finance-document-editor .finance-allocation-panel :is(input, select, .lookup-field-trigger, .bisc-date-picker-trigger) {
-  min-height: 22px !important;
-  height: 22px !important;
-  font-size: 11px !important;
-  padding: 0 4px !important;
-  border-radius: 3px !important;
+  min-height: 20px !important;
+  height: 20px !important;
+  font-size: 10px !important;
+  padding: 0 3px !important;
+  border-radius: 4px !important;
+  border-color: #c4d8d4 !important;
 }
 .finance-document-editor .finance-allocation-panel .bisc-date-picker-trigger span {
-  font-size: 10.5px !important;
+  font-size: 9.5px !important;
+}
+.finance-document-editor .finance-allocation-panel button {
+  min-height: 20px !important;
+  height: 20px !important;
+  font-size: 9.5px !important;
+  border-radius: 5px !important;
+}
+.finance-document-editor .finance-allocation-panel .finance-allocation-grid {
+  max-height: 132px !important;
+  background: #ffffff !important;
 }
 .finance-document-editor .commercial-sticky-footer { justify-content: flex-end; }
 .finance-document-editor .commercial-command-header .ui-button[aria-label="Close"] { width: auto !important; gap: 5px; }
