@@ -46,6 +46,7 @@ import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
@@ -580,6 +581,19 @@ function PaymentDocumentEditor({
     }
   };
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) =>
+          !row.curr_code || row.curr_code === current.curr_code
+            ? { ...row, ex_rate: numRate }
+            : row
+        ),
+      }));
+      return;
+    }
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -1120,16 +1134,30 @@ function PaymentDocumentEditor({
                             loginid: user?.loginid || user?.username || "ADMIN"
                           })}
                           disabled={disabled}
-                          onChange={(value, row) => setForm((current) => ({
-                            ...current,
-                            curr_code: value,
-                            curr_name: text(getLookupValue(row || {}, "curr_name")),
-                            ex_rate: Number(row?.ex_rate ?? 1),
-                          }))}
+                          onChange={(value, row) => {
+                            const newRate = Number(row?.ex_rate ?? 1);
+                            const currName = text(getLookupValue(row || {}, "curr_name"));
+                            setForm((current) => ({
+                              ...current,
+                              curr_code: value,
+                              curr_name: currName,
+                              ex_rate: newRate,
+                              detail: current.detail.map((d) =>
+                                !d.curr_code || d.curr_code === current.curr_code
+                                  ? { ...d, curr_code: value, curr_name: currName, ex_rate: newRate }
+                                  : d
+                              ),
+                            }));
+                          }}
                         />
                       </div>
-                      <Field label="Exchange Rate*">
-                        <Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
+                      <Field label="Exchange Rate *">
+                        <ExchangeRateInput
+                          disabled={disabled}
+                          required
+                          value={form.ex_rate}
+                          onChange={(rate) => updateField("ex_rate", rate)}
+                        />
                       </Field>
                       <label className="field col-span-2 max-md:col-span-1">
                         <span>Address</span>

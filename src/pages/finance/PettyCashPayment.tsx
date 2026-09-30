@@ -44,6 +44,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { formatDate } from "../../utils/date";
 
 type EditorState =
@@ -490,6 +491,19 @@ function PettyCashPaymentDocument({
   }, [form.detail, lineSearch]);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) =>
+          !row.curr_code || row.curr_code === current.curr_code
+            ? { ...row, ex_rate: numRate }
+            : row
+        ),
+      }));
+      return;
+    }
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -981,15 +995,29 @@ function PettyCashPaymentDocument({
                           loginid: user?.loginid || user?.username || "ADMIN"
                         })}
                         disabled={disabled}
-                        onChange={(value, row) => setForm((current) => ({
-                          ...current,
-                          curr_code: value,
-                          curr_name: text(getLookupValue(row || {}, "curr_name")),
-                          ex_rate: Number(row?.ex_rate ?? 1),
-                        }))}
+                        onChange={(value, row) => {
+                          const newRate = Number(row?.ex_rate ?? 1);
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? { ...d, curr_code: value, curr_name: currName, ex_rate: newRate }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
                       <Field label="Exchange Rate *">
-                        <Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
+                        <ExchangeRateInput
+                          disabled={disabled}
+                          required
+                          value={form.ex_rate}
+                          onChange={(rate) => updateField("ex_rate", rate)}
+                        />
                       </Field>
                       {docType !== "CR" && (
                         <LookupField

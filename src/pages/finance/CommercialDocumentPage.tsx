@@ -37,6 +37,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../utils/date";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
@@ -622,7 +623,18 @@ function CommercialEditor({
     });
   }, [visibleLines, lineSearch]);
 
-  const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
+  const update = (field: keyof FormState, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) => ({ ...row, ex_rate: numRate })),
+      }));
+      return;
+    }
+    setForm((current) => ({ ...current, [field]: value }));
+  };
   const updateLine = (id: string, patch: Partial<Line>) => {
     setForm((current) => ({ ...current, detail: current.detail.map((line) => line.id === id ? { ...line, ...patch } : line) }));
   };
@@ -1081,7 +1093,17 @@ function CommercialEditor({
       valueField="curr_code"
       displayFields={["curr_code", "curr_name", "ex_rate"]}
       loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
-      onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || c.ex_rate || 1) }))}
+      onChange={(value, row) => {
+        const newRate = Number(getLookupValue(row || {}, "ex_rate") || form.ex_rate || 1);
+        const currName = text(getLookupValue(row || {}, "curr_name"));
+        setForm((c) => ({
+          ...c,
+          curr_code: value,
+          curr_name: currName,
+          ex_rate: newRate,
+          detail: c.detail.map((row) => ({ ...row, ex_rate: newRate })),
+        }));
+      }}
     />
     {fieldErrors.curr_code && (
       <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
@@ -1091,9 +1113,13 @@ function CommercialEditor({
   </div>
 
   <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
-    <Input disabled={isCancelled} type="number" step="0.000001" value={form.ex_rate}
-      className={fieldErrors.ref_no ? "border-destructive" : ""}
-      onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
+    <ExchangeRateInput
+      disabled={isCancelled}
+      required
+      value={form.ex_rate}
+      onChange={(rate) => update("ex_rate", rate)}
+      className={fieldErrors.ex_rate ? "border-destructive" : ""}
+    />
   </Field>
 
   <Field label="Address" className="col-span-2">
