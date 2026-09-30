@@ -13,8 +13,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, Filter, Loader2, Search } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Filter, Loader2, Search } from "lucide-react";
 import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
 import { ExportCSVButton } from "./ExportCSVButton";
@@ -141,6 +142,11 @@ const CELL_DIVIDER = `border-r ${GRID_LINE} last:border-r-0`;
 // functions) are left untouched.
 const HEADER_ACRONYMS = new Set(["ID", "SKU", "UOM", "GRN", "ASN", "EDI", "PO", "UPC", "EAN", "SN"]);
 
+// Descriptive values must not determine the width of an operational grid.
+// These columns receive a predictable reading width and expose their full
+// value through the shared overflow tooltip below.
+const LONG_TEXT_COLUMN = /(^|_)(description|remarks?|notes?|comments?)$/i;
+
 function formatHeaderText(text: string): string {
   return text
     .toLowerCase()
@@ -233,14 +239,23 @@ export function DataTable<TData, TValue>({
     () => columns.map((column) => {
       const id = "id" in column && column.id ? column.id : "accessorKey" in column ? String(column.accessorKey) : "";
       const isDate = isDateColumn(id) || (typeof column.header === "string" && /(^|_|\s)(date|dt)(_|\s|$)/i.test(column.header));
+      const isLongText = LONG_TEXT_COLUMN.test(id);
+      const widthDefaults = isLongText
+        ? {
+            size: column.size ?? 340,
+            minSize: column.minSize ?? 220,
+            maxSize: column.maxSize ?? 420,
+          }
+        : {};
       if (isDate) {
         return {
           ...column,
+          ...widthDefaults,
           filterFn: column.filterFn || (dateBetween as FilterFn<TData>),
           ...(!column.cell ? { cell: ({ getValue }: { getValue: () => unknown }) => formatDate(getValue()) } : {}),
         };
       }
-      return column;
+      return { ...column, ...widthDefaults };
     }),
     [columns],
   );
@@ -564,8 +579,10 @@ export function DataTable<TData, TValue>({
                         style={{
                           width: header.column.columnDef.size ? `${header.column.columnDef.size}px` : undefined,
                           minWidth: header.column.columnDef.minSize ? `${header.column.columnDef.minSize}px` : undefined,
+                          maxWidth: header.column.columnDef.maxSize ? `${header.column.columnDef.maxSize}px` : undefined,
                           boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                         }}
+                        data-column-id={header.column.id}
                         className={cn(
                           "relative transition-colors border-r border-[#8e97a8] last:border-r-0",
                           isFilterActive && "bg-[#00378C]/[0.06] border-b-2 border-b-[#00378C]",
@@ -657,15 +674,18 @@ export function DataTable<TData, TValue>({
                             stickRight && "right-0",
                           )}
                           style={{
+                            width: cell.column.columnDef.size ? `${cell.column.columnDef.size}px` : undefined,
+                            minWidth: cell.column.columnDef.minSize ? `${cell.column.columnDef.minSize}px` : undefined,
+                            maxWidth: cell.column.columnDef.maxSize ? `${cell.column.columnDef.maxSize}px` : undefined,
                             boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                           }}
                           key={cell.id}
-                          title={cellTitle}
+                          data-column-id={cell.column.id}
                         >
                           {truncateCellText && !skipTruncate ? (
-                            <div className="truncate" title={getCellTitle(cell)}>
+                            <OverflowCellText text={getCellTitle(cell) ?? cellTitle}>
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </div>
+                            </OverflowCellText>
                           ) : (
                             flexRender(cell.column.columnDef.cell, cell.getContext())
                           )}
@@ -706,29 +726,26 @@ export function DataTable<TData, TValue>({
               <li>
                 <button
                   type="button"
-                  className="px-2 py-1 text-xs rounded-md border border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="data-table-page-button"
                   disabled={!canPreviousPage}
                   onClick={() => goToPage(currentPageIndex - 1)}
                   title="Previous Page"
+                  aria-label="Previous page"
                 >
-                  {"<"}
+                  <ChevronLeft size={14} />
                 </button>
               </li>
 
               {pageNumbers.map((page, idx) => (
                 <li key={`${page}-${idx}`}>
                   {page === -1 ? (
-                    <span className="px-2 py-1 text-xs text-[#94a3b8]">...</span>
+                    <span className="data-table-page-ellipsis">...</span>
                   ) : (
                     <button
                       type="button"
-                      className={cn(
-                        "px-2.5 py-1 text-xs rounded-md border font-medium transition-colors cursor-pointer min-w-[28px]",
-                        currentPageIndex === page
-                          ? "bg-[#00378C] text-white border-[#00378C] shadow-sm font-semibold"
-                          : "border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9]",
-                      )}
+                      className={cn("data-table-page-button", currentPageIndex === page && "is-active")}
                       onClick={() => goToPage(page)}
+                      aria-current={currentPageIndex === page ? "page" : undefined}
                     >
                       {page + 1}
                     </button>
@@ -739,19 +756,20 @@ export function DataTable<TData, TValue>({
               <li>
                 <button
                   type="button"
-                  className="px-2 py-1 text-xs rounded-md border border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="data-table-page-button"
                   disabled={!canNextPage}
                   onClick={() => goToPage(currentPageIndex + 1)}
                   title="Next Page"
+                  aria-label="Next page"
                 >
-                  {">"}
+                  <ChevronRight size={14} />
                 </button>
               </li>
             </ul>
 
             <label className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
               <select
-                className="h-7 rounded-md border border-[#cbd5e1] bg-white px-2 text-xs font-medium text-[#1e293b] focus:outline-none focus:ring-1 focus:ring-[#00378C] cursor-pointer"
+                className="data-table-page-size"
                 value={currentPageSize}
                 onChange={(event) => changePageSize(Number(event.target.value))}
               >
@@ -765,6 +783,63 @@ export function DataTable<TData, TValue>({
       )}
       </div>
     </div>
+  );
+}
+
+function OverflowCellText({ children, text }: { children: ReactNode; text?: string }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<{ left: number; top: number; width: number } | null>(null);
+
+  const showTooltip = () => {
+    const element = contentRef.current;
+    if (!element || !text || element.scrollWidth <= element.clientWidth + 1) {
+      setTooltip(null);
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const width = Math.min(420, Math.max(220, window.innerWidth - 32));
+    const left = Math.min(Math.max(16, rect.left), Math.max(16, window.innerWidth - width - 16));
+    const placeAbove = rect.bottom + 110 > window.innerHeight;
+    setTooltip({
+      left,
+      top: placeAbove ? Math.max(12, rect.top - 8) : rect.bottom + 7,
+      width,
+    });
+  };
+
+  useEffect(() => {
+    if (!tooltip) return undefined;
+    const hideTooltip = () => setTooltip(null);
+    window.addEventListener("resize", hideTooltip);
+    window.addEventListener("scroll", hideTooltip, true);
+    return () => {
+      window.removeEventListener("resize", hideTooltip);
+      window.removeEventListener("scroll", hideTooltip, true);
+    };
+  }, [tooltip]);
+
+  return (
+    <>
+      <div ref={contentRef} className="data-table-cell-text truncate" onMouseEnter={showTooltip} onMouseLeave={() => setTooltip(null)}>
+        {children}
+      </div>
+      {tooltip && createPortal(
+        <div
+          className="data-table-overflow-tooltip"
+          role="tooltip"
+          style={{
+            left: tooltip.left,
+            top: tooltip.top,
+            width: tooltip.width,
+            transform: tooltip.top < (contentRef.current?.getBoundingClientRect().top ?? 0) ? "translateY(-100%)" : undefined,
+          }}
+        >
+          {text}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

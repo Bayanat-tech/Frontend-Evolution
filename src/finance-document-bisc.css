@@ -809,11 +809,7 @@
 .finance-document-editor .finance-lines-table .finance-amount-cell { width:88px !important; min-width:82px !important; }
 .finance-document-editor .finance-money-input { min-width:0 !important; }
 .finance-document-editor .commercial-sticky-footer { padding:4px 10px !important; min-height:32px; }
-/* Two-table forms reserve 38% of available table space for the active line's allocations. */
-.finance-document-editor .finance-allocation-panel { display:flex; flex-direction:column; flex:0.65 1 0% !important; min-height:120px; overflow:hidden !important; margin:0 !important; border:1px solid #cbd5e1; border-radius:8px; }
-.finance-document-editor .finance-allocation-panel > :first-child { flex:none; padding:4px 8px !important; }
-.finance-document-editor .finance-allocation-panel > :nth-child(2) { flex:1; min-height:0 !important; max-height:none !important; overflow:auto !important; }
-.finance-document-editor .finance-allocation-panel select { width:auto !important; max-width:260px; }
+/* Inline allocation styling handled in section below */
 .finance-document-editor .finance-payment-editor { min-width:0; }
 @media (max-width:1100px) {
  .finance-document-editor .commercial-header-panel .commercial-header-block-fields,
@@ -1202,3 +1198,113 @@
   font-weight: 700 !important;
 }
 
+
+/* Allocations belong to the preceding detail line, nested compactly */
+.finance-document-editor .finance-allocation-cell {
+  padding: 2px 10px 4px 32px !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+.finance-document-editor .finance-lines-table > tbody > tr:has(+ .finance-allocation-row) > td {
+  background: #f1f5f9 !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+.finance-document-editor .finance-allocation-branch {
+  position: relative;
+  width: fit-content !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  border-left: 2px solid #475569 !important;
+  padding-left: 8px !important;
+}
+.finance-document-editor .finance-allocation-branch::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 0;
+  width: 7px;
+  border-top: 2px solid #475569;
+}
+.finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
+.finance-document-editor .finance-allocation-panel {
+  width: fit-content !important;
+  max-width: 100% !important;
+  border: 1px solid #9fcfc4 !important;
+  border-radius: 8px !important;
+  background: #fbfefd !important;
+  box-shadow: 0 2px 7px rgba(15, 118, 110, 0.09) !important;
+  margin: 1px 0 2px !important;
+  overflow: hidden !important;
+}
+.finance-document-editor .finance-allocation-panel > .finance-allocation-toolbar {
+  min-height: 25px !important;
+  background: linear-gradient(180deg, #f1faf8 0%, #e6f5f1 100%) !important;
+  border-bottom: 1px solid #b8ddd5 !important;
+  padding: 2px 5px !important;
+  gap: 3px !important;
+}
+.finance-document-editor .finance-allocation-panel .finance-allocation-table {
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  min-width: 0 !important;
+  background: #ffffff !important;
+}
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead,
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead tr,
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead th {
+  background: #dff2ed !important;
+  background-color: #dff2ed !important;
+  color: #14554e !important;
+}
+.finance-document-editor .finance-allocation-panel .finance-allocation-thead th {
+  height: 23px !important;
+  min-height: 23px !important;
+  padding: 2px 4px !important;
+  font-size: 9.5px !important;
+  line-height: 1.05 !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.01em !important;
+  border-right: 1px solid #b7d9d1 !important;
+  border-bottom: 1px solid #9fcfc4 !important;
+  white-space: nowrap !important;
+}
+.finance-document-editor .finance-allocation-panel tbody td {
+  background: #ffffff !important;
+  height: 25px !important;
+  padding: 1px 3px !important;
+  font-size: 10px !important;
+  line-height: 1.05 !important;
+  border-right: 1px solid #e2efec !important;
+  border-bottom: 1px solid #deebe8 !important;
+}
+.finance-document-editor .finance-allocation-panel tbody tr:hover td {
+  background: #f0faf7 !important;
+}
+.finance-document-editor .finance-allocation-panel :is(input, select, .lookup-field-trigger, .bisc-date-picker-trigger) {
+  min-height: 20px !important;
+  height: 20px !important;
+  font-size: 10px !important;
+  padding: 0 3px !important;
+  border-radius: 4px !important;
+  border-color: #c4d8d4 !important;
+}
+.finance-document-editor .finance-allocation-panel .bisc-date-picker-trigger span {
+  font-size: 9.5px !important;
+}
+.finance-document-editor .finance-allocation-panel button {
+  min-height: 20px !important;
+  height: 20px !important;
+  font-size: 9.5px !important;
+  border-radius: 5px !important;
+}
+.finance-document-editor .finance-allocation-panel .finance-allocation-grid {
+  max-height: 132px !important;
+  background: #ffffff !important;
+}
+.finance-document-editor .commercial-sticky-footer { justify-content: flex-end; }
+.finance-document-editor .commercial-command-header .ui-button[aria-label="Close"] { width: auto !important; gap: 5px; }
+@media (max-width: 768px) {
+  .finance-document-editor .finance-allocation-cell { padding-left: 16px !important; padding-right: 8px !important; }
+  .finance-document-editor .finance-allocation-branch { max-width: calc(100cqw - 40px); padding-left: 10px; }
+}
