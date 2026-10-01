@@ -284,7 +284,6 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
           <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => setPrintTarget(row.original as any)}>
             <Printer size={15} />
           </Button>

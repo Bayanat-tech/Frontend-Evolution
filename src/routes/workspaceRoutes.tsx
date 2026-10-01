@@ -210,6 +210,7 @@ import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
+import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 
 
  type WorkspaceRouteContext = {
@@ -1448,7 +1449,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Purchase Request Register(old) Report",
   match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
   element: () => <PrRegisterOldPage />,
-}
+},
+
+  {
+  name: "Purchase & Sales Dashboard",
+  match: ({ pathname }) => isPnSRoute(pathname),
+  element: () => <PurchaseSalesDashboard />},
 
 
 ];
@@ -2857,6 +2863,14 @@ function isProductBomRoute(pathname: string) {
   );
 }
 
+function isPnSRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales") 
+   
+  );
+}
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
 
