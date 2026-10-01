@@ -125,7 +125,8 @@ const META: Record<CommercialType, { title: string;  addLabel: string }> = {
   SV: { title: "Service Invoice", addLabel: "Add Service" },
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localYmd(new Date());
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 => {
   if (typeof value === "string") {
@@ -768,17 +769,17 @@ function CommercialEditor({
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
                   <Download size={15} />
                 </Button>
-                {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
               </>
             )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
+            {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
             <Button
               disabled={saving}
               aria-label="Close"
@@ -874,14 +875,14 @@ function CommercialEditor({
   {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input disabled={isCancelled} value={form.ref_no || ""}
+      <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
   {isSales && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
+      <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
@@ -1009,7 +1010,7 @@ function CommercialEditor({
   {/* field: ac_code / ac_name — same in all tables ── */}
   <div className="col-span-1">
     <LookupField
-      label={isSales ? "Customer" : "Supplier"} required
+      label={isSales ? "Customer" : "Supplier"} required enforceRequired
       value={form.ac_code}
       displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
       columns={[
@@ -1074,6 +1075,7 @@ function CommercialEditor({
     <LookupField
       label="Currency"
       required
+      enforceRequired
       disabled={isCancelled}
       value={form.curr_code ?? ""}
       displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
@@ -1416,6 +1418,7 @@ function CommercialEditor({
                           <LookupField
                             label="Line Account"
                             required
+                            enforceRequired
                             compact
                             placeholder="A/c code"
                             value={line.ac_code}
@@ -1646,6 +1649,12 @@ function CommercialEditor({
     </form>
   );
 }
+
+const reqProps = (label: string) => ({
+  required: true,
+  onInvalid: (e: React.FormEvent<HTMLInputElement>) => e.currentTarget.setCustomValidity(`${label} is required`),
+  onInput: (e: React.FormEvent<HTMLInputElement>) => e.currentTarget.setCustomValidity(""),
+});
 
 function Field({ label, children, error, required, className }: { label: string; children: React.ReactNode; error?: string; required?: boolean; className?: string }) {
   return (
@@ -1984,12 +1993,25 @@ function hasRecordData(record: Record<string, unknown> | null | undefined) {
   return Boolean(record && Object.keys(record).length > 0);
 }
 
+// function dateInput(value: unknown) {
+//   if (!value) return "";
+//   const date = new Date(String(value));
+//   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+//   return date.toISOString().slice(0, 10);
+// }
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const localYmd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 function dateInput(value: unknown) {
   if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const date = new Date(s);
+  if (Number.isNaN(date.getTime())) return s.slice(0, 10);
+  return localYmd(date);
 }
+// const today = () => localYmd(new Date());
 
 function formatAmount(value: number) {
   const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
