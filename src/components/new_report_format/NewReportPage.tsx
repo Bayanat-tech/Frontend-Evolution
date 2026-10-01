@@ -10,6 +10,7 @@ import { BiscDatePicker } from "../../components/ui/BiscDatePicker"; // ← adju
  */
 export function NewReportPage({
   title,
+  filterLabel,
   fields,
   values,
   onChange,
