@@ -20,7 +20,8 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
-import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
+import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage"
+import WmsDashboard from "../pages/wms/dashboard/WmsDashboard";;
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
@@ -230,6 +231,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+    {
+    name: "WMS Dashboard",
+    match: ({ pathname }) => isWmsDashboardRoute(pathname),
+    element: () => <WmsDashboard />,
+  },
   {
     name : 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
@@ -2087,6 +2093,10 @@ function isWmsCountryRoute(pathname: string) {
 function isWmsBillingActRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
+function isWmsDashboardRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/wms/wms";
 }
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
