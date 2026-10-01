@@ -613,7 +613,7 @@ function CashFlowTrendChart({
       return (
         found || {
           MONTH_NO: monthNo,
-          MONTH_LABEL: months[monthNo]?.slice(0, 3) || `M${monthNo}`,
+          MONTH_LABEL: (months[monthNo]?.slice(0, 3) || `M${monthNo}`).toUpperCase(),
           INFLOW: 0,
           OUTFLOW: 0,
           RECEIPTS: 0,
@@ -637,9 +637,13 @@ function CashFlowTrendChart({
 
   const getX = (idx: number) => left + idx * ((width - left - right) / 11);
   const getY = (val: number) => top + (height - top - bottom) * (1 - Math.min(1, Math.max(0, val / maxVal)));
+  const baseY = getY(0);
 
   const inflowPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.INFLOW))}`).join(" ");
   const outflowPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.OUTFLOW))}`).join(" ");
+
+  const inflowArea = `${getX(0)},${baseY} ${inflowPoints} ${getX(11)},${baseY}`;
+  const outflowArea = `${getX(0)},${baseY} ${outflowPoints} ${getX(11)},${baseY}`;
 
   const hoveredRow = hoverIndex !== null ? normalized[hoverIndex] : null;
 
@@ -647,7 +651,7 @@ function CashFlowTrendChart({
     <article className="finance-dashboard-card finance-dashboard-chart">
       <div className="finance-dashboard-card-head">
         <h3>
-          <TrendingUp size={15} />
+          <TrendingUp size={15} className="finance-card-icon" />
           {title}
         </h3>
         <div className="finance-dashboard-card-legend">
@@ -670,10 +674,22 @@ function CashFlowTrendChart({
       ) : (
         <div style={{ position: "relative" }}>
           <svg
+            className="finance-trend-svg"
             viewBox={`0 0 ${width} ${height}`}
             onMouseLeave={() => setHoverIndex(null)}
           >
-            {/* Gridlines & Y-axis labels */}
+            <defs>
+              <linearGradient id="finInflowGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#00378C" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#00378C" stopOpacity="0.0" />
+              </linearGradient>
+              <linearGradient id="finOutflowGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#e11d48" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#e11d48" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+
+            {/* Subtle Gridlines & Y-axis labels */}
             {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
               const yPos = getY(maxVal * ratio);
               return (
@@ -712,12 +728,16 @@ function CashFlowTrendChart({
               </text>
             ))}
 
-            {/* Inflow Polylines (Blue) */}
+            {/* Gradient Area Fills */}
+            <polygon points={inflowArea} fill="url(#finInflowGrad)" />
+            <polygon points={outflowArea} fill="url(#finOutflowGrad)" />
+
+            {/* Inflow Polylines (Corporate Blue) */}
             <polyline
               points={inflowPoints}
               fill="none"
               stroke="#00378C"
-              strokeWidth="2.5"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -726,8 +746,10 @@ function CashFlowTrendChart({
                 key={`inflow-${i}`}
                 cx={getX(i)}
                 cy={getY(number(r.INFLOW))}
-                r={hoverIndex === i ? "5" : "3"}
+                r={hoverIndex === i ? "5" : "3.5"}
                 fill="#00378C"
+                stroke="#ffffff"
+                strokeWidth="1.5"
               />
             ))}
 
@@ -736,7 +758,7 @@ function CashFlowTrendChart({
               points={outflowPoints}
               fill="none"
               stroke="#e11d48"
-              strokeWidth="2.5"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -745,8 +767,10 @@ function CashFlowTrendChart({
                 key={`outflow-${i}`}
                 cx={getX(i)}
                 cy={getY(number(r.OUTFLOW))}
-                r={hoverIndex === i ? "5" : "3"}
+                r={hoverIndex === i ? "5" : "3.5"}
                 fill="#e11d48"
+                stroke="#ffffff"
+                strokeWidth="1.5"
               />
             ))}
 
@@ -788,17 +812,20 @@ function CashFlowTrendChart({
               style={{
                 position: "absolute",
                 top: 10,
-                left: Math.min(width - 180, Math.max(left, getX(hoverIndex) - 75)),
+                left: Math.min(width - 210, Math.max(left, getX(hoverIndex) - 85)),
               }}
             >
-              <strong>{months[hoverIndex + 1]}</strong>
-              <div style={{ display: "flex", gap: "10px", marginTop: "2px" }}>
+              <strong style={{ fontSize: "10.5px" }}>{months[hoverIndex + 1]}</strong>
+              <div style={{ display: "flex", gap: "10px", marginTop: "3px" }}>
                 <span style={{ color: "#93c5fd" }}>
                   Inflow: {number(hoveredRow.INFLOW).toLocaleString()} OMR
                 </span>
                 <span style={{ color: "#fda4af" }}>
                   Outflow: {number(hoveredRow.OUTFLOW).toLocaleString()} OMR
                 </span>
+              </div>
+              <div style={{ marginTop: "2px", fontSize: "9px", color: number(hoveredRow.INFLOW) >= number(hoveredRow.OUTFLOW) ? "#86efac" : "#fca5a5" }}>
+                Net: {(number(hoveredRow.INFLOW) - number(hoveredRow.OUTFLOW)).toLocaleString()} OMR
               </div>
             </div>
           )}
@@ -819,6 +846,8 @@ function ActivityMixChart({
   rows: MonthlyRow[];
   loading: boolean;
 }) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
   const normalized = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
       const monthNo = i + 1;
@@ -826,7 +855,7 @@ function ActivityMixChart({
       return (
         found || {
           MONTH_NO: monthNo,
-          MONTH_LABEL: months[monthNo]?.slice(0, 3) || `M${monthNo}`,
+          MONTH_LABEL: (months[monthNo]?.slice(0, 3) || `M${monthNo}`).toUpperCase(),
           INVOICES_COUNT: 0,
           PAYMENTS_COUNT: 0,
           JOURNALS_COUNT: 0,
@@ -858,11 +887,13 @@ function ActivityMixChart({
   const paymentsPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.PAYMENTS_COUNT))}`).join(" ");
   const journalsPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.JOURNALS_COUNT))}`).join(" ");
 
+  const hoveredRow = hoverIndex !== null ? normalized[hoverIndex] : null;
+
   return (
     <article className="finance-dashboard-card finance-dashboard-chart">
       <div className="finance-dashboard-card-head">
         <h3>
-          <Layers size={15} />
+          <Layers size={15} className="finance-card-icon" />
           {title}
         </h3>
         <div className="finance-dashboard-card-legend">
@@ -887,67 +918,162 @@ function ActivityMixChart({
           <span>Loading volume metrics...</span>
         </div>
       ) : (
-        <svg viewBox={`0 0 ${width} ${height}`}>
-          {[0, 0.5, 1].map((ratio) => {
-            const yPos = getY(maxVal * ratio);
-            return (
-              <g key={ratio}>
-                <line
-                  x1={left}
-                  x2={width - right}
-                  y1={yPos}
-                  y2={yPos}
-                  className="chart-gridline"
+        <div style={{ position: "relative" }}>
+          <svg
+            className="finance-trend-svg"
+            viewBox={`0 0 ${width} ${height}`}
+            onMouseLeave={() => setHoverIndex(null)}
+          >
+            {/* Gridlines */}
+            {[0, 0.5, 1].map((ratio) => {
+              const yPos = getY(maxVal * ratio);
+              return (
+                <g key={ratio}>
+                  <line
+                    x1={left}
+                    x2={width - right}
+                    y1={yPos}
+                    y2={yPos}
+                    className="chart-gridline"
+                  />
+                  <text
+                    x={left - 8}
+                    y={yPos + 3.5}
+                    textAnchor="end"
+                    className="chart-axis"
+                  >
+                    {Math.round(maxVal * ratio)}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* X-axis Labels */}
+            {normalized.map((r, i) => (
+              <text
+                key={i}
+                x={getX(i)}
+                y={height - 10}
+                textAnchor="middle"
+                className="chart-axis"
+                fontWeight={hoverIndex === i ? "700" : "500"}
+                fill={hoverIndex === i ? "#00378C" : "#64748b"}
+              >
+                {r.MONTH_LABEL}
+              </text>
+            ))}
+
+            {/* Invoices Line (Emerald) */}
+            <polyline
+              points={invoicesPoints}
+              fill="none"
+              stroke="#059669"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+            {/* Payments Line (Amber) */}
+            <polyline
+              points={paymentsPoints}
+              fill="none"
+              stroke="#d97706"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+            {/* Journals Line (Indigo) */}
+            <polyline
+              points={journalsPoints}
+              fill="none"
+              stroke="#4f46e5"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+
+            {/* Data point dots */}
+            {normalized.map((r, i) => (
+              <g key={`pts-${i}`}>
+                <circle
+                  cx={getX(i)}
+                  cy={getY(number(r.INVOICES_COUNT))}
+                  r={hoverIndex === i ? "4.5" : "3"}
+                  fill="#059669"
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
                 />
-                <text
-                  x={left - 8}
-                  y={yPos + 3.5}
-                  textAnchor="end"
-                  className="chart-axis"
-                >
-                  {Math.round(maxVal * ratio)}
-                </text>
+                <circle
+                  cx={getX(i)}
+                  cy={getY(number(r.PAYMENTS_COUNT))}
+                  r={hoverIndex === i ? "4.5" : "3"}
+                  fill="#d97706"
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                />
+                <circle
+                  cx={getX(i)}
+                  cy={getY(number(r.JOURNALS_COUNT))}
+                  r={hoverIndex === i ? "4.5" : "3"}
+                  fill="#4f46e5"
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                />
               </g>
-            );
-          })}
+            ))}
 
-          {normalized.map((r, i) => (
-            <text
-              key={i}
-              x={getX(i)}
-              y={height - 10}
-              textAnchor="middle"
-              className="chart-axis"
+            {/* Hover guideline */}
+            {hoverIndex !== null && (
+              <line
+                x1={getX(hoverIndex)}
+                x2={getX(hoverIndex)}
+                y1={top}
+                y2={height - bottom}
+                stroke="#00378C"
+                strokeWidth="1.2"
+                strokeDasharray="3 3"
+              />
+            )}
+
+            {/* Hover catcher rects */}
+            {normalized.map((_, i) => {
+              const xPos = getX(i) - 20;
+              return (
+                <rect
+                  key={`hit-${i}`}
+                  x={xPos}
+                  y={top}
+                  width="40"
+                  height={height - top - bottom}
+                  fill="transparent"
+                  onMouseEnter={() => setHoverIndex(i)}
+                  style={{ cursor: "pointer" }}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Floating Tooltip */}
+          {hoveredRow && hoverIndex !== null && (
+            <div
+              className="finance-chart-tooltip-box"
+              style={{
+                position: "absolute",
+                top: 10,
+                left: Math.min(width - 220, Math.max(left, getX(hoverIndex) - 95)),
+              }}
             >
-              {r.MONTH_LABEL}
-            </text>
-          ))}
-
-          {/* Invoices Line */}
-          <polyline
-            points={invoicesPoints}
-            fill="none"
-            stroke="#059669"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-          {/* Payments Line */}
-          <polyline
-            points={paymentsPoints}
-            fill="none"
-            stroke="#d97706"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-          {/* Journals Line */}
-          <polyline
-            points={journalsPoints}
-            fill="none"
-            stroke="#4f46e5"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-        </svg>
+              <strong style={{ fontSize: "10.5px" }}>{months[hoverIndex + 1]}</strong>
+              <div style={{ display: "flex", gap: "10px", marginTop: "3px" }}>
+                <span style={{ color: "#6ee7b7" }}>
+                  Invoices: {number(hoveredRow.INVOICES_COUNT).toLocaleString()}
+                </span>
+                <span style={{ color: "#fcd34d" }}>
+                  Payments: {number(hoveredRow.PAYMENTS_COUNT).toLocaleString()}
+                </span>
+                <span style={{ color: "#a5b4fc" }}>
+                  Journals: {number(hoveredRow.JOURNALS_COUNT).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </article>
   );
@@ -960,7 +1086,7 @@ function TopPartiesPanel({ rows, loading }: { rows: PartyRow[]; loading: boolean
     <article className="finance-dashboard-card">
       <div className="finance-dashboard-card-head">
         <h3>
-          <Users size={15} />
+          <Users size={15} className="finance-card-icon" />
           Top 5 Account Parties
         </h3>
         <span>By transaction turnover</span>
@@ -1039,7 +1165,7 @@ function AttentionQueuePanel({
     <article className="finance-dashboard-card">
       <div className="finance-dashboard-card-head">
         <h3>
-          <CalendarDays size={15} />
+          <CalendarDays size={15} className="finance-card-icon" />
           Recent Transaction Activity &amp; Queue
         </h3>
         <span>Latest registered vouchers</span>

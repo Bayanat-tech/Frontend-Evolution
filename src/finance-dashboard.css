@@ -239,6 +239,13 @@
   background: #eff6ff;
   color: #00378C;
 }
+.finance-dashboard-hero-icon svg {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  flex-shrink: 0;
+}
 
 .finance-dashboard-hero-card.tone-emerald .finance-dashboard-hero-icon { background: #ecfdf5; color: #059669; }
 .finance-dashboard-hero-card.tone-rose .finance-dashboard-hero-icon { background: #fff1f2; color: #e11d48; }
@@ -329,6 +336,13 @@
   color: #00378C;
   flex-shrink: 0;
 }
+.finance-dashboard-kpi-top i svg {
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+  min-height: 13px !important;
+  flex-shrink: 0;
+}
 
 .finance-dashboard-kpi.tone-violet .finance-dashboard-kpi-top i { background: #f5f3ff; color: #7c3aed; }
 .finance-dashboard-kpi.tone-teal .finance-dashboard-kpi-top i { background: #f0fdfa; color: #0d9488; }
@@ -407,6 +421,21 @@
   font-weight: 800;
 }
 
+.finance-dashboard-card-head h3 svg,
+.finance-card-icon {
+  width: 15px !important;
+  height: 15px !important;
+  min-width: 15px !important;
+  min-height: 15px !important;
+  max-width: 15px !important;
+  max-height: 15px !important;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  vertical-align: middle;
+}
+
 .finance-dashboard-card-head > span {
   color: #64748b;
   font-size: 10px;
@@ -434,11 +463,11 @@
   border-radius: 50%;
 }
 
-.finance-dashboard-chart svg {
+.finance-dashboard-chart svg.finance-trend-svg {
   display: block;
   width: 100%;
-  height: 250px;
-  padding: 10px 10px 4px;
+  height: 230px;
+  padding: 8px 10px 4px;
 }
 
 .finance-dashboard-chart .chart-gridline {
@@ -778,7 +807,7 @@
 .finance-workspace .finance-dashboard-card-head h3 { font-size: 10.5px; }
 .finance-workspace .finance-dashboard-card-head > span,
 .finance-workspace .finance-dashboard-card-legend { font-size: 8.5px; }
-.finance-workspace .finance-dashboard-chart svg { height: 198px; padding: 6px 7px 2px; }
+.finance-workspace .finance-dashboard-chart svg.finance-trend-svg { height: 198px; padding: 6px 7px 2px; }
 .finance-workspace .finance-dashboard-ranking { padding: 5px 10px 8px; }
 .finance-workspace .finance-dashboard-rank { grid-template-columns: 22px 1fr; gap: 7px; padding: 4px 0; }
 .finance-workspace .finance-dashboard-rank > b { width: 21px; height: 21px; font-size: 9px; }
