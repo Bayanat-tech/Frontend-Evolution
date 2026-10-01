@@ -816,3 +816,14 @@
 .finance-workspace .finance-dashboard-attention { padding: 3px 8px 6px; }
 .finance-workspace .finance-dashboard-attention-row { min-height: 32px; padding: 2px 0; font-size: 9px; }
 .finance-workspace .finance-dashboard-empty { min-height: 140px; font-size: 10px; }
+
+
+/* Division dropdown width to display full division name */
+.finance-dashboard-filters select.finance-filter-division {
+  min-width: 160px;
+  max-width: 260px;
+}
+.finance-workspace .finance-dashboard-filters select.finance-filter-division {
+  min-width: 150px;
+  max-width: 240px;
+}

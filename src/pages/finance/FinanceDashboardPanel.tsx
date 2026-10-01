@@ -312,16 +312,31 @@ export function FinanceDashboardPanel() {
           <label>
             <span>Division</span>
             <select
+              className="finance-filter-division"
               value={divCode}
               onChange={(e) => setDivCode(e.target.value)}
               disabled={loading}
+              title={
+                divCode === "All"
+                  ? "All Divisions"
+                  : (data.available_divisions || []).find((d) => d.div_code === divCode)?.div_name ||
+                    `Division ${divCode}`
+              }
             >
               <option value="All">All Divisions</option>
-              {(data.available_divisions || []).map((d) => (
-                <option key={d.div_code} value={d.div_code}>
-                  Div {d.div_code}
-                </option>
-              ))}
+              {(data.available_divisions || []).map((d) => {
+                const label =
+                  d.div_name &&
+                  d.div_name.toLowerCase() !== `division ${d.div_code}`.toLowerCase() &&
+                  d.div_name !== d.div_code
+                    ? `${d.div_code} - ${d.div_name}`
+                    : `Division ${d.div_code}`;
+                return (
+                  <option key={d.div_code} value={d.div_code} title={label}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
           </label>
 
