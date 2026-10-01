@@ -1,5 +1,5 @@
 import { ChevronDown, Search, X } from "lucide-react";
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
 
@@ -25,6 +25,8 @@ type LookupFieldProps = {
   required?: boolean;
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
+  /** ⭐ NEW — per-row action renderer (Edit / Delete buttons etc.) */
+  renderRowActions?: (row: LookupRow) => ReactNode;
 };
 
 export function LookupField({
@@ -44,6 +46,7 @@ export function LookupField({
   required,
   enforceRequired,
   multiSelect,
+  renderRowActions,       // ⭐ NEW
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -75,7 +78,6 @@ export function LookupField({
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
-      // Adapt width to the field: match trigger width or min needed for columns
       const minIdealWidth = columns.length >= 3 ? 340 : 280;
       const width = Math.min(
         Math.max(rect.width, minIdealWidth),
@@ -88,7 +90,6 @@ export function LookupField({
       const maxHeight = Math.max(280, Math.min(520, preferredSpace));
       const opensAbove = belowSpace < 200 && aboveSpace > belowSpace;
 
-      // Horizontal alignment: if trigger is on right side of screen or overflows, align flush with trigger's right edge
       let left = rect.left;
       if (left + width > viewportWidth - 12) {
         left = Math.max(12, rect.right - width);
@@ -216,6 +217,8 @@ export function LookupField({
         ) || String(value)
         : "");
 
+  const totalCols = columns.length + (renderRowActions ? 1 : 0);
+
   return (
     <>
       <label className={compact ? "block w-full min-w-0" : "field"}>
@@ -333,18 +336,24 @@ export function LookupField({
                         {column.header}
                       </th>
                     ))}
+                    {/* ⭐ Actions column */}
+                    {renderRowActions && (
+                      <th className="w-16 px-2 py-1.5 text-center text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loading ? (
                     <tr>
-                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={columns.length}>
+                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={totalCols}>
                         Loading...
                       </td>
                     </tr>
                   ) : pagedRows.length === 0 ? (
                     <tr>
-                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={columns.length}>
+                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={totalCols}>
                         No records found
                       </td>
                     </tr>
@@ -378,6 +387,18 @@ export function LookupField({
                               </td>
                             );
                           })}
+
+                          {/* ⭐ Actions cell */}
+                          {renderRowActions && (
+                            <td
+                              className="px-2 py-1 text-center"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {renderRowActions(row)}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })
