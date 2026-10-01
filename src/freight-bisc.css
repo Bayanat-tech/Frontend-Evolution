@@ -2290,3 +2290,35 @@ input[tabindex="-1"].opacity-0,
 .dark .freight-dashboard-kpi-foot,
 .dark .freight-dashboard-attention > div { border-color: #26364b; }
 
+.freight-dashboard-kpi.is-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.freight-dashboard-kpi.is-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgb(15 23 42 / 12%);
+  border-color: #00378C;
+}
+.freight-dashboard-rank.is-clickable,
+.freight-dashboard-attention > div.is-clickable {
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.freight-dashboard-rank.is-clickable:hover,
+.freight-dashboard-attention > div.is-clickable:hover {
+  background-color: #f1f5f9;
+  border-radius: 6px;
+}
+.dark .freight-dashboard-rank.is-clickable:hover,
+.dark .freight-dashboard-attention > div.is-clickable:hover {
+  background-color: #1e293b;
+}
+.freight-company-select {
+  max-width: 220px;
+  text-overflow: ellipsis;
+}
+.freight-chart-tooltip-bar {
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
