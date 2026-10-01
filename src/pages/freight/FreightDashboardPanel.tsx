@@ -120,9 +120,13 @@ export function FreightDashboardPanel() {
 
       {error && <div className="freight-dashboard-error"><AlertTriangle size={15} />{error}<button type="button" onClick={() => void loadDashboard()}>Try again</button></div>}
 
-      <DashboardSection title="Commercial Pipeline"><div className="freight-dashboard-kpis">{commercialCards.map((item) => <MetricCard key={item.title} {...item} loading={loading} />)}</div></DashboardSection>
-      <DashboardSection title="Job Operations"><div className="freight-dashboard-kpis">{operationCards.map((item) => <MetricCard key={item.title} {...item} loading={loading} />)}</div></DashboardSection>
-      <DashboardSection title="Transport Mode Mix"><div className="freight-dashboard-kpis freight-dashboard-kpis-three">{modeCards.map((item) => <MetricCard key={item.title} {...item} loading={loading} />)}</div></DashboardSection>
+      <DashboardSection title="Freight Performance Snapshot">
+        <div className="freight-dashboard-kpis freight-dashboard-kpis-summary">
+          {[...commercialCards, ...operationCards, ...modeCards].map((item) => (
+            <MetricCard key={item.title} {...item} loading={loading} />
+          ))}
+        </div>
+      </DashboardSection>
 
       <div className="freight-dashboard-chart-grid">
         <TrendChart title="Jobs by Month" rows={data.monthly || []} series={[{ key: "JOBS", label: "New jobs", color: "#06479b" }, { key: "COMPLETED", label: "Completed", color: "#10a37f" }]} loading={loading} />
