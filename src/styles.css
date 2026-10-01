@@ -5495,6 +5495,124 @@ freight-dense-form .freight-form-card {
   min-height: 0;         /* new â€” critical for flex children to scroll properly */
   overflow-y: auto;      /* new */
 }
+
+/* Finance workspace density.
+   Keeps the module comfortable at normal browser zoom while preserving full
+   viewport width and native text rendering. */
+.workspace.finance-workspace {
+  --app-control-font-size: 11.5px;
+  --app-table-font-size: 11.5px;
+  --app-label-font-size: 10.5px;
+  --app-control-height: 32px;
+  --app-button-height: 31px;
+  --app-button-sm-height: 27px;
+  --app-button-icon-size: 29px;
+  --app-content-padding-y: 9px;
+  --app-content-padding-x: 12px;
+  --app-sidebar-width: 224px;
+  --app-sidebar-collapsed-width: 58px;
+  font-size: 12px;
+}
+
+.finance-workspace .workspace-top-header {
+  height: 40px !important;
+  min-height: 40px;
+  padding-inline: 13px !important;
+}
+
+.finance-workspace .workspace-top-header > div:first-child,
+.finance-workspace .workspace-top-header > div:last-child {
+  min-width: 160px !important;
+}
+
+.finance-workspace .workspace-top-header .w-8.h-8 {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.finance-workspace .sidebar {
+  padding-top: 40px;
+}
+
+.finance-workspace .sidebar-section-heading {
+  min-height: 34px;
+  padding: 3px 10px 2px;
+}
+
+.finance-workspace .sidebar-module-name {
+  max-width: 168px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+
+.finance-workspace .bisc-sidebar-search-container {
+  padding: 3px 8px 6px;
+}
+
+.finance-workspace .bisc-sidebar-search-box {
+  height: 30px;
+}
+
+.finance-workspace .sidebar-nav {
+  padding: 0 7px 7px;
+}
+
+.finance-workspace .nav-item.nav-level-1 {
+  min-height: 29px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.finance-workspace .nav-item.nav-level-2 {
+  min-height: 20px;
+  padding: 1px 7px 1px 9px;
+  font-size: 10.5px;
+}
+
+.finance-workspace .nav-children {
+  margin-left: 9px;
+}
+
+.finance-workspace .sidebar-footer {
+  gap: 6px;
+  padding: 7px 8px 8px;
+}
+
+.finance-workspace .sidebar-company-card {
+  padding: 7px 8px !important;
+}
+
+.finance-workspace .sidebar-switch-module {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.finance-workspace .workspace-content .breadcrumb {
+  margin-bottom: 6px !important;
+  padding-bottom: 6px;
+  font-size: 10.5px;
+}
+
+.finance-workspace .workspace-content > section > div:first-child h1 {
+  font-size: 19px;
+}
+
+.finance-workspace .data-table-scroll thead th {
+  height: 32px;
+  padding-block: 4px;
+  font-size: 10.5px;
+}
+
+.finance-workspace .data-table-scroll tbody td {
+  height: 27px;
+  padding-block: 3px;
+}
+
+.finance-workspace .data-table-pagination {
+  min-height: 39px;
+  padding: 5px 10px;
+}
 .workspace-content > section > div:first-child:has(h1) {
   align-items: flex-end;
   padding-bottom: 10px;

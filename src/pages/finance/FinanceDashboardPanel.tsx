@@ -193,7 +193,7 @@ export function FinanceDashboardPanel() {
       prevAmount: summary.PREV_SALES_INVOICE_AMOUNT,
       icon: Receipt,
       tone: "green",
-      route: "/workspace/finance/accounts/transactions/sales",
+      route: "/workspace/finance/finance/accounts/transactions/sales",
       caption: "Billed Revenue",
     },
     {
@@ -203,7 +203,7 @@ export function FinanceDashboardPanel() {
       prevAmount: summary.PREV_PURCHASE_INVOICE_AMOUNT,
       icon: FileText,
       tone: "amber",
-      route: "/workspace/finance/accounts/transactions/purchase",
+      route: "/workspace/finance/finance/accounts/transactions/purchase",
       caption: "Payable Expenses",
     },
     {
@@ -212,7 +212,7 @@ export function FinanceDashboardPanel() {
       amount: summary.CREDIT_NOTE_AMOUNT,
       icon: TrendingDown,
       tone: "red",
-      route: "/workspace/finance/accounts/transactions/credit-note",
+      route: "/workspace/finance/finance/accounts/transactions/credit-note",
       caption: "Sales Adjustments",
     },
     {
@@ -221,7 +221,7 @@ export function FinanceDashboardPanel() {
       amount: summary.DEBIT_NOTE_AMOUNT,
       icon: TrendingUp,
       tone: "violet",
-      route: "/workspace/finance/accounts/transactions/debit-note",
+      route: "/workspace/finance/finance/accounts/transactions/debit-note",
       caption: "Purchase Adjustments",
     },
   ];
@@ -235,7 +235,7 @@ export function FinanceDashboardPanel() {
       prevAmount: summary.PREV_BANK_RECEIPT_AMOUNT,
       icon: Landmark,
       tone: "blue",
-      route: "/workspace/finance/accounts/transactions/bank-receipt",
+      route: "/workspace/finance/finance/accounts/transactions/cheque-receipt",
       caption: "Bank Inflow",
     },
     {
@@ -245,7 +245,7 @@ export function FinanceDashboardPanel() {
       prevAmount: summary.PREV_BANK_PAYMENT_AMOUNT,
       icon: CreditCard,
       tone: "red",
-      route: "/workspace/finance/accounts/transactions/bank-payment",
+      route: "/workspace/finance/finance/accounts/transactions/cheque-payment",
       caption: "Bank Outflow",
     },
     {
@@ -255,7 +255,7 @@ export function FinanceDashboardPanel() {
       prevAmount: summary.PREV_CASH_RECEIPT_AMOUNT,
       icon: Banknote,
       tone: "teal",
-      route: "/workspace/finance/accounts/transactions/cash-receipt",
+      route: "/workspace/finance/finance/accounts/transactions/cash-receipt",
       caption: "Petty Inflow",
     },
     {
@@ -265,7 +265,7 @@ export function FinanceDashboardPanel() {
       prevAmount: summary.PREV_CASH_PAYMENT_AMOUNT,
       icon: Wallet,
       tone: "amber",
-      route: "/workspace/finance/accounts/transactions/cash-payment",
+      route: "/workspace/finance/finance/accounts/transactions/petty_cash_payment",
       caption: "Petty Outflow",
     },
   ];
@@ -277,9 +277,9 @@ export function FinanceDashboardPanel() {
         <div>
           <h1>
             <Landmark size={24} className="text-[#00378C]" />
-            Finance Executive Dashboard
+            Finance Dashboard
           </h1>
-          <p>Live financial overview, liquidity monitoring &amp; module control for {companyName}</p>
+          <p>Invoicing, treasury, adjustments and recent activity for {companyName}</p>
         </div>
 
         {/* Filter Toolbar */}
@@ -363,23 +363,23 @@ export function FinanceDashboardPanel() {
       {/* Top 4 Hero Cards: Net Liquidity & Volume */}
       <section className="finance-dashboard-hero-kpis">
         <HeroCard
-          title="Total Cash Inflow"
+          title="Inflow & Revenue"
           value={number(summary.TOTAL_INFLOW)}
           prevValue={summary.PREV_TOTAL_INFLOW}
           icon={TrendingUp}
           tone="emerald"
           loading={loading}
-          caption="Receipts & Invoiced"
+          caption="Receipts and sales invoices"
         />
 
         <HeroCard
-          title="Total Cash Outflow"
+          title="Outflow & Purchases"
           value={number(summary.TOTAL_OUTFLOW)}
           prevValue={summary.PREV_TOTAL_OUTFLOW}
           icon={TrendingDown}
           tone="rose"
           loading={loading}
-          caption="Disbursements & Billed"
+          caption="Payments and purchase invoices"
         />
 
         <HeroCard
@@ -408,7 +408,7 @@ export function FinanceDashboardPanel() {
       <section className="finance-dashboard-section">
         <div className="finance-dashboard-section-title">
           <span />
-          <h2>Commercial Invoicing &amp; Orders</h2>
+          <h2>Commercial Documents</h2>
           <span />
         </div>
         <div className="finance-dashboard-kpis">
@@ -435,12 +435,12 @@ export function FinanceDashboardPanel() {
       {/* Interactive Charts: 12-Month Liquidity & Activity Breakdown */}
       <div className="finance-dashboard-chart-grid">
         <CashFlowTrendChart
-          title="12-Month Cash Inflow vs Outflow Trend"
+          title="Monthly Inflow vs Outflow"
           rows={data.monthly || []}
           loading={loading}
         />
         <ActivityMixChart
-          title="Monthly Transaction Volume Distribution"
+          title="Monthly Transaction Volume"
           rows={data.monthly || []}
           loading={loading}
         />
@@ -1011,25 +1011,25 @@ function AttentionQueuePanel({
   const getDocRoute = (docType: string) => {
     switch (docType?.toUpperCase()) {
       case "SI":
-        return "/workspace/finance/accounts/transactions/sales";
+        return "/workspace/finance/finance/accounts/transactions/sales";
       case "PI":
-        return "/workspace/finance/accounts/transactions/purchase";
+        return "/workspace/finance/finance/accounts/transactions/purchase";
       case "BP":
-        return "/workspace/finance/accounts/transactions/bank-payment";
+        return "/workspace/finance/finance/accounts/transactions/cheque-payment";
       case "BR":
-        return "/workspace/finance/accounts/transactions/bank-receipt";
+        return "/workspace/finance/finance/accounts/transactions/cheque-receipt";
       case "CP":
-        return "/workspace/finance/accounts/transactions/cash-payment";
+        return "/workspace/finance/finance/accounts/transactions/petty_cash_payment";
       case "CR":
-        return "/workspace/finance/accounts/transactions/cash-receipt";
+        return "/workspace/finance/finance/accounts/transactions/cash-receipt";
       case "JV":
-        return "/workspace/finance/accounts/transactions/jv";
+        return "/workspace/finance/finance/accounts/transactions/journal";
       case "CN":
-        return "/workspace/finance/accounts/transactions/credit-note";
+        return "/workspace/finance/finance/accounts/transactions/credit-note";
       case "DN":
-        return "/workspace/finance/accounts/transactions/debit-note";
+        return "/workspace/finance/finance/accounts/transactions/debit-note";
       default:
-        return "/workspace/finance/accounts/transactions/sales";
+        return "/workspace/finance/finance/accounts/transactions/sales";
     }
   };
 

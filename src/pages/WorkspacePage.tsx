@@ -228,7 +228,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   };
 
   return (
-    <div className="workspace h-screen flex flex-col overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div className={cn("workspace h-screen flex flex-col overflow-hidden bg-background", isFinanceApp && "finance-workspace")} style={{ fontFamily: "Inter, sans-serif" }}>
       {/* Top Header - BISC style: clean white/card, logo + company left, dark mode + profile right */}
       <header className="workspace-top-header h-[45px] bg-card border-b border-border flex items-center justify-between px-5 shrink-0 z-20">
         {/* Left: Logo + Company Name */}
