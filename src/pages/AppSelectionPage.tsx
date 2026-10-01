@@ -310,8 +310,13 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
 //   });
 // }, [displayCoreApps, catalogOrderCodes]);
   const openApp = (app: MenuNode) => {
+    const code = cleanAppCode(app.title);
+    if (code === "finance") {
+      navigate("/workspace/finance");
+      return;
+    }
     const firstPath = firstLeafPath(app);
-    navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
+    navigate(`/workspace/${code}${firstPath ? `/${firstPath}` : ""}`);
   };
 
   const handleLogout = () => {
