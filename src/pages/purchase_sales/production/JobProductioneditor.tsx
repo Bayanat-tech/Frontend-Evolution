@@ -635,7 +635,7 @@ export function JobProductionOrderEditor({
                    </div> */}
 
               <FinanceDocumentIdentity
-                title="Purchase Order"
+                title="Job Production"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
                 total={formatAmount(grandTotal)}
@@ -744,7 +744,7 @@ export function JobProductionOrderEditor({
             </div>
           )}
 
-          <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
+                  <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
               <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
             ) : (
@@ -806,7 +806,6 @@ export function JobProductionOrderEditor({
                     </div>
                   ) : (
                     <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
-
                       {activeLineTab === "lines" && (
                         <div className="grid gap-3 p-2">
                           <PurchaseOrderHeaderForm
@@ -822,26 +821,28 @@ export function JobProductionOrderEditor({
                             rows={rows}
                             setdetails={setRows}
                             calculateDiscount={applyDiscountCalculation} />
-
                         </div>
-                        
                       )}
-                         </div>
+                    </div>
                   )}
 
-
-                      <PurchaseOrderLinesTable
-                        rows={rows}
-                        form={form}
-                        ex_rate={form.ex_rate}
-                        updateRow={updateRow}
-                        addRow={addRow}
-                        removeRow={removeRow}
-                        headerAndLineDisabled={headerAndLineDisabled}
-                        discAmt={form.disc_price}
-                        companyCode={user?.company_code}
-                        loginid={user?.loginid || user?.username}
-                      />
+                  {/* CHANGED: both tables only on the Job Production tab */}
+                  {activeLineTab === "lines" && (
+                    <div className="flex flex-col gap-4">
+                      <div className="min-h-[160px] [&>*]:h-full">
+                        <PurchaseOrderLinesTable
+                          rows={rows}
+                          form={form}
+                          ex_rate={form.ex_rate}
+                          updateRow={updateRow}
+                          addRow={addRow}
+                          removeRow={removeRow}
+                          headerAndLineDisabled={headerAndLineDisabled}
+                          discAmt={form.disc_price}
+                          companyCode={user?.company_code}
+                          loginid={user?.loginid || user?.username}
+                        />
+                      </div>
 
                       {/* Pass ex_rate as optional; JobconsumLinesTable accepts it but doesn't require it */}
                       <JobconsumLinesTable
@@ -855,7 +856,10 @@ export function JobProductionOrderEditor({
                         loginid={user?.loginid || user?.username}
                         ex_rate={form.ex_rate}
                       />
-            
+                    </div>
+                  )}
+
+                  {/* CHANGED: moved back inside the card */}
                   {activeLineTab === "expenses" && (
                     <div className="p-2">
                       <OtherExpensesTable
