@@ -132,6 +132,7 @@ export function FinanceDashboardPanel() {
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const companyName = String(userRecord.company_name || userRecord.COMPANY_NAME || companyCode);
+  const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
 
   const [fyPeriod, setFyPeriod] = useState<string>("");
   const [divCode, setDivCode] = useState<string>("All");
@@ -148,6 +149,7 @@ export function FinanceDashboardPanel() {
         "/api/finance/dashboard",
         {
           company_code: companyCode,
+          user_id: userId,
           fy_period: fyPeriod || undefined,
           div_code: divCode !== "All" ? divCode : undefined,
           month: month > 0 ? month : undefined,
