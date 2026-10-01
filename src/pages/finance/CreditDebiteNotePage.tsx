@@ -302,7 +302,6 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               enablePagination
               manualPagination
               manualFiltering
-              enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
                   <Button

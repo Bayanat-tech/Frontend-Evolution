@@ -309,7 +309,7 @@ export function DataTable<TData, TValue>({
 
   const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
   const exportRows = (manualPagination || manualFiltering ? table.getCoreRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
-  const showExport = Boolean(enableExport);
+  const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const responsiveMinWidth = minWidth ?? (enhancedColumns.length > 14 ? Math.max(760, enhancedColumns.length * 110) : "100%");
