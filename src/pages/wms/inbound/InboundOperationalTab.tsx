@@ -1,5 +1,5 @@
 import {
-  CheckCircle2, Plus, RefreshCw, Save, Settings2, Truck, X,
+  CheckCircle2, Plus, Save, Settings2, Truck, X,
   Package, MapPin, Hash, FileText, CalendarDays, Barcode, ArrowLeft
 } from "lucide-react";
 import { type FormEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -25,6 +25,7 @@ import { FileSpreadsheet, Download, CheckCircle2 as CheckCircle2Icon } from "luc
 import { ActivityBillingSection } from "./ActivityBillingSection";
 import { InboundJobDetailsTab } from "./InboundJobDetailTab"; 
 import { Dialog } from "../../../components/ui/Dialog";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
   job:        WmsRow | null;
@@ -811,39 +812,59 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       <Card><CardContent className="p-6 text-sm text-muted-foreground">This tab is not configured yet.</CardContent></Card>
     );
 
+    // ── action button helper (Freight Style) ────────────────────────────────
+    const renderActionButton = (
+      onClick: () => void, 
+      icon: React.ReactNode, 
+      label: string, 
+      disabled = false, 
+      variant: "primary" | "outline" = "primary"
+    ) => {
+      const baseClass = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+      const variantClass = variant === "primary"
+        ? "bg-[#00378C] text-white hover:opacity-90 font-semibold"
+        : "border border-border bg-card text-foreground hover:bg-secondary font-medium";
+      return (
+        <button type="button" onClick={onClick} disabled={disabled} className={`${baseClass} ${variantClass}`}>
+          {icon} {label}
+        </button>
+      );
+    };
+
     // ── action button ────────────────────────────────────────────────────────
     const getActionButton = () => {
       switch (tab) {
         case "putway_hht":
-          return <Button size="sm" variant="outline" onClick={() => setViewMode("process")}><Truck size={14} /> Process HHT Putaway</Button>;
+          return renderActionButton(() => setViewMode("process"), <Truck size={14} />, "Process HHT Putaway", false, "outline");
         case "quality_clearance":
-          return <Button size="sm" variant="outline" onClick={() => setViewMode("process")} disabled={selectedRows.length === 0}><Settings2 size={14} /> Process Clearance</Button>;
+          return renderActionButton(() => setViewMode("process"), <Settings2 size={14} />, "Process Clearance", selectedRows.length === 0, "outline");
         case "putway_details":
-          return <Button size="sm" variant="outline" onClick={openPutawayModal} disabled={selectedRows.length === 0}><Truck size={14} /> Process Putaway</Button>;
+          return renderActionButton(openPutawayModal, <Truck size={14} />, "Process Putaway", selectedRows.length === 0, "outline");
         case "packing_details":
           return (
             <>
-              <Button size="sm" variant="outline" onClick={openAddModal}><Plus size={14} /> {config.addLabel || `Add ${config.title}`}</Button>
-              <Button size="sm" variant="outline" onClick={openEdiImportModal}><Upload size={14} /> Import EDI</Button>
+              {renderActionButton(openAddModal, <Plus size={14} />, config.addLabel || `Add ${config.title}`)}
+              {renderActionButton(openEdiImportModal, <Upload size={14} />, "Import EDI", false, "outline")}
             </>
           );
         case "job_confirmation":
-          return <Button size="sm" variant="outline" onClick={() => setViewMode("process")} disabled={selectedRows.length === 0}><CheckCircle2 size={14} /> Process Confirm Selected</Button>;
+          return renderActionButton(() => setViewMode("process"), <CheckCircle2 size={14} />, "Process Confirm Selected", selectedRows.length === 0, "outline");
         case "receiving_details":
           return null;
         case "tally_details":
-          return <Button size="sm" variant="outline" onClick={openAddModal}><Plus size={14} /> Add Tally Detail</Button>;
+          return renderActionButton(openAddModal, <Plus size={14} />, "Add Tally Detail");
         default:
-          return config.addFields && config.addEndpoint
-            ? <Button size="sm" variant="outline" onClick={openAddModal}><Plus size={14} /> {config.addLabel || `Add ${config.title}`}</Button>
-            : null;
+          if (config.addFields && config.addEndpoint) {
+            return renderActionButton(openAddModal, <Plus size={14} />, config.addLabel || `Add ${config.title}`);
+          }
+          return null;
       }
     };
 
+    // ── toolbar (Refresh removed) ─────────────────────────────────────────────
     const toolbar = (
       <div className="flex flex-wrap items-center gap-2">
         {getActionButton()}
-        <Button size="sm" variant="outline" onClick={loadRows}><RefreshCw size={14} /> Refresh</Button>
       </div>
     );
 
@@ -948,14 +969,34 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       );
       return (
         <div className="grid gap-4">
-          <div className="flex gap-1 border-b">
-            {([ ["pallet", "Pallet Wise"], ["product", "Product/SKU Wise"], ["serial", "Serial Wise"] ] as [TallySubTab, string][]).map(([key, label]) => (
-              <button key={key} type="button" onClick={() => setTallySubTab(key)}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tallySubTab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                {label}
-              </button>
-            ))}
+          {/* Freight-style Tabs for Tally with Counts */}
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+            {([ ["pallet", "Pallet Wise"], ["product", "Product/SKU Wise"], ["serial", "Serial Wise"] ] as [TallySubTab, string][]).map(([key, label]) => {
+              const active = tallySubTab === key;
+              // Calculate counts dynamically based on current rows
+              const count = key === "pallet" ? rows.filter(r => value(r, "pallet_id")).length
+                          : key === "serial" ? rows.filter(r => value(r, "serial_no")).length
+                          : rows.filter(r => !value(r, "pallet_id") && !value(r, "serial_no")).length;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTallySubTab(key)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer ${
+                    active
+                      ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                      : "border border-border bg-card text-foreground hover:bg-secondary font-medium"
+                  }`}
+                >
+                  <span>{label}</span>
+                  <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+          
           {tallySubTab === "pallet" && (
             <div className="grid gap-3">
               <SectionHeader icon={Package} label="Pallet Information" caption="Pallet, container and product" />
@@ -1126,66 +1167,128 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       const uomDetails  = addForm.p_uom
         ? `${addForm.p_uom}${addForm.uppp ? ` × ${addForm.uppp}` : ""}${Number(addForm.uom_count) > 1 && addForm.l_uom ? ` + ${addForm.l_uom}` : ""}`
         : "—";
+
+      // Helper to render the Freight-style section panel
+      const FreightPanel = ({ icon: Icon, title, children }: { icon: any, title: string, children: React.ReactNode }) => (
+        <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm mb-2">
+          <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-primary text-white">
+                <Icon size={10} />
+              </span>
+              <div className="min-w-0">
+                <h3 className="m-0 truncate text-[10px] font-semibold uppercase tracking-wider text-foreground">{title}</h3>
+              </div>
+            </div>
+          </div>
+          <div className="freight-panel-body p-2.5">
+            {children}
+          </div>
+        </section>
+      );
+
+      // FIXED: Use inline styles to force the label into a single row
+      const LabelText = ({ text, required }: { text: string, required?: boolean }) => (
+        <span 
+          style={{ 
+            display: "flex", 
+            flexDirection: "row", 
+            alignItems: "center", 
+            gap: "4px",
+            fontSize: "11px",
+            fontWeight: 600,
+            color: "#475569",
+            textTransform: "uppercase",
+            letterSpacing: "0.02em",
+            marginBottom: "4px"
+          }}
+        >
+          <span>{text}</span>
+          {required && <span style={{ color: "#dc2626" }}>*</span>}
+        </span>
+      );
+
       return (
-        <div className="grid gap-5">
-          <div className="grid gap-3">
-            <SectionHeader icon={Package} label="Product Information" caption="Container, SKU and pallet details" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Container No. <strong className="text-destructive">*</strong></span>
+        <div className="grid gap-1">
+          <FreightPanel icon={Package} title="Product Information">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 items-start">
+              <label className="field">
+                <LabelText text="Container No." required />
                 <LookupField label="Container No." compact value={String(addForm.container_no || "")} displayValue={String(addForm.container_no || "")}
-                  valueField={containerLp.valueField} displayFields={containerLp.displayFields} columns={containerLp.columns} loadOptions={containerLp.loadOptions} onChange={containerLp.onChange} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Product / SKU <strong className="text-destructive">*</strong></span>
+                  valueField={containerLp.valueField} displayFields={containerLp.displayFields} columns={containerLp.columns} loadOptions={containerLp.loadOptions} onChange={containerLp.onChange} />
+              </label>
+              <label className="field">
+                <LabelText text="Product / SKU" required />
                 <LookupField label="Product / SKU" compact value={String(addForm.prod_code || "")} displayValue={String(addForm.prod_code || "")}
-                  valueField={productLp.valueField} displayFields={productLp.displayFields} columns={productLp.columns} loadOptions={productLp.loadOptions} onChange={productLp.onChange} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Product Name</span>
-                <Input disabled value={String(addForm.prod_name || "")} className="bg-muted text-muted-foreground" /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Pallet ID</span>
-                <Input maxLength={10} value={String(addForm.pallet_id || "")} onChange={(e) => setAddForm((c) => ({ ...c, pallet_id: e.target.value }))} /></label>
+                  valueField={productLp.valueField} displayFields={productLp.displayFields} columns={productLp.columns} loadOptions={productLp.loadOptions} onChange={productLp.onChange} />
+              </label>
+              <label className="field">
+                <LabelText text="Product Name" />
+                <Input disabled value={String(addForm.prod_name || "")} className="bg-muted text-muted-foreground h-8 text-xs" />
+              </label>
+              <label className="field">
+                <LabelText text="Pallet ID" />
+                <Input maxLength={10} className="h-8 text-xs" value={String(addForm.pallet_id || "")} onChange={(e) => setAddForm((c) => ({ ...c, pallet_id: e.target.value }))} />
+              </label>
             </div>
-          </div>
-          <div className="grid gap-3">
-            <SectionHeader icon={Hash} label="Quantity & UOM" caption="Primary, lowest unit and total quantity" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Quantity 1 (Primary) <strong className="text-destructive">*</strong></span>
-                <Input type="number" min="0" value={String(addForm.qty_puom ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_puom", e.target.value) }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Quantity 2 (Lowest)</span>
-                <Input type="number" min="0" disabled={Number(addForm.uom_count ?? 1) <= 1} value={String(addForm.qty_luom ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_luom", e.target.value) }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Total Quantity</span>
-                <Input type="number" disabled value={String(addForm.quantity ?? 0)} className="bg-muted text-muted-foreground" /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">UOM Details</span>
-                <Input disabled value={uomDetails} className="bg-muted text-muted-foreground" /></label>
+          </FreightPanel>
+
+          <FreightPanel icon={Hash} title="Quantity & UOM">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 items-start">
+              <label className="field">
+                <LabelText text="Quantity 1 (Primary)" required />
+                <Input type="number" min="0" className="h-8 text-xs" value={String(addForm.qty_puom ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_puom", e.target.value) }))} />
+              </label>
+              <label className="field">
+                <LabelText text="Quantity 2 (Lowest)" />
+                <Input type="number" min="0" className="h-8 text-xs" disabled={Number(addForm.uom_count ?? 1) <= 1} value={String(addForm.qty_luom ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_luom", e.target.value) }))} />
+              </label>
+              <label className="field">
+                <LabelText text="Total Quantity" />
+                <Input type="number" disabled className="h-8 text-xs bg-muted text-muted-foreground" value={String(addForm.quantity ?? 0)} />
+              </label>
+              <label className="field">
+                <LabelText text="UOM Details" />
+                <Input disabled className="h-8 text-xs bg-muted text-muted-foreground" value={uomDetails} />
+              </label>
             </div>
-          </div>
-          <div className="grid gap-3">
-            <SectionHeader icon={MapPin} label="Putaway Location" caption="Destination site and location" />
-            <div className="grid grid-cols-2 gap-3">
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Site Code <strong className="text-destructive">*</strong></span>
+          </FreightPanel>
+
+          <FreightPanel icon={MapPin} title="Putaway Location">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 items-start">
+              <label className="field">
+                <LabelText text="Site Code" required />
                 <LookupField label="Site Code" compact value={String(addForm.site_code || "")} displayValue={String(addForm.site_code_display || "")}
-                  valueField={siteLp.valueField} displayFields={siteLp.displayFields} columns={siteLp.columns} loadOptions={siteLp.loadOptions} onChange={siteLp.onChange} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Location Code <strong className="text-destructive">*</strong></span>
+                  valueField={siteLp.valueField} displayFields={siteLp.displayFields} columns={siteLp.columns} loadOptions={siteLp.loadOptions} onChange={siteLp.onChange} />
+              </label>
+              <label className="field">
+                <LabelText text="Location Code" required />
                 <LookupField label="Location Code" compact value={String(addForm.location_code || "")} displayValue={String(addForm.location_code_display || "")}
-                  valueField={locationLp.valueField} displayFields={locationLp.displayFields} columns={locationLp.columns} loadOptions={locationLp.loadOptions} onChange={locationLp.onChange} /></label>
+                  valueField={locationLp.valueField} displayFields={locationLp.displayFields} columns={locationLp.columns} loadOptions={locationLp.loadOptions} onChange={locationLp.onChange} />
+              </label>
             </div>
-          </div>
-          <div className="grid gap-3">
-            <SectionHeader icon={FileText} label="Batch & References" caption="Traceability and order references" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Batch No.</span><Input value={String(addForm.batch_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, batch_no: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Lot No.</span><Input value={String(addForm.lot_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, lot_no: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">PO No.</span><Input value={String(addForm.po_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, po_no: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Doc Ref.</span><Input value={String(addForm.doc_ref || "")} onChange={(e) => setAddForm((c) => ({ ...c, doc_ref: e.target.value }))} /></label>
+          </FreightPanel>
+
+          <FreightPanel icon={FileText} title="Batch & References">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 items-start">
+              <label className="field"><LabelText text="Batch No." /><Input className="h-8 text-xs" value={String(addForm.batch_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, batch_no: e.target.value }))} /></label>
+              <label className="field"><LabelText text="Lot No." /><Input className="h-8 text-xs" value={String(addForm.lot_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, lot_no: e.target.value }))} /></label>
+              <label className="field"><LabelText text="PO No." /><Input className="h-8 text-xs" value={String(addForm.po_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, po_no: e.target.value }))} /></label>
+              <label className="field"><LabelText text="Doc Ref." /><Input className="h-8 text-xs" value={String(addForm.doc_ref || "")} onChange={(e) => setAddForm((c) => ({ ...c, doc_ref: e.target.value }))} /></label>
             </div>
-          </div>
-          <div className="grid gap-3">
-            <SectionHeader icon={CalendarDays} label="Dates & Shelf Life" caption="Manufacturing, expiry and shelf life" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Manufacturing Date</span><Input type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
-                <Input type="date" min={todayDateStr} value={String(addForm.expiry_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, expiry_date: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life (Date)</span><Input type="date" value={String(addForm.shelf_life_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_date: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life Days</span><Input type="number" min="0" value={String(addForm.shelf_life_days ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_days: e.target.value }))} /></label>
+          </FreightPanel>
+
+          <FreightPanel icon={CalendarDays} title="Dates & Shelf Life">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 items-start">
+              <label className="field"><LabelText text="Manufacturing Date" /><Input type="date" className="h-8 text-xs" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
+              <label className="field">
+                <LabelText text="Expiry Date" />
+                <Input type="date" min={todayDateStr} className="h-8 text-xs" value={String(addForm.expiry_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, expiry_date: e.target.value }))} />
+              </label>
+              <label className="field"><LabelText text="Shelf Life (Date)" /><Input type="date" className="h-8 text-xs" value={String(addForm.shelf_life_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_date: e.target.value }))} /></label>
+              <label className="field"><LabelText text="Shelf Life Days" /><Input type="number" min="0" className="h-8 text-xs" value={String(addForm.shelf_life_days ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_days: e.target.value }))} /></label>
             </div>
-          </div>
+          </FreightPanel>
         </div>
       );
     };
@@ -1392,19 +1495,45 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       return (
         <section className="grid gap-3 freight-dense-form freight-ui-standard p-1">
           {/* Freight-style Header */}
-          <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-            <div className="flex min-w-0 items-center gap-2.5">
+          <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1 shadow-sm">
+            <div className="flex min-w-0 py-2 items-center gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => setViewMode("list")}>
                 <ArrowLeft size={14} /> Back
               </Button>
-              <div className="min-w-0">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+              
+              <div className="flex items-center gap-2 min-w-0">
+                {/* Inline styled Icon Box to match Freight theme perfectly */}
+                <div 
+                  style={{
+                    display: "grid",
+                    placeItems: "center",
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "6px",
+                    backgroundColor: "rgba(0, 55, 140, 0.08)", // Soft primary blue background
+                    color: "#00378C", // Primary blue icon color
+                    flexShrink: 0,
+                  }}
+                >
+                  <Package size={14} />
+                </div>
+
+                <h1 
+                  style={{ 
+                    margin: 0, 
+                    fontSize: "15px", 
+                    fontWeight: 600, 
+                    lineHeight: 1.2, 
+                    color: "#0f172a" 
+                  }}
+                >
                   {viewMode === "add" && (isTallyDetails ? "Add Tally Detail" : (config.addLabel || `Add ${config.title}`))}
                   {viewMode === "edit" && (tab === "packing_details" ? "Edit Packing Details" : "Edit Receiving Quantity")}
                   {viewMode === "process" && `Process ${config.title}`}
                 </h1>
               </div>
             </div>
+            
             <div className="flex flex-wrap items-center justify-end gap-1.5">
               {modalNotice && (
                 <span className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
@@ -1419,10 +1548,9 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
               </Button>
             </div>
           </div>
-
           {/* Form Body */}
-          <div className="freight-form-card rounded-md border bg-card shadow-sm p-4">
-            <form id="inline-form" onSubmit={viewMode === "add" ? saveAdd : viewMode === "edit" ? saveEdit : (e) => { e.preventDefault(); /* handle process submit */ }} className="grid gap-4">
+<div className="freight-form-card rounded-md border bg-card shadow-sm p-2">
+            <form id="inline-form" onSubmit={viewMode === "add" ? saveAdd : viewMode === "edit" ? saveEdit : (e) => { e.preventDefault(); /* handle process submit */ }} className="grid gap-2">
               
               {viewMode === "add" && (
                 isManualPutaway ? renderManualPutawaySections() :
@@ -1617,28 +1745,50 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
 
     // ── List View ─────────────────────────────────────────────────────────────
     return (
-      <section className="grid gap-3">
+      <section className="freight-enquiry-list-screen grid gap-2">
         <DataTable
           key={tab}
-          columns={columns} data={rows}
-          title={loading ? "Loading" : `${rows.length} Rows`}
-          subtitle={config.title} searchValue={query} onSearchChange={setQuery}
+          columns={columns}
+          data={rows}
+          searchValue={query}
+          onSearchChange={setQuery}
           searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-          loading={loading || loadingJob} height="calc(100vh - 365px)"
-          minWidth={config.minWidth} density="grid" enablePagination pageSize={75}
+          loading={loading || loadingJob}
+          height="calc(100dvh - 180px)"
+          minWidth={config.minWidth}
+          density="grid"
+          enablePagination
+          pageSize={25}
+          enableExport
+          exportFilename={`inbound-${tab}-list.csv`}
           toolbar={toolbar}
           rowClassName={
             tab === "quality_clearance"
-              ? (row) => String(value(row as WmsRow, "clearance") || "").toUpperCase() === "Y"
-                  ? "opacity-50 pointer-events-none bg-muted/40" : ""
+              ? (row) =>
+                  String(value(row as WmsRow, "clearance") || "").toUpperCase() === "Y"
+                    ? "opacity-50 pointer-events-none bg-muted/40"
+                    : ""
               : undefined
           }
-          getRowId={(row, index) => `${tab}_${value(row, "packdet_no") || value(row, "container_no") || value(row, "key_number") || index}`}
+          getRowId={(row, index) =>
+            `${tab}_${
+              value(row, "packdet_no") ||
+              value(row, "container_no") ||
+              value(row, "key_number") ||
+              index
+            }`
+          }
           onRowSelectionChange={
-            (tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation")
+            tab === "quality_clearance" ||
+            tab === "putway_details" ||
+            tab === "job_confirmation"
               ? (selected) => {
                   if (tab === "quality_clearance") {
-                    setSelectedRows(selected.filter((r) => String(value(r, "clearance") || "").toUpperCase() !== "Y"));
+                    setSelectedRows(
+                      selected.filter(
+                        (r) => String(value(r, "clearance") || "").toUpperCase() !== "Y"
+                      )
+                    );
                   } else {
                     setSelectedRows(selected);
                   }
