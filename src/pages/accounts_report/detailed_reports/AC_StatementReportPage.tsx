@@ -1,280 +1,273 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  Printer,
-  RotateCcw,
-  BarChart2,
-  Loader2,
-  Download,
-} from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
-import { exportAcStatementExcel, openAcStatementReport } from "../../../api/transactions";
+import {
+  exportAcStatementExcel,
+  openAcStatementReport,
+} from "../../../api/transactions";
+import {
+  NewReportDialog,
+  NewReportPage,
+  ReportFieldConfig,
+  ReportOption,
+} from "../../../components/new_report_format";
 
-const getRowKey = (row: any, tab: "acCode" | "group"): string =>
-  tab === "acCode" ? String(row.ac_code ?? "") : String(row.l4_code ?? "");
+const today = new Date().toISOString().split("T")[0];
+const yearStart = `${new Date().getFullYear()}-01-01`;
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-function startOfMonthISO() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-function formatDisplay(iso: string) {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-
-function formatDateOracle(iso: string) {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-  return `${d}-${months[parseInt(m, 10) - 1]}-${y}`;
-}
-
-// ─── Shared styles (same as PeriodWisePage) ───────────────────────────────────
-
-const thStyle: React.CSSProperties = {
-  padding: "7px 10px",
-  textAlign: "left",
-  fontWeight: 500,
-  fontSize: 11,
-  background: "#185FA5",
-  color: "#fff",
+const formatDateOracle = (date: string) => {
+  if (!date) return "";
+  const d = new Date(date);
+  const months = [
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+  ];
+  return `${String(d.getDate()).padStart(2, "0")}-${months[d.getMonth()]}-${d.getFullYear()}`;
 };
 
-const tdStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  fontSize: 11,
-  borderBottom: "0.5px solid #e5e7eb",
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  maxWidth: 0,
+const codesOrAll = (arr: string[] | undefined): string => {
+  if (!arr || arr.length === 0 || arr.includes("All")) return "All";
+  return arr.join(",");
 };
 
-const rowStyle = (sel: boolean): React.CSSProperties => ({
-  cursor: "pointer",
-  background: sel ? "#E6F1FB" : "transparent",
-  color: sel ? "#0C447C" : "inherit",
-});
-
-const fieldLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 500,
-  color: "#6b7280",
-  marginBottom: 5,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  fontSize: 12,
-  padding: "6px 9px",
-  border: "0.5px solid #d1d5db",
-  borderRadius: 6,
-  background: "#fff",
-  color: "#111827",
-  boxSizing: "border-box",
-};
-
-const badgeStyle: React.CSSProperties = {
-  background: "#E6F1FB",
-  color: "#0C447C",
-  fontSize: 10,
-  fontWeight: 500,
-  padding: "2px 8px",
-  borderRadius: 20,
-};
-
-const radioLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 5,
-  fontSize: 12,
-  cursor: "pointer",
-  color: "#374151",
-};
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-export default function AC_StatementPage() {
+const AC_StatementPage: React.FC = () => {
   const { user } = useAuth();
-  const companyCode = user?.company_code ?? "";
-  const loginId = user?.loginid ?? "";
+  const companyCode = user?.company_code || "";
+  const loginId = user?.loginid || user?.username || "ADMIN";
 
-  // ── Division state ──────────────────────────────────────────────────────────
+  // ── Filter values ─────────────────────────────────────────────────────────
+  const [values, setValues] = useState<Record<string, any>>({
+    division: "",
+    dateFrom: yearStart,
+    dateTo: today,
+    activeTab: "acCode", // "acCode" | "group"
+    acCodes: ["All"],
+    l4Codes: ["All"],
+  });
+
+  // ── Lookup data ───────────────────────────────────────────────────────────
   const [divisionList, setDivisionList] = useState<any[]>([]);
-  const [division, setDivision] = useState("");
-  const [divisionDisplay, setDivisionDisplay] = useState("");
-  const [divisionSearch, setDivisionSearch] = useState("");
-  const [showDivisionDropdown, setShowDivisionDropdown] = useState(false);
-
-  // ── A/C Code list + selection state ─────────────────────────────────────────
-  const [acLeftItems, setAcLeftItems] = useState<any[]>([]);
-  const [acRightItems, setAcRightItems] = useState<any[]>([]);
-  const [acLeftSelected, setAcLeftSelected] = useState(new Set<string>());
-  const [acRightSelected, setAcRightSelected] = useState(new Set<string>());
-  const [acSearchLeft, setAcSearchLeft] = useState("");
-  const [acSearchRight, setAcSearchRight] = useState("");
-
-  // ── Group list + selection state ────────────────────────────────────────────
-  const [groupLeftItems, setGroupLeftItems] = useState<any[]>([]);
-  const [groupRightItems, setGroupRightItems] = useState<any[]>([]);
-  const [groupLeftSelected, setGroupLeftSelected] = useState(new Set<string>());
-  const [groupRightSelected, setGroupRightSelected] = useState(new Set<string>());
-  const [groupSearchLeft, setGroupSearchLeft] = useState("");
-  const [groupSearchRight, setGroupSearchRight] = useState("");
-
-
-  // ── Other state ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<"acCode" | "group">("acCode");
-  const [currency, setCurrency] = useState<"local" | "foreign">("local");
-  const [dateFrom, setDateFrom] = useState(`${new Date().getFullYear()}-01-01`);
-  const [dateTo, setDateTo] = useState(todayISO());
-  const [reportOpen, setReportOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [generatingExcel, setGeneratingExcel] = useState(false);
-
-  // ── Track fetched tabs ──────────────────────────────────────────────────────
+  const [accountItems, setAccountItems] = useState<any[]>([]);
+  const [groupItems, setGroupItems] = useState<any[]>([]);
   const [fetchedTabs, setFetchedTabs] = useState<Set<string>>(new Set());
+  const [optionsLoading, setOptionsLoading] = useState(false);
 
-  // ── Fetch divisions on mount ────────────────────────────────────────────────
-  useEffect(() => {
-    getDynamicLookup({
-      parameter: "Account_division",
-      loginid: loginId,
-      code1: companyCode,
-      code2: "", code3: "", code4: "",
-      number1: 0, number2: 0, number3: 0, number4: 0,
-      date1: null, date2: null, date3: null, date4: null,
-    })
-      .then((res) => setDivisionList(res || []))
-      .catch(console.error);
-  }, []);
+  // ── Report dialog ─────────────────────────────────────────────────────────
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
-  // ── On division change: reset all, fetch active tab ────────────────────────
+  const division = values.division as string;
+  const activeTab = values.activeTab as "acCode" | "group";
+
+  // ── Fetch divisions on mount ──────────────────────────────────────────────
   useEffect(() => {
-    if (!division) return;
-    setAcLeftItems([]); setAcRightItems([]);
-    setAcLeftSelected(new Set()); setAcRightSelected(new Set());
-    setGroupLeftItems([]); setGroupRightItems([]);
-    setGroupLeftSelected(new Set()); setGroupRightSelected(new Set());
+    const fetchDivisions = async () => {
+      try {
+        const response = await getDynamicLookup({
+          parameter: "Account_division",
+          code1: companyCode,
+          loginid: loginId,
+        });
+        setDivisionList(response || []);
+      } catch (error) {
+        console.error("Division fetch error:", error);
+      }
+    };
+    fetchDivisions();
+  }, [companyCode, loginId]);
+
+  // ── Reset lists when division changes ─────────────────────────────────────
+  useEffect(() => {
+    if (!division) {
+      setAccountItems([]);
+      setGroupItems([]);
+      setFetchedTabs(new Set());
+      return;
+    }
+    setAccountItems([]);
+    setGroupItems([]);
     setFetchedTabs(new Set());
-
-    if (activeTab === "acCode") fetchAccounts(division);
-    else fetchGroups(division);
+    setValues((prev) => ({
+      ...prev,
+      acCodes: ["All"],
+      l4Codes: ["All"],
+    }));
+    // Pre-fetch accounts (default tab)
+    fetchAccounts(division);
   }, [division]);
-
-  // ── On tab change: fetch if not yet fetched ─────────────────────────────────
-  useEffect(() => {
-    if (!division || fetchedTabs.has(activeTab)) return;
-    if (activeTab === "acCode") fetchAccounts(division);
-    else fetchGroups(division);
-  }, [activeTab]);
 
   const fetchAccounts = async (div: string) => {
     try {
-      const res = await getDynamicLookupaccount({
+      setOptionsLoading(true);
+      const response = await getDynamicLookupaccount({
         parameter: "Account_Report_AC",
         code1: companyCode,
         code2: div,
       });
-      const unique = Array.from(
-        new Map((res || []).map((i: any) => [i.ac_code, i])).values()
-      ) as any[];
-      setAcLeftItems(unique);
-      setAcRightItems([]);
-      setAcLeftSelected(new Set());
-      setAcRightSelected(new Set());
-      setFetchedTabs((p) => new Set(p).add("acCode"));
-    } catch (e) { console.error(e); }
+      const uniqueData = Array.from(
+        new Map((response || []).map((item: any) => [item.ac_code, item])).values()
+      );
+      setAccountItems(uniqueData as any[]);
+      setFetchedTabs((prev) => new Set(prev).add("acCode"));
+    } catch (error) {
+      console.error("Account fetch error:", error);
+    } finally {
+      setOptionsLoading(false);
+    }
   };
 
   const fetchGroups = async (div: string) => {
+    if (fetchedTabs.has("group")) return;
     try {
-      const res = await getDynamicLookupaccount({
+      setOptionsLoading(true);
+      const response = await getDynamicLookupaccount({
         parameter: "Account_Report_Group",
         code1: companyCode,
         code2: div,
       });
-      setGroupLeftItems(res || []);
-      setGroupRightItems([]);
-      setGroupLeftSelected(new Set());
-      setGroupRightSelected(new Set());
-      setFetchedTabs((p) => new Set(p).add("group"));
-    } catch (e) { console.error(e); }
+      setGroupItems(response || []);
+      setFetchedTabs((prev) => new Set(prev).add("group"));
+    } catch (error) {
+      console.error("Group fetch error:", error);
+    } finally {
+      setOptionsLoading(false);
+    }
   };
 
-  // ── Generic selection helpers ───────────────────────────────────────────────
-  const toggleSel = (code: string, set: React.Dispatch<React.SetStateAction<Set<string>>>) => {
-    set((prev) => {
-      const next = new Set(prev);
-      next.has(code) ? next.delete(code) : next.add(code);
-      return next;
-    });
-  };
+  // Lazy-load groups when the Group multiselect is first used / tab switches
+  useEffect(() => {
+    if (division && activeTab === "group" && !fetchedTabs.has("group")) {
+      fetchGroups(division);
+    }
+  }, [division, activeTab, fetchedTabs]);
 
-  const toggleAllSelection = (
-    items: any[],
-    selected: Set<string>,
-    setSelected: React.Dispatch<React.SetStateAction<Set<string>>>,
-    keyField: string
-  ) => {
-    const itemKeys = new Set(items.map((item) => item[keyField]));
-    const allSelected = items.length > 0 && items.every((item) => selected.has(item[keyField]));
-    setSelected(allSelected ? new Set() : itemKeys);
-  };
+  // ── Options for fields ────────────────────────────────────────────────────
+  const divisionOptions: ReportOption[] = useMemo(
+    () =>
+      divisionList.map((d: any) => ({
+        value: String(d.div_code),
+        label: `${d.div_code} - ${d.div_name}`,
+        code: String(d.div_code),
+      })),
+    [divisionList]
+  );
 
-  // ── Reset ───────────────────────────────────────────────────────────────────
-  const handleReset = () => {
-    setAcLeftSelected(new Set());
-    setAcRightSelected(new Set());
-    setGroupLeftSelected(new Set());
-    setGroupRightSelected(new Set());
+  const accountOptions: ReportOption[] = useMemo(
+    () =>
+      accountItems.map((a: any) => ({
+        value: String(a.ac_code),
+        label: `${a.ac_code} - ${a.ac_name}`,
+        code: String(a.ac_code),
+      })),
+    [accountItems]
+  );
+
+  const groupOptions: ReportOption[] = useMemo(
+    () =>
+      groupItems.map((g: any) => ({
+        value: String(g.l4_code),
+        label: `${g.l4_code} - ${g.description}`,
+        code: String(g.l4_code),
+      })),
+    [groupItems]
+  );
+
+  // ── Field config for NewReportPage ────────────────────────────────────────
+  const fields: ReportFieldConfig[] = useMemo(
+    () => [
+      {
+        key: "division",
+        label: "Division",
+        type: "select",
+        options: divisionOptions,
+        required: true,
+        placeholder: "Select division",
+        colSpan: 3,
+      },
+      {
+        key: "dateFrom",
+        toKey: "dateTo",
+        label: "Date Range",
+        type: "daterange",
+        required: true,
+        colSpan: 6,
+      },
+      {
+        key: "activeTab",
+        label: "Filter By",
+        type: "select",
+        options: [
+          { value: "acCode", label: "A/c Code" },
+          { value: "group", label: "Group" },
+        ],
+        colSpan: 3,
+      },
+      {
+        key: "acCodes",
+        label: "A/c Code",
+        type: "multiselect",
+        options: accountOptions,
+        loading: optionsLoading && !fetchedTabs.has("acCode"),
+        placeholder: "All",
+        colSpan: 6,
+        disabled: !division || activeTab !== "acCode",
+      },
+      {
+        key: "l4Codes",
+        label: "Group",
+        type: "multiselect",
+        options: groupOptions,
+        loading: optionsLoading && !fetchedTabs.has("group"),
+        placeholder: "All",
+        colSpan: 6,
+        disabled: !division || activeTab !== "group",
+      },
+    ],
+    [
+      divisionOptions,
+      accountOptions,
+      groupOptions,
+      division,
+      activeTab,
+      optionsLoading,
+      fetchedTabs,
+    ]
+  );
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleChange = useCallback((key: string, value: any) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
     setReportError(null);
-  };
+  }, []);
 
-  // ── Filtered lists ──────────────────────────────────────────────────────────
-  const filteredAcLeft = acLeftItems.filter(
-    (i) => i.ac_code?.toLowerCase().includes(acSearchLeft.toLowerCase()) ||
-      i.ac_name?.toLowerCase().includes(acSearchLeft.toLowerCase())
-  );
-  const filteredGroupLeft = groupLeftItems.filter(
-    (i) => i.l4_code?.toLowerCase().includes(groupSearchLeft.toLowerCase()) ||
-      i.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
-  );
-  const filteredDivisions = divisionList.filter((d: any) =>
-    `${d.div_code} ${d.div_name}`.toLowerCase().includes(divisionSearch.toLowerCase())
-  );
+  const handleClearAll = useCallback(() => {
+    setValues({
+      division: "",
+      dateFrom: yearStart,
+      dateTo: today,
+      activeTab: "acCode",
+      acCodes: ["All"],
+      l4Codes: ["All"],
+    });
+    setReportError(null);
+  }, []);
 
-  // ── Report values ───────────────────────────────────────────────────────────
-  const reportValues = {
-    loginid: loginId,
-    company_code: companyCode,
-    date_from: formatDisplay(dateFrom),
-    date_to: formatDisplay(dateTo),
-    date_from_iso: dateFrom,
-    date_to_iso: dateTo,
-    currency,
-    division: division || "All",
-    ac_codes:
-      activeTab === "acCode"
-        ? acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(",") : "All"
-        : "All",
-    l4_codes:
-      activeTab === "group"
-        ? groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All"
-        : "All",
-    selected_groups:
-      activeTab === "acCode"
-        ? Array.from(acLeftSelected)
-        : Array.from(groupLeftSelected),
-  };
+  const buildParams = useCallback(() => {
+    return {
+      parameter: "Account_Report_AC_StatementReport",
+      loginid: loginId,
+      code1: companyCode,
+      code2: division,
+      code3: activeTab === "acCode" ? codesOrAll(values.acCodes) : "All",
+      code4: activeTab === "group" ? codesOrAll(values.l4Codes) : "All",
+      code5: formatDateOracle(values.dateFrom),
+      code6: formatDateOracle(values.dateTo),
+      code20: "RAWSQL",
+    };
+  }, [values, division, activeTab, companyCode, loginId]);
 
   const handleGenerate = async () => {
     if (!division) {
@@ -283,386 +276,72 @@ export default function AC_StatementPage() {
     }
     setReportError(null);
     setGenerating(true);
+    setReportHtml(null);
+    setReportOpen(true);
+
     try {
-      const params = {
-        parameter: "Account_Report_AC_StatementReport",
-        loginid: loginId,
-        code1: companyCode,
-        code2: division,
-        code3: activeTab === "acCode"
-          ? (acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(",") : "All")
-          : "All",
-        code4: activeTab === "group"
-          ? (groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All")
-          : "All",
-        code5: formatDateOracle(dateFrom),
-        code6: formatDateOracle(dateTo),
-        code20: "RAWSQL"
-      };
-      await openAcStatementReport(params);
+      const params = buildParams();
+      // openAcStatementReport must return the report HTML string
+      // (same pattern as openInvdatewiseDetailReport etc. in PeriodWisePage)
+      const html = await openAcStatementReport(params);
+      setReportHtml(typeof html === "string" ? html : String(html ?? ""));
     } catch (err: any) {
-      setReportError("Failed to generate report.");
+      setReportError("Failed to generate report. Check console.");
       console.error(err);
+      setReportOpen(false);
     } finally {
       setGenerating(false);
     }
   };
 
-
-const handleExportExcel = async () => {
+  const handleExportExcel = async () => {
     if (!division) {
-        setReportError("Please select a Division before exporting.");
-        return;
+      setReportError("Please select a Division before exporting.");
+      return;
     }
     setReportError(null);
     setGeneratingExcel(true);
     try {
-        const params = {
-            parameter: "Account_Report_AC_StatementReport",
-            loginid: loginId,
-            code1: companyCode,
-            code2: division,
-            code3: activeTab === "acCode"
-                ? (acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(",") : "All")
-                : "All",
-            code4: activeTab === "group"
-                ? (groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All")
-                : "All",
-            code5: formatDateOracle(dateFrom),
-            code6: formatDateOracle(dateTo),
-            code20: "RAWSQL",
-        };
-        await exportAcStatementExcel(params);
+      await exportAcStatementExcel(buildParams());
     } catch (err: any) {
-        setReportError("Failed to export Excel.");
-        console.error(err);
+      setReportError(err?.message || "Failed to export Excel.");
+      console.error(err);
     } finally {
-        setGeneratingExcel(false);
+      setGeneratingExcel(false);
     }
-};
-
-
-
-
-
-  // ─── Render ───────────────────────────────────────────────────────────────
+  };
 
   return (
-    <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", }}>
-      <style>{`
-        .tf-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-        .tab-ac { padding: 7px 18px; border: none; background: none; cursor: pointer; font-size: 12px; font-weight: 500; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -0.5px; }
-        .tab-ac.active { color: #185FA5; border-bottom-color: #185FA5; }
-        .action-btn:hover { background: #f9fafb !important; }
-        .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        tbody tr:last-child td { border-bottom: none !important; }
-        tbody tr:hover td { background: #f9fafb; }
-        .div-option:hover { background: #f0f7ff; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-      `}</style>
+    <>
+      <NewReportPage
+        title="AC Statement"
+        fields={fields}
+        values={values}
+        onChange={handleChange}
+        onClearAll={handleClearAll}
+        onGenerate={handleGenerate}
+        loading={generating}
+        optionsLoading={optionsLoading}
+        error={reportError}
+        onClearError={() => setReportError(null)}
+        defaultColSpan={3}
+      />
 
-      <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
-
-        {/* ══ Card 1: Filters ══════════════════════════════════════════════════ */}
-        <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "5px 10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <BarChart2 size={18} color="#185FA5" />
-            <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>AC Statement filter</span>
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start" }}>
-
-            {/* Division searchable dropdown */}
-            <div style={{ position: "relative", flex: "1 1 220px", minWidth: 220 }}>
-              <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Division</div>
-              <input
-                type="text"
-                placeholder="Search division..."
-                value={divisionSearch !== "" ? divisionSearch : divisionDisplay}
-                onChange={(e) => { setDivisionSearch(e.target.value); setShowDivisionDropdown(true); }}
-                onFocus={() => setShowDivisionDropdown(true)}
-                onBlur={() => setTimeout(() => setShowDivisionDropdown(false), 150)}
-                style={inputStyle}
-              />
-              {showDivisionDropdown && filteredDivisions.length > 0 && (
-                <div style={{
-                  position: "absolute", zIndex: 100, top: "calc(100% + 2px)", left: 0, right: 0,
-                  background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto",
-                }}>
-                  {filteredDivisions.map((d: any) => (
-                    <div
-                      key={d.div_code}
-                      className="div-option"
-                      style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
-                      onMouseDown={() => {
-                        setDivision(d.div_code);
-                        setDivisionDisplay(`${d.div_code} - ${d.div_name}`);
-                        setDivisionSearch("");
-                        setShowDivisionDropdown(false);
-                      }}
-                    >
-                      <span style={{ fontWeight: 500 }}>{d.div_code}</span>
-                      <span style={{ color: "#6b7280", marginLeft: 6 }}>{d.div_name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* From */}
-            <div style={{ flex: "1 1 140px", minWidth: 140 }}>
-              <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>From</div>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            {/* To */}
-            <div style={{ flex: "1 1 140px", minWidth: 140 }}>
-              <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>To</div>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-
-
-            {/* Currency */}
-            {/* <div style={{ flex: "1 1 220px", minWidth: 220 }}>
-              <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
-                <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Currency
-                </legend>
-                <div style={{ display: "flex", gap: 14 }}>
-                  {(["local", "foreign"] as const).map((val) => (
-                    <label key={val} style={radioLabelStyle}>
-                      <input
-                        type="radio"
-                        name="currency"
-                        value={val}
-                        checked={currency === val}
-                        onChange={() => setCurrency(val)}
-                        style={{ accentColor: "#185FA5" }}
-                      />
-                      {val === "local" ? "Local Currency" : "Foreign Currency"}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            </div> */}
-
-          </div>
-
-          {reportError && (
-            <div style={{ marginTop: 10, fontSize: 12, color: "#dc2626", background: "#fef2f2", border: "0.5px solid #fecaca", borderRadius: 6, padding: "6px 12px" }}>
-              {reportError}
-            </div>
-          )}
-        </div>
-
-        {/* ══ Card 2: A/c Code / Group list ════════════════════════════════════ */}
-        <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "0px 10px" }}>
-
-          {/* Tabs */}
-          <div style={{ display: "flex", borderBottom: "0.5px solid #e5e7eb", marginBottom: 10 }}>
-            {([["acCode", "A/c Code"], ["group", "Group"]] as [typeof activeTab, string][]).map(([tab, label]) => (
-              <button
-                key={tab}
-                className={`tab-ac ${activeTab === tab ? "active" : ""}`}
-                onClick={() => { setActiveTab(tab); }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── A/C Code tab ── */}
-          {activeTab === "acCode" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Accounts
-                </span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {acLeftSelected.size > 0 && (
-                    <span style={badgeStyle}>{acLeftSelected.size} selected</span>
-                  )}
-                  <span style={badgeStyle}>{acLeftItems.length} total</span>
-                </div>
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Search accounts..."
-                  value={acSearchLeft}
-                  onChange={(e) => setAcSearchLeft(e.target.value)}
-                  style={{ ...inputStyle, fontSize: 12 }}
-                />
-              </div>
-              <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ ...thStyle, width: 36 }}>
-                        <input
-                          type="checkbox"
-                          checked={acLeftItems.length > 0 && acLeftItems.every((i) => acLeftSelected.has(i.ac_code))}
-                          onChange={() => toggleAllSelection(acLeftItems, acLeftSelected, setAcLeftSelected, "ac_code")}
-                          style={{ accentColor: "#fff", cursor: "pointer" }}
-                        />
-                      </th>
-                      <th style={{ ...thStyle, width: 100 }}>A/C Code</th>
-                      <th style={thStyle}>AC Name</th>
-                      <th style={{ ...thStyle, width: 70 }}>Currency</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAcLeft.map((row) => (
-                      <tr
-                        key={row.ac_code}
-                        style={rowStyle(acLeftSelected.has(row.ac_code))}
-                        onClick={() => toggleSel(row.ac_code, setAcLeftSelected)}
-                      >
-                        <td style={{ ...tdStyle, width: 36 }}>
-                          <input
-                            type="checkbox"
-                            checked={acLeftSelected.has(row.ac_code)}
-                            onChange={() => toggleSel(row.ac_code, setAcLeftSelected)}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                          />
-                        </td>
-                        <td style={tdStyle}>{row.ac_code}</td>
-                        <td style={tdStyle}>{row.ac_name}</td>
-                        <td style={tdStyle}>{row.curr_code}</td>
-                      </tr>
-                    ))}
-                    {filteredAcLeft.length === 0 && (
-                      <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
-                        {division ? "No data" : "Select a division first"}
-                      </td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── Group tab ── */}
-          {activeTab === "group" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Groups
-                </span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {groupLeftSelected.size > 0 && (
-                    <span style={badgeStyle}>{groupLeftSelected.size} selected</span>
-                  )}
-                  <span style={badgeStyle}>{groupLeftItems.length} total</span>
-                </div>
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Search groups..."
-                  value={groupSearchLeft}
-                  onChange={(e) => setGroupSearchLeft(e.target.value)}
-                  style={{ ...inputStyle, fontSize: 12 }}
-                />
-              </div>
-              <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ ...thStyle, width: 36 }}>
-                        <input
-                          type="checkbox"
-                          checked={groupLeftItems.length > 0 && groupLeftItems.every((i) => groupLeftSelected.has(i.l4_code))}
-                          onChange={() => toggleAllSelection(groupLeftItems, groupLeftSelected, setGroupLeftSelected, "l4_code")}
-                          style={{ accentColor: "#fff", cursor: "pointer" }}
-                        />
-                      </th>
-                      <th style={{ ...thStyle, width: 100 }}>L4 Code</th>
-                      <th style={thStyle}>Description</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredGroupLeft.map((row) => (
-                      <tr
-                        key={row.l4_code}
-                        style={rowStyle(groupLeftSelected.has(row.l4_code))}
-                        onClick={() => toggleSel(row.l4_code, setGroupLeftSelected)}
-                      >
-                        <td style={{ ...tdStyle, width: 36 }}>
-                          <input
-                            type="checkbox"
-                            checked={groupLeftSelected.has(row.l4_code)}
-                            onChange={() => toggleSel(row.l4_code, setGroupLeftSelected)}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                          />
-                        </td>
-                        <td style={tdStyle}>{row.l4_code}</td>
-                        <td style={tdStyle}>{row.description}</td>
-                      </tr>
-                    ))}
-                    {filteredGroupLeft.length === 0 && (
-                      <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
-                        {division ? "No data" : "Select a division first"}
-                      </td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Action bar */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-            <button
-                className="action-btn action-btn-excel"
-              onClick={handleReset}
-              style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
-            >
-              <RotateCcw size={13} /> Reset
-            </button>
-
-                      <button
-                            className="action-btn action-btn-excel"
-                            onClick={handleExportExcel}
-                            disabled={generatingExcel}
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
-                        >
-                            <Download size={13} /> {generatingExcel ? "Exporting..." : "Export Excel"}
-                        </button>
-
-
-
-
-            <button
-              className="action-btn-primary"
-              onClick={handleGenerate}
-              disabled={generating}
-              style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", opacity: generating ? 0.7 : 1 }}
-            >
-              {generating
-                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
-                : <><Printer size={13} /> Generate Report</>
-              }
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      <NewReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportHtml(null);
+        }}
+        title="AC Statement"
+        htmlContent={reportHtml}
+        loading={generating}
+        error={reportError}
+        onExportExcel={handleExportExcel}
+        exportingExcel={generatingExcel}
+      />
+    </>
   );
-}
+};
+
+export default AC_StatementPage;

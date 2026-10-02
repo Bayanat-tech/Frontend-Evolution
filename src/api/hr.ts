@@ -24,6 +24,14 @@ type LeaveValidationResult = {
   availableBalance: number | null;
   message: string;
 };
+export interface ILeaveDaysParams {
+  leaveStartDate: string ;
+  leaveEndDate: string;
+  leaveType?: string;
+  company_code: string;
+  employee_code: string;
+  half_day?: string;
+}
 
 export async function getHrMaster(master: string, options: Record<string, unknown> = {}) {
   const response = await withHrFallback((prefix) => api.get<ApiResponse<HrMasterResponse>>(`${prefix}/${master}`, { params: options }));
@@ -133,7 +141,7 @@ export type ValidateLeavePayload = {
 };
 
 export async function validateHrLeave(payload: ValidateLeavePayload,tenantName?: string) {
-  if(tenantName === "WMSTST" || tenantName === 'WMSDEV' || tenantName === 'WMSDEV Development'){
+  if(tenantName === "ALMS" || tenantName === "WMSTST" || tenantName === 'WMSDEV' || tenantName === 'WMSDEV Development'){
     const response = await withHrFallback((prefix) => api.get<LeaveValidationResult>(`${prefix}/gm/validateleave`, {
       params: payload,
     }));
@@ -147,7 +155,7 @@ export async function validateHrLeave(payload: ValidateLeavePayload,tenantName?:
 }
 
 export async function saveHrLeaveApproval(payload: Record<string, unknown>, tenantName?: string) {
-  if (tenantName ==="WMSTST"){
+  if (tenantName === "ALMS" || tenantName ==="WMSTST"){
     console.log('hit ALMS savehrleaveapproval route',payload);
   const response = await withHrFallback((prefix) => api.put<ApiResponse<unknown> & { request_number?: unknown }>(`${prefix}/gm/upsertLeaveApprovalHandler`, payload));
     if (!response.data.success) throw new Error(response.data.message || "Unable to save leave request");
@@ -159,6 +167,49 @@ export async function saveHrLeaveApproval(payload: Record<string, unknown>, tena
     return response.data;
   }
 }
+
+export async function getleavedaycount(payload:Record<string,unknown>,tenantName?:string){
+  if(tenantName === 'ALMS'){
+    console.log('hit Alms getleavedayscount',payload,tenantName)
+      const response = await withHrFallback((prefix) => api.get<ILeaveDaysParams>(`${prefix}/gm/leavedayscount`,{params: payload,}))
+      return response.data;
+  }else{
+        console.log('hit Alms getleavedayscount',payload,tenantName)
+      const response = await withHrFallback((prefix) => api.get<ILeaveDaysParams>(`${prefix}/gm/msleavedayscount`,{params: payload,}))
+      return response.data;
+    }
+  }
+
+  export async function getRequestFlowUsers (payload:Record<string,unknown>,tenantName?:string){
+    if(tenantName === 'ALMS'){
+      console.log('hit Alms getRequestFlowUsers',payload,tenantName)
+      const response = await withHrFallback((prefix)=> api.get(`${prefix}/gm/getRequestFlowUsers`,{params:payload,}))
+      return response.data;
+    }else{
+      console.log('hit Alms mhgetRequestFlowUsers',payload,tenantName)
+      const response = await withHrFallback((prefix)=> api.get(`${prefix}/gm/mhgetRequestFlowUsers`,{params:payload,}))
+      return response.data;
+    }
+  }
+
+  export async function getPayslipreport(params: {loginid: string |undefined , employeeId: string; month: string; year: string; embed?: boolean }) {
+    const response = await withHrFallback((prefix) =>
+      api.get<string>(`${prefix}/gm/reports/payslip`, {
+        params: {
+          logind: params.loginid,
+          employeeId: params.employeeId,
+          month: Number(params.month),
+          year: params.year,
+          embed: params.embed ? 1 : undefined,
+        },
+        responseType: "text",
+        transformResponse: (d) => d,
+      })
+    );
+    if (!response.data) throw new Error("Unable to fetch payslip report");
+    return response.data;
+  }
+
 
 export async function uploadHrEmployeeAttachment(requestNumber: string, file: File) {
   const formData = new FormData();

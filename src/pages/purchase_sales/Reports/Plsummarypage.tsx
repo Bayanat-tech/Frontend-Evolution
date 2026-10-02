@@ -5,12 +5,13 @@ import { CalendarDays, Eye, FileText, Filter, UserRound } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount, LookupRow } from "../../../api/lookups";
 import { getPLSummaryReportExcel, getPLSummaryReportHtml } from "../../../api/transactions";
-
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { Button } from "../../../components/ui/Button";
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 import { MultiSelectField, type MultiSelectOption } from "../../../components/ui/MultiSelectField";
-import { NewReportDialog } from "../../../components/new_report_format";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+
 
 export type ReportMode =
   | "invoicewise"
@@ -164,7 +165,6 @@ export default function PLSummaryPage() {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginId = user?.loginid ?? user?.username ?? "ADMIN";
-
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("");
@@ -172,20 +172,44 @@ export default function PLSummaryPage() {
   const [mode, setMode] = useState<ReportMode>("invoicewise");
   const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Select filters and run the report.");
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
-
-  // ── Inline preview dialog state (no new window) ─────────────────────────
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState("");
-
   const invoiceLookup = usePLLookup(LOOKUP_PARAMS.docno, companyCode, "doc_no", "inv_no", loginId);
   const salesmanLookup = usePLLookup(LOOKUP_PARAMS.salesman, companyCode, "salesman_code", "salesman_name", loginId);
+
+
+  const companyName: string =
+    (user as any)?.company_name || (user as any)?.COMPANY_NAME || companyCode;
+
+  const [companyInfo, setCompanyInfo] = useState<{ logo: string; address: string[] }>({
+    logo: "",
+    address: [],
+  });
+
+  useEffect(() => {
+    let alive = true;
+    getDynamicLookupaccount({
+      parameter: "PENDING_PURCHASE_ORDER_LOGO",
+      loginid: loginId,
+      code1: companyCode,
+      code2: "", code3: "", code4: "",
+      number1: 0, number2: 0, number3: 0, number4: 0,
+      date1: null, date2: null, date3: null, date4: null,
+    })
+      .then((rows) => {
+        if (!alive) return;
+        const row = (Array.isArray(rows) ? rows[0] : null) as LookupRow | null;
+        setCompanyInfo({
+          logo: String(row ? firstExisting(row, "COMP_LOGO") ?? "" : ""),
+          address: [],
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [companyCode, loginId]);
 
   const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
   const totals = useMemo(() => buildTotals(rows), [rows]);
@@ -210,31 +234,50 @@ export default function PLSummaryPage() {
   }), [companyCode, fromDate, invoiceNo, loginId, mode, salesman, selections, toDate]);
 
   // ── Fetch report HTML → fed straight into NewReportDialog ───────────────
-  const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
-    setLoading(true);
-    setError("");
-    setMessage("");
-    lastRequestRef.current = params;
+ const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
+  setLoading(true);
+  setError("");
+  setMessage("");
+  lastRequestRef.current = params;
 
-    setReportHtml(null);
-    setPreviewError("");
-    setPreviewOpen(true);
+  const preview = openPurchaseReport("P&L Summary Report");
 
-    try {
-      const html = await getPLSummaryReportHtml(params);
-      setReportHtml(html);
-      setRows([]);
-      setHasGeneratedReport(true);
-      setMessage("Report generated successfully.");
-    } catch (err: any) {
-      const msg = err?.message || "Failed to load report. Please try again.";
-      setError(msg);
-      setPreviewError(msg);
-      setMessage(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  try {
+    const html = await getPLSummaryReportHtml(params);
+
+    // Backend HTML madhla logo (lookup rikama asel tar hach vapra)
+    const htmlLogo =
+      new DOMParser().parseFromString(html, "text/html").querySelector("img")?.getAttribute("src") || "";
+
+    preview.ready({
+      html,
+      filename: `pl_summary_${params.mode}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "landscape",
+      stripChrome: true,
+      company: {
+        name: companyName,
+        address: companyInfo.address,
+        logo: htmlLogo,
+      },
+      onExcel: async () => {
+        await getPLSummaryReportExcel(params);
+      },
+    });
+
+
+    console.log("address--------->:", companyInfo.address, "| htmlLogo------->:", htmlLogo);
+    setRows([]);
+    setHasGeneratedReport(true);
+    setMessage("Report generated successfully.");
+  } catch (err: any) {
+    const msg = err?.message || "Failed to load report. Please try again.";
+    preview.fail(new Error(msg));
+    setError(msg);
+    setMessage(msg);
+  } finally {
+    setLoading(false);
+  }
+}, [companyInfo, companyName]);
 
   function handleGenerate() {
     if (!dateRangeValid) return;
@@ -254,79 +297,7 @@ export default function PLSummaryPage() {
     setHasGeneratedReport(false);
   }
 
-  function closePreview() {
-    setPreviewOpen(false);
-    setReportHtml(null);
-    setPreviewError("");
-  }
 
-  // Excel export — wired to NewReportDialog's onExportExcel
-  async function handleExcel() {
-    if (!lastRequestRef.current) {
-      setError("Generate the report at least once before exporting to Excel.");
-      return;
-    }
-    setExporting(true);
-    try {
-      await getPLSummaryReportExcel(lastRequestRef.current);
-    } catch {
-      setPreviewError("Excel export failed. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Open report in a new browser tab
-  function handleOpenInNewWindow() {
-    if (!reportHtml) return;
-    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
-    if (win) {
-      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-    } else {
-      window.URL.revokeObjectURL(url);
-    }
-  }
-
-  // Trigger browser print dialog (Save as PDF) for the current report
-  function handleDownloadPdf() {
-    if (!reportHtml) return;
-    const PRINT_IFRAME_ID = "pl-summary-print-iframe";
-    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
-
-    if (!iframe) {
-      iframe = document.createElement("iframe");
-      iframe.id = PRINT_IFRAME_ID;
-      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
-      iframe.style.cssText =
-        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
-      document.body.appendChild(iframe);
-    }
-
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(reportHtml);
-    doc.close();
-
-    const doPrint = () => {
-      try {
-        iframe?.contentWindow?.focus();
-        iframe?.contentWindow?.print();
-      } catch {
-        /* ignore */
-      }
-    };
-
-    if (iframe.contentDocument?.readyState === "complete") {
-      setTimeout(doPrint, 300);
-    } else {
-      iframe.onload = () => setTimeout(doPrint, 300);
-      setTimeout(doPrint, 700);
-    }
-  }
 
   return (
     <section className="freight-ui-standard freight-report-screen">
@@ -342,7 +313,7 @@ export default function PLSummaryPage() {
 
         <ReportFilterHeader onClear={handleReset} />
 
-        {error && !previewOpen && (
+        {error &&  (
           <div className="mx-3 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠️ {error}</div>
         )}
         {!dateRangeValid && (
@@ -412,26 +383,7 @@ export default function PLSummaryPage() {
       </div>
 
       {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
-      <NewReportDialog
-        open={previewOpen}
-        onClose={closePreview}
-        title="P&L Summary Report"
-        htmlContent={reportHtml}
-        loading={loading}
-        error={previewError || null}
-        meta={{
-          companyName: companyCode,
-          user: loginId,
-          recordCount: rows.length,
-          period: `${toDisplayDate(fromDate) || "Start"} - ${toDisplayDate(toDate) || "Today"}`,
-          status: optionLabel(MODE_OPTIONS, mode),
-          generatedAt: new Date().toLocaleString(),
-        }}
-        onExportExcel={handleExcel}
-        exportingExcel={exporting}
-        onOpenInNewWindow={handleOpenInNewWindow}
-        onDownloadPdf={handleDownloadPdf}
-      />
+           <PurchaseReportPreview />
     </section>
   );
 }

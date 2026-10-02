@@ -1,14 +1,16 @@
-import { Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { Loader2, Paperclip, Save, Send, ShieldCheck, Trash2, UserRound, X, Undo2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  getHrEmployees,
-  getHrLeaveEntitlement,
+  // getHrEmployees,
+  // getHrLeaveEntitlement,
   executeHrRawSql,
   saveHrLeaveApproval,
   validateHrLeave,
   type HrEmployee,
   type HrLeaveEntitlement,
+  getleavedaycount,
+  getRequestFlowUsers,
 } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
 import { LmsDialog } from "../../../components/ui/LmsDialog";
@@ -17,7 +19,7 @@ import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToas
 import { Select } from "../../../components/ui/Select";
 import { useAuth } from "../../../state/AuthContext";
 import { HrLeaveAttachmentDialog } from "./HrLeaveAttachmentDialog";
-import { toApiDateInput, toBackendDate } from "../../../hooks/apiDate";
+import { toApiDateInput, toBackendDate, toIsoDate } from "../../../hooks/apiDate";
 
 type LeaveRequestDialogProps = {
   open: boolean;
@@ -102,7 +104,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const [leaveTypes, setLeaveTypes] = useState<HrLeaveEntitlement[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
-  const [savingAction, setSavingAction] = useState<"SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED"| null>(null);
+  const [savingAction, setSavingAction] = useState<"SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED"| "SENTBACK" | null>(null);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<LeaveValidationResult | null>(null);
   const [approverInfo, setApproverInfo] = useState<Record<string, unknown> | null>(null);
@@ -110,18 +112,37 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const [requestNumber, setRequestNumber] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
+  const [fetchingLeaveDays, setFetchingLeaveDays] = useState(false);
+  const LEAVE_TYPES_SKIP_VALIDATION = new Set(["SL"]);
+
+  const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+
+  const [sentBackParams, setSentBackParams] = useState<{
+    LOGIN_ID: string;
+    USERNAME: string;
+    SENTBACK_HISTORY: string;
+  }>({ LOGIN_ID: "", USERNAME: "", SENTBACK_HISTORY: "" });
+
+  const [rejectParams, setRejectParams] = useState<{ CANCEL_REMARK: string }>({
+    CANCEL_REMARK: "",
+  });
+
+  const [userFlowData, setUserFlowData] = useState<{ LOGIN_ID: string; USERNAME: string }[]>([]);
+  const [loadingFlowUsers, setLoadingFlowUsers] = useState(false);
 
   const loginId = String( user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
   const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
-  const tenantName = String(user?.tenant_name || user?.TENANT_NAME || "");
+  const LOGINUSER = String(user?.LOGINID || user?.loginid || "")
+  const tenantName = /[A-Za-z]/.test(LOGINUSER.trim()) ? "MHDL" : "ALMS";
   const isCreator =initialRow?.CREATED_BY === user?.loginid1 || initialRow?.CREATED_BY === undefined || initialRow?.CREATED_BY === null || initialRow?.CREATED_BY === '';
   const createMode = !requestNumber;
   const fieldsDisabled = readOnly || !isCreator;
 
   useEffect(() => {
-    // console.log('user',user);
+    console.log('user',user);
     if (!open) return;
     const initialRequestNumber = getRowString(initialRow, "REQUEST_NUMBER", "requestNumber");
     setForm(initialRow ? formFromRow(initialRow) : { ...initialForm, requestDate: today() });
@@ -158,6 +179,23 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     [employees, form.employeeCode],
   );
 
+  const lastAction = getRowString(initialRow, "LAST_ACTION", "lastAction").toUpperCase();
+
+  const sendBackRemark = getRowString(initialRow, "SENTBACK_HISTORY", "sendBackHistory");
+  const rejectRemark   = getRowString(
+    initialRow,
+    "CANCEL_REMARK",
+    "REJECT_REMARKS",
+    "REJECT_REMARK",
+    "REJECTED_REMARKS",
+    "REJECTED_REMARK",
+    "cancelRemark",
+    "rejectRemarks",
+  );
+
+  const showSendBackRemark = lastAction === "SENTBACK" && sendBackRemark.trim() !== "";
+  const showRejectRemark   = lastAction === "REJECTED" && rejectRemark.trim() !== "";
+
   const uniqueLeaveTypes = useMemo(() => {
     const map = new Map<string, HrLeaveEntitlement>();
     leaveTypes.forEach((leaveType) => {
@@ -185,7 +223,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     }
   };
 
-  console.log('initialRow',initialRow);
+  // console.log('initialRow',initialRow);
 
   useEffect(() => {
     if (!form.employeeCode) {
@@ -210,6 +248,45 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   const supervisorName = getApproverDisplay2(approverInfo, "SUPERVISOR_NAME", form.supervisor);
   const deptHeadName = getApproverDisplay2(approverInfo, "DEPT_HEAD_NAME", form.deptHead);
   const hodName = getApproverDisplay2(approverInfo, "MANAGER_NAME", form.hod);
+
+    useEffect(() => {
+    if (!open) return;
+    if (!form.leaveStartDate || !form.leaveEndDate || !form.employeeCode || !form.leaveType) {
+      return;
+    }
+
+    let cancelled = false;setFetchingLeaveDays(true);
+
+    getleavedaycount(
+      {
+        leaveStartDate: toBackendDate(form.leaveStartDate),
+        leaveEndDate: toBackendDate(form.leaveEndDate),
+        leaveType: form.leaveType,
+        company_code: companyCode,
+        employee_code: form.employeeCode,
+        half_day: form.halfDay,
+      },
+      tenantName,
+    )
+      .then((response) => {
+        if (cancelled) return;
+        const days = extractLeaveDays(response);
+        if (days !== null) {
+          setForm((current) => ({ ...current, leaveDays: String(days) }));
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn("getleavedaycount failed, using local calculation", error);
+      })
+      .finally(() => {
+        if (!cancelled) setFetchingLeaveDays(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open,form.leaveStartDate,form.leaveEndDate,form.employeeCode, form.leaveType,form.halfDay,companyCode,tenantName,]);
 
   const handleEmployeeChange = (employeeCode: string, sourceEmployees = employees) => {
     const employee = sourceEmployees.find((item) => getEmployeeCode(item) === employeeCode);
@@ -273,30 +350,106 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   };
 
   const validate = async () => {
-    const errors = getValidationErrors(form);
-    if (errors.length) {
-      setNotice({ type: "error", message: errors[0] });
-      return false;
-    }
-    const result = await runLeaveValidation(Number(form.leaveDays || 0));
-    return result.isValid;
+      const errors = getValidationErrors(form);
+      if (errors.length) {
+        setNotice({ type: "error", message: errors[0] });
+        return false;
+      }
+
+      if (LEAVE_TYPES_SKIP_VALIDATION.has(form.leaveType)) {
+        setValidationResult({
+          isValid: true,
+          availableBalance: null,
+          message: "Validation skipped for this leave type",
+        });
+        setShowValidationAlert(true);
+        setNotice({ type: "info", message: "Validation skipped for this leave type" });
+        return true;
+      }
+
+      const result = await runLeaveValidation(Number(form.leaveDays || 0));
+      return result.isValid;
   };
 
-  console.log('save',form);
-  const save = async (action: "SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED") => {
+    useEffect(() => {
+    if (!sendBackOpen || !requestNumber) return;
+    let cancelled = false;
+
+    setLoadingFlowUsers(true);
+
+    getRequestFlowUsers(
+        {
+          doc_id: requestNumber, 
+          loginId: loginId,      
+        },
+      tenantName,
+    )
+      .then((payload: any) => {
+          if (cancelled) return;
+          const rows =
+            Array.isArray(payload) ? payload :
+            Array.isArray(payload?.data) ? payload.data :
+            Array.isArray(payload?.rows) ? payload.rows :
+            payload?.data ? [payload.data] :
+            payload ? [payload] : [];
+
+          setUserFlowData(
+            rows.map((r: any) => ({
+              LOGIN_ID: r.LOGIN_ID ?? r.login_id ?? r.LOGINID1 ?? "",
+              USERNAME: r.USERNAME ?? r.username ?? "",
+            })).filter((u: any) => u.LOGIN_ID),
+          );
+        })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("getRequestFlowUsers failed", err);
+        setUserFlowData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFlowUsers(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sendBackOpen, requestNumber, loginId, companyCode, tenantName]);
+
+  // console.log('save',form);
+
+  const save = async (action: "SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED" | "SENTBACK") => {
+
     const errors = getValidationErrors(form);
 
-    if (action === "SAVEASDRAFT" || action === "SUBMITTED" && !form.actualresumedate && !form.dutyresumedate) {
+    const isExemptFromValidation = LEAVE_TYPES_SKIP_VALIDATION.has(form.leaveType);
+    const hasResumptionDates = Boolean(form.actualresumedate || form.dutyresumedate);
+
+    if (
+      !isExemptFromValidation &&
+      (action === "SAVEASDRAFT" || action === "SUBMITTED") &&
+      !hasResumptionDates
+    ) {
       const requestedDays = Number(form.leaveDays || 0);
-      if (requestedDays > 0 && !form.actualresumedate && !form.dutyresumedate) {
+      if (requestedDays > 0) {
         const { isValid, availableBalance } = await runLeaveValidation(requestedDays);
         const hasInsufficientBalance =
-          availableBalance !== null && !Number.isNaN(availableBalance) && availableBalance < requestedDays;
+          availableBalance !== null &&
+          !Number.isNaN(availableBalance) &&
+          availableBalance < requestedDays;
 
         if (!isValid || hasInsufficientBalance) {
-          return; 
+          return;
         }
       }
+    }
+
+    if (action === "REJECTED" && !rejectParams.CANCEL_REMARK.trim()) {
+      setNotice({ type: "error", message: "Reject remarks are required" });
+      return;
+    }
+
+    if (action === "SENTBACK" && (!sentBackParams.LOGIN_ID || !sentBackParams.SENTBACK_HISTORY.trim())) {
+      setNotice({ type: "error", message: "Please select a user and add remarks" });
+      return;
     }
 
     if (errors.length) {
@@ -307,19 +460,19 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
     setNotice(null);
     try {
       
-      const saveResult = await saveHrLeaveApproval({
+      const payload: Record<string, unknown> = {
         COMPANY_CODE: companyCode,
         EMPLOYEE_NAME: form.employeeName,
         CREATED_BY: loginId,
         UPDATED_BY: loginId,
-        LAST_ACTION: action ,
+        LAST_ACTION: action,
         REQUEST_NUMBER: requestNumber,
-        REQUEST_DATE: form.requestDate,
+        REQUEST_DATE: toIsoDate(form.requestDate),
         EMPLOYEE_CODE: form.employeeCode,
         LEAVE_TYPE: form.leaveType,
         LEAVE_TYPE_DESC: form.leaveTypeDesc,
-        LEAVE_START_DATE: form.leaveStartDate,
-        LEAVE_END_DATE: form.leaveEndDate,
+        LEAVE_START_DATE: toIsoDate(form.leaveStartDate),
+        LEAVE_END_DATE: toIsoDate(form.leaveEndDate),
         LEAVE_DAYS: Number(form.leaveDays || 0),
         REMARKS: form.remarks,
         FLOW_CODE: "004",
@@ -331,17 +484,28 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         CAUSE_TYPE: form.causeType,
         AIR_TICKET: form.airTicket,
         AIR_ROUTE: form.airRoute,
-        TRAVEL_DATE: form.travelDate,
-        TRAVEL_END_DATE: form.travelEndDate,
+        TRAVEL_DATE: toIsoDate(form.travelDate),
+        TRAVEL_END_DATE: toIsoDate(form.travelEndDate),
         NAME_OF_REPLACEMENT: form.replacementName,
         CONTACT_DETAILS_DURING_LEAVE: form.contactDuringLeave,
         RESUME_DATE: "",
         HALF_DAY: form.halfDay,
         RESUME_WORK: "No",
-        ACTUAL_RESUME_DATE: form.actualresumedate,
-        DUTY_RESUME_DATE: form.dutyresumedate,
+        ACTUAL_RESUME_DATE: toIsoDate(form.actualresumedate),
+        DUTY_RESUME_DATE: toIsoDate(form.dutyresumedate),
         UUID: getUuid(),
-      },tenantName);
+      };
+
+      if (action === "SENTBACK") {
+        payload.SENTBACK_HISTORY = sentBackParams.SENTBACK_HISTORY;
+        payload.NEXT_ACTION_BY   = sentBackParams.LOGIN_ID;
+      }
+
+      if (action === "REJECTED") {
+        payload.CANCEL_REMARK = rejectParams.CANCEL_REMARK;
+      }
+
+      const saveResult = await saveHrLeaveApproval(payload as any, tenantName);
       
       const savedRequestNumber = getSavedRequestNumber(saveResult);
       if (savedRequestNumber) {
@@ -358,6 +522,9 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         onSaved();
         return;
       }
+
+      if (action === "SENTBACK") { setSendBackOpen(false); setSentBackParams({ LOGIN_ID: "", USERNAME: "", SENTBACK_HISTORY: "" }); }
+      if (action === "REJECTED") { setRejectOpen(false); setRejectParams({ CANCEL_REMARK: "" }); }
 
       setNotice({ type: "success", message: "Leave request submitted" });
       onSaved();
@@ -441,16 +608,30 @@ footer={
             )}
 
             {!isCreator && (
+              <>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void save("REJECTED")}
+                onClick={() => setRejectOpen(true)}
                 disabled={Boolean(savingAction)}
                 className="!w-auto shrink-0 whitespace-nowrap"
               >
-                {savingAction === "REJECTED" ? <Loader2 className="animate-spin" size={16} /> : <X size={16} />}
+                <X size={16} />
                 <span>Reject</span>
               </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSendBackOpen(true)}
+                disabled={Boolean(savingAction) || !requestNumber}
+                className="!w-auto shrink-0 whitespace-nowrap"
+                title={!requestNumber ? "Save first to enable Send Back" : "Send Back"}
+              >
+                <Undo2 size={16} />
+                <span>Send Back</span>
+              </Button>
+            </>
             )}
           </>
         )}
@@ -487,41 +668,55 @@ footer={
           </Field>
         </div>
 
-          {hasActualResumeDate(initialRow) && (
-            <div className="mt-2 flex flex-col rounded-lg border-2 border-gray-200 p-3">
-              <h3 className="mb-2 text-sm font-medium text-gray-700">Leave Resumption Details</h3>
+{hasActualResumeDate(initialRow) && (
+  <div className="mt-2 flex w-fit flex-col rounded-lg border-2 border-gray-200 p-3">
+    <h3 className="mb-2 text-sm font-medium text-gray-700">Leave Resumption Details</h3>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-end">
-                <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={form.actualresumedate ? true : form.resumework === "Y"}
-                    onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
-                    disabled={fieldsDisabled}
-                  />
-                  <span>Resume Work</span>
-                </label>
+    <div
+      className={`grid grid-cols-1 items-end gap-y-4 ${
+        tenantName === "ALMS"
+          ? "sm:grid-cols-[auto_200px_200px] sm:gap-x-10"
+          : "sm:grid-cols-[auto_200px] sm:gap-x-10"
+      }`}
+    >
+      <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          checked={form.actualresumedate ? true : form.resumework === "Y"}
+          onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
+          disabled={fieldsDisabled}
+        />
+        <span>Resume Work</span>
+      </label>
 
-                <Field label="Actual Resume Date">
-                  <Input
-                    type="date"
-                    value={form.actualresumedate}
-                    onChange={(event) => update("actualresumedate", event.target.value)}
-                    disabled={fieldsDisabled}
-                  />
-                </Field>
+      <div className="w-[200px]">
+        <Field label="Actual Resume Date">
+          <Input
+            type="date"
+            value={form.actualresumedate}
+            onChange={(event) => update("actualresumedate", event.target.value)}
+            disabled={fieldsDisabled}
+            className="!w-[200px]"
+          />
+        </Field>
+      </div>
 
-                <Field label="Duty Resume Date">
-                  <Input
-                    type="date"
-                    value={form.dutyresumedate}
-                    onChange={(event) => update("dutyresumedate", event.target.value)}
-                    disabled={fieldsDisabled}
-                  />
-                </Field>
-              </div>
-            </div>
-          )}
+      {tenantName === "ALMS" && (
+        <div className="w-[200px]">
+          <Field label="Duty Resume Date">
+            <Input
+              type="date"
+              value={form.dutyresumedate}
+              onChange={(event) => update("dutyresumedate", event.target.value)}
+              disabled={fieldsDisabled}
+              className="!w-[200px]"
+            />
+          </Field>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:items-start">
         {/* Leave Details */}
@@ -590,11 +785,22 @@ footer={
           <Field label="Leave End Date *">
             <Input type="date" value={form.leaveEndDate} onChange={(event) => update("leaveEndDate", event.target.value)} disabled={fieldsDisabled} />
           </Field>
+          
+          { tenantName === 'MHDL'&&(
+          <Field label="Duty Resusssme Date*">
+              <Input
+                type="date"
+                value={form.dutyresumedate}
+                onChange={(event) => update("dutyresumedate", event.target.value)}
+                disabled={fieldsDisabled}
+              />
+          </Field>
+          )}
 
           <div className="flex items-end gap-3">
             <Field label="Leave Days" className="flex-1">
-              <Input type="number" min="0" step="0.5" value={form.leaveDays} onChange={(event) => update("leaveDays", event.target.value)} disabled={fieldsDisabled} />
-            </Field>
+              <Input type="number" min="0" step="0.5" value={form.leaveDays} onChange={(event) => update("leaveDays", event.target.value)} className="!w-[100px]" disabled={fieldsDisabled} />
+            </Field>  
             <label className="flex items-center gap-2 pb-2 text-sm text-gray-600">
               <input type="checkbox" checked={form.halfDay === "Y"} onChange={(event) => update("halfDay", event.target.checked ? "Y" : "N")} disabled={fieldsDisabled} />
               <span>Half Day</span>
@@ -645,9 +851,29 @@ footer={
             <textarea className="w-full rounded-md border border-gray-300 p-2 text-sm" rows={2} value={form.contactDuringLeave} onChange={(event) => update("contactDuringLeave", event.target.value)} disabled={fieldsDisabled} />
           </Field>
 
-          {/* <Field label="Replacement Name">
-            <Input value={form.replacementName} onChange={(event) => update("replacementName", event.target.value)} disabled={readOnly}  />
-          </Field> */}
+          {showSendBackRemark && (
+            <Field label="Send Back Remarks">
+              <textarea
+                className="w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-sm"
+                rows={2}
+                value={sendBackRemark}
+                readOnly
+                disabled
+              />
+            </Field>
+          )}
+
+          {showRejectRemark && (
+            <Field label="Reject Remarks">
+              <textarea
+                className="w-full rounded-md border border-gray-300 bg-gray-50 p-2 text-sm"
+                rows={2}
+                value={rejectRemark}
+                readOnly
+                disabled
+              />
+            </Field>
+          )}
         </div>
 
         {/* Approver Details */}
@@ -693,6 +919,100 @@ footer={
         </div>
       </div>
       </div>
+
+      {/* -------------------- SEND BACK DIALOG -------------------- */}
+      <LmsDialog
+        open={sendBackOpen}
+        title="Send Back Request"
+        onClose={() => setSendBackOpen(false)}
+        footer={
+          <div className="flex w-full justify-end gap-2 p-1">
+            <Button variant="outline" onClick={() => setSendBackOpen(false)} disabled={savingAction === "SENTBACK"}>
+              Close
+            </Button>
+            <Button
+              onClick={() => void save("SENTBACK")}
+              disabled={
+                savingAction === "SENTBACK" ||
+                !sentBackParams.LOGIN_ID ||
+                !sentBackParams.SENTBACK_HISTORY.trim()
+              }
+              className="!w-auto shrink-0"
+            >
+              {savingAction === "SENTBACK" ? <Loader2 className="animate-spin" size={16} /> : <Undo2 size={16} />}
+              <span>Send Back</span>
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label="Employee *">
+            <Select
+              value={sentBackParams.LOGIN_ID}
+              onChange={(e) => {
+                const selected = userFlowData.find((u) => u.LOGIN_ID === e.target.value);
+                setSentBackParams((prev) => ({
+                  ...prev,
+                  LOGIN_ID: e.target.value,
+                  USERNAME: selected?.USERNAME || "",
+                }));
+              }}
+              disabled={loadingFlowUsers}
+            >
+              <option value="">
+                {loadingFlowUsers ? "Loading..." : "Select employee"}
+              </option>
+              {userFlowData.map((u) => (
+                <option key={u.LOGIN_ID} value={u.LOGIN_ID}>
+                  {u.LOGIN_ID} - {u.USERNAME}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Remarks *">
+            <textarea
+              className="w-full rounded-md border border-gray-300 p-2 text-sm"
+              rows={3}
+              value={sentBackParams.SENTBACK_HISTORY}
+              onChange={(e) =>
+                setSentBackParams((prev) => ({ ...prev, SENTBACK_HISTORY: e.target.value }))
+              }
+            />
+          </Field>
+        </div>
+      </LmsDialog>
+
+      {/* -------------------- REJECT DIALOG -------------------- */}
+      <LmsDialog
+        open={rejectOpen}
+        title="Reject Request"
+        onClose={() => setRejectOpen(false)}
+        footer={
+          <div className="flex w-full justify-end gap-2 p-1">
+            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={savingAction === "REJECTED"}>
+              Close
+            </Button>
+            <Button
+              onClick={() => void save("REJECTED")}
+              disabled={savingAction === "REJECTED" || !rejectParams.CANCEL_REMARK.trim()}
+              className="!w-auto shrink-0"
+            >
+              {savingAction === "REJECTED" ? <Loader2 className="animate-spin" size={16} /> : <X size={16} />}
+              <span>Reject</span>
+            </Button>
+          </div>
+        }
+      >
+        <Field label="Reject Remarks *">
+          <textarea
+            className="w-full rounded-md border border-gray-300 p-2 text-sm"
+            rows={3}
+            value={rejectParams.CANCEL_REMARK}
+            onChange={(e) => setRejectParams({ CANCEL_REMARK: e.target.value })}
+          />
+        </Field>
+      </LmsDialog>
       <HrLeaveAttachmentDialog
         open={attachmentOpen}
         requestNumber={requestNumber}
@@ -734,20 +1054,21 @@ function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
 }
 
 async function loadEmployees(loginId: string) {
-  let rows = await getHrEmployees(loginId);
-  if (!rows.length) {
-    rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
-  }
+  // let rows = await getHrEmployees(loginId);
+   const rows = await executeHrRawSql<HrEmployee>(employeeTreeSql(loginId));
+  // }
   return uniqueBy(rows, getEmployeeCode).sort((a, b) => getEmployeeName(a).localeCompare(getEmployeeName(b)));
 }
 
 async function loadLeaveEntitlement(employeeId: string) {
-  let rows = await getHrLeaveEntitlement(employeeId);
-  if (!rows.length) {
-    rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
-  }
+  // let rows = await getHrLeaveEntitlement(employeeId);
+  // if (!rows.length) {
+    const rows = await executeHrRawSql<HrLeaveEntitlement>(leaveEntitlementSql(employeeId));
+  // }
   return uniqueBy(rows, (row) => String(row.LEAVE_TYPE || "")).filter((row) => row.LEAVE_TYPE);
 }
+
+
 
 function uniqueBy<T>(rows: T[], getKey: (row: T) => string) {
   const map = new Map<string, T>();
@@ -889,6 +1210,32 @@ function getStatusRemark(row: Record<string, unknown> | null | undefined) {
   );
 }
 
+function extractLeaveDays(response: unknown): number | null {
+  if (response === null || response === undefined) return null;
+  if (typeof response === "number") return Number.isFinite(response) ? response : null;
+  if (typeof response === "string") {
+    const parsed = Number(response);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof response === "object") {
+    const record = response as Record<string, unknown>;
+    const raw =
+      record.leaveDays ??
+      record.LEAVE_DAYS ??
+      record.leave_days ??
+      record.days ??
+      record.DAYS ??
+      record.count ??
+      record.COUNT ??
+      record.data;
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === "object") return extractLeaveDays(raw);
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
 // function getDateInputValue(value: string) {
 //   if (!value) return "";
 //   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
@@ -902,12 +1249,12 @@ function getYesNoValue(value: string): "N" | "Y" | "" {
   return normalized === "Y" || normalized === "N" ? normalized : "";
 }
 
-function getValidationToneClass(text: string) {
-  const lower = text.toLowerCase();
-  if (!text) return "";
-  if (lower.includes("insufficient") || lower.includes("failed") || lower.includes("error")) return "is-error";
-  return "is-success";
-}
+// function getValidationToneClass(text: string) {
+//   const lower = text.toLowerCase();
+//   if (!text) return "";
+//   if (lower.includes("insufficient") || lower.includes("failed") || lower.includes("error")) return "is-error";
+//   return "is-success";
+// }
 
   function getApproverDisplay2(row: Record<string, unknown> | null, nameKey: string, fallbackId: string) {
     const name = row ? String(row[nameKey] || "").trim() : "";
@@ -915,29 +1262,29 @@ function getValidationToneClass(text: string) {
     return fallbackId || "";
   }
 
-function parseValidationMessage(response: unknown) {
-  if (typeof response === "string") return parseValidationString(response);
-  if (response && typeof response === "object") {
-    const record = response as Record<string, unknown>;
-    const raw = record.validationResult ?? record.message ?? record.data;
-    if (typeof raw === "string") return parseValidationString(raw);
-    if (record.success === false) return String(record.message || "Leave validation failed");
-  }
-  return "Leave validation passed";
-}
+// function parseValidationMessage(response: unknown) {
+//   if (typeof response === "string") return parseValidationString(response);
+//   if (response && typeof response === "object") {
+//     const record = response as Record<string, unknown>;
+//     const raw = record.validationResult ?? record.message ?? record.data;
+//     if (typeof raw === "string") return parseValidationString(raw);
+//     if (record.success === false) return String(record.message || "Leave validation failed");
+//   }
+//   return "Leave validation passed";
+// }
 
 function hasActualResumeDate(row: Record<string, unknown> | null | undefined) {
   const value = getRowString(row, "ACTUAL_RESUME_DATE", "actualResumeDate").trim();
   return Boolean(value) && value !== "0000-00-00";
 }
 
-function parseValidationString(value: string) {
-  if (value.includes("$$$")) {
-    const [status, balance] = value.split("$$$");
-    return status.toUpperCase().startsWith("S") ? `Available balance: ${balance} days` : `Leave validation failed: ${balance}`;
-  }
-  return value || "Leave validation passed";
-}
+// function parseValidationString(value: string) {
+//   if (value.includes("$$$")) {
+//     const [status, balance] = value.split("$$$");
+//     return status.toUpperCase().startsWith("S") ? `Available balance: ${balance} days` : `Leave validation failed: ${balance}`;
+//   }
+//   return value || "Leave validation passed";
+// }
 
 function getUuid() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
