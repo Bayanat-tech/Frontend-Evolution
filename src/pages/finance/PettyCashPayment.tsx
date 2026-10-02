@@ -44,6 +44,9 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 
 type EditorState =
@@ -249,6 +252,11 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           <div className="finance-list-heading flex items-center justify-between gap-3">
             <div className="finance-list-title flex items-center gap-2.5">
               <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{meta.title}</h1>
+              {fyPeriod && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+                  FY {fyPeriod}
+                </span>
+              )}
             </div>
           </div>
 
@@ -273,28 +281,29 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
               enablePagination
               manualPagination
               manualFiltering
-              toolbar={
-                <div className="finance-list-controls">
-                  <label className="finance-period-control">
-                    <span>FY</span>
-                    <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                      {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-                    </Select>
-                  </label>
+              enableExport={false}
+              actionButton={
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                    title={meta.addLabel}
+                    onClick={() => setDivisionPicker(true)}
+                  >
+                    <Plus size={14} /> Add
+                  </Button>
+                  <FinanceListActionsMenu
+                    fyPeriod={fyPeriod}
+                    fyPeriods={fyPeriods}
+                    onFyPeriodChange={(val) => {
+                      setFyPeriod(val);
+                      setPageIndex(0);
+                    }}
+                    onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+                    onRefresh={() => void loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false)}
+                  />
                 </div>
               }
-              enableExport
-              actionButton={
-                <Button
-                  type="button"
-                  className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
-                  title={meta.addLabel}
-                  onClick={() => setDivisionPicker(true)}
-                >
-                  <Plus size={14} /> Add
-                </Button>
-              }
-              exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalRows={totalRows}
@@ -490,6 +499,19 @@ function PettyCashPaymentDocument({
   }, [form.detail, lineSearch]);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) =>
+          !row.curr_code || row.curr_code === current.curr_code
+            ? { ...row, ex_rate: numRate }
+            : row
+        ),
+      }));
+      return;
+    }
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -981,15 +1003,29 @@ function PettyCashPaymentDocument({
                           loginid: user?.loginid || user?.username || "ADMIN"
                         })}
                         disabled={disabled}
-                        onChange={(value, row) => setForm((current) => ({
-                          ...current,
-                          curr_code: value,
-                          curr_name: text(getLookupValue(row || {}, "curr_name")),
-                          ex_rate: Number(row?.ex_rate ?? 1),
-                        }))}
+                        onChange={(value, row) => {
+                          const newRate = Number(row?.ex_rate ?? 1);
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? { ...d, curr_code: value, curr_name: currName, ex_rate: newRate }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
                       <Field label="Exchange Rate *">
-                        <Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
+                        <ExchangeRateInput
+                          disabled={disabled}
+                          required
+                          value={form.ex_rate}
+                          onChange={(rate) => updateField("ex_rate", rate)}
+                        />
                       </Field>
                       {docType !== "CR" && (
                         <LookupField

@@ -13,6 +13,7 @@ import { BankReconciliationPage } from "../pages/finance/BankReconciliationPage"
 import { BudgetVersionPage } from "../pages/finance/BudgetVersionPage";
 import { ChequeDepositSlipPage } from "../pages/finance/ChequeDepositSlipPage";
 import { CommercialDocumentPage } from "../pages/finance/CommercialDocumentPage";
+import { FinanceDashboardPanel } from "../pages/finance/FinanceDashboardPanel";
 import { DocumentSetupPage } from "../pages/finance/DocumentSetupPage";
 import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
@@ -860,7 +861,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isFreightWorkspaceRoute(context),
     element: (context) => <FreightWorkspacePage target={getFreightWorkspaceTarget(context)} />,
   },
-    {
+  {
+    name: "Finance Dashboard",
+    match: (context) => isFinanceDashboardRoute(context),
+    element: () => <FinanceDashboardPanel />,
+  },
+  {
     name: "ALMS Simple Master",
     match: ({ pathname }) => Boolean(getAlmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <AlmsSimpleMasterPage config={getAlmsSimpleMasterConfig(pathname)!} />,
@@ -2179,6 +2185,25 @@ function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
     compact.includes("freight") ||
     compact.includes("frieght") ||
     compact.includes("freightenquirymainpage")
+  );
+}
+
+function isFinanceDashboardRoute(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase().trim().replace(/\/+$/, "");
+  if (
+    pathname === "/workspace/finance" ||
+    pathname === "/workspace/finance/finance" ||
+    pathname === "/workspace/finance/dashboard" ||
+    pathname === "/workspace/finance/finance/dashboard"
+  ) {
+    return true;
+  }
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    compact === "financedashboard" ||
+    compact === "finance" ||
+    matchText.includes("finance/dashboard")
   );
 }
 
