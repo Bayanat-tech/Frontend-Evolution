@@ -16,6 +16,8 @@ export interface MultiSelectFieldProps {
   value: string[];
   onChange: (v: string[]) => void;
   loading?: boolean;
+  /** When true, field is non-interactive but does NOT show "Loading…". */
+  disabled?: boolean;
   /** Value used for the "All" sentinel option. Defaults to "All". */
   allValue?: string;
   /** Hide the built-in "All" option (use when the caller manages "select all" differently). */
@@ -102,6 +104,11 @@ const CheckmarkIcon: React.FC = () => (
  * Option rows use <div role="option"> (not bare <label>) so global form CSS
  * that forces label { flex-direction: column } cannot stack the checkbox
  * under the text (e.g. Freight .freight-ui-standard screens).
+ *
+ * `loading` vs `disabled`:
+ * - loading → shows "Loading…", non-interactive
+ * - disabled → non-interactive, shows normal summary (All / label / N selected)
+ * Existing callers that only pass `loading` are unchanged.
  */
 export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   label,
@@ -109,6 +116,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   value,
   onChange,
   loading,
+  disabled,
   allValue = "All",
   hideAllOption = false,
   placeholder = "Select…",
@@ -124,6 +132,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const isDisabled = Boolean(loading || disabled);
   const isAllSelected = !hideAllOption && value.includes(allValue);
   const hasCode = useMemo(() => options.some((o) => !!o.code), [options]);
 
@@ -176,6 +185,11 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
     }
   }, [open]);
 
+  // Close panel if control becomes disabled while open
+  useEffect(() => {
+    if (isDisabled && open) setOpen(false);
+  }, [isDisabled, open]);
+
   const filteredOptions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return options;
@@ -188,6 +202,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   }, [options, searchQuery]);
 
   const toggleOption = (optValue: string) => {
+    if (isDisabled) return;
     if (isAllSelected) {
       // Coming from "All" → start a fresh specific selection with just this one
       onChange([optValue]);
@@ -205,15 +220,18 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   };
 
   const toggleAll = () => {
+    if (isDisabled) return;
     onChange([allValue]);
   };
 
   const clearAll = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isDisabled) return;
     onChange(hideAllOption ? [] : [allValue]);
   };
 
   const summaryText = (): string => {
+    // Only show "Loading…" when actually loading — not when merely disabled
     if (loading) return "Loading…";
     if (!value.length || isAllSelected) return "All";
     if (value.length === 1) {
@@ -224,7 +242,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
   };
 
   const panel =
-    open && !loading && panelRect ? (
+    open && !isDisabled && panelRect ? (
       <div
         ref={panelRef}
         style={{
@@ -451,8 +469,8 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
           ref={triggerRef}
           className={className}
           type="button"
-          onClick={() => !loading && setOpen((o) => !o)}
-          disabled={loading}
+          onClick={() => !isDisabled && setOpen((o) => !o)}
+          disabled={isDisabled}
           style={{
             width: "100%",
             display: "flex",
@@ -461,13 +479,14 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
             gap: 8,
             padding: "7px 10px",
             fontSize: 12,
-            color: loading ? "#9ca3af" : "#111827",
-            background: "#fff",
+            color: loading || isDisabled ? "#9ca3af" : "#111827",
+            background: isDisabled && !loading ? "#f9fafb" : "#fff",
             border: `1px solid ${open ? THEME : "#d1d5db"}`,
             borderRadius: 6,
-            cursor: loading ? "not-allowed" : "pointer",
+            cursor: isDisabled ? "not-allowed" : "pointer",
             textAlign: "left",
             boxShadow: open ? "0 0 0 2px rgba(29,78,216,0.12)" : "none",
+            opacity: isDisabled && !loading ? 0.75 : 1,
           }}
         >
           <span
@@ -482,7 +501,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
           </span>
 
           <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            {!isAllSelected && value.length > 0 && (
+            {!isAllSelected && value.length > 0 && !isDisabled && (
               <span
                 onClick={clearAll}
                 title="Clear selection"
@@ -529,7 +548,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
 
       {!open && (
         <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3 }}>
-          {loading ? "" : "Click to select multiple"}
+          {loading ? "" : isDisabled ? "" : "Click to select multiple"}
         </div>
       )}
     </div>
