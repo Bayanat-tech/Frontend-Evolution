@@ -860,6 +860,14 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
+    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+
+    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
+    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+
+    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
+    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+
     setSaving(true);
     setError("");
     try {
