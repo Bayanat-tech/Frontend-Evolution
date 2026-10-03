@@ -68,6 +68,19 @@ export function FinanceDocumentIdentity({
             <strong className="text-xs font-bold text-emerald-200">{total}</strong>
           </div>
         )}
+
+        {/* Highlighted Division Badge */}
+        {(divCode || divName) && (
+          <div
+            className="rounded-md bg-white/10 border border-white/20 text-white px-2.5 py-0.5 shadow-xs flex items-center gap-1.5"
+            title={divName ? `${divCode || ""} - ${divName}` : divCode}
+          >
+            <span className="text-[10px] uppercase font-bold text-blue-200">Div</span>
+            <strong className="text-xs font-semibold text-white truncate max-w-[220px]">
+              {divCode ? (divName ? `${divCode} - ${divName}` : divCode) : divName}
+            </strong>
+          </div>
+        )}
       </div>
       {onToggleHeader && (
         <button type="button" className="finance-header-toggle" aria-expanded={headerExpanded}

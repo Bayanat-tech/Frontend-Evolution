@@ -976,6 +976,8 @@ function JVDocument({
             documentNo={form.doc_no}
             documentDate={form.doc_date}
             total={formatAmount(debitTotal > 0 ? debitTotal : total + totalTax)}
+            divCode={form.div_code}
+            divName={form.div_name}
             onBack={onClose}
             headerExpanded={showHeaderDetails}
             onToggleHeader={() => setShowHeaderDetails(value => !value)}
