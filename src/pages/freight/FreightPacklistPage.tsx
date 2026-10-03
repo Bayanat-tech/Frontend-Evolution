@@ -1024,7 +1024,7 @@ function SelectField({ label, value, options, onChange, required, className = ""
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="">Blank</option>
+        <option value=""> </option>
         {options.map((option) => (
           <option key={option} value={option}>
             {option}
