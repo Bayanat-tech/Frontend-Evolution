@@ -5495,6 +5495,131 @@ freight-dense-form .freight-form-card {
   min-height: 0;         /* new â€” critical for flex children to scroll properly */
   overflow-y: auto;      /* new */
 }
+
+/* Shared workspace density.
+   Keeps every module comfortable at normal browser zoom while preserving full
+   viewport width and native text rendering. */
+.workspace {
+  --app-control-font-size: 11.5px;
+  --app-table-font-size: 11.5px;
+  --app-label-font-size: 10.5px;
+  --app-control-height: 32px;
+  --app-button-height: 31px;
+  --app-button-sm-height: 27px;
+  --app-button-icon-size: 29px;
+  --app-content-padding-y: 9px;
+  --app-content-padding-x: 12px;
+  --app-sidebar-width: 224px;
+  --app-sidebar-collapsed-width: 58px;
+  font-size: 12px;
+}
+
+.workspace .workspace-top-header {
+  height: 40px !important;
+  min-height: 40px;
+  padding-inline: 13px !important;
+}
+
+.workspace .workspace-top-header > div:first-child,
+.workspace .workspace-top-header > div:last-child {
+  min-width: 160px !important;
+}
+
+.workspace .workspace-top-header .w-8.h-8 {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.workspace .sidebar {
+  padding-top: 40px;
+}
+
+.workspace .sidebar-section-heading {
+  min-height: 34px;
+  padding: 3px 10px 2px;
+}
+
+.workspace .sidebar-module-name {
+  max-width: 168px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+
+.workspace .bisc-sidebar-search-container {
+  padding: 3px 8px 6px;
+}
+
+.workspace .bisc-sidebar-search-box {
+  height: 30px;
+}
+
+.workspace .sidebar-nav {
+  padding: 0 7px 7px;
+}
+
+.workspace .nav-item.nav-level-1 {
+  min-height: 29px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.workspace .nav-item.nav-level-2 {
+  min-height: 20px;
+  padding: 1px 7px 1px 9px;
+  font-size: 10.5px;
+}
+
+.workspace .nav-children {
+  margin-left: 9px;
+}
+
+.workspace .sidebar-footer {
+  gap: 6px;
+  padding: 7px 8px 8px;
+}
+
+.workspace .sidebar-company-card {
+  padding: 7px 8px !important;
+}
+
+.workspace .sidebar-switch-module {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.workspace .workspace-content .breadcrumb {
+  margin-bottom: 6px !important;
+  padding-bottom: 6px;
+  font-size: 10.5px;
+}
+
+.workspace .workspace-content > section > div:first-child h1 {
+  font-size: 19px;
+}
+
+.workspace .data-table-scroll thead th {
+  height: 32px;
+  padding-block: 4px;
+  font-size: 10.5px;
+}
+
+.workspace .data-table-scroll tbody td {
+  height: 27px;
+  padding-block: 3px;
+}
+
+.workspace .data-table-pagination {
+  min-height: 39px;
+  padding: 5px 10px;
+}
+
+@media (max-width: 768px) {
+  .workspace .workspace-top-header > div:first-child,
+  .workspace .workspace-top-header > div:last-child {
+    min-width: 0 !important;
+  }
+}
 .workspace-content > section > div:first-child:has(h1) {
   align-items: flex-end;
   padding-bottom: 10px;
@@ -8292,13 +8417,13 @@ freight-dense-form .freight-form-card {
   box-shadow: 0 8px 22px rgba(0, 55, 140, 0.22);
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) {
   width: 132px;
   min-width: 112px;
   max-width: 148px;
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] .ui-button-icon {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) .ui-button-icon {
   width: 26px;
   height: 26px;
   min-height: 26px;
@@ -8310,7 +8435,7 @@ freight-dense-form .freight-form-card {
   box-shadow: none;
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] .ui-button-icon:hover {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) .ui-button-icon:hover {
   color: #00378c;
   border-color: #bfdbfe;
   background: #eff6ff;
@@ -8318,7 +8443,7 @@ freight-dense-form .freight-form-card {
   box-shadow: none;
 }
 
-.workspace-content .data-table-scroll [data-column-id="actions"] .ui-button-icon svg {
+.workspace-content .data-table-scroll :is([data-column-id="actions"], [data-column-id="action"]) .ui-button-icon svg {
   width: 14px;
   height: 14px;
   stroke-width: 1.8;
@@ -8603,6 +8728,18 @@ freight-dense-form .freight-form-card {
 
 .app.dark .workspace-content .data-table-pagination strong {
   color: #f8fafc !important;
+}
+
+.app.dark .workspace-content .data-table-pagination .data-table-page-button.is-active {
+  border-color: #4d8fda !important;
+  background: #2563a9 !important;
+  color: #ffffff !important;
+}
+
+.app.dark .workspace-content .data-table-pagination .data-table-page-size {
+  border-color: #33415d !important;
+  background: #111827 !important;
+  color: #e2e8f0 !important;
 }
 
 .app.dark .data-table-filter-popover {
@@ -10386,9 +10523,13 @@ freight-dense-form .freight-form-card {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
-.workspace .sidebar-nav > .nav-group { margin-bottom: 3px; }
-.workspace .nav-item.nav-level-1 { min-height: 38px; border-radius: 8px; padding: 8px 10px; }
-.workspace .nav-item.nav-level-2 { min-height: 32px; border-radius: 6px; }
+.workspace .sidebar-nav > .nav-group { margin-bottom: 1px; }
+.workspace .nav-item.nav-level-1 { min-height: 34px; border-radius: 7px; padding: 6px 9px; }
+.workspace .nav-item.nav-level-2 { min-height: 26px; border-radius: 5px; padding-block: 3px; }
+.workspace .nav-item.nav-level-3,
+.workspace .nav-item.nav-level-4,
+.workspace .nav-item.nav-level-5 { min-height: 24px; padding-block: 2px; }
+.workspace .nav-children { margin-left: 10px; }
 .workspace .sidebar .nav-item.active,
 .workspace .sidebar .nav-item.active:hover { background: #e8f8f0; color: #087443; font-weight: 600; }
 .workspace .sidebar .nav-item.active .nav-bullet { background: #087443; box-shadow: none; }

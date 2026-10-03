@@ -15,8 +15,10 @@ import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesDNEditor } from "./SalesDNeditor";
 import { SDN_CONFIG } from "./SalesOrdertypes";
-import ReportDialogPage from "../../../components/ReportDialogPage";
-import { SalesDNReport, downloadSalesDNExcel } from "./SalesDNReport";
+
+import {  downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -86,38 +88,29 @@ export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   // ── Report dialog state ────────────────────────────────────────────────────
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportValues, setReportValues] = useState<{
-    company_code?: string;
-    doc_type?: string;
-    doc_no: string;
-  } | null>(null);
+ 
 
-  const openReport = (row: SalesOrderRow) => {
-    setReportValues({
-      company_code: user?.company_code,
-      doc_type: row.doc_type || "SDN",
-      doc_no: row.doc_no,
+ const openReport = async (row: SalesOrderRow) => {
+  const params = {
+    company_code: user?.company_code,
+    doc_type: row.doc_type || "SDN",
+    doc_no: row.doc_no,
+  };
+  const preview = openPurchaseReport(`Delivery Note - ${row.doc_no}`);
+  try {
+    const html = await getSalesDNReportHtml(params);
+    preview.ready({
+      html,
+      filename: `delivery_note_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await downloadSalesDNExcel(params);
+      },
     });
-    setReportOpen(true);
-  };
-
-  const closeReport = () => {
-    setReportOpen(false);
-    setReportValues(null);
-  };
-
-  const handleExcelFromReport = async () => {
-    if (!reportValues?.doc_no) return;
-    try {
-      await downloadSalesDNExcel(reportValues);
-    } catch (e) {
-      setNotice({
-        type: "error",
-        message: e instanceof Error ? e.message : "Unable to export Excel",
-      });
-    }
-  };
+  } catch (e) {
+    preview.fail(e instanceof Error ? e : new Error("Unable to load Delivery Note report"));
+  }
+};
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -394,16 +387,7 @@ export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
       )}
 
       {/* Report dialog — Print opens this; Excel downloads from API */}
-      {reportOpen && reportValues && (
-        <ReportDialogPage
-          Report={SalesDNReport}
-          required_values={reportValues}
-          title={`Delivery Note - ${reportValues.doc_no}`}
-          onClose={closeReport}
-          excel={handleExcelFromReport}
-        />
-      )}
-
+    <PurchaseReportPreview />
       <DivisionPickerDialog
         open={divisionPicker}
         divisions={divisions}

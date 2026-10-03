@@ -26,6 +26,10 @@ export function LeaveRegisterPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
   const [activeFilterPill, setActiveFilterPill] = useState("ALL");
+  const EXCLUDED_BALANCE_TYPES = new Set(
+    ["SICK LEAVE", "FUNERAL LEAVE", "COMPENSATORY LEAVE", "MATERNITY LEAVE", "PATERNITY LEAVE", "SL", "CL", "ML", "FL", "CMP"]
+      .map((v) => v.trim().toUpperCase())
+  );
 
   useEffect(() => {
     if (!loginId) return;
@@ -85,6 +89,14 @@ export function LeaveRegisterPage() {
       setLoading(false);
     }
   };
+
+    const visibleBalances = useMemo(() => {
+    return balances.filter((row) => {
+      const code = String(row.LEAVE_TYPE || "").trim().toUpperCase();
+      const desc = String(row.LEAVE_TYPE_DESC || "").trim().toUpperCase();
+      return !EXCLUDED_BALANCE_TYPES.has(code) && !EXCLUDED_BALANCE_TYPES.has(desc);
+    });
+  }, [balances]);
 
   const selectedEmployee = employees.find((employee) => String(employee.EMPLOYEE_ID || "") === employeeId);
 
@@ -316,8 +328,8 @@ export function LeaveRegisterPage() {
 
       {/* Leave Balances Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-        {balances.length ? (
-          balances.map((row) => (
+      {visibleBalances.length ? (
+        visibleBalances.map((row) => (
             <Card
               key={`${String(row.LEAVE_TYPE)}-${String(row.EMPLOYEE_ID)}`}
               className="border border-border/80 shadow-sm rounded-xl overflow-hidden bg-card"
@@ -398,7 +410,7 @@ function leaveBalanceSql(employeeId: string) {
       NVL(NO_OF_LEAVES_AVAILABLE, 0) AS NO_OF_LEAVES_AVAILABLE
     FROM VW_HR_LEAVE_YEARLY_BAL_SYSDATE_AWARE
     WHERE EMPLOYEE_ID = '${escapeSql(employeeId)}'
-      AND LEAVE_TYPE NOT IN ('001', '008', 'ABS')
+      AND LEAVE_TYPE NOT IN ('001', '008', 'ABS' )
   `;
 }
 

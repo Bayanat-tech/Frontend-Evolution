@@ -30,6 +30,7 @@ import {
   Landmark,
   Layers,
   Languages,
+  LayoutDashboard,
   LayoutGrid,
   LogOut,
   Map,
@@ -88,6 +89,16 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
   const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
+
+  const isFinanceApp = (appCode || "").toLowerCase() === "finance" || cleanAppCode(activeApp?.title) === "finance";
+  const isFinanceDashboardActive =
+    isFinanceApp &&
+    (location.pathname === "/workspace/finance" ||
+      location.pathname === "/workspace/finance/" ||
+      location.pathname === "/workspace/finance/finance" ||
+      location.pathname === "/workspace/finance/finance/" ||
+      location.pathname === "/workspace/finance/dashboard" ||
+      location.pathname === "/workspace/finance/finance/dashboard");
 
   const menuSearchRef = useRef<HTMLInputElement>(null);
   const focusMenuSearch = useRef(false);
@@ -184,17 +195,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     ? moduleMeta.fullForm.replace(/Management System/i, "").trim()
     : (activeApp?.title ? titleCase(activeApp.title) : "Module");
 
-  // useEffect(() => {
-  //   setExpanded(collectExpandedPath(activeMenuPath));
-  // }, [activeApp?.id, activeApp?.title, location.pathname]);
-
   useEffect(() => {
-    setExpanded((current) => ({
-      ...(isFinanceModule ? current : {}),
-      ...collectDefaultExpanded(activeApp?.children || [], 1),
-      ...collectExpandedPath(activeMenuPath),
-    }));
-  }, [activeApp?.id, activeApp?.title, location.pathname, isFinanceModule]);
+    setExpanded(collectExpandedPath(activeMenuPath));
+  }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
     if (!isMobile && keepSidebarOpen) {
@@ -210,11 +213,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     setCollapsed((value) => {
       const nextCollapsed = !value;
       if (!nextCollapsed) {
-        // setExpanded(collectExpandedPath(activeMenuPath));
-         setExpanded({
-          ...collectDefaultExpanded(activeApp?.children || [], 1),
-          ...collectExpandedPath(activeMenuPath),
-        });
+        setExpanded(collectExpandedPath(activeMenuPath));
       }
       return nextCollapsed;
     });
@@ -229,7 +228,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   };
 
   return (
-    <div className="workspace h-screen flex flex-col overflow-hidden bg-background" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div className={cn("workspace h-screen flex flex-col overflow-hidden bg-background", isFinanceApp && "finance-workspace")} style={{ fontFamily: "Inter, sans-serif" }}>
       {/* Top Header - BISC style: clean white/card, logo + company left, dark mode + profile right */}
       <header className="workspace-top-header h-[45px] bg-card border-b border-border flex items-center justify-between px-5 shrink-0 z-20">
         {/* Left: Logo + Company Name */}
@@ -444,21 +443,42 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
                 )}
               </div>
             ) : (
-              (activeApp?.children || []).map((item, index) => (
-                <MenuItem
-                  key={item.id || item.title}
-                  item={item}
-                  collapsed={displayCollapsed}
-                  expanded={expanded}
-                  setExpanded={setExpanded}
-                  appCode={appCode || ""}
-                  pathname={location.pathname}
-                  selectedMenu={activeMenu}
-                  level={1}
-                  siblingIndex={index + 1}
-                  onNavigate={handleMenuNavigate}
-                />
-              ))
+              <>
+                {isFinanceApp && (
+                  <Link
+                    className={cn(
+                      "nav-item nav-level-1 mb-1",
+                      isFinanceDashboardActive && "active",
+                      displayCollapsed && "icon-only"
+                    )}
+                    to="/workspace/finance"
+                    aria-current={isFinanceDashboardActive ? "page" : undefined}
+                    title="Finance Dashboard"
+                    aria-label="Finance Dashboard"
+                    onClick={handleMenuNavigate}
+                  >
+                    <span className="nav-link-copy">
+                      <LayoutDashboard size={17} className="nav-leading-icon" />
+                      {!displayCollapsed && <span>Dashboard</span>}
+                    </span>
+                  </Link>
+                )}
+                {(activeApp?.children || []).map((item, index) => (
+                  <MenuItem
+                    key={item.id || item.title}
+                    item={item}
+                    collapsed={displayCollapsed}
+                    expanded={expanded}
+                    setExpanded={setExpanded}
+                    appCode={appCode || ""}
+                    pathname={location.pathname}
+                    selectedMenu={activeMenu}
+                    level={1}
+                    siblingIndex={index + 1}
+                    onNavigate={handleMenuNavigate}
+                  />
+                ))}
+              </>
             )}
           </nav>
 
@@ -539,17 +559,6 @@ function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
   nodes.slice(0, -1).forEach((node) => {
     if (node.children?.length) {
       expanded[node.id || node.title] = true;
-    }
-  });
-  return expanded;
-}
-
-function collectDefaultExpanded(nodes: MenuNode[], maxLevel: number, level = 1): Record<string, boolean> {
-  const expanded: Record<string, boolean> = {};
-  nodes.forEach((node) => {
-    if (node.children?.length && level <= maxLevel) {
-      expanded[node.id || node.title] = true;
-      Object.assign(expanded, collectDefaultExpanded(node.children, maxLevel, level + 1));
     }
   });
   return expanded;

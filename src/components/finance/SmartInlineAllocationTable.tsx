@@ -1,8 +1,9 @@
-import { AlertCircle, Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Briefcase, CheckCircle2, ChevronUp, FileText, Plus, Receipt, RefreshCw, Trash2, Zap } from "lucide-react";
 import { TransactionChildRow, TransactionDetail } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue } from "../../api/lookups";
 import { Input } from "../ui/Input";
 import { LookupField } from "../ui/LookupField";
+import { BiscDatePicker } from "../ui/BiscDatePicker";
 import { useAuth } from "../../state/AuthContext";
 
 function text(value: unknown) {
@@ -88,39 +89,39 @@ export function SmartInlineAllocationTable({
   const colConfigs =
     childTable === "invoice"
       ? [
-          { key: "sr", header: "#", width: 28, align: "center" },
-          { key: "inv_no", header: "Invoice No", width: 130, align: "left" },
-          { key: "inv_date", header: "Invoice Date", width: 105, align: "left" },
-          { key: "inv_amt", header: "Invoice Amount", width: 100, align: "right" },
-          { key: "outstanding", header: "Outstanding", width: 100, align: "right" },
-          { key: "allocated", header: "Allocated Amount", width: 120, align: "right" },
-          { key: "action", header: "", width: 27, align: "center" },
+          { key: "sr", header: "#", width: 24, align: "center" },
+          { key: "inv_no", header: "Invoice No", width: 105, align: "left" },
+          { key: "inv_date", header: "Invoice Date", width: 96, align: "left" },
+          { key: "inv_amt", header: "Invoice Amount", width: 92, align: "right" },
+          { key: "outstanding", header: "Outstanding", width: 92, align: "right" },
+          { key: "allocated", header: "Allocated", width: 110, align: "right" },
+          { key: "action", header: "", width: 24, align: "center" },
         ]
       : childTable === "job"
         ? [
-            { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "job_no", header: "Job No", width: 150, align: "left" },
-            { key: "doc_refno", header: "Doc Ref", width: 115, align: "left" },
-            { key: "doc_refno_2", header: "Doc Ref 2", width: 115, align: "left" },
-            { key: "amount", header: "Amount", width: 105, align: "right" },
-            { key: "action", header: "", width: 27, align: "center" },
+            { key: "sr", header: "#", width: 24, align: "center" },
+            { key: "job_no", header: "Job No", width: 125, align: "left" },
+            { key: "doc_refno", header: "Doc Ref", width: 100, align: "left" },
+            { key: "doc_refno_2", header: "Doc Ref 2", width: 100, align: "left" },
+            { key: "amount", header: "Amount", width: 92, align: "right" },
+            { key: "action", header: "", width: 24, align: "center" },
           ]
         : [
-            { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "exp_type", header: "Expense Type", width: 125, align: "left" },
-            { key: "exp_subtype", header: "Expense Subtype", width: 125, align: "left" },
-            { key: "description", header: "Description", width: 130, align: "left" },
-            { key: "job_no", header: "Job No", width: 95, align: "left" },
-            { key: "amount", header: "Amount", width: 105, align: "right" },
-            { key: "action", header: "", width: 27, align: "center" },
+            { key: "sr", header: "#", width: 24, align: "center" },
+            { key: "exp_type", header: "Expense Type", width: 110, align: "left" },
+            { key: "exp_subtype", header: "Subtype", width: 110, align: "left" },
+            { key: "description", header: "Description", width: 115, align: "left" },
+            { key: "job_no", header: "Job No", width: 85, align: "left" },
+            { key: "amount", header: "Amount", width: 92, align: "right" },
+            { key: "action", header: "", width: 24, align: "center" },
           ];
 
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <div className="finance-allocation-panel my-0.5 rounded border border-slate-300 bg-white shadow-2xs overflow-hidden text-xs w-fit max-w-full">
+    <div className="finance-allocation-panel my-0.5 w-fit max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
       {/* Sub-toolbar: Ultra-compact, no unwanted verbose titles */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-slate-100/90 px-2 py-1 text-xs">
+      <div className="finance-allocation-toolbar flex flex-wrap items-center justify-between gap-1 border-b px-1.5 py-0.5 text-xs">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Compact Child Type Badge */}
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1e293b] text-white text-[10px] font-semibold uppercase tracking-wide shadow-2xs">
@@ -144,23 +145,14 @@ export function SmartInlineAllocationTable({
 
           {childTable && (
             <div className="flex items-center gap-1 flex-wrap">
-              {/* Summary Chip */}
-              <span className="inline-flex items-center rounded bg-white border border-slate-300 px-1.5 py-0.5 text-[10px] font-mono text-slate-700 shadow-2xs">
-                Allocated: <strong className="ml-1 text-slate-900">{formatAmount(totalAllocated)}</strong>
+              <span
+                className="inline-flex items-center rounded border border-[#bfd1e8] bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#244467] shadow-2xs"
+                title={`Allocated ${formatAmount(totalAllocated)} of ${formatAmount(parentAmount)}`}
+              >
+                {formatAmount(totalAllocated)}
                 <span className="mx-1 text-slate-300">/</span>
-                Line: <strong className="ml-1 text-slate-900">{formatAmount(parentAmount)}</strong>
+                {formatAmount(parentAmount)}
               </span>
-
-              {/* Status Badge */}
-              {isMatched ? (
-                <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-700">
-                  <CheckCircle2 size={10} /> Matched
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-300 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-700">
-                  <AlertCircle size={10} /> Diff: {formatAmount(Math.abs(diff))}
-                </span>
-              )}
 
               {/* Action Buttons: Auto-Fill & Allocate All */}
               {childTable === "invoice" && rows.length > 0 && !isMatched && diff > 0 && (
@@ -265,10 +257,10 @@ export function SmartInlineAllocationTable({
         </div>
       </div>
 
-      {/* Sub-table Body: Compact height, fixed width with Deep Slate Header */}
-      <div className="max-h-[160px] overflow-auto">
+      {/* Compact child grid with a lighter header to distinguish it from accounting lines. */}
+      <div className="finance-allocation-grid max-h-[132px] overflow-auto">
         <table
-          className="table-fixed text-xs border-collapse"
+          className="finance-allocation-table table-fixed border-collapse text-xs"
           style={{ width: `${totalTableWidth}px` }}
         >
           <colgroup>
@@ -276,12 +268,12 @@ export function SmartInlineAllocationTable({
               <col key={i} style={{ width: `${col.width}px` }} />
             ))}
           </colgroup>
-          <thead className="sticky top-0 bg-[#1e293b] text-white shadow-2xs z-10">
+          <thead className="finance-allocation-thead sticky top-0 z-10 shadow-2xs">
             <tr>
               {colConfigs.map((col, i) => (
                 <th
                   key={i}
-                  className={`px-1.5 py-1 text-[10.5px] font-semibold text-white tracking-wider border-r border-slate-700/80 last:border-r-0 ${
+                  className={`border-r border-[#b9cee4] px-1.5 py-0.5 text-[10px] font-bold text-[#163a63] last:border-r-0 ${
                     col.align === "right"
                       ? "text-right"
                       : col.align === "center"
@@ -314,7 +306,7 @@ export function SmartInlineAllocationTable({
               rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+                  className="border-b border-[#dce7f2] bg-white hover:bg-[#f1f7fd] transition-colors"
                 >
                   {/* # Column */}
                   <td className="px-1 py-0.5 text-center font-mono text-[10.5px] text-slate-500">
@@ -326,7 +318,7 @@ export function SmartInlineAllocationTable({
                       {/* Invoice No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#1e293b] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#00378C] focus:outline-none"
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
@@ -344,29 +336,30 @@ export function SmartInlineAllocationTable({
 
                       {/* Invoice Date */}
                       <td className="px-1 py-0.5">
-                        <Input
-                          className="h-[22px] text-[11px] px-1 py-0"
+                        <BiscDatePicker
+                          compact
                           disabled={disabled}
-                          type="date"
                           value={dateInput(row.inv_date)}
-                          onChange={(e) => onChange(row.id, { inv_date: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
+                          onChange={(val) => onChange(row.id, { inv_date: val })}
                         />
                       </td>
 
                       {/* Invoice Amount */}
                       <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] text-slate-600 truncate">
-                        {row.inv_amt != null ? formatAmount(Number(row.inv_amt)) : "-"}
+                        {row.inv_amt != null && Number(row.inv_amt) > 0
+                          ? formatAmount(Number(row.inv_amt))
+                          : Number(row.amount || 0) > 0
+                            ? formatAmount(Number(row.amount || 0))
+                            : "-"}
                       </td>
 
                       {/* Outstanding */}
                       <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] font-semibold text-slate-800 truncate">
-                        {row.c_bal_amt_org != null ? formatAmount(Number(row.c_bal_amt_org)) : "-"}
+                        {row.c_bal_amt_org != null && Number(row.c_bal_amt_org) > 0
+                          ? formatAmount(Number(row.c_bal_amt_org))
+                          : Number(row.amount || 0) > 0
+                            ? formatAmount(Number(row.amount || 0))
+                            : "-"}
                       </td>
 
                       {/* Allocated Amount with compact Full button */}

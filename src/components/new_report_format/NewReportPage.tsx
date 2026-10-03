@@ -196,6 +196,7 @@ export function NewReportPage({
                   onChange={onReportVariantChange}
                   placeholder="Standard"
                   loading={loading}
+                  disabled={loading}
                 />
               </div>
             )}
@@ -318,6 +319,8 @@ function FieldCell({
   defaultSpan: number;
 }) {
   const span = field.colSpan ?? defaultSpan;
+  // Only true loading (options fetch) — never treat disabled as loading
+  const fieldLoading = Boolean(field.loading);
 
   if (field.type === "daterange" && field.toKey) {
     const half = Math.min(span, 3);
@@ -362,7 +365,8 @@ function FieldCell({
             }))}
             value={Array.isArray(value) ? value : value ? [value] : ["All"]}
             onChange={(v) => onChange(field.key, v)}
-            loading={field.loading || disabled}
+            loading={fieldLoading}
+            disabled={disabled}
             placeholder={field.placeholder ?? "All"}
           />
         </>
@@ -376,7 +380,8 @@ function FieldCell({
             value={value ?? ""}
             onChange={(v) => onChange(field.key, v)}
             placeholder={field.placeholder ?? "All"}
-            loading={field.loading || disabled}
+            loading={fieldLoading}
+            disabled={disabled}
           />
         </>
       )}
@@ -402,7 +407,14 @@ function FieldCell({
             onChange={(e) => onChange(field.key, e.target.value)}
             placeholder={field.placeholder}
             disabled={disabled}
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              opacity: disabled ? 0.65 : 1,
+              cursor: disabled ? "not-allowed" : undefined,
+              background: disabled
+                ? "var(--panel-soft, #f0f4f8)"
+                : inputStyle.background,
+            }}
           />
         </>
       )}
@@ -444,12 +456,14 @@ function SingleSelectField({
   onChange,
   placeholder = "All",
   loading,
+  disabled,
 }: {
   options: ReportOption[];
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   loading?: boolean;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -463,7 +477,10 @@ function SingleSelectField({
   const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const isDisabled = Boolean(loading || disabled);
+
   const selected = options.find((o) => o.value === value);
+  // Only show "Loading…" when actually loading options — not when merely disabled
   const display = loading
     ? "Loading…"
     : selected
@@ -521,6 +538,11 @@ function SingleSelectField({
     }
   }, [open]);
 
+  // Close panel if control becomes disabled while open
+  useEffect(() => {
+    if (isDisabled && open) setOpen(false);
+  }, [isDisabled, open]);
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return options;
@@ -539,11 +561,12 @@ function SingleSelectField({
 
   const clear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isDisabled) return;
     onChange("");
   };
 
   const panel =
-    open && !loading && panelRect
+    open && !isDisabled && panelRect
       ? createPortal(
           <div
             ref={panelRef}
@@ -706,8 +729,8 @@ function SingleSelectField({
       <button
         ref={triggerRef}
         type="button"
-        disabled={loading}
-        onClick={() => !loading && setOpen((o) => !o)}
+        disabled={isDisabled}
+        onClick={() => !isDisabled && setOpen((o) => !o)}
         style={{
           width: "100%",
           display: "flex",
@@ -721,17 +744,20 @@ function SingleSelectField({
             loading || !selected
               ? "var(--muted, #6b7a8d)"
               : "var(--text, #1a1a2e)",
-          background: "var(--panel, #ffffff)",
+          background: isDisabled
+            ? "var(--panel-soft, #f0f4f8)"
+            : "var(--panel, #ffffff)",
           border: `1px solid ${
             open ? "var(--primary, #00378c)" : "var(--border, #cbd5e1)"
           }`,
           borderRadius: 6,
-          cursor: loading ? "not-allowed" : "pointer",
+          cursor: isDisabled ? "not-allowed" : "pointer",
           textAlign: "left",
           boxShadow: open
             ? "0 0 0 3px color-mix(in srgb, var(--primary, #00378c) 18%, transparent)"
             : "none",
           boxSizing: "border-box",
+          opacity: isDisabled && !loading ? 0.75 : 1,
         }}
       >
         <span
@@ -752,7 +778,7 @@ function SingleSelectField({
             flexShrink: 0,
           }}
         >
-          {value && !loading && (
+          {value && !loading && !disabled && (
             <span
               onClick={clear}
               title="Clear"
