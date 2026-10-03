@@ -809,6 +809,22 @@ function JVDocument({
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
+    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+
+    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
+    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+
+    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
+    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+
+    const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
+    if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
+
+    const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
+    if (diff > 0.001) {
+      return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -878,8 +894,10 @@ function JVDocument({
             documentNo={form.doc_no}
             documentDate={form.doc_date}
             total={formatAmount(debitTotal > 0 ? debitTotal : total + totalTax)}
+            divCode={form.div_code}
+            divName={form.div_name}
             onBack={onClose}
-          headerExpanded={showHeaderDetails}
+            headerExpanded={showHeaderDetails}
             onToggleHeader={() => setShowHeaderDetails(value => !value)}
           />
           <div className="flex items-center gap-2">
