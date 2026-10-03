@@ -222,6 +222,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const termsWrapRef = useRef<HTMLDivElement | null>(null);
+  const focusNewTermRef = useRef(false);
   const [pendingValidateTab, setPendingValidateTab] = useState<FreightQuotationInitialTab | null>(null);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
   const [deepOpenDone, setDeepOpenDone] = useState("");
@@ -544,6 +546,15 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     }
   };
 
+    useEffect(() => {
+    if (!focusNewTermRef.current) return;
+    focusNewTermRef.current = false;
+    const areas = termsWrapRef.current?.querySelectorAll("textarea");
+    const last = areas?.[areas.length - 1] as HTMLTextAreaElement | undefined;
+    last?.focus();
+    last?.scrollIntoView({ block: "nearest" });
+  }, [terms.length]);
+
   const loadRows = async () => {
     const companyCode = String(userInfo?.company_code || userInfo?.COMPANY_CODE || header.company_code || "");
     if (!companyCode) return;
@@ -696,7 +707,20 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       const copied = toHeaderFromEnquiry(sourceHeader, header);
       const nextHeader = { ...header, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" };
       const sourceDetails = (response.data?.data?.details || []).map(normalizeLookupRow);
+      // setHeader((current) => ({ ...current, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" }));
       setHeader((current) => ({ ...current, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" }));
+      setHeaderNames((current) => ({
+        ...current,
+        prin_name: lookupText(sourceHeader, "prin_name") || current.prin_name,
+        walkin_prin_name: lookupText(sourceHeader, "walkin_prin_name"),
+        dept_name: lookupText(sourceHeader, "dept_name") || current.dept_name,
+        origin_port_name: lookupText(sourceHeader, "origin_port_name"),
+        destination_port_name: lookupText(sourceHeader, "destination_port_name"),
+        salesman_name: lookupText(sourceHeader, "salesman_name"),
+        forwarder_name: lookupText(sourceHeader, "forwarder_name"),
+        vehicle_type_name: lookupText(sourceHeader, "vtype_name"),
+        curr_name: lookupText(sourceHeader, "curr_name") || current.curr_name,
+      }));
       setDetails(sourceDetails.length ? sourceDetails.map((item, index) => toDetailFromSourceEnquiry(item, nextHeader, index + 1)) : [buildInitialDetail(nextHeader, 1)]);
       setActiveTab("charges");
     } catch (error) {
@@ -902,7 +926,11 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   const addDetail = () => setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
   const removeDetail = (index: number) => setDetails((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, srno: rowIndex + 1 })));
-  const addTerm = () => setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
+  // const addTerm = () => setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
+  const addTerm = () => {
+    focusNewTermRef.current = true;
+    setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
+  };
   const removeTerm = (index: number) => setTerms((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, serial_no: rowIndex + 1, sr_no: String(rowIndex + 1) })));
 
   const persistQuotation = async () => {
@@ -1168,7 +1196,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                     {header.transport_mode === "R" && (
                     <><FormLookup label="Vehicle Type" value={header.vehicle_type} displayValue={headerNames.vehicle_type_name} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     </>)}
-                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
+                    <FormInput label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} className="truncate" />
                   </div>
                 </SectionPanel>
                 {/* <SectionPanel className="xl:col-span-5" icon={PackageCheck} title="Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
@@ -1189,7 +1217,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                    <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
                    <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} required/>
                     </div>
-                   <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
+                   <FormInput label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} className="truncate" />
                     </SectionPanel>
                           {/* <div className="grid gap-2 lg:grid-cols-12">
                             <SectionPanel className="lg:col-span-5" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
@@ -1366,8 +1394,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                 {terms.length === 0 ? (
                   <div className="rounded-md border border-dashed bg-muted/25 p-5 text-center text-sm text-muted-foreground">No terms added. Oracle save procedure can also copy defaults from `MS_QUOTE_TERMS`.</div>
                 ) : (
-                  <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner">
-                    <table className="w-full border-collapse text-[11px]">
+                  // <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner">
+                  <div ref={termsWrapRef} className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner">
+                  <table className="w-full border-collapse text-[11px]">
                       <thead>
                         <tr className="border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
                           <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Sr No</th>
@@ -1644,6 +1673,7 @@ function toHeaderFromRow(row: LookupRow, user: Record<string, unknown> | null, t
 function toHeaderFromEnquiry(row: LookupRow, fallback: QuotationHeader): Partial<QuotationHeader> {
   return {
     prin_code: lookupText(row, "prin_code") || fallback.prin_code,
+    walkin_prin_code: lookupText(row, "walkin_prin_code") || fallback.walkin_prin_code,
     dept_code: lookupText(row, "dept_code") || fallback.dept_code,
     job_type: lookupText(row, "job_type") || fallback.job_type,
     transport_mode: lookupText(row, "transport_mode") || fallback.transport_mode,
@@ -1709,6 +1739,8 @@ function toDetailFromSourceEnquiry(row: LookupRow, header: QuotationHeader, srno
       srno: Number(lookupText(row, "srno") || lookupText(row, "sr_no")) || srno,
       act_code: lookupText(row, "act_code"),
       activity: lookupText(row, "activity") || lookupText(row, "ms_activity_activity"),
+      uoc: lookupText(row, "uoc"),
+      moc1: lookupText(row, "moc1"),
       activity_remarks: lookupText(row, "remarks"),
       rate_remarks: lookupText(row, "remarks"),
       transport_mode: lookupText(row, "transport_mode") || header.transport_mode,

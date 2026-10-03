@@ -72,6 +72,8 @@ type Line = {
   tx_compnt_amt_1?: number;
   prod_code?: string;
   other_remarks?: string;
+  qty_rcv?: number;
+  amount_rcv?: number;
 };
 
 type FormState = {
@@ -104,6 +106,8 @@ type FormState = {
   hse_compliance?: string;
   app_ref_no?: string;
 pdo_type?: string;
+cash_ind?: string;
+inv_generated?: string;
 delivery_to?: string;
 dlvr_mobile?: string;
 dlvr_email?: string;
@@ -774,11 +778,13 @@ function CommercialEditor({
             divCode={form.div_code}
             divName={form.div_name}
             onBack={onClose}
-          headerExpanded={showHeaderDetails}
+            headerExpanded={showHeaderDetails}
             onToggleHeader={() => setShowHeaderDetails(value => !value)}
           />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <span className="rounded-full border border-primary-foreground/35 px-2.5 py-1 text-xs font-semibold text-primary-foreground">Cancelled</span>}
+            {form.inv_generated === "Y" && <span className="rounded-full bg-emerald-500/20 border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-100">Invoice Generated</span>}
+            {form.cash_ind === "Y" && <span className="rounded-full bg-amber-500/20 border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-100">CPO</span>}
             {form.doc_no && form.doc_no !== "0" && (
               <>
                 <Button type="button" variant="secondary" 
@@ -1010,6 +1016,15 @@ function CommercialEditor({
         <option value="PDO-OTO">PDO-OTO</option>
         <option value="PDO-NON-OTO">PDO-NON-OTO</option>
         <option value="NON-PDO">NON-PDO</option>
+      </Select>
+    </Field>
+  )}
+  {isPO && (
+    <Field label="Order Type (LPO/CPO)">
+      <Select value={form.cash_ind || "N"}
+        onChange={(e) => update("cash_ind", e.target.value)}>
+        <option value="N">LPO - Credit Purchase</option>
+        <option value="Y">CPO - Cash Purchase</option>
       </Select>
     </Field>
   )}
@@ -1407,8 +1422,10 @@ function CommercialEditor({
                       <th className="px-2 py-2 text-left">Description</th>
                       {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
                       <th className="px-2 py-2 text-left">Qty</th>
+                      {isPO && <th className="px-2 py-2 text-left">Qty Rcv</th>}
                       <th className="px-2 py-2 text-left">Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
+                      {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>}
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
@@ -1491,14 +1508,15 @@ function CommercialEditor({
                         </td>
                         )}
                         <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        {isPO && <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
                         <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
-                        // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const amount = Number(e.target.value || 0);
     const taxperc   = Number(line.tx_compnt_perc_1 || 0);
     updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
   }} /></td>
+                        {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-14 max-w-[60px] px-1 py-1">
                           <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
@@ -1755,6 +1773,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     dlvr_mobile:        text(header.dlvr_mobile ?? header.mobile_no),
     dlvr_email:         text(header.dlvr_email ?? header.e_mail),
     pdo_type:      text(header.pdo_type),
+    cash_ind:      text(header.cash_ind || "N"),
+    inv_generated: text(header.inv_generated || "N"),
     salesman_code: text(header.salesman_code),
     salesman_name: text(nested(headerRaw, ["Salesman", "salesman_name"]) ?? header.salesman_name),
     sector_code:   text(header.sector_code),
@@ -1806,6 +1826,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         prod_code:     docType === "PO" ? text(row.prod_code) : undefined,
         other_remarks: docType === "PO" ? text(row.other_remarks) : undefined,
         cost_code: docType === "PO" ? text(row.cost_code) : undefined,
+        qty_rcv: docType === "PO" ? Number(row.qty_rcv || 0) : undefined,
+        amount_rcv: docType === "PO" ? Number(row.amount_rcv || 0) : undefined,
       };
     }),
   };
@@ -1822,6 +1844,8 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     party_name: form.ac_name || "",
     invoice_no: form.inv_no || "",
     invoice_date: form.inv_date || "",
+    cash_ind: form.cash_ind || "N",
+    inv_generated: form.inv_generated || "N",
     
     detail: form.detail.map((line) => {
       const lineCurrCode = line.curr_code || form.curr_code || "";
@@ -1856,6 +1880,8 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
         prod_code: line.prod_code || "",
         cost_code: line.cost_code || "", 
         other_remarks: line.other_remarks || "",
+        qty_rcv: Number(line.qty_rcv || 0),
+        amount_rcv: Number(line.amount_rcv || 0),
         header_ac_code: form.ac_code,
       };
     }),
