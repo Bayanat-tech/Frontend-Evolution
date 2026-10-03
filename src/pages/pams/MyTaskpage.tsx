@@ -12,7 +12,8 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
-import { DataTable } from "../../components/ui/PamsDataTable";
+import { DataTable } from "../../components/ui/DataTable";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
@@ -759,7 +760,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         columns={columns}
         data={rows}
         title={`${rows.length.toLocaleString()} Records`}
-        subtitle={`${statusFilter} Appraisals`}
+        // subtitle={`${statusFilter} Appraisals`}
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search appraisal..."
