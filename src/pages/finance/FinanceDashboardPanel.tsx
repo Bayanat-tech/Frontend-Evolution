@@ -86,6 +86,23 @@ type PartyRow = {
   SHARE_PERCENT?: number;
 };
 
+type ExposureRow = {
+  PARTY_TYPE?: "CUSTOMER" | "SUPPLIER";
+  AC_CODE?: string;
+  AC_NAME?: string;
+  OPEN_INVOICE_COUNT?: number;
+  OUTSTANDING_AMOUNT?: number;
+  OVERDUE_AMOUNT?: number;
+  OLDEST_DUE_DATE?: string;
+};
+
+type ExposureSummary = {
+  RECEIVABLE_OUTSTANDING?: number;
+  RECEIVABLE_OVERDUE?: number;
+  PAYABLE_OUTSTANDING?: number;
+  PAYABLE_OVERDUE?: number;
+};
+
 type AttentionRow = {
   DOC_TYPE?: string;
   DOC_NO?: string;
@@ -106,7 +123,12 @@ type DashboardData = {
   summary?: Summary;
   monthly?: MonthlyRow[];
   topParties?: PartyRow[];
+  topCustomers?: ExposureRow[];
+  topSuppliers?: ExposureRow[];
+  exposureSummary?: ExposureSummary;
   attention?: AttentionRow[];
+  currency_code?: string;
+  currency_symbol?: string;
 };
 
 const months = [
@@ -181,6 +203,14 @@ export function FinanceDashboardPanel() {
   }, [loadDashboard]);
 
   const summary = data.summary || {};
+  const exposure = data.exposureSummary || {};
+  const currencyCode = data.currency_code || "OMR";
+  const masterCurrencySymbol = String(data.currency_symbol || "").trim();
+  const currencySymbol = currencyCode.toUpperCase() === "OMR"
+    ? currencySymbolFor("OMR")
+    : isUsableCurrencySymbol(masterCurrencySymbol, currencyCode)
+      ? masterCurrencySymbol
+      : currencySymbolFor(currencyCode);
 
   // Hero Overview Cards
   const netFlow = number(summary.NET_CASH_FLOW);
@@ -377,74 +407,82 @@ export function FinanceDashboardPanel() {
         </div>
       )}
 
-      {/* Top 4 Hero Cards: Net Liquidity & Volume */}
+      {/* Decision KPIs: collections, obligations, liquidity and controls */}
       <section className="finance-dashboard-hero-kpis">
         <HeroCard
-          title="Inflow & Revenue"
-          value={number(summary.TOTAL_INFLOW)}
-          prevValue={summary.PREV_TOTAL_INFLOW}
+          title="Customer Receivables"
+          value={number(exposure.RECEIVABLE_OUTSTANDING)}
           icon={TrendingUp}
           tone="emerald"
           loading={loading}
-          caption="Receipts and sales invoices"
+          caption={`${formatCurrency(number(exposure.RECEIVABLE_OVERDUE), false, currencySymbol)} overdue`}
+          currencySymbol={currencySymbol}
         />
 
         <HeroCard
-          title="Outflow & Purchases"
-          value={number(summary.TOTAL_OUTFLOW)}
-          prevValue={summary.PREV_TOTAL_OUTFLOW}
+          title="Supplier Payables"
+          value={number(exposure.PAYABLE_OUTSTANDING)}
           icon={TrendingDown}
           tone="rose"
           loading={loading}
-          caption="Payments and purchase invoices"
+          caption={`${formatCurrency(number(exposure.PAYABLE_OVERDUE), false, currencySymbol)} overdue`}
+          currencySymbol={currencySymbol}
         />
 
         <HeroCard
-          title="Net Cash Position"
+          title="Cash Received"
+          value={number(summary.BANK_RECEIPT_AMOUNT) + number(summary.CASH_RECEIPT_AMOUNT)}
+          icon={Banknote}
+          tone="emerald"
+          loading={loading}
+          caption="Bank and cash receipts"
+          currencySymbol={currencySymbol}
+        />
+
+        <HeroCard
+          title="Cash Paid"
+          value={number(summary.BANK_PAYMENT_AMOUNT) + number(summary.CASH_PAYMENT_AMOUNT)}
+          icon={CreditCard}
+          tone="rose"
+          loading={loading}
+          caption="Bank and cash payments"
+          currencySymbol={currencySymbol}
+        />
+
+        <HeroCard
+          title="Net Cash Movement"
           value={netFlow}
           prevValue={summary.PREV_NET_CASH_FLOW}
           icon={Scale}
           tone={netFlowIsPositive ? "emerald" : "rose"}
           loading={loading}
-          caption="Treasury Liquidity"
+          caption="Receipts less payments"
           isBalance
+          currencySymbol={currencySymbol}
         />
 
         <HeroCard
-          title="Audit & Exceptions"
-          value={number(summary.TOTAL_CANCELED_COUNT)}
+          title="Control Exceptions"
+          value={number(summary.TOTAL_CANCELED_COUNT) + number(summary.UNPOSTED_JOURNAL_COUNT)}
           icon={AlertTriangle}
           tone="amber"
           loading={loading}
-          caption={`${number(summary.UNPOSTED_JOURNAL_COUNT)} unposted JVs`}
+          caption={`${number(summary.TOTAL_CANCELED_COUNT)} cancelled · ${number(summary.UNPOSTED_JOURNAL_COUNT)} unposted JVs`}
           isCount
+          currencySymbol={currencySymbol}
         />
       </section>
 
-      {/* Commercial Documents Section */}
+      {/* Compact document activity snapshot */}
       <section className="finance-dashboard-section">
         <div className="finance-dashboard-section-title">
           <span />
-          <h2>Commercial Documents</h2>
+          <h2>Document &amp; Treasury Activity</h2>
           <span />
         </div>
-        <div className="finance-dashboard-kpis">
-          {commercialCards.map((card) => (
-            <ModuleCard key={card.title} {...card} loading={loading} onNavigate={navigate} />
-          ))}
-        </div>
-      </section>
-
-      {/* Treasury, Cash & Bank Section */}
-      <section className="finance-dashboard-section">
-        <div className="finance-dashboard-section-title">
-          <span />
-          <h2>Treasury, Cash &amp; Bank Operations</h2>
-          <span />
-        </div>
-        <div className="finance-dashboard-kpis">
-          {treasuryCards.map((card) => (
-            <ModuleCard key={card.title} {...card} loading={loading} onNavigate={navigate} />
+        <div className="finance-dashboard-kpis finance-dashboard-kpis-summary">
+          {[...commercialCards, ...treasuryCards].map((card) => (
+            <ModuleCard key={card.title} {...card} loading={loading} onNavigate={navigate} currencySymbol={currencySymbol} />
           ))}
         </div>
       </section>
@@ -452,9 +490,10 @@ export function FinanceDashboardPanel() {
       {/* Interactive Charts: 12-Month Liquidity & Activity Breakdown */}
       <div className="finance-dashboard-chart-grid">
         <CashFlowTrendChart
-          title="Monthly Inflow vs Outflow"
+          title="Monthly Cash Received vs Paid"
           rows={data.monthly || []}
           loading={loading}
+          currencySymbol={currencySymbol}
         />
         <ActivityMixChart
           title="Monthly Transaction Volume"
@@ -463,10 +502,14 @@ export function FinanceDashboardPanel() {
         />
       </div>
 
-      {/* Bottom Grid: Top Parties & Recent Attention Queue */}
-      <div className="finance-dashboard-panel-grid">
-        <TopPartiesPanel rows={data.topParties || []} loading={loading} />
-        <AttentionQueuePanel rows={data.attention || []} loading={loading} onNavigate={navigate} />
+      {/* Outstanding exposure: actionable collection and payment priorities */}
+      <div className="finance-dashboard-panel-grid finance-dashboard-exposure-grid">
+        <ExposurePanel title="Top 5 Customers to Collect" subtitle="Open sales invoices" rows={data.topCustomers || []} loading={loading} currencySymbol={currencySymbol} tone="customer" />
+        <ExposurePanel title="Top 5 Suppliers to Pay" subtitle="Open purchase invoices" rows={data.topSuppliers || []} loading={loading} currencySymbol={currencySymbol} tone="supplier" />
+      </div>
+
+      <div className="finance-dashboard-panel-grid finance-dashboard-activity-grid">
+        <AttentionQueuePanel rows={data.attention || []} loading={loading} onNavigate={navigate} currencySymbol={currencySymbol} />
       </div>
     </div>
   );
@@ -484,6 +527,7 @@ type HeroCardProps = {
   caption?: string;
   isBalance?: boolean;
   isCount?: boolean;
+  currencySymbol: string;
 };
 
 function HeroCard({
@@ -496,6 +540,7 @@ function HeroCard({
   caption,
   isBalance,
   isCount,
+  currencySymbol,
 }: HeroCardProps) {
   const change =
     prevValue !== undefined && prevValue > 0
@@ -517,7 +562,7 @@ function HeroCard({
         ) : isCount ? (
           value.toLocaleString()
         ) : (
-          formatCurrency(value, isBalance)
+          formatCurrency(value, isBalance, currencySymbol)
         )}
       </div>
 
@@ -531,7 +576,7 @@ function HeroCard({
           <span>{caption || "Current period"}</span>
         )}
         {prevValue !== undefined && prevValue > 0 && !isCount && (
-          <span>Prev: {compactNumber(prevValue)} OMR</span>
+          <span>Prev: {formatCompactCurrency(prevValue, currencySymbol)}</span>
         )}
       </div>
     </article>
@@ -549,6 +594,7 @@ type ModuleCardProps = {
   caption?: string;
   loading?: boolean;
   onNavigate?: (route: string) => void;
+  currencySymbol?: string;
 };
 
 function ModuleCard({
@@ -562,6 +608,7 @@ function ModuleCard({
   caption,
   loading,
   onNavigate,
+  currencySymbol = "¤",
 }: ModuleCardProps) {
   const amt = number(amount);
   const cnt = number(count);
@@ -587,7 +634,7 @@ function ModuleCard({
         {loading ? (
           <span className="finance-dashboard-skeleton" />
         ) : (
-          formatCurrency(amt)
+          formatCurrency(amt, false, currencySymbol)
         )}
       </strong>
 
@@ -614,10 +661,12 @@ function CashFlowTrendChart({
   title,
   rows,
   loading,
+  currencySymbol,
 }: {
   title: string;
   rows: MonthlyRow[];
   loading: boolean;
+  currencySymbol: string;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -640,7 +689,7 @@ function CashFlowTrendChart({
 
   const maxVal = Math.max(
     1000,
-    ...normalized.flatMap((r) => [number(r.INFLOW), number(r.OUTFLOW)])
+    ...normalized.flatMap((r) => [number(r.RECEIPTS), number(r.PAYMENTS)])
   );
 
   const width = 640;
@@ -654,8 +703,8 @@ function CashFlowTrendChart({
   const getY = (val: number) => top + (height - top - bottom) * (1 - Math.min(1, Math.max(0, val / maxVal)));
   const baseY = getY(0);
 
-  const inflowPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.INFLOW))}`).join(" ");
-  const outflowPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.OUTFLOW))}`).join(" ");
+  const inflowPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.RECEIPTS))}`).join(" ");
+  const outflowPoints = normalized.map((r, i) => `${getX(i)},${getY(number(r.PAYMENTS))}`).join(" ");
 
   const inflowArea = `${getX(0)},${baseY} ${inflowPoints} ${getX(11)},${baseY}`;
   const outflowArea = `${getX(0)},${baseY} ${outflowPoints} ${getX(11)},${baseY}`;
@@ -672,11 +721,11 @@ function CashFlowTrendChart({
         <div className="finance-dashboard-card-legend">
           <span>
             <i style={{ background: "#00378C" }} />
-            Inflow
+            Received
           </span>
           <span>
             <i style={{ background: "#e11d48" }} />
-            Outflow
+            Paid
           </span>
         </div>
       </div>
@@ -760,7 +809,7 @@ function CashFlowTrendChart({
               <circle
                 key={`inflow-${i}`}
                 cx={getX(i)}
-                cy={getY(number(r.INFLOW))}
+                cy={getY(number(r.RECEIPTS))}
                 r={hoverIndex === i ? "5" : "3.5"}
                 fill="#00378C"
                 stroke="#ffffff"
@@ -781,7 +830,7 @@ function CashFlowTrendChart({
               <circle
                 key={`outflow-${i}`}
                 cx={getX(i)}
-                cy={getY(number(r.OUTFLOW))}
+                cy={getY(number(r.PAYMENTS))}
                 r={hoverIndex === i ? "5" : "3.5"}
                 fill="#e11d48"
                 stroke="#ffffff"
@@ -833,14 +882,14 @@ function CashFlowTrendChart({
               <strong style={{ fontSize: "10.5px" }}>{months[hoverIndex + 1]}</strong>
               <div style={{ display: "flex", gap: "10px", marginTop: "3px" }}>
                 <span style={{ color: "#93c5fd" }}>
-                  Inflow: {number(hoveredRow.INFLOW).toLocaleString()} OMR
+                  Received: {formatCurrency(number(hoveredRow.RECEIPTS), false, currencySymbol)}
                 </span>
                 <span style={{ color: "#fda4af" }}>
-                  Outflow: {number(hoveredRow.OUTFLOW).toLocaleString()} OMR
+                  Paid: {formatCurrency(number(hoveredRow.PAYMENTS), false, currencySymbol)}
                 </span>
               </div>
-              <div style={{ marginTop: "2px", fontSize: "9px", color: number(hoveredRow.INFLOW) >= number(hoveredRow.OUTFLOW) ? "#86efac" : "#fca5a5" }}>
-                Net: {(number(hoveredRow.INFLOW) - number(hoveredRow.OUTFLOW)).toLocaleString()} OMR
+              <div style={{ marginTop: "2px", fontSize: "9px", color: number(hoveredRow.RECEIPTS) >= number(hoveredRow.PAYMENTS) ? "#86efac" : "#fca5a5" }}>
+                Net: {formatCurrency(number(hoveredRow.RECEIPTS) - number(hoveredRow.PAYMENTS), true, currencySymbol)}
               </div>
             </div>
           )}
@@ -1096,15 +1145,31 @@ function ActivityMixChart({
 
 // ─── Bottom Panels: Top Parties & Attention Queue ─────────────────────────────
 
-function TopPartiesPanel({ rows, loading }: { rows: PartyRow[]; loading: boolean }) {
+function ExposurePanel({
+  title,
+  subtitle,
+  rows,
+  loading,
+  currencySymbol,
+  tone,
+}: {
+  title: string;
+  subtitle: string;
+  rows: ExposureRow[];
+  loading: boolean;
+  currencySymbol: string;
+  tone: "customer" | "supplier";
+}) {
+  const largest = Math.max(1, ...rows.map((row) => number(row.OUTSTANDING_AMOUNT)));
+
   return (
-    <article className="finance-dashboard-card">
+    <article className={`finance-dashboard-card finance-dashboard-exposure tone-${tone}`}>
       <div className="finance-dashboard-card-head">
         <h3>
           <Users size={15} className="finance-card-icon" />
-          Top 5 Account Parties
+          {title}
         </h3>
-        <span>By transaction turnover</span>
+        <span>{subtitle}</span>
       </div>
 
       <div className="finance-dashboard-ranking">
@@ -1113,28 +1178,32 @@ function TopPartiesPanel({ rows, loading }: { rows: PartyRow[]; loading: boolean
             <Loader2 className="animate-spin" size={18} />
           </div>
         ) : rows.length > 0 ? (
-          rows.map((row, idx) => (
-            <div className="finance-dashboard-rank" key={idx}>
+          rows.map((row, idx) => {
+            const outstanding = number(row.OUTSTANDING_AMOUNT);
+            const overdue = number(row.OVERDUE_AMOUNT);
+            const overduePercent = outstanding > 0 ? (overdue / outstanding) * 100 : 0;
+            return (
+            <div className="finance-dashboard-rank" key={`${row.AC_CODE || row.AC_NAME}-${idx}`}>
               <b>{idx + 1}</b>
               <div>
                 <div>
                   <strong title={row.AC_NAME}>{row.AC_NAME}</strong>
-                  <span>{formatCurrency(number(row.TOTAL_AMOUNT))}</span>
+                  <span>{formatCurrency(outstanding, false, currencySymbol)}</span>
                 </div>
                 <i>
-                  <span style={{ width: `${Math.min(100, number(row.SHARE_PERCENT))}%` }} />
+                  <span style={{ width: `${Math.min(100, (outstanding / largest) * 100)}%` }} />
                 </i>
                 <small>
-                  {number(row.VOUCHER_COUNT)} vouchers &middot;{" "}
-                  {number(row.SHARE_PERCENT).toFixed(1)}% of top volume
+                  {number(row.OPEN_INVOICE_COUNT)} open invoices &middot; {formatCurrency(overdue, false, currencySymbol)} overdue ({overduePercent.toFixed(0)}%)
                 </small>
               </div>
             </div>
-          ))
+            );
+          })
         ) : (
           <div className="finance-dashboard-empty">
             <CheckCircle2 size={18} />
-            <span>No transaction parties found</span>
+            <span>No open balances found</span>
           </div>
         )}
       </div>
@@ -1146,10 +1215,12 @@ function AttentionQueuePanel({
   rows,
   loading,
   onNavigate,
+  currencySymbol,
 }: {
   rows: AttentionRow[];
   loading: boolean;
   onNavigate: (route: string) => void;
+  currencySymbol: string;
 }) {
   const getDocRoute = (docType: string) => {
     switch (docType?.toUpperCase()) {
@@ -1213,7 +1284,7 @@ function AttentionQueuePanel({
                 </div>
 
                 <div className="finance-dashboard-attention-amount">
-                  {number(row.AMOUNT).toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                  {formatCurrency(number(row.AMOUNT), false, currencySymbol)}
                 </div>
 
                 <span
@@ -1254,15 +1325,51 @@ function number(val: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatCurrency(val: number, isBalance = false): string {
+function formatCurrency(val: number, isBalance = false, symbol = "¤"): string {
   const absFormatted = Math.abs(val).toLocaleString("en-US", {
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   });
+  const amount = usesCurrencySuffix(symbol)
+    ? `${absFormatted} ${symbol}`
+    : `${symbol}${needsCurrencyGap(symbol) ? " " : ""}${absFormatted}`;
   if (isBalance && val < 0) {
-    return `(${absFormatted}) OMR`;
+    return `(${amount})`;
   }
-  return `${absFormatted} OMR`;
+  return amount;
+}
+
+function needsCurrencyGap(symbol: string): boolean {
+  return /^[A-Za-z]{2,5}$/.test(symbol.trim());
+}
+
+function usesCurrencySuffix(symbol: string): boolean {
+  return /[\u0600-\u06ff]/.test(symbol);
+}
+
+function formatCompactCurrency(value: number, symbol: string): string {
+  const compact = compactNumber(value);
+  return usesCurrencySuffix(symbol)
+    ? `${compact} ${symbol}`
+    : `${symbol}${needsCurrencyGap(symbol) ? " " : ""}${compact}`;
+}
+
+function currencySymbolFor(code: string): string {
+  const symbols: Record<string, string> = {
+    AED: "د.إ",
+    EUR: "€",
+    GBP: "£",
+    INR: "₹",
+    OMR: "ر.ع.",
+    QAR: "ر.ق",
+    SAR: "ر.س",
+    USD: "$",
+  };
+  return symbols[code.toUpperCase()] || "¤";
+}
+
+function isUsableCurrencySymbol(symbol: string, code: string): boolean {
+  return Boolean(symbol && !symbol.includes("?") && symbol.toUpperCase() !== code.toUpperCase());
 }
 
 function compactNumber(val: number): string {
