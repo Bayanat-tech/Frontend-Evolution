@@ -1,5 +1,5 @@
-import { Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
@@ -33,12 +33,16 @@ import {
   text,
   DiscAmountPercentage,
   TotalUnitPrice,
+  amountBeforeDiscPrice,
+  TotalDiscAmount,
 } from "../../purchase_sales/purchase/Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
+import { createPortal } from "react-dom";
 
 export type { PurchaseOrderEditorState };
 
@@ -74,12 +78,74 @@ export function ProductionJobOrderEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
-
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const submitBtnRef = useRef<HTMLDivElement>(null);
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const applyDiscountCalculation = (type: "amount" | "percent", value?: number) => {
+    const totalAmount = rows.reduce(
+      (sum, row) => sum + amountBeforeDiscPrice(row),
+      0
+    );
+
+    if (totalAmount <= 0) return;
+
+    const inputValue = value ?? (type === "amount" ? form.disc_hdr_price : form.disc_hdr_percent);
+
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (type === "amount") {
+      discountAmount = Number(inputValue) || 0;
+      discountPercent = (discountAmount / totalAmount) * 100;
+    } else {
+      discountPercent = Number(inputValue) || 0;
+      discountAmount = totalAmount * (discountPercent / 100);
+    }
+
+    setDiscountEditType(type);
+
+    setForm((current) => ({
+      ...current,
+      disc_hdr_price: discountAmount,
+      disc_hdr_percent: discountPercent,
+    }));
+
+    setRows((current) =>
+      current.map((row) => {
+        const amount = amountBeforeDiscPrice(row);
+        return {
+          ...row,
+          disc_percent: discountPercent,
+          disc_price: amount * (discountPercent / 100),
+        };
+      })
+    );
+  };
+
+  const rowsAmountSignature = rows
+    .map((r) => `${r.unit_price}|${r.qty_puom}|${r.qty_luom}|${r.uppp}`)
+    .join(",");
+
+  const effectiveDiscountType: "amount" | "percent" | null =
+    discountEditType ??
+    (numberOrZero(form.disc_hdr_percent) !== 0
+      ? "percent"
+      : numberOrZero(form.disc_hdr_price) !== 0
+        ? "amount"
+        : null);
+
+  useEffect(() => {
+    if (form.discount_scoope !== "PO" || !effectiveDiscountType) return;
+    applyDiscountCalculation(effectiveDiscountType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsAmountSignature, form.discount_scoope]);
 
   // Reset form when editor changes
   useEffect(() => {
@@ -194,7 +260,8 @@ export function ProductionJobOrderEditor({
   const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
-
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const finalTotal = (() => {
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
@@ -205,20 +272,20 @@ export function ProductionJobOrderEditor({
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => {
       let updated = { ...current, [field]: value };
-      
+
       // When discount amount is set, calculate the percentage
       if (field === "disc_hdr_price" && Number(value) > 0) {
         updated.disc_hdr_percent = DiscAmountPercentage(updated, rows);
       }
-      
+
       return updated;
     });
-    
+
     // When discount amount is set, update disc_price in all detail rows
     if (field === "disc_hdr_price") {
       setRows((current) => current.map((row) => ({ ...row, disc_price: Number(value) || 0 })));
     }
-    
+
     // When header discount percentage is set, clear all detail row discounts
     if (field === "disc_hdr_percent" && Number(value) > 0) {
       setRows((current) => current.map((row) => ({ ...row, disc_percent: 0 })));
@@ -262,25 +329,42 @@ export function ProductionJobOrderEditor({
       },
       "Job Order saved as draft"
     );
-
-  const handleSubmit = () => {
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    return runAction(
-      "submit",
-      async () => {
-        await runWorkflow(
-          "SUBMITTED",
-          PO_DOC_TYPE.JO,
-          form,
-          rows,
-          user?.company_code || "",
-          user?.loginid || user?.username || "ADMIN"
-        );
-      },
-      editMode ? "Job Order updated successfully" : "Job Order created successfully"
-    );
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => {
+      const qtyPuom = numberOrZero(row.qty_puom);
+      const uppp = numberOrZero(row.uppp);
+      const qtyLuom = numberOrZero(row.qty_luom);
+      const unitPrice = numberOrZero(row.unit_price);
+      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+      return !(total > 0);
+    });
+    if (invalidRow) {
+      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    }
+    const rect = submitBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setSubmitConfirmPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+      return setError("Line item discount cannot exceed line item amount");
+    }
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.JO, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Job Production updated successfully" : "Job Production created successfully");
   };
 
   const handleCancel = () =>
@@ -407,16 +491,14 @@ export function ProductionJobOrderEditor({
 
   return (
     <>
-      <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleSubmit();
-        }}
-      >
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="finance-document-ui finance-document-editor commercial-editor payment-workbench flex h-screen flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm px-4 py-2">
+        <form
+          data-header-expanded={showHeaderDetails} className={` finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+          onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
+        >
+          <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              {/* <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                   {editMode ? "Edit Job Order" : "New Job Order"}
@@ -439,71 +521,182 @@ export function ProductionJobOrderEditor({
                   </strong>
                 </div>
               )}
-            </div>
-            <div className="flex items-center gap-2">
-              {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-              {form.doc_no && (
-                <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                </>
-              )}
-               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                <Paperclip size={15} /> Files
-              </Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
-            </div>
-          </div>
-        </CardHeader>
+            </div> */}
+              <FinanceDocumentIdentity
+                title="Job Order"
+                documentNo={form.doc_no}
+                documentDate={form.doc_date}
+                total={formatAmount(grandTotal)}
+                divCode={form.div_code}
+                divName={form.div_name}
+                onBack={onClose}
+                headerExpanded={showHeaderDetails}
+                onToggleHeader={() => setShowHeaderDetails(value => !value)}
+              />
+              <div className="flex items-center gap-2">
+                {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+                {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
+                <div className="flex items-center gap-2">
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                      {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                    </Button>
+                  )}
+                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
+                    {showSubmitConfirm &&
+                      createPortal(
+                        <div
+                          style={{ position: "fixed", top: submitConfirmPos.top, right: submitConfirmPos.right }}
+                          className="z-[9999] w-56 rounded-lg border border-slate-200 bg-white p-3 text-black shadow-xl"
+                        >
+                          <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>
+                              No
+                            </Button>
+                            <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>
+                              Yes
+                            </Button>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                  </div>
 
-        {isCancelled && (
-          <div className="cancelled-document-banner" role="status">
-            <div>
-              <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Job Order"}</strong>
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
+                  )}
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                    </Button>
+                  )}
+
+                </div>
+                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+              </div>
             </div>
-            <p>This Job Order is cancelled and opened in read-only mode.</p>
-          </div>
-        )}
+          </CardHeader>
 
-        <CardContent className="min-h-0 overflow-auto p-3">
-          {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Job Order...</div>
-          ) : (
-            <div className="grid gap-3">
-              <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
-
-              {/* <PurchaseOrderHeaderForm
-                form={form}
-                docType={PO_DOC_TYPE.JO}
-                setForm={setForm}
-                updateField={updateField}
-                disabled={disabled}
-                headerAndLineDisabled={headerAndLineDisabled}
-                editMode={editMode}
-                companyCode={user?.company_code}
-                loginid={user?.loginid || user?.username}
-              /> */}
-{/* 
-              <PurchaseOrderLinesTable
-                rows={rows}
-                form={form}
-                setdetails={setRows}
-                docType={PO_DOC_TYPE.JO}
-                ex_rate={form.ex_rate}
-                updateRow={updateRow}
-                addRow={addRow}
-                removeRow={removeRow}
-                headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_price}
-                companyCode={user?.company_code}
-                loginid={user?.loginid || user?.username}
-              /> */}
+          {isCancelled && (
+            <div className="cancelled-document-banner" role="status">
+              <div>
+                <span className="cancelled-document-kicker">Cancelled Document</span>
+                <strong>{form.doc_no || "Job Order"}</strong>
+              </div>
+              <p>This Job Order is cancelled and opened in read-only mode.</p>
             </div>
           )}
-        </CardContent>
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+        <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
+            {loading ? (
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+            ) : (
+              <div className="commercial-editor-sections grid gap-3 min-w-0">
+                <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+
+                {!showHeaderDetails ? (
+                  <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                    <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                        <span className="font-medium">{form.doc_date}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Division:</span>
+                        <span className="font-medium">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 truncate">
+                        <span className="font-semibold text-[#00378C]">A/c Code:</span>
+                        <span className="font-medium truncate">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "Not selected"}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Currency:</span>
+                        <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+                      onClick={() => setShowHeaderDetails(true)}
+                    >
+                      Show Header Fields <ChevronDown size={13} className="ml-1" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
+                    <PurchaseOrderHeaderForm
+                      form={form}
+                      docType={config.docType}
+                      setForm={setForm}
+                      updateField={updateField}
+                      disabled={disabled}
+                      headerAndLineDisabled={headerAndLineDisabled}
+                      editMode={editMode}
+                      companyCode={user?.company_code}
+                      loginid={user?.loginid || user?.username}
+                      rows={rows}
+                      setdetails={setRows}
+                      calculateDiscount={applyDiscountCalculation}
+                    />
+                  </div>
+                )}
+
+
+
+
+                <PurchaseOrderLinesTable
+                  rows={rows}
+                  form={form}
+                  setdetails={setRows}
+                  docType={PO_DOC_TYPE.JO}
+                  ex_rate={form.ex_rate}
+                  updateRow={updateRow}
+                  addRow={addRow}
+                  removeRow={removeRow}
+                  headerAndLineDisabled={headerAndLineDisabled}
+                  discAmt={form.disc_price}
+                  companyCode={user?.company_code}
+                  loginid={user?.loginid || user?.username}
+                />
+              </div>
+            )}
+          </CardContent>
+
+          {/* <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
             {isPendingTab && (
               <Button
@@ -572,9 +765,9 @@ export function ProductionJobOrderEditor({
               Close
             </Button>
           </div>
-        </div>
-      </form>
-
+        </div> */}
+        </form>
+      </div>
       <SendBackDialog
         open={sendBackDialogOpen}
         isSaving={actionLoading === "sendBack"}
@@ -605,7 +798,7 @@ export function ProductionJobOrderEditor({
         onConfirm={confirmReject}
       />
 
-       <AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}

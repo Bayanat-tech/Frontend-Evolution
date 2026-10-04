@@ -1,5 +1,5 @@
 
-import { Plus, X } from "lucide-react";
+import { Columns3, List, Plus, Search, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -10,6 +10,7 @@ import { PurchaseOrderForm, SalesOrderLineRow, SODocType } from "../sales/SalesO
 import { Select } from "../../../components/ui/Select";
 import { PODocType } from "../purchase/Purchaseordertypes";
 import { computePoQuantity, computeQuantity, formatAmount, isSamePoUom, isSameUom, lineAmount, lineDiscPrice, lineLcurrAmount, lineTaxAmount, numberOrZero, taxLcurrAmount, text } from "./SalesOrderutils";
+import { useMemo, useState } from "react";
 
 
 const STICKY_COLS = {
@@ -92,6 +93,18 @@ export function SalesDnDetailsTable({
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     const grandTotal = totalAmount - totalDiscPrice - discAmt;
     const finalTotal = grandTotal + totalTaxAmount;
+     const [lineSearch, setLineSearch] = useState("");
+      const [showAllColumns, setShowAllColumns] = useState(false);
+      const filteredRows = useMemo(() => {
+        const q = lineSearch.trim().toLowerCase();
+        if (!q) return rows;
+        return rows.filter((r) =>
+          r.prod_name?.toLowerCase().includes(q) ||
+          r.prod_code?.toLowerCase().includes(q) ||
+          r.line_remarks?.toLowerCase().includes(q) ||
+          r.job_no?.toLowerCase().includes(q)
+        );
+      }, [rows, lineSearch]);
 
 
     // Quantity is always derived, never typed directly:
@@ -99,21 +112,59 @@ export function SalesDnDetailsTable({
     // - different UOM: quantity = (qty_puom * uppp) + qty_luom
 
     return (
-        <div className="commercial-lines-card rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-                <div>
-                    <p className="eyebrow m-0">Lines</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight"></h3>
-                </div>
-                {/* <div className="flex items-center gap-2">
-                    <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
-                        <Plus size={14} /> Add Line
-                    </Button>
-                </div> */}
+      <div className="commercial-lines-card rounded-md border bg-card">
+           <div className="finance-line-actions">
+        <div className="finance-line-actions-left">
+          <span className="finance-line-actions-icon"><List size={14} /></span>
+          <span className="finance-line-actions-title">Accounting Lines</span>
+          <span className="finance-line-actions-badge">
+            {lineSearch.trim()
+              ? `${filteredRows.length} of ${rows.length} lines`
+              : `${rows.length} ${rows.length === 1 ? "line" : "lines"}`}
+          </span>
+          {lineSearch.trim() && (
+            <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              Filtered ({filteredRows.length})
+            </span>
+          )}
+        </div>
+                 <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAllColumns(!showAllColumns)}
+            className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
+              ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
+              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
+          >
+            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+          </button>
+
+          <div className="bisc-table-search">
+            <Search size={13} className="bisc-table-search-icon" />
+            <input
+              className="bisc-search-input"
+              type="text"
+              value={lineSearch}
+              onChange={(e) => setLineSearch(e.target.value)}
+              placeholder="Search lines..."
+            />
+            {lineSearch && (
+              <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          {/* <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
+            <Plus size={14} /> Add Line
+          </Button> */}
             </div>
-            <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[1600px] text-sm" style={{ tableLayout: "fixed" }}>
-                    <thead className="text-xs text-primary-foreground">
+               </div>
+             <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
+        <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
+          <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                         <tr>
                             <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(0.5)}>SNo</th>
                             <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(1)}>Div</th>
@@ -234,11 +285,11 @@ export function SalesDnDetailsTable({
                                     <td className="finance-amount-cell w-24 px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled || samePoUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? 0 : row.so_qty_luom}
+                                            value={samePoUom ? 0 : row.so_qty_luom}
                                             onChange={(event) => {
                                                 const newQtyLuom = Number(event.target.value || 0);
 
@@ -246,7 +297,7 @@ export function SalesDnDetailsTable({
                                                     so_qty_luom: newQtyLuom,
                                                 };
 
-                                                patch.so_quantity = computeQuantity({
+                                                patch.so_quantity = computePoQuantity({
                                                     ...row,
                                                     ...patch,
                                                 });
@@ -317,11 +368,11 @@ export function SalesDnDetailsTable({
                                     <td className="finance-amount-cell w-24 px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled || samePoUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? 0 : row.qty_luom}
+                                            value={samePoUom ? 0 : row.qty_luom}
                                             onChange={(event) => {
                                                 const newQtyLuom = Number(event.target.value || 0);
 

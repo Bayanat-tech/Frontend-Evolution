@@ -40,6 +40,9 @@ import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { CardContent, CardHeader } from "../../components/ui/Card";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -276,6 +279,11 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       <div className="finance-list-heading flex items-center justify-between gap-3">
         <div className="finance-list-title flex items-center gap-2.5">
           <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+          {fyPeriod && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+              FY {fyPeriod}
+            </span>
+          )}
         </div>
       </div>
 
@@ -299,28 +307,29 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
           density="grid"
           enablePagination
           manualPagination
-          toolbar={
-            <div className="finance-list-controls">
-              <label className="finance-period-control">
-                <span>FY</span>
-                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                  {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-                </Select>
-              </label>
+          enableExport={false}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                title={meta.addLabel}
+                onClick={() => setDivisionPicker(true)}
+              >
+                <Plus size={14} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                fyPeriod={fyPeriod}
+                fyPeriods={fyPeriods}
+                onFyPeriodChange={(val) => {
+                  setFyPeriod(val);
+                  setPageIndex(0);
+                }}
+                onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+                onRefresh={() => void loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false)}
+              />
             </div>
           }
-          enableExport
-          actionButton={
-            <Button
-              type="button"
-              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
-              title={meta.addLabel}
-              onClick={() => setDivisionPicker(true)}
-            >
-              <Plus size={14} /> Add
-            </Button>
-          }
-          exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
           initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -428,6 +437,7 @@ function PaymentDocumentEditor({
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
+  const [showPartyDetails, setShowPartyDetails] = useState(false);
 
   const toggleRowExpanded = (id: string) => {
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -579,6 +589,19 @@ function PaymentDocumentEditor({
   }, [form.detail, lineSearch]);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) =>
+          !row.curr_code || row.curr_code === current.curr_code
+            ? { ...row, ex_rate: numRate }
+            : row
+        ),
+      }));
+      return;
+    }
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -1039,6 +1062,8 @@ function PaymentDocumentEditor({
                       {docType !== "CR" && <Field label="Cheque Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.cheque_date)} onChange={(val) => updateField("cheque_date", val)} /></Field>}
                       {docType === "BR" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
                       {docType === "BP" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
+                      <Field label="Ref No"><Input disabled={disabled} value={form.ref_no || ""} onChange={(event) => updateField("ref_no", event.target.value)} /></Field>
+                      <Field label="Ref Date"><BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} /></Field>
                     </div>
                   </div>
 
@@ -1120,14 +1145,30 @@ function PaymentDocumentEditor({
                           loginid: user?.loginid || user?.username || "ADMIN"
                         })}
                         disabled={disabled}
-                        onChange={(value, row) => setForm((current) => ({
-                          ...current,
-                          curr_code: value,
-                          curr_name: text(getLookupValue(row || {}, "curr_name")),
-                          ex_rate: Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || current.ex_rate || 1),
-                        }))}
+                        onChange={(value, row) => {
+                          const newRate = Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || form.ex_rate || 1);
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? { ...d, curr_code: value, curr_name: currName, ex_rate: newRate }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
-                      <Field label="Exchange Rate *"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
+                      <Field label="Exchange Rate *">
+                        <ExchangeRateInput
+                          disabled={disabled}
+                          required
+                          value={form.ex_rate}
+                          onChange={(rate) => updateField("ex_rate", rate)}
+                        />
+                      </Field>
                       <div className="col-span-2 max-md:col-span-1">
                         <Field label="Remarks">
                           <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
@@ -1135,6 +1176,43 @@ function PaymentDocumentEditor({
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Section 3: Party & Order Details (Optional / PB Parity) */}
+                <div className="finance-payment-header-block border-t border-slate-200/80 pt-2 mt-1">
+                  <div className="flex items-center justify-between cursor-pointer py-1 select-none" onClick={() => setShowPartyDetails(!showPartyDetails)}>
+                    <div className="finance-section-title mb-0">
+                      <span className="finance-section-icon"><Building2 size={11} /></span>
+                      <span>Party & Order Details (Optional)</span>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground p-0 hover:bg-transparent">
+                      {showPartyDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </Button>
+                  </div>
+                  {showPartyDetails && (
+                    <div className="finance-payment-header-fields grid-cols-4 max-lg:grid-cols-2 max-sm:grid-cols-1 mt-2 pt-2 border-t border-slate-100">
+                      <Field label="Payment Terms">
+                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="e.g. 30 Days" />
+                      </Field>
+                      <Field label="LPO No">
+                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO / PO Reference" />
+                      </Field>
+                      <Field label="LPO Date">
+                        <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
+                      </Field>
+                      <Field label="Party Phone">
+                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(e) => updateField("party_phone", e.target.value)} placeholder="Phone" />
+                      </Field>
+                      <Field label="Party Fax">
+                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
+                      </Field>
+                      <div className="col-span-3 max-lg:col-span-2 max-sm:col-span-1">
+                        <Field label="Party Address">
+                          <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Full Party Address" />
+                        </Field>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1438,8 +1516,13 @@ function PaymentDocumentEditor({
                           )}
 
                           {showAllColumns && (
-                            <td className="w-16 max-w-[65px] px-1 py-1">
-                              <Input className="commercial-number-input finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(4) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} />
+                            <td className="w-20 max-w-[85px] px-1 py-1">
+                              <ExchangeRateInput
+                                disabled={disabled}
+                                className="commercial-number-input finance-money-input h-7 text-xs"
+                                value={detail.ex_rate}
+                                onChange={(rate) => updateDetail(detail.id, { ex_rate: rate })}
+                              />
                             </td>
                           )}
 

@@ -48,6 +48,8 @@ import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
@@ -283,6 +285,11 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
           <div className="finance-list-heading flex items-center justify-between gap-3">
             <div className="finance-list-title flex items-center gap-2.5">
               <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{meta.title}</h1>
+              {fyPeriod && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+                  FY {fyPeriod}
+                </span>
+              )}
             </div>
           </div>
 
@@ -307,26 +314,27 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
               enablePagination
               manualPagination
               manualFiltering
-              toolbar={
-                <div className="finance-list-controls">
-                  <label className="finance-period-control">
-                    <span>FY</span>
-                    <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                    {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-                    </Select>
-                  </label>
-                </div>
-              }
-              enableExport
               actionButton={
-                <Button
-                  type="button"
-                  className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
-                  title={meta.addLabel}
-                  onClick={() => setDivisionPicker(true)}
-                >
-                  <Plus size={14} /> Add
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                    title={meta.addLabel}
+                    onClick={() => setDivisionPicker(true)}
+                  >
+                    <Plus size={14} /> Add
+                  </Button>
+                  <FinanceListActionsMenu
+                    fyPeriod={fyPeriod}
+                    fyPeriods={fyPeriods}
+                    onFyPeriodChange={(val) => {
+                      setFyPeriod(val);
+                      setPageIndex(0);
+                    }}
+                    onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+                    onRefresh={() => void loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false)}
+                  />
+                </div>
               }
               exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
               pageIndex={pageIndex}
@@ -458,6 +466,82 @@ function JVDocument({
       setReportError(err instanceof Error ? err.message : "Unable to load report");
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  const [sourceJvDocNo, setSourceJvDocNo] = useState("");
+  const [reversing, setReversing] = useState(false);
+  const [successNotice, setSuccessNotice] = useState("");
+
+  const handleReverseJV = async (jvDocNo: string) => {
+    const cleanDocNo = jvDocNo.trim();
+    if (!cleanDocNo) {
+      setError("Please enter or select a JV Document Number to reverse");
+      return;
+    }
+    setReversing(true);
+    setError("");
+    setSuccessNotice("");
+    try {
+      const [headerRaw, detailRaw] = await Promise.all([
+        getTransactionHeader(cleanDocNo, "JV"),
+        getTransactionDetail(cleanDocNo, form.div_code, "JV"),
+      ]);
+
+      if (!headerRaw) {
+        setError(`JV Document ${cleanDocNo} not found`);
+        return;
+      }
+
+      const rawDetails = Array.isArray(detailRaw) ? detailRaw : (detailRaw as any)?.data || [];
+      if (!rawDetails.length) {
+        setError(`No detail lines found in JV ${cleanDocNo}`);
+        return;
+      }
+
+      const mappedDetails: TransactionDetail[] = rawDetails.map((d: any, idx: number) => {
+        const origSign = Number(d.sign_ind ?? d.SIGN_IND ?? 1);
+        const reversedSign: 1 | -1 = origSign === 1 ? -1 : 1;
+        const lineAmt = Number(d.amount ?? d.AMOUNT ?? 0);
+        const lineExRate = Number(d.ex_rate ?? d.EX_RATE ?? headerRaw.ex_rate ?? form.ex_rate ?? 1);
+        return {
+          id: newId(),
+          serial_no: idx + 1,
+          doc_type: "RJV" as TransactionType,
+          doc_no: form.doc_no || "0",
+          ac_code: text(d.ac_code ?? d.AC_CODE ?? ""),
+          ac_name: text(d.ac_name ?? d.AC_NAME ?? ""),
+          remarks: text(d.remarks ?? d.REMARKS ?? `Reversal of line ${idx + 1}`),
+          amount: lineAmt,
+          sign_ind: reversedSign,
+          curr_code: text(d.curr_code ?? d.CURR_CODE ?? form.curr_code),
+          curr_name: text(d.curr_name ?? d.CURR_NAME ?? form.curr_name),
+          ex_rate: lineExRate,
+          lcur_amount: Number((lineAmt * lineExRate).toFixed(3)),
+          job_no: text(d.job_no ?? d.JOB_NO ?? ""),
+          dept_code: text(d.dept_code ?? d.DEPT_CODE ?? ""),
+          cost_code: text(d.cost_code ?? d.COST_CODE ?? ""),
+          child_table: "",
+          child_code: "",
+        };
+      });
+
+      setForm((current) => ({
+        ...current,
+        ref_no: cleanDocNo,
+        ref_doc_no: cleanDocNo,
+        curr_code: text(headerRaw.curr_code ?? current.curr_code),
+        curr_name: text(headerRaw.curr_name ?? current.curr_name),
+        ex_rate: Number(headerRaw.ex_rate ?? current.ex_rate ?? 1),
+        remarks: `Reversal of JV ${cleanDocNo}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
+        detail: mappedDetails,
+      }));
+
+      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from JV ${cleanDocNo}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to load JV ${cleanDocNo}`);
+    } finally {
+      setReversing(false);
     }
   };
 
@@ -815,6 +899,22 @@ function JVDocument({
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
+    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+
+    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
+    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+
+    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
+    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+
+    const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
+    if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
+
+    const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
+    if (diff > 0.001) {
+      return setError(`Reverse Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -876,6 +976,8 @@ function JVDocument({
             documentNo={form.doc_no}
             documentDate={form.doc_date}
             total={formatAmount(debitTotal > 0 ? debitTotal : total + totalTax)}
+            divCode={form.div_code}
+            divName={form.div_name}
             onBack={onClose}
             headerExpanded={showHeaderDetails}
             onToggleHeader={() => setShowHeaderDetails(value => !value)}
@@ -935,6 +1037,7 @@ function JVDocument({
         ) : (
           <div className="commercial-editor-sections">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+            <AutoDismissAlert notice={successNotice ? { type: "success", message: successNotice } : null} onClose={() => setSuccessNotice("")} />
 
             {/* Smart Collapsible RJV Header */}
             {!showHeaderDetails ? (
@@ -944,6 +1047,12 @@ function JVDocument({
                     <span className="font-semibold text-[#00378C]">Doc Date:</span>
                     <span className="font-medium">{formatDate(form.doc_date)}</span>
                   </span>
+                  {form.ref_no && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Ref JV:</span>
+                      <span className="font-medium bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">{form.ref_no}</span>
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1.5">
                     <span className="font-semibold text-[#00378C]">Currency:</span>
                     <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
@@ -970,11 +1079,33 @@ function JVDocument({
                 <div className="finance-payment-header-block">
                   <div className="finance-section-title">
                     <span className="finance-section-icon"><FileText size={11} /></span>
-                    <span>Document & Currency Details</span>
+                    <span>Document & Reversal Details</span>
                   </div>
                   <div className="finance-payment-header-fields">
                     <Field label="Doc Date">
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
+                    </Field>
+                    <Field label="Source JV No (To Reverse)">
+                      <div className="flex gap-1.5 items-center">
+                        <Input
+                          disabled={disabled || editMode}
+                          placeholder="e.g. JV2261000001"
+                          value={sourceJvDocNo || form.ref_no || ""}
+                          onChange={(e) => setSourceJvDocNo(e.target.value)}
+                        />
+                        {!editMode && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={disabled || reversing || !(sourceJvDocNo || form.ref_no)}
+                            onClick={() => void handleReverseJV(sourceJvDocNo || form.ref_no || "")}
+                            className="shrink-0 h-9 px-3 bg-[#00378C] text-white hover:bg-[#002b6d]"
+                          >
+                            <RefreshCw size={13} className={reversing ? "animate-spin mr-1" : "mr-1"} />
+                            {reversing ? "Reversing..." : "Auto-Reverse"}
+                          </Button>
+                        )}
+                      </div>
                     </Field>
                     <LookupField
                       label="Currency"

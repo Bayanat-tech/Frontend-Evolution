@@ -26,6 +26,72 @@ import type { NewReportDialogProps } from "./types";
 
 type Orientation = "portrait" | "landscape";
 
+/* ───────────────────────── Responsive helpers ───────────────────────── */
+
+type Breakpoint = "mobile" | "tablet" | "desktop";
+
+const readBreakpoint = (): Breakpoint => {
+  if (typeof window === "undefined") return "desktop";
+  const w = window.innerWidth;
+  return w < 640 ? "mobile" : w < 1024 ? "tablet" : "desktop";
+};
+
+/** mobile < 640px · tablet < 1024px · desktop otherwise */
+function useBreakpoint(): Breakpoint {
+  const [bp, setBp] = useState<Breakpoint>(readBreakpoint);
+  useEffect(() => {
+    const onResize = () => setBp(readBreakpoint());
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
+  return bp;
+}
+
+/**
+ * Two-finger pinch zoom. `map` converts the pinch centre (in the target's own
+ * client coordinates) into parent-window client coordinates; `zoomBy` is the
+ * existing anchored zoom (dy > 0 zooms out, dy < 0 zooms in).
+ */
+const attachPinch = (
+  target: EventTarget,
+  map: (x: number, y: number) => [number, number],
+  zoomBy: (dy: number, clientX: number, clientY: number) => void
+) => {
+  let last = 0;
+  const dist = (t: TouchList) =>
+    Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const start = (e: Event) => {
+    const t = (e as TouchEvent).touches;
+    last = t.length === 2 ? dist(t) : 0;
+  };
+  const move = (e: Event) => {
+    const t = (e as TouchEvent).touches;
+    if (t.length !== 2 || !last) return;
+    e.preventDefault();
+    const d = dist(t);
+    const [x, y] = map((t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2);
+    zoomBy(-Math.log(d / last) * 100, x, y);
+    last = d;
+  };
+  const end = () => {
+    last = 0;
+  };
+  target.addEventListener("touchstart", start, { passive: true });
+  target.addEventListener("touchmove", move, { passive: false });
+  target.addEventListener("touchend", end);
+  target.addEventListener("touchcancel", end);
+  return () => {
+    target.removeEventListener("touchstart", start);
+    target.removeEventListener("touchmove", move);
+    target.removeEventListener("touchend", end);
+    target.removeEventListener("touchcancel", end);
+  };
+};
+
 /**
  * Pagination of the report. Header (thead) and footer (tfoot) of the report's
  * outer `table.report-shell` are repeated on every page; only the body (tbody)
@@ -93,6 +159,7 @@ const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
  * - Toolbar page indicator + left thumbnails driven by page count
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
  * - 100% zoom = page fits the full width of the preview area (no side gutters)
+ * - Responsive: full-screen on phones, slide-over page navigator, trimmed toolbar, touch pinch-zoom
  */
 export function NewReportDialog({
   open,
@@ -107,6 +174,10 @@ export function NewReportDialog({
   onOpenInNewWindow,
   headerSlot,
 }: NewReportDialogProps) {
+  const bp = useBreakpoint();
+  const isMobile = bp === "mobile";
+  const isCompact = bp !== "desktop";
+
   const measureRef = useRef<HTMLIFrameElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -134,8 +205,10 @@ export function NewReportDialog({
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [totalPages, setTotalPages] = useState(1);
   const [measuring, setMeasuring] = useState(false);
-  /** Left page-thumb navbar visible */
-  const [navOpen, setNavOpen] = useState(true);
+  /** Left page-thumb navbar visible (starts closed on small screens) */
+  const [navOpen, setNavOpen] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 768
+  );
   /** Width of the scrollable preview area (px) — used to fit the page edge to edge */
   const [viewW, setViewW] = useState(0);
   /** Unscaled layout height of the pages wrapper (px) — used to size scroll area after scaling */
@@ -192,6 +265,8 @@ export function NewReportDialog({
     font-family: Arial, sans-serif !important;
     font-size: ${REPORT_FONT_PX}px !important;
     color: #000 !important;
+    /* let the parent handle pinch-zoom; one-finger pan still scrolls */
+    touch-action: pan-x pan-y;
   }
   /* One constant font size for all report text (headings excluded) */
   body *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(script):not(style):not(.company-name):not(.group-title) {
@@ -373,7 +448,7 @@ export function NewReportDialog({
       setTotalPages(1);
       setOrientation("portrait");
       setMeasuring(false);
-      setNavOpen(true);
+      setNavOpen(typeof window === "undefined" || window.innerWidth >= 768);
       setSearchOpen(false);
       setQuery("");
       setDebouncedQuery("");
@@ -690,7 +765,7 @@ export function NewReportDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, debouncedQuery, layout, preparedHtml]);
 
-  /* ─────────────── Trackpad pinch / Ctrl+wheel zoom (anchored at the cursor) ─────────────── */
+  /* ─────────────── Pinch / Ctrl+wheel / touch zoom (anchored at the cursor) ─────────────── */
 
   zoomFnRef.current = (dy: number, clientX: number, clientY: number) => {
     const el = scrollRef.current;
@@ -741,10 +816,17 @@ export function NewReportDialog({
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("gesturestart", onGestureStart);
     el.addEventListener("gesturechange", onGestureChange);
+    // Touch screens: two-finger pinch on the preview area
+    const detachPinch = attachPinch(
+      el,
+      (x, y) => [x, y],
+      (dy, x, y) => zoomFnRef.current(dy, x, y)
+    );
     return () => {
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("gesturestart", onGestureStart);
       el.removeEventListener("gesturechange", onGestureChange);
+      detachPinch();
     };
   }, [open]);
 
@@ -790,6 +872,16 @@ export function NewReportDialog({
           openSearch();
         }
       });
+      // Touches inside the page iframes don't bubble to the parent — handle pinch here too
+      attachPinch(
+        d,
+        (x, y) => {
+          const r = frame.getBoundingClientRect();
+          const sc = scaleRef.current;
+          return [r.left + x * sc, r.top + y * sc];
+        },
+        (dy, x, y) => zoomFnRef.current(dy, x, y)
+      );
       applyHighlightToDoc(d);
     } catch {
       /* ignore */
@@ -950,6 +1042,8 @@ export function NewReportDialog({
   /** True when the user has manually overridden the auto-detected orientation */
   const orientationOverridden = orientation !== autoOrientation;
 
+  const navW = orientation === "portrait" ? 100 : 132;
+
   return (
     <div
       ref={rootRef}
@@ -963,7 +1057,7 @@ export function NewReportDialog({
         display: "flex",
         alignItems: "stretch",
         justifyContent: "center",
-        padding: "20px 28px",
+        padding: isMobile ? 0 : isCompact ? "12px 16px" : "20px 28px",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         boxSizing: "border-box",
@@ -977,30 +1071,40 @@ export function NewReportDialog({
           width: "100%",
           maxWidth: 1280,
           height: "100%",
-          maxHeight: "calc(100vh - 40px)",
+          maxHeight: "100%",
           background: "#ffffff",
-          borderRadius: 10,
+          borderRadius: isMobile ? 0 : 10,
           boxShadow: "0 25px 50px -12px rgba(0,0,0,0.35)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
         }}
       >
-        {/* Header — matches screenshot: title + Portrait/Landscape toggle pills + close */}
+        {/* Header — title + Portrait/Landscape toggle pills + close */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "14px 18px 12px",
+            padding: isMobile ? "10px 12px" : "14px 18px 12px",
             borderBottom: "1px solid #e5e7eb",
             flexShrink: 0,
             background: "#fff",
             gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
-            <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              columnGap: 14,
+              rowGap: 8,
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <div style={{ minWidth: 0, flex: isMobile ? "1 1 100%" : undefined }}>
               <div
                 style={{
                   fontSize: 10,
@@ -1028,7 +1132,7 @@ export function NewReportDialog({
               </div>
             </div>
 
-            {/* Portrait / Landscape toggle — matches screenshot style */}
+            {/* Portrait / Landscape toggle */}
             <div
               style={{
                 display: "inline-flex",
@@ -1050,8 +1154,8 @@ export function NewReportDialog({
                 onClick={() => setOrientation("portrait")}
                 disabled={loading || !htmlContent}
                 style={{
-                  height: 32,
-                  padding: "0 14px",
+                  height: isMobile ? 30 : 32,
+                  padding: isMobile ? "0 12px" : "0 14px",
                   fontSize: 13,
                   fontWeight: 500,
                   border: "none",
@@ -1068,8 +1172,8 @@ export function NewReportDialog({
                 onClick={() => setOrientation("landscape")}
                 disabled={loading || !htmlContent}
                 style={{
-                  height: 32,
-                  padding: "0 14px",
+                  height: isMobile ? 30 : 32,
+                  padding: isMobile ? "0 12px" : "0 14px",
                   fontSize: 13,
                   fontWeight: 500,
                   border: "none",
@@ -1101,6 +1205,7 @@ export function NewReportDialog({
               justifyContent: "center",
               color: "#64748b",
               flexShrink: 0,
+              alignSelf: isMobile ? "flex-start" : undefined,
             }}
           >
             <X size={16} strokeWidth={2} />
@@ -1125,12 +1230,13 @@ export function NewReportDialog({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            padding: "6px 12px",
+            gap: isMobile ? 4 : 8,
+            padding: isMobile ? "4px 8px" : "6px 12px",
             background: "#1f2937",
             color: "#f1f5f9",
             flexShrink: 0,
             minHeight: 40,
+            overflowX: "auto",
           }}
         >
           <button
@@ -1144,18 +1250,21 @@ export function NewReportDialog({
           >
             <Menu size={15} />
           </button>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              maxWidth: 160,
-            }}
-          >
-            {title}
-          </span>
+          {!isCompact && (
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: 160,
+                flexShrink: 0,
+              }}
+            >
+              {title}
+            </span>
+          )}
 
           {/* Page nav */}
           <button
@@ -1179,6 +1288,7 @@ export function NewReportDialog({
               fontWeight: 500,
               minWidth: 52,
               justifyContent: "center",
+              flexShrink: 0,
             }}
           >
             <span>{page}</span>
@@ -1196,7 +1306,15 @@ export function NewReportDialog({
           </button>
 
           {/* Zoom */}
-          <div style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: 4 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              marginLeft: isMobile ? 0 : 4,
+              flexShrink: 0,
+            }}
+          >
             <button
               type="button"
               onClick={() => {
@@ -1208,9 +1326,24 @@ export function NewReportDialog({
             >
               <ZoomOut size={14} />
             </button>
-            <span style={{ fontSize: 12, minWidth: 38, textAlign: "center", fontWeight: 500 }}>
+            <button
+              type="button"
+              title="Reset zoom"
+              onClick={() => {
+                zoomAnchor.current = null;
+                setZoom(100);
+              }}
+              style={{
+                ...toolIconBtn,
+                width: "auto",
+                minWidth: 38,
+                padding: "0 4px",
+                fontSize: 12,
+                fontWeight: 500,
+              }}
+            >
               {Math.round(zoom)}%
-            </span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -1226,9 +1359,11 @@ export function NewReportDialog({
 
           <div style={{ flex: 1 }} />
 
-          <span style={{ fontSize: 11, color: "#9ca3af", marginRight: 4 }}>
-            {orientation === "portrait" ? "A4 Portrait" : "A4 Landscape"}
-          </span>
+          {!isMobile && (
+            <span style={{ fontSize: 11, color: "#9ca3af", marginRight: 4, whiteSpace: "nowrap", flexShrink: 0 }}>
+              {orientation === "portrait" ? "A4 Portrait" : "A4 Landscape"}
+            </span>
+          )}
 
           <button
             type="button"
@@ -1241,28 +1376,32 @@ export function NewReportDialog({
           <button type="button" onClick={handlePrint} style={toolIconBtn} title="Print">
             <Printer size={14} />
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              zoomAnchor.current = null;
-              setZoom(100);
-            }}
-            style={toolIconBtn}
-            title="Reset zoom"
-          >
-            <RotateCcw size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              zoomAnchor.current = null;
-              setZoom(100);
-            }}
-            style={toolIconBtn}
-            title="100%"
-          >
-            <Maximize2 size={14} />
-          </button>
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => {
+                zoomAnchor.current = null;
+                setZoom(100);
+              }}
+              style={toolIconBtn}
+              title="Reset zoom"
+            >
+              <RotateCcw size={14} />
+            </button>
+          )}
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => {
+                zoomAnchor.current = null;
+                setZoom(100);
+              }}
+              style={toolIconBtn}
+              title="100%"
+            >
+              <Maximize2 size={14} />
+            </button>
+          )}
         </div>
 
         {/* Body */}
@@ -1275,13 +1414,19 @@ export function NewReportDialog({
             position: "relative",
           }}
         >
-          {/* Collapsible page navigator — real mini previews of each page */}
+          {/* Collapsible page navigator — real mini previews of each page (slide-over on phones) */}
           <div
             style={{
-              width: navOpen ? (orientation === "portrait" ? 100 : 132) : 0,
-              minWidth: navOpen ? (orientation === "portrait" ? 100 : 132) : 0,
+              position: isMobile ? "absolute" : "relative",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              zIndex: 4,
+              width: navOpen ? navW : 0,
+              minWidth: navOpen ? navW : 0,
               background: "#1f2937",
               borderRight: navOpen ? "1px solid #374151" : "none",
+              boxShadow: isMobile && navOpen ? "4px 0 16px rgba(0,0,0,0.4)" : "none",
               padding: navOpen ? "12px 8px" : 0,
               overflowY: "auto",
               overflowX: "hidden",
@@ -1310,7 +1455,10 @@ export function NewReportDialog({
                     )}
                     <button
                       type="button"
-                      onClick={() => goToPage(n)}
+                      onClick={() => {
+                        goToPage(n);
+                        if (isMobile) setNavOpen(false);
+                      }}
                       title={`Go to page ${n}`}
                       style={{
                         width: thumbW,
@@ -1391,6 +1539,7 @@ export function NewReportDialog({
               overflowX: zoom > 100.5 ? "auto" : "hidden",
               background: "#374151",
               padding: "0 0 40px",
+              touchAction: "pan-x pan-y",
             }}
           >
             {loading && (
@@ -1430,90 +1579,90 @@ export function NewReportDialog({
                   position: "relative",
                 }}
               >
-              <div
-                ref={wrapperRef}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  width: pageW,
-                  transform: `scale(${scale})`,
-                  transformOrigin: "top left",
-                }}
-              >
-                {/*
-                  One continuous report, split visually into A4 sheets.
-                  Each sheet clips a slice of the same content via translateY.
-                  Measure iframe runs report scripts (drill postMessage) with
-                  sandbox allow-scripts allow-same-origin so DRILL_DOWN works.
-                */}
-                <iframe
-                  ref={measureRef}
-                  title={`${title}-measure`}
-                  srcDoc={preparedHtml}
-                  onLoad={onIframeLoad}
+                <div
+                  ref={wrapperRef}
                   style={{
-                    position: "absolute",
-                    left: -9999,
-                    top: 0,
-                    width: contentW,
-                    height: 50,
-                    opacity: 0,
-                    pointerEvents: "none",
-                    border: "none",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    width: pageW,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top left",
                   }}
-                  sandbox="allow-same-origin allow-scripts"
-                />
+                >
+                  {/*
+                    One continuous report, split visually into A4 sheets.
+                    Each sheet clips a slice of the same content via translateY.
+                    Measure iframe runs report scripts (drill postMessage) with
+                    sandbox allow-scripts allow-same-origin so DRILL_DOWN works.
+                  */}
+                  <iframe
+                    ref={measureRef}
+                    title={`${title}-measure`}
+                    srcDoc={preparedHtml}
+                    onLoad={onIframeLoad}
+                    style={{
+                      position: "absolute",
+                      left: -9999,
+                      top: 0,
+                      width: contentW,
+                      height: 50,
+                      opacity: 0,
+                      pointerEvents: "none",
+                      border: "none",
+                    }}
+                    sandbox="allow-same-origin allow-scripts"
+                  />
 
-                {Array.from({ length: totalPages }, (_, i) => {
-                  const pageNum = i + 1;
+                  {Array.from({ length: totalPages }, (_, i) => {
+                    const pageNum = i + 1;
 
-                  return (
-                    <div
-                      key={`${pageNum}-${htmlContent?.slice(0, 32) ?? ""}`}
-                      ref={(el) => {
-                        pageSheetRefs.current[i] = el;
-                      }}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        marginBottom: 20,
-                      }}
-                    >
+                    return (
                       <div
+                        key={`${pageNum}-${htmlContent?.slice(0, 32) ?? ""}`}
+                        ref={(el) => {
+                          pageSheetRefs.current[i] = el;
+                        }}
                         style={{
-                          width: pageW,
-                          height: pageH,
-                          overflow: "hidden",
-                          background: "#ffffff",
-                          boxShadow:
-                            page === pageNum
-                              ? "0 0 0 2px #3b82f6, 0 8px 30px rgba(0,0,0,0.35)"
-                              : "0 8px 30px rgba(0,0,0,0.35)",
-                          position: "relative",
-                          borderRadius: 1,
-                          boxSizing: "border-box",
-                          padding: pageMarginPx,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          marginBottom: 20,
                         }}
                       >
-                        {renderComposite(i, true, `page-${pageNum}`)}
+                        <div
+                          style={{
+                            width: pageW,
+                            height: pageH,
+                            overflow: "hidden",
+                            background: "#ffffff",
+                            boxShadow:
+                              page === pageNum
+                                ? "0 0 0 2px #3b82f6, 0 8px 30px rgba(0,0,0,0.35)"
+                                : "0 8px 30px rgba(0,0,0,0.35)",
+                            position: "relative",
+                            borderRadius: 1,
+                            boxSizing: "border-box",
+                            padding: pageMarginPx,
+                          }}
+                        >
+                          {renderComposite(i, true, `page-${pageNum}`)}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 8,
+                            fontSize: 12,
+                            color: page === pageNum ? "#93c5fd" : "#94a3b8",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Page {pageNum} of {totalPages}
+                          {measuring && pageNum === 1 ? " · measuring…" : ""}
+                        </div>
                       </div>
-                      <div
-                        style={{
-                          marginTop: 8,
-                          fontSize: 12,
-                          color: page === pageNum ? "#93c5fd" : "#94a3b8",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Page {pageNum} of {totalPages}
-                        {measuring && pageNum === 1 ? " · measuring…" : ""}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1527,8 +1676,9 @@ export function NewReportDialog({
             <div
               style={{
                 position: "absolute",
-                top: 10,
-                right: 24,
+                top: isMobile ? 8 : 10,
+                left: isMobile ? 8 : undefined,
+                right: isMobile ? 8 : 24,
                 zIndex: 5,
                 display: "flex",
                 alignItems: "center",
@@ -1540,7 +1690,7 @@ export function NewReportDialog({
                 boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
               }}
             >
-              <Search size={14} color="#94a3b8" />
+              <Search size={14} color="#94a3b8" style={{ flexShrink: 0 }} />
               <input
                 ref={searchInputRef}
                 value={query}
@@ -1553,18 +1703,29 @@ export function NewReportDialog({
                 }}
                 placeholder="Search in report"
                 style={{
-                  width: 200,
-                  height: 26,
+                  width: isMobile ? undefined : 200,
+                  flex: isMobile ? 1 : undefined,
+                  minWidth: 0,
+                  height: isMobile ? 30 : 26,
                   background: "#1f2937",
                   color: "#f1f5f9",
                   border: "1px solid #374151",
                   borderRadius: 4,
                   padding: "0 8px",
-                  fontSize: 12,
+                  /* 16px on phones stops iOS focus-zoom */
+                  fontSize: isMobile ? 16 : 12,
                   outline: "none",
                 }}
               />
-              <span style={{ fontSize: 11, color: "#9ca3af", minWidth: 62, textAlign: "center" }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#9ca3af",
+                  minWidth: isMobile ? 46 : 62,
+                  textAlign: "center",
+                  flexShrink: 0,
+                }}
+              >
                 {!debouncedQuery
                   ? ""
                   : matches.length === 0
@@ -1602,16 +1763,21 @@ export function NewReportDialog({
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-end",
+            flexWrap: "wrap",
             gap: 8,
-            padding: "10px 16px",
+            padding: isMobile ? "8px 10px" : "10px 16px",
             borderTop: "1px solid #e5e7eb",
             background: "#f8fafc",
             flexShrink: 0,
           }}
         >
-          <span style={{ marginRight: "auto", fontSize: 12, color: "#94a3b8" }}>
-            PDF preview · Esc to close · scroll or ← → for pages · Ctrl+F search · pinch / Ctrl+scroll to zoom
-          </span>
+          {!isMobile && (
+            <span style={{ marginRight: "auto", fontSize: 12, color: "#94a3b8" }}>
+              {isCompact
+                ? "PDF preview · pinch to zoom"
+                : "PDF preview · Esc to close · scroll or ← → for pages · Ctrl+F search · pinch / Ctrl+scroll to zoom"}
+            </span>
+          )}
 
           {onExportExcel && (
             <button
@@ -1620,6 +1786,7 @@ export function NewReportDialog({
               disabled={exportingExcel || loading}
               style={{
                 ...footerBtn,
+                ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
                 opacity: exportingExcel || loading ? 0.55 : 1,
                 cursor: exportingExcel || loading ? "not-allowed" : "pointer",
               }}
@@ -1630,13 +1797,27 @@ export function NewReportDialog({
           )}
 
           {onOpenInNewWindow && (
-            <button type="button" onClick={onOpenInNewWindow} style={footerBtn}>
+            <button
+              type="button"
+              onClick={onOpenInNewWindow}
+              style={{
+                ...footerBtn,
+                ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
+              }}
+            >
               <ExternalLink size={14} strokeWidth={2} />
-              Open in new window
+              {isMobile ? "New window" : "Open in new window"}
             </button>
           )}
 
-          <button type="button" onClick={onClose} style={footerBtn}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              ...footerBtn,
+              ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
+            }}
+          >
             Close
           </button>
         </div>
@@ -1664,6 +1845,7 @@ const toolIconBtn: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: 0,
+  flexShrink: 0,
 };
 
 const footerBtn: React.CSSProperties = {

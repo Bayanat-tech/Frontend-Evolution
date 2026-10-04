@@ -41,6 +41,13 @@ export type TransactionHeader = {
   party_address?: string;
   party_phone?: string;
   party_fax?: string;
+  party_name?: string;
+  payment_terms?: string;
+  lpo_no?: string;
+  lpo_date?: string;
+  cash_ind?: string;
+  inv_generated?: string;
+  sys_gen?: string;
   bank_ac_code?: string;
   bank_ac_name?: string;
   curr_code: string;
@@ -1335,6 +1342,33 @@ export async function getSalesAccountDetailsReportExcel(params: Record<string, a
   window.URL.revokeObjectURL(url);
 }
 
+
+// Sales DN Report HTML and Excel route
+export async function getSalesDNReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSalesDNReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Delivery_Note.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 
 

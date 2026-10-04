@@ -159,6 +159,7 @@ const transportModes = [
 const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
+const shipmentStatusOptions = ["FCL/FCL", "FCL/LCL", "LCL/LCL", "LCL/FCL"];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: PackageCheck },
@@ -490,6 +491,10 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     return next;
   });
 
+  if (field === "origin_port" || field === "destination_port") {
+    setDetails((current) => current.map((row) => ({ ...row, [field]: value })));
+  }
+
   setHeaderNames((current) => {
     const next = { ...current };
     if (field === "prin_code") {
@@ -613,20 +618,20 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
       const lookupRow = row || {};
       const activityCode = value || lookupFirstText(lookupRow, "activity_code", "ACTIVITY_CODE", "act_code", "ACT_CODE");
       const activityName = lookupFirstText(lookupRow, "activity", "ACTIVITY", "other_services", "OTHER_SERVICES", "act_name", "ACT_NAME");
-      const quantity = lookupFirstText(lookupRow, "quantity", "QUANTITY") || line.quantity || "1";
-      const billRate = lookupFirstText(lookupRow, "bill", "BILL", "bill_rate", "BILL_RATE") || line.bill_rate || "0";
-      const costRate = lookupFirstText(lookupRow, "cost", "COST", "cost_rate", "COST_RATE") || line.cost_rate || "0";
+      // const quantity = lookupFirstText(lookupRow, "quantity", "QUANTITY") || line.quantity || "1";
+      // const billRate = lookupFirstText(lookupRow, "bill", "BILL", "bill_rate", "BILL_RATE") || line.bill_rate || "0";
+      // const costRate = lookupFirstText(lookupRow, "cost", "COST", "cost_rate", "COST_RATE") || line.cost_rate || "0";
       return {
         ...line,
         act_code: activityCode || line.act_code,
         activity: activityName || line.activity,
         transport_mode: header.transport_mode || line.transport_mode,
-        quantity,
+        // quantity,
         uom: lookupFirstText(lookupRow, "uom", "UOM") || line.uom,
-        bill_rate: billRate,
-        cost_rate: costRate,
-        bill: multiplyText(quantity, billRate),
-        cost: multiplyText(quantity, costRate),
+        // bill_rate: billRate,
+        // cost_rate: costRate,
+        // bill: multiplyText(quantity, billRate),
+        // cost: multiplyText(quantity, costRate),
         curr_code: line.curr_code || header.curr_code || "OMR",
       };
     }),
@@ -1466,12 +1471,12 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     onChange={(value, row) => applyHeaderLookup("commodity", value, row)}
     className="sm:col-span-2 lg:col-span-1"
   />
-  <FormTextarea
+  <FormInput
     label="Cargo Detail"
     value={header.cargo_detail}
     onChange={(value) => setHeaderField("cargo_detail", value)}
-    compact
     className="sm:col-span-2"
+    inputClassName="truncate"
   />
 
   {header.transport_mode === "S" && (
@@ -1522,9 +1527,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 // meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}
                   >     
                   <div className="grid gap-1 sm:grid-cols-1 sm:grid-cols-1">
-                    <FormTextarea label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
+                    {/* <FormTextarea label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact /> */}
+                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" />
                     <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact />
-                    <FormTextarea label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact />
+                    {/* <FormTextarea label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact /> */}
+                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" />
                     <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact />
                   </div>
                 </SectionPanel>
@@ -1559,7 +1566,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
                     {header.transport_mode === "S" && (
                     <>
-                    <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
+                    <FormSelect label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} options={["", ...shipmentStatusOptions].map((value) => ({ value, label: value }))} />
                     </>)}
                   </div>
                 </SectionPanel>
@@ -2442,10 +2449,10 @@ function FormTextarea({
   className?: string;
 }) {
   return (
-    // <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
        {label}
-      <textarea className={`${fieldClassName} ${compact ? "min-h-8" : "min-h-10"} resize-y py-1`} value={value} onChange={(event) => onChange(event.target.value)} />
+      {/* <textarea className={`${fieldClassName} ${compact ? "min-h-8" : "min-h-10"} resize-y py-1`} value={value} onChange={(event) => onChange(event.target.value)} /> */}
+            <input type="text" className={`${fieldClassName} truncate`} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
