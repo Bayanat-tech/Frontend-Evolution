@@ -1,3 +1,5 @@
+
+import { Customer, DashboardResponse, MonthlyAmount, PurchaseSalesDashboardData, Supplier } from "../pages/purchase_sales/dashboard/types";
 import { InventoryDocType, IV_DOC_TYPE } from "../pages/purchase_sales/inventory/Inventorytypes";
 import { PO_DOC_TYPE, PODocType } from "../pages/purchase_sales/purchase/Purchaseordertypes";
 import { SO_DOC_TYPE, SODocType } from "../pages/purchase_sales/sales/SalesOrdertypes";
@@ -9,6 +11,7 @@ export type TInvoiceDetail = Record<string, unknown>;
 export type IPrincipal = { prin_code: string; prin_name: string };
 
 type ApiResponse<T> = {
+  comparison_id: null;
   success: boolean;
   data?: T;
   message?: string;
@@ -238,4 +241,172 @@ const endpoint =
   }
 
   return response.data;
+}
+
+export const insertQuotationComparison = async (data: {
+  company_code: string;
+  div_code: string;
+  quotation_nos: string;
+  user_id: string;
+}) => {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/purchase-sales/insertQuotationComparison",
+    data
+  );
+
+  if (!response.data.success) {
+    throw new Error(
+      response.data.message || "Quotation comparison failed"
+    );
+  }
+
+  return response.data;
+};
+
+// export async function getPurchaseSalesDashboard(
+//   companyCode: string,
+//   signal?: AbortSignal
+// ): Promise<PurchaseSalesDashboardData> {
+//   const res = await api.get<DashboardResponse>("/api/purchase-sales/dashboard/purchase-sales", {
+//     params: { company_code: companyCode },
+//     signal,
+//   });
+//   if (!res.data?.success) {
+//     throw new Error(res.data?.message || "Failed to load dashboard data");
+//   }
+//   const d = res.data.data;
+//   return {
+//     summary: d.summary,
+//     topSuppliers: d.topSuppliers ?? [],
+//     topCustomers: d.topCustomers ?? [],
+//     monthlyPurchase: d.monthlyPurchase ?? [],
+//     monthlySales: d.monthlySales ?? [],
+//   };
+// }
+
+const pick = (o: any, ...keys: string[]) => {
+  for (const k of keys) if (o?.[k] !== undefined && o?.[k] !== null) return o[k];
+  return undefined;
+};
+const num = (v: unknown) => Number(v ?? 0) || 0;
+ 
+const toMonthly = (rows: any[] = []): MonthlyAmount[] =>
+  rows.map((r) => ({
+    month: String(pick(r, "month", "MONTH") ?? ""),
+    totalAmount: num(pick(r, "totalAmount", "TOTAL_AMOUNT")),
+  }));
+ 
+const toSuppliers = (rows: any[] = []): Supplier[] =>
+  rows.map((r) => ({
+    supplierCode: String(pick(r, "supplierCode", "SUPPLIER_CODE") ?? ""),
+     supplierName: String(pick(r, "supplierName", "SUPPLIER_NAME") ?? ""),
+    totalAmount: num(pick(r, "totalAmount", "TOTAL_AMOUNT")),
+  }));
+ 
+const toCustomers = (rows: any[] = []): Customer[] =>
+  rows.map((r) => ({
+    customerCode: String(pick(r, "customerCode", "CUSTOMER_CODE") ?? ""),
+       customerName: String(pick(r, " customerName", "CUSTOMER_NAME") ?? ""),
+    totalAmount: num(pick(r, "totalAmount", "TOTAL_AMOUNT")),
+  }));
+ 
+// export async function getPurchaseSalesDashboard(
+//   companyCode: string,
+//   signal?: AbortSignal
+// ): Promise<PurchaseSalesDashboardData> {
+
+//   const currentDate = new Date();
+
+//   const year = currentDate.getFullYear();
+//   const month = currentDate.getMonth() + 1;
+
+//   const res = await api.get<DashboardResponse>(
+//     "/api/purchase-sales/dashboard/purchase-sales",
+//     {
+//       params: {
+//         company_code: companyCode,
+//         year,
+//         month,
+//       },
+//       signal,
+//     }
+//   );
+
+//   if (!res.data?.success) {
+//     throw new Error(res.data?.message || "Failed to load dashboard data");
+//   }
+
+//   const d: any = res.data.data;
+//   const s = d.summary ?? {};
+
+//   return {
+//     summary: {
+//       totalPRequest: num(s.totalPRequest),
+//       totalQuotation: num(s.totalQuotation),
+//       totalPOrder: num(s.totalPOrder),
+//       totalGrn: num(s.totalGrn),
+//       pOrderGrnPending: num(s.pOrderGrnPending),
+//       totalInvoice: num(s.totalInvoice),
+//       invoicePending: num(s.invoicePending),
+//       totalSOrder: num(s.totalSOrder),
+//       totalSdn: num(s.totalSdn),
+//       sOrderSdnPending: num(s.sOrderSdnPending),
+//       totalSInvoice: num(s.totalSInvoice),
+//       sInvoicePending: num(s.sInvoicePending),
+//     },
+
+//     topSuppliers: toSuppliers(d.topSuppliers),
+//     topCustomers: toCustomers(d.topCustomers),
+//     monthlyPurchase: toMonthly(d.monthlyPurchase),
+//     monthlySales: toMonthly(d.monthlySales),
+//   };
+// }
+
+export async function getPurchaseSalesDashboard(
+  companyCode: string,
+  year: number,
+  month: number, // 0 = full year, 1-12 = month
+  signal?: AbortSignal
+): Promise<PurchaseSalesDashboardData> {
+
+  const res = await api.get<DashboardResponse>(
+    "/api/purchase-sales/dashboard/purchase-sales",
+    {
+      params: {
+        company_code: companyCode,
+        year,
+        month,
+      },
+      signal,
+    }
+  );
+
+  if (!res.data?.success) {
+    throw new Error(res.data?.message || "Failed to load dashboard data");
+  }
+
+  const d: any = res.data.data;
+  const s = d.summary ?? {};
+
+  return {
+    summary: {
+      totalPRequest: num(s.totalPRequest),
+      totalQuotation: num(s.totalQuotation),
+      totalPOrder: num(s.totalPOrder),
+      totalGrn: num(s.totalGrn),
+      pOrderGrnPending: num(s.pOrderGrnPending),
+      totalInvoice: num(s.totalInvoice),
+      invoicePending: num(s.invoicePending),
+      totalSOrder: num(s.totalSOrder),
+      totalSdn: num(s.totalSdn),
+      sOrderSdnPending: num(s.sOrderSdnPending),
+      totalSInvoice: num(s.totalSInvoice),
+      sInvoicePending: num(s.sInvoicePending),
+    },
+
+    topSuppliers: toSuppliers(d.topSuppliers),
+    topCustomers: toCustomers(d.topCustomers),
+    monthlyPurchase: toMonthly(d.monthlyPurchase),
+    monthlySales: toMonthly(d.monthlySales),
+  };
 }

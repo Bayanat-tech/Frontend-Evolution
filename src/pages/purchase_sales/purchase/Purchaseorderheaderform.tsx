@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { Briefcase, Building2, FileText, Percent, Receipt, Truck } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
@@ -8,40 +9,53 @@ import { amountBeforeDiscPrice, DiscAmountPercentage, numberOrZero, text, TotalD
 import { SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
-// Updated CompactSection to be more flexible for the two-column layout
-function CompactSection({ label, children, className, gridCols = "grid-cols-4" }: { label: string; children: ReactNode; className?: string; gridCols?: string }) {
+// Group block — same structure as the Payment Document page:
+// finance-payment-header-block > finance-section-title (finance-section-icon + label) > fields.
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  gridCols = "grid-cols-4",
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+}) {
   return (
-    <div className={`px-2 py-1.5 ${className || ""}`}>
-      <p className="m-0 mb-1.5 text-[9px] font-bold uppercase tracking-wide text-foreground/60 border-b border-gray-100 pb-1">{label}</p>
-      <div className={`grid gap-x-2 gap-y-1.5 pt-0.5 ${gridCols} max-md:grid-cols-1`}>
+    <div className="finance-payment-header-block">
+      <div className="finance-section-title">
+        <span className="finance-section-icon">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className={`grid gap-x-1 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
         {children}
       </div>
     </div>
   );
 }
 
-// SideBox for the right-hand column sections
-function SideBox({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-md border-2 border-gray-100  p-2.5 mb-2.5 ${className || ""}`}>
-      <p className="m-0 mb-1.5 text-[9px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
-      <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-        {children}
-      </div>
-    </div>
-  );
+function CompactSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+    return (
+        <div className={`border-t px-3 py-1.5 first:border-t-0 ${className || ""}`}>
+            <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-foreground">{label}</p>
+            <div className="grid grid-cols-8 gap-x-2 gap-y-1 pt-1 max-2xl:grid-cols-6 max-xl:grid-cols-4 max-lg:grid-cols-3 max-md:grid-cols-2 max-sm:grid-cols-1">
+                {children}
+            </div>
+        </div>
+    );
 }
 
 function CField({ label, required, className, children }: { label: string; required?: boolean; className?: string; children: ReactNode }) {
-  return (
-    <label className={`field flex flex-col gap-0.5 ${className || ""}`}>
-      <span className="text-[9px] font-semibold text-foreground/75">
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
-      </span>
-      {children}
-    </label>
-  );
+    return (
+        <label className={`field ${className || ""}`}>
+            <span className="text-[10px]   font-semibold">
+                {label}
+                {required && <span className="ml-1 text-destructive">*</span>}
+            </span>
+            {children}
+        </label>
+    );
 }
 
 export function PurchaseOrderHeaderForm({
@@ -75,73 +89,35 @@ export function PurchaseOrderHeaderForm({
 
   const discountScope = form.discount_scoope || "ITEM";
 
-  // const applyDiscountCalculation = (type: "amount" | "percent") => {
-  //   const totalAmount = (rows || []).reduce(
-  //     (sum, row) => sum + amountBeforeDiscPrice(row),
-  //     0
-  //   );
-
-  //   if (totalAmount <= 0) return;
-
-  //   let discountAmount = 0;
-  //   let discountPercent = 0;
-
-  //   if (type === "amount") {
-  //     discountAmount = Number(form.disc_hdr_price) || 0;
-  //     discountPercent = (discountAmount / totalAmount) * 100;
-  //   } else {
-  //     discountPercent = Number(form.disc_hdr_percent) || 0;
-  //     discountAmount = totalAmount * (discountPercent / 100);
-  //   }
-
-  //   setForm((current) => ({
-  //     ...current,
-  //     disc_hdr_price: discountAmount,
-  //     disc_hdr_percent: discountPercent,
-  //   }));
-
-  //   setdetails?.(
-  //     (rows || []).map((row) => {
-  //       const amount = amountBeforeDiscPrice(row);
-
-  //       return {
-  //         ...row,
-  //         disc_percent: discountPercent,
-  //         disc_price: amount * (discountPercent / 100),
-  //       };
-  //     })
-  //   );
-  // };
-
   return (
     <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
       {/* HEADER SECTION - HEIGHT UNCHANGED */}
-      <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
+      {/* <div className="flex items-center justify-between border-b-2 border-gray-100 bg-gray-50 px-3 py-1">
         <div>
           <p className="eyebrow m-0 text-[9px] leading-tight uppercase opacity-70 font-semibold">Header</p>
           <h3 className="m-0 text-sm font-bold leading-tight"></h3>
         </div>
-      </div>
+      </div> */}
 
-      {/* TWO COLUMN CONTENT AREA */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
+      {/* EXPLICIT TWO-COLUMN LAYOUT: left = Document & Party (tallest block),
+          right = Order & Currency + Tax Configuration stacked so heights balance
+          and Tax Configuration sits on the right as requested. */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2 items-start">
 
-        {/* LEFT COLUMN: PRIMARY INFO */}
-        <div className="lg:col-span-8 border-r-2 border-gray-100 divide-y divide-gray-200">
-
-          {/* Document & Party Section */}
-          <CompactSection label="Document & Party" gridCols="grid-cols-6">
-            {editMode && <CField label="Doc No"><Input disabled value={form.doc_no || ""} /></CField>}
+        {/* LEFT COLUMN */}
+        <div className="flex flex-col gap-2">
+          <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
+            {editMode && <CField label="Doc No"><Input className="h-7 text-xs" disabled value={form.doc_no || ""} /></CField>}
             <CField label="Doc Date " required>
-              <Input type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+              <Input className="h-7 text-xs w-18" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
             </CField>
 
             {(String(docType ?? "").trim().toUpperCase() === "SO" && <CField label="Quotation No">
-              <Input type="Quotation No" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(e) => updateField("ref_no", e.target.value)} />
+              <Input className="h-7 text-xs" type="Quotation No" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(e) => updateField("ref_no", e.target.value)} />
             </CField>)}
             {(String(docType ?? "").trim().toUpperCase() === "LPO" &&
-              <div>
-                <label>Quotation No</label>
+               <div className="col-span-2">
+                <label className="text-[9px] font-semibold text-foreground/75 leading-none">Quotation No</label>
                 <LookupField
                   label="Quotation No"
                   compact
@@ -198,9 +174,7 @@ export function PurchaseOrderHeaderForm({
                       salesman_code: text(getLookupValue(row || {}, "salesman_code")),
                       zone_code: text(getLookupValue(row || {}, "zone_code")),
                       tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
-                      // tx_cat_code: `${text(getLookupValue(row || {}, "tx_cat_code"))} - ${text(
-                      //   getLookupValue(row || {}, "tx_cat_name")
-                      // )}`,
+                      tx_compntcat_name_1: text(getLookupValue(row || {}, "tx_compntcat_name_1")),
                       tx_cat_code: text(getLookupValue(row || {}, "tx_cat_code")),
                       tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
                       project_name: text(getLookupValue(row || {}, "project_name")),
@@ -283,11 +257,70 @@ export function PurchaseOrderHeaderForm({
                 />
               </div>
             )}
-            <CField label="Quotn Date">
-              <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+            {/* <CField label="Quotn Date">
+              <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+            </CField> */}
+            <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_90px] gap-x-1 items-end">
+              <LookupField
+                label="Currency *"
+                value={form.curr_code}
+                displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                valueField="curr_code"
+                displayFields={["curr_code", "curr_name"]}
+                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Serach", code1: companyCode, loginid: loginIdOrAdmin })}
+                disabled={headerAndLineDisabled}
+                onChange={(value, row) => setForm((current) => ({
+                  ...current,
+                  curr_code: value,
+                  curr_name: text(getLookupValue(row || {}, "curr_name")),
+                  ex_rate: Number(getLookupValue(row || {}, "ex_rate") || (row as any)?.ex_rate || current.ex_rate || 1),
+                }))}
+              />
+            <CField label="Ex Rate">
+              <Input
+                className="h-7 w-full text-xs text-right"
+                type="number"
+                disabled={headerAndLineDisabled}
+                step="0.000001"
+                value={form.ex_rate}
+                onChange={(e) =>
+                  updateField("ex_rate", Number(e.target.value || 1))
+                }
+              />
             </CField>
+            </div>
 
+            <CField label="Credit Period">
+              <Input className="h-7 w-full text-xs text-right" disabled={headerAndLineDisabled} type="number" value={form.credit_period} onChange={(e) => updateField("credit_period", Number(e.target.value || 0))} />
+            </CField>
             <div className="col-span-2">
+              <LookupField
+                label="Department"
+                value={form.dept_code || ""}
+                displayValue={form.dept_name ? `${form.dept_code} - ${form.dept_name}` : form.dept_code}
+                columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Name" }]}
+                valueField="dept_code"
+                displayFields={["dept_code", "dept_name"]}
+                loadOptions={() => getDynamicLookup({ parameter: "DROP_DOWN_DEPT_BASED_ON_DIV", code1: companyCode, code2: form.div_code, loginid: loginIdOrAdmin })}
+                disabled={headerAndLineDisabled}
+                onChange={(value, row) => setForm((current) => ({ ...current, dept_code: value, dept_name: text(getLookupValue(row || {}, "dept_name")) }))}
+              />
+            </div>
+            <CField label="Remarks" className="col-span-3">
+              <Input
+                className="h-7 text-xs"
+                disabled={headerAndLineDisabled}
+                value={form.remarks}
+                onChange={(e) =>
+                  updateField("remarks", e.target.value)
+                }
+              />
+            </CField>
+          </HeaderBlock>
+
+          <HeaderBlock label="Party Details" icon={<Building2 size={11} />} gridCols="grid-cols-6">
+            <div className="col-span-4">
               <LookupField
                 label="A/c code *"
                 value={form.ac_code}
@@ -307,59 +340,32 @@ export function PurchaseOrderHeaderForm({
                 }))}
               />
             </div>
-            <div className="col-span-1">
-              <LookupField
-                label="Currency *"
-                value={form.curr_code}
-                displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                valueField="curr_code"
-                displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Serach", code1: companyCode, loginid: loginIdOrAdmin })}
-                disabled={headerAndLineDisabled}
-                onChange={(value, row) => setForm((current) => ({
-                  ...current,
-                  curr_code: value,
-                  curr_name: text(getLookupValue(row || {}, "curr_name")),
-                  ex_rate: Number(getLookupValue(row || {}, "ex_rate") || (row as any)?.ex_rate || current.ex_rate || 1),
-                }))}
-              />
-            </div>
-            <CField label="Ex Rate"><Input className="text-right" type="number" disabled={headerAndLineDisabled} step="0.000001" value={form.ex_rate} onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))} /></CField>
-
-            <CField label="Credit Period">
-              <Input disabled={headerAndLineDisabled} className="text-right" type="number" value={form.credit_period} onChange={(e) => updateField("credit_period", Number(e.target.value || 0))} />
+            <CField label="Tel"><Input className="h-7 text-xs text-right" disabled={headerAndLineDisabled} value={form.party_phone} onChange={(e) => updateField("party_phone", e.target.value)} /></CField>
+            <CField label="Fax"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.party_fax} onChange={(e) => updateField("party_fax", e.target.value)} /></CField>
+            <CField label="Address" className="col-span-3"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.party_address} onChange={(e) => updateField("party_address", e.target.value)} /></CField>
+        <CField label="Expense A/c Post" className="col-span-2">
+              <Select className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
+                {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </Select>
             </CField>
-            <div className="col-span-2">
-              <LookupField
-                label="Department"
-                value={form.dept_code || ""}
-                displayValue={form.dept_name ? `${form.dept_code} - ${form.dept_name}` : form.dept_code}
-                columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Name" }]}
-                valueField="dept_code"
-                displayFields={["dept_code", "dept_name"]}
-                loadOptions={() => getDynamicLookup({ parameter: "DROP_DOWN_DEPT_BASED_ON_DIV", code1: companyCode, code2: form.div_code, loginid: loginIdOrAdmin })}
-                disabled={headerAndLineDisabled}
-                onChange={(value, row) => setForm((current) => ({ ...current, dept_code: value, dept_name: text(getLookupValue(row || {}, "dept_name")) }))}
-              />
-            </div>
-            <CField label="Tel"><Input className="text-right" disabled={headerAndLineDisabled} value={form.party_phone} onChange={(e) => updateField("party_phone", e.target.value)} /></CField>
-            <CField label="Address" className="col-span-3"><Input disabled={headerAndLineDisabled} value={form.party_address} onChange={(e) => updateField("party_address", e.target.value)} /></CField>
-            <CField label="Fax"><Input className="text-right" disabled={headerAndLineDisabled} value={form.party_fax} onChange={(e) => updateField("party_fax", e.target.value)} /></CField>
             {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
               <>
-                <CField label="Buyer"><Input disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
-                <CField label="WO No"><Input disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
+                <CField label="Buyer" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
+                <CField label="WO No" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
               </>
             ))}
+          </HeaderBlock>
 
+         
 
-          </CompactSection>
+        
+        </div>
 
-          {/* Order, Currency & Tax (Core Fields) */}
-          <CompactSection label="Order & Currency" gridCols="grid-cols-6">
+        {/* RIGHT COLUMN — Order & Currency, then Tax Configuration underneath */}
+        <div className="flex flex-col gap-2">
+          <HeaderBlock label="Discount Scope & Delivery Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
             {/* Discount Scope */}
-            <div className="col-span-6 flex items-center gap-6 border-b border-gray-100 pb-2 mb-1">
+            <div className="col-span-4 flex items-center gap-6 border-b border-gray-100 pb-1 mb-0.5">
               <span className="text-[9px] font-semibold text-foreground/75">
                 Discount Applied To:
               </span>
@@ -406,7 +412,7 @@ export function PurchaseOrderHeaderForm({
             {/* Discount Amount */}
             <CField label="Disc Amt">
               <Input
-                className="text-right"
+                className="h-7 text-xs text-right"
                 type="number"
                 step="0.01"
                 disabled={
@@ -427,7 +433,7 @@ export function PurchaseOrderHeaderForm({
             </CField>
             <CField label="Disc %">
               <Input
-                className="text-right"
+                className="h-7 text-xs text-right"
                 type="number"
                 step="0.001"
                 disabled={
@@ -447,8 +453,10 @@ export function PurchaseOrderHeaderForm({
               />
             </CField>
 
-            <CField label="Pay Terms" className="col-span-2">
+
+    <CField label="Pay Terms" className="col-span-2">
               <Input
+                className="h-7 text-xs "
                 disabled={headerAndLineDisabled}
                 value={form.payment_terms}
                 onChange={(e) =>
@@ -456,22 +464,14 @@ export function PurchaseOrderHeaderForm({
                 }
               />
             </CField>
-
-            <CField label="Remarks" className="col-span-2">
-              <Input
-                disabled={headerAndLineDisabled}
-                value={form.remarks}
-                onChange={(e) =>
-                  updateField("remarks", e.target.value)
-                }
-              />
-            </CField>
+            
 
             {/* LPO fields */}
             {String(docType ?? "").trim().toUpperCase() === "LPO" && (
               <>
                 <CField label="Delivery Contact Person">
                   <Input
+                    className="h-7 text-xs"
                     disabled={headerAndLineDisabled}
                     value={form.dlvr_contact}
                     onChange={(e) =>
@@ -482,6 +482,7 @@ export function PurchaseOrderHeaderForm({
 
                 <CField label="Delivery Telephone">
                   <Input
+                    className="h-7 text-xs"
                     disabled={headerAndLineDisabled}
                     value={form.dlvr_mobile}
                     onChange={(e) =>
@@ -492,6 +493,7 @@ export function PurchaseOrderHeaderForm({
 
                 <CField label="Delivery Email Address">
                   <Input
+                    className="h-7 text-xs"
                     type="email"
                     disabled={headerAndLineDisabled}
                     value={form.dlvr_email}
@@ -503,6 +505,7 @@ export function PurchaseOrderHeaderForm({
 
                 <CField label="Delivery Term">
                   <Input
+                    className="h-7 text-xs"
                     disabled={headerAndLineDisabled}
                     value={form.dlvr_term}
                     onChange={(e) =>
@@ -512,18 +515,11 @@ export function PurchaseOrderHeaderForm({
                 </CField>
               </>
             )}
+          </HeaderBlock>
 
-          </CompactSection>
-
-        </div>
-
-        {/* RIGHT COLUMN: BOXED SECTIONS */}
-        <div className="lg:col-span-4 p-2 flex flex-col gap-2">
-
-          {/* Tax Section */}
-          <SideBox label="Tax Configuration">
+          <HeaderBlock label="Tax Configuration" icon={<Receipt size={11} />} gridCols="grid-cols-3">
             <CField label="Tax Type">
-              <Select value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+              <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                 const taxType = e.target.value;
                 setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
               }}>
@@ -533,7 +529,9 @@ export function PurchaseOrderHeaderForm({
 
             <LookupField
               label="Tax Category"
-              value={form.tx_cat_code || ""}
+              value={form.tx_cat_name
+                ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+                : form.tx_cat_code}
               displayValue={
                 form.tx_cat_name
                   ? `${form.tx_cat_code} - ${form.tx_cat_name}`
@@ -557,6 +555,7 @@ export function PurchaseOrderHeaderForm({
                 setForm((current) => ({
                   ...current,
                   tx_cat_code: text(value).split(" - ")[0].trim(),
+                  tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
 
                 }))
               }
@@ -564,8 +563,8 @@ export function PurchaseOrderHeaderForm({
 
             <LookupField
               label="Tax Code"
-              value={form.tx_compntcat_name
-                ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name}`
+              value={form.tx_compntcat_name_1
+                ? `${form.tx_compntcat_code_1} - ${form.tx_compntcat_name_1}`
                 : form.tx_compntcat_code_1}
               displayValue={
                 form.tx_compntcat_name
@@ -580,35 +579,27 @@ export function PurchaseOrderHeaderForm({
               onChange={(value) => setForm((current) => ({ ...current, tx_compntcat_code_1: value }))}
             />
 
-            <CField label="Expense A/c Post">
-              <Select disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
-                {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </Select>
-            </CField>
-          </SideBox>
-
-          {/* Project & Scope Section */}
+          </HeaderBlock>
+           {/* Project & Scope Section (LPO only) */}
           {(String(docType ?? "").trim().toUpperCase() === "LPO") && (
-            <SideBox label="Project & Scope">
-              <CField label="Project Name"><Input disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
-              <CField label="PR No"><Input className="text-right" disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
-              <CField label="Scope of Work"><Input disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
-            </SideBox>
+            <HeaderBlock label="Project & Scope" icon={<Briefcase size={11} />} gridCols="grid-cols-3">
+              <CField label="Project Name"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
+              <CField label="PR No"><Input className="h-7 text-xs text-right" disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
+              <CField label="Scope of Work"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
+            </HeaderBlock>
           )}
-
-          {/* Delivery Section */}
+            {/* Delivery Section (SO only) */}
           {(String(docType ?? "").trim().toUpperCase() === "SO" && (
-            <><SideBox label="Delivery Details">
-              <CField label="Delivery Contact Person"><Input disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
-              <CField label=" Delivery Telephone"><Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
-              <CField label="Delivery Email Address" className="col-span-1"><Input type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
-              <CField label="Delivery Term"><Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
-            </SideBox>
-            </>
+            <HeaderBlock label="Delivery Details" icon={<Truck size={11} />} gridCols="grid-cols-4">
+              <CField label="Delivery Contact Person"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
+              <CField label="Delivery Telephone"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
+              <CField label="Delivery Email Address"><Input className="h-7 text-xs" type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
+              <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
+            </HeaderBlock>
           ))}
-
-
         </div>
+
+
       </div>
     </div>
   );
