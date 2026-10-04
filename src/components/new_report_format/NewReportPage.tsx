@@ -3,16 +3,39 @@ import { createPortal } from "react-dom";
 import { Filter, RotateCcw, Search, ChevronDown, X } from "lucide-react";
 import type { NewReportPageProps, ReportFieldConfig, ReportOption } from "./types";
 import { MultiSelectField } from "../../components/ui/MultiSelectField";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker"; // ← adjust path if needed
+
+/* ───────────────────────── Responsive helpers ───────────────────────── */
+
+type Breakpoint = "mobile" | "tablet" | "desktop";
+
+const readBreakpoint = (): Breakpoint => {
+  if (typeof window === "undefined") return "desktop";
+  const w = window.innerWidth;
+  return w < 640 ? "mobile" : w < 1024 ? "tablet" : "desktop";
+};
+
+/** mobile < 640px · tablet < 1024px · desktop otherwise */
+function useBreakpoint(): Breakpoint {
+  const [bp, setBp] = useState<Breakpoint>(readBreakpoint);
+  useEffect(() => {
+    const onResize = () => setBp(readBreakpoint());
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
+  return bp;
+}
+
+/** mobile: full width · tablet: at least half width · desktop: as configured */
+const responsiveSpan = (span: number, bp: Breakpoint) =>
+  bp === "mobile" ? 12 : bp === "tablet" ? (span < 6 ? 6 : span) : span;
 
 /**
- * Common report filter page — matches Freight Job List screenshot.
- *
- * Layout control for other developers:
- *   <NewReportPage fieldsPerRow={3} ... />   // 3 equal fields per row
- *   <NewReportPage fieldsPerRow={4} ... />   // 4 equal fields per row
- *   // or per-field:
- *   { key: "status", type: "select", colSpan: 3, ... }
- *   { key: "principal", type: "multiselect", colSpan: 4, ... }
+ * Common report filter page — matches Enquiry List using app design tokens + BiscDatePicker
  */
 export function NewReportPage({
   title,
@@ -34,25 +57,32 @@ export function NewReportPage({
 }: NewReportPageProps) {
   const resolvedDefaultSpan =
     defaultColSpan ??
-    (fieldsPerRow && fieldsPerRow > 0 ? Math.floor(12 / fieldsPerRow) : 4);
+    (fieldsPerRow && fieldsPerRow > 0 ? Math.floor(12 / fieldsPerRow) : 3);
+
+  const bp = useBreakpoint();
+  const isMobile = bp === "mobile";
+  const px = isMobile ? 12 : 20; // horizontal padding inside the card
 
   return (
     <div
+      className="nr-page"
       style={{
-        background: "#f1f5f9",
+        background: "var(--bg, #f8f9fb)",
         minHeight: "100%",
-        padding: "16px 20px 32px",
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        padding: isMobile
+          ? "10px 10px 24px"
+          : "var(--app-content-padding-y, 16px) var(--app-content-padding-x, 18px) 32px",
+        fontFamily: "var(--app-font-family, Inter, system-ui, sans-serif)",
         boxSizing: "border-box",
+        color: "var(--text, #1a1a2e)",
       }}
     >
       <div
         style={{
           width: "100%",
-          background: "#ffffff",
-          borderRadius: 10,
-          border: "1px solid #e2e8f0",
+          background: "var(--panel, #ffffff)",
+          borderRadius: "var(--radius, 0.625rem)",
+          border: "1px solid var(--border, #cbd5e1)",
           boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
           overflow: "visible",
         }}
@@ -63,16 +93,19 @@ export function NewReportPage({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "14px 20px 12px",
-            borderBottom: "1px solid #f1f5f9",
+            gap: 12,
+            padding: `14px ${px}px 12px`,
+            borderBottom: "1px solid var(--border, #cbd5e1)",
           }}
         >
           <h1
             style={{
               margin: 0,
-              fontSize: 15,
+              minWidth: 0,
+              wordBreak: "break-word",
+              fontSize: 16,
               fontWeight: 600,
-              color: "#0f172a",
+              color: "var(--text, #1a1a2e)",
               letterSpacing: "-0.01em",
             }}
           >
@@ -83,7 +116,7 @@ export function NewReportPage({
               width: 8,
               height: 8,
               borderRadius: "50%",
-              background: "#2563eb",
+              background: "var(--primary, #00378c)",
               flexShrink: 0,
             }}
           />
@@ -95,7 +128,7 @@ export function NewReportPage({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "10px 20px 6px",
+            padding: `10px ${px}px 8px`,
           }}
         >
           <div
@@ -105,10 +138,10 @@ export function NewReportPage({
               gap: 6,
               fontSize: 13,
               fontWeight: 500,
-              color: "#64748b",
+              color: "var(--muted, #6b7a8d)",
             }}
           >
-            <Filter size={14} strokeWidth={2} color="#64748b" />
+            <Filter size={14} strokeWidth={2} color="var(--muted, #6b7a8d)" />
             Report Filters
           </div>
           <button
@@ -121,11 +154,11 @@ export function NewReportPage({
               gap: 5,
               fontSize: 12,
               fontWeight: 500,
-              color: "#64748b",
+              color: "var(--muted, #6b7a8d)",
               background: "transparent",
               border: "none",
               cursor: loading ? "not-allowed" : "pointer",
-              padding: "4px 6px",
+              padding: isMobile ? "8px 6px" : "4px 6px",
               borderRadius: 4,
             }}
           >
@@ -137,12 +170,12 @@ export function NewReportPage({
         {error && (
           <div
             style={{
-              margin: "4px 20px 10px",
+              margin: `4px ${px}px 10px`,
               padding: "8px 12px",
               background: "#fef2f2",
               border: "1px solid #fecaca",
               borderRadius: 6,
-              color: "#b91c1c",
+              color: "var(--danger, #dc2626)",
               fontSize: 12,
               display: "flex",
               alignItems: "center",
@@ -150,7 +183,7 @@ export function NewReportPage({
             }}
           >
             <span>⚠️</span>
-            <span style={{ flex: 1 }}>{error}</span>
+            <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{error}</span>
             {onClearError && (
               <button
                 type="button"
@@ -159,7 +192,7 @@ export function NewReportPage({
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "#b91c1c",
+                  color: "var(--danger, #dc2626)",
                   fontSize: 14,
                   lineHeight: 1,
                   padding: 0,
@@ -171,14 +204,14 @@ export function NewReportPage({
           </div>
         )}
 
-        {/* Filter grid — Freight style: labels above, clean white */}
-        <div style={{ padding: "4px 20px 16px" }}>
+        {/* Filter grid */}
+        <div style={{ padding: `4px ${px}px 16px` }}>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(12, 1fr)",
-              columnGap: 14,
-              rowGap: 16,
+              gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
+              columnGap: isMobile ? 10 : 14,
+              rowGap: isMobile ? 14 : 16,
             }}
           >
             {fields.map((field) => (
@@ -190,11 +223,12 @@ export function NewReportPage({
                 onChange={onChange}
                 disabled={loading || field.disabled}
                 defaultSpan={resolvedDefaultSpan}
+                bp={bp}
               />
             ))}
 
             {reportVariantOptions && onReportVariantChange && (
-              <div style={{ gridColumn: `span ${resolvedDefaultSpan}` }}>
+              <div style={{ gridColumn: `span ${responsiveSpan(resolvedDefaultSpan, bp)}`, minWidth: 0 }}>
                 <FieldLabel label="Report Variant" />
                 <SingleSelectField
                   options={reportVariantOptions}
@@ -202,6 +236,7 @@ export function NewReportPage({
                   onChange={onReportVariantChange}
                   placeholder="Standard"
                   loading={loading}
+                  disabled={loading}
                 />
               </div>
             )}
@@ -214,17 +249,20 @@ export function NewReportPage({
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 20px",
-            borderTop: "1px solid #f1f5f9",
-            background: "#fafbfc",
+            justifyContent: isMobile ? "stretch" : "space-between",
+            gap: 12,
+            padding: `12px ${px}px`,
+            borderTop: "1px solid var(--border, #cbd5e1)",
+            background: "var(--panel-soft, #f0f4f8)",
             minHeight: 56,
-            borderRadius: "0 0 10px 10px",
+            borderRadius: "0 0 var(--radius, 0.625rem) var(--radius, 0.625rem)",
           }}
         >
-          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
-            Select filters and run the report.
-          </p>
+          {!isMobile && (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--muted, #6b7a8d)" }}>
+              Select filters and run the report.
+            </p>
+          )}
           <button
             type="button"
             onClick={onGenerate}
@@ -232,19 +270,25 @@ export function NewReportPage({
             style={{
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: 8,
-              padding: "8px 18px",
+              padding: "0 18px",
+              width: isMobile ? "100%" : undefined,
+              height: "var(--app-button-height, 34px)",
               fontSize: 13,
               fontWeight: 500,
-              color: "#ffffff",
-              background: loading || optionsLoading ? "#94a3b8" : "#1e3a8a",
+              color: "var(--primary-ink, #ffffff)",
+              background:
+                loading || optionsLoading
+                  ? "var(--muted, #6b7a8d)"
+                  : "var(--primary, #00378c)",
               border: "none",
               borderRadius: 6,
               cursor: loading || optionsLoading ? "not-allowed" : "pointer",
               boxShadow:
                 loading || optionsLoading
                   ? "none"
-                  : "0 1px 2px rgba(30, 58, 138, 0.2)",
+                  : "0 1px 2px rgba(0, 55, 140, 0.2)",
             }}
           >
             {loading ? (
@@ -277,6 +321,11 @@ export function NewReportPage({
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @media (max-width: 639px) {
+          .nr-page { --app-control-height: 40px; --app-button-height: 42px; }
+          /* 16px stops iOS Safari zooming the page when an input is focused */
+          .nr-page input, .nr-ss-search { font-size: 16px !important; }
+        }
       `}</style>
     </div>
   );
@@ -289,15 +338,17 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
     <label
       style={{
         display: "block",
-        fontSize: 12,
+        fontSize: "var(--app-label-font-size, 11px)",
         fontWeight: 500,
-        color: "#64748b",
+        color: "var(--muted, #6b7a8d)",
         marginBottom: 6,
         lineHeight: 1.2,
       }}
     >
       {label}
-      {required && <span style={{ color: "#dc2626", marginLeft: 2 }}>*</span>}
+      {required && (
+        <span style={{ color: "var(--danger, #dc2626)", marginLeft: 2 }}>*</span>
+      )}
     </label>
   );
 }
@@ -309,6 +360,7 @@ function FieldCell({
   onChange,
   disabled,
   defaultSpan,
+  bp,
 }: {
   field: ReportFieldConfig;
   value: any;
@@ -316,30 +368,36 @@ function FieldCell({
   onChange: (key: string, value: any) => void;
   disabled?: boolean;
   defaultSpan: number;
+  bp: Breakpoint;
 }) {
-  const span = field.colSpan ?? defaultSpan;
+  const span = responsiveSpan(field.colSpan ?? defaultSpan, bp);
+  // Only true loading (options fetch) — never treat disabled as loading
+  const fieldLoading = Boolean(field.loading);
 
   if (field.type === "daterange" && field.toKey) {
-    const half = Math.min(span, 3);
+    // desktop: compact pair · tablet: side by side · mobile: stacked
+    const half = bp === "mobile" ? 12 : bp === "tablet" ? 6 : Math.min(span, 3);
     return (
       <>
-        <div style={{ gridColumn: `span ${half}` }}>
+        <div style={{ gridColumn: `span ${half}`, minWidth: 0 }}>
           <FieldLabel
             label={field.label.replace(/ Range$/i, "") + " From"}
             required={field.required}
           />
-          <DateInput
+          <BiscDatePicker
             value={value ?? ""}
             onChange={(v) => onChange(field.key, v)}
             disabled={disabled}
+            placeholder="DD / MM / YYYY"
           />
         </div>
-        <div style={{ gridColumn: `span ${half}` }}>
+        <div style={{ gridColumn: `span ${half}`, minWidth: 0 }}>
           <FieldLabel label="To" />
-          <DateInput
+          <BiscDatePicker
             value={toValue ?? ""}
             onChange={(v) => onChange(field.toKey!, v)}
             disabled={disabled}
+            placeholder="DD / MM / YYYY"
           />
         </div>
       </>
@@ -347,7 +405,7 @@ function FieldCell({
   }
 
   return (
-    <div style={{ gridColumn: `span ${span}` }}>
+    <div style={{ gridColumn: `span ${span}`, minWidth: 0 }}>
       {field.type === "multiselect" && (
         <>
           <FieldLabel label={field.label} required={field.required} />
@@ -360,7 +418,8 @@ function FieldCell({
             }))}
             value={Array.isArray(value) ? value : value ? [value] : ["All"]}
             onChange={(v) => onChange(field.key, v)}
-            loading={field.loading || disabled}
+            loading={fieldLoading}
+            disabled={disabled}
             placeholder={field.placeholder ?? "All"}
           />
         </>
@@ -374,7 +433,8 @@ function FieldCell({
             value={value ?? ""}
             onChange={(v) => onChange(field.key, v)}
             placeholder={field.placeholder ?? "All"}
-            loading={field.loading || disabled}
+            loading={fieldLoading}
+            disabled={disabled}
           />
         </>
       )}
@@ -382,10 +442,11 @@ function FieldCell({
       {field.type === "date" && (
         <>
           <FieldLabel label={field.label} required={field.required} />
-          <DateInput
+          <BiscDatePicker
             value={value ?? ""}
             onChange={(v) => onChange(field.key, v)}
             disabled={disabled}
+            placeholder="DD / MM / YYYY"
           />
         </>
       )}
@@ -399,73 +460,69 @@ function FieldCell({
             onChange={(e) => onChange(field.key, e.target.value)}
             placeholder={field.placeholder}
             disabled={disabled}
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              opacity: disabled ? 0.65 : 1,
+              cursor: disabled ? "not-allowed" : undefined,
+              background: disabled
+                ? "var(--panel-soft, #f0f4f8)"
+                : inputStyle.background,
+            }}
           />
         </>
       )}
 
       {field.hint && field.type !== "multiselect" && (
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{field.hint}</div>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--muted, #6b7a8d)",
+            marginTop: 4,
+          }}
+        >
+          {field.hint}
+        </div>
       )}
     </div>
   );
 }
 
-function DateInput({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      placeholder="DD / MM / YYYY"
-      style={inputStyle}
-    />
-  );
-}
-
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  height: 36,
+  height: "var(--app-control-height, 36px)",
   padding: "0 12px",
-  fontSize: 13,
-  color: "#0f172a",
-  background: "#fff",
-  border: "1px solid #e2e8f0",
+  fontSize: "var(--app-control-font-size, 12px)",
+  color: "var(--text, #1a1a2e)",
+  background: "var(--panel, #ffffff)",
+  border: "1px solid var(--border, #cbd5e1)",
   borderRadius: 6,
   outline: "none",
   boxSizing: "border-box",
 };
 
-const THEME = "#1d4ed8";
 const PANEL_Z = 2147483000;
 
-/** Single-select portal dropdown — same visual language as MultiSelectField */
+/** Single-select portal dropdown */
 function SingleSelectField({
   options,
   value,
   onChange,
   placeholder = "All",
   loading,
+  disabled,
 }: {
   options: ReportOption[];
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   loading?: boolean;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [panelRect, setPanelRect] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     width: number;
   } | null>(null);
@@ -474,7 +531,10 @@ function SingleSelectField({
   const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const isDisabled = Boolean(loading || disabled);
+
   const selected = options.find((o) => o.value === value);
+  // Only show "Loading…" when actually loading options — not when merely disabled
   const display = loading
     ? "Loading…"
     : selected
@@ -483,15 +543,23 @@ function SingleSelectField({
         ? value
         : placeholder;
 
+  /** Clamp the panel to the viewport and flip it above the trigger when there's no room below */
   const recalcPosition = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPanelRect({
-      top: r.bottom + 4,
-      left: r.left,
-      width: Math.max(r.width, 220),
-    });
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const m = 8;
+    const width = Math.min(Math.max(r.width, 220), vw - m * 2);
+    const left = Math.min(Math.max(m, r.left), vw - width - m);
+    const spaceBelow = vh - r.bottom - m;
+    const flip = spaceBelow < 300 && r.top > spaceBelow;
+    setPanelRect(
+      flip
+        ? { bottom: vh - r.top + 4, left, width }
+        : { top: r.bottom + 4, left, width }
+    );
   }, []);
 
   useEffect(() => {
@@ -532,6 +600,11 @@ function SingleSelectField({
     }
   }, [open]);
 
+  // Close panel if control becomes disabled while open
+  useEffect(() => {
+    if (isDisabled && open) setOpen(false);
+  }, [isDisabled, open]);
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return options;
@@ -550,30 +623,39 @@ function SingleSelectField({
 
   const clear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isDisabled) return;
     onChange("");
   };
 
   const panel =
-    open && !loading && panelRect
+    open && !isDisabled && panelRect
       ? createPortal(
           <div
             ref={panelRef}
             style={{
               position: "fixed",
               top: panelRect.top,
+              bottom: panelRect.bottom,
               left: panelRect.left,
               width: panelRect.width,
+              maxHeight: "calc(100vh - 16px)",
               zIndex: PANEL_Z,
-              background: "#fff",
-              border: "1px solid #d1d5db",
+              background: "var(--panel, #ffffff)",
+              border: "1px solid var(--border, #cbd5e1)",
               borderRadius: 8,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+              boxShadow: "var(--shadow, 0 18px 45px rgba(15, 23, 42, 0.1))",
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
+              fontFamily: "var(--app-font-family, Inter, system-ui, sans-serif)",
             }}
           >
-            <div style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>
+            <div
+              style={{
+                padding: 8,
+                borderBottom: "1px solid var(--border, #cbd5e1)",
+              }}
+            >
               <div style={{ position: "relative" }}>
                 <Search
                   size={13}
@@ -582,11 +664,12 @@ function SingleSelectField({
                     left: 8,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "#9ca3af",
+                    color: "var(--muted, #6b7a8d)",
                   }}
                 />
                 <input
                   ref={searchRef}
+                  className="nr-ss-search"
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -596,17 +679,24 @@ function SingleSelectField({
                     boxSizing: "border-box",
                     padding: "6px 8px 6px 26px",
                     fontSize: 12,
-                    border: "1px solid #d1d5db",
+                    border: "1px solid var(--border, #cbd5e1)",
                     borderRadius: 6,
                     outline: "none",
-                    color: "#111827",
-                    background: "#fff",
+                    color: "var(--text, #1a1a2e)",
+                    background: "var(--panel, #ffffff)",
                   }}
                 />
               </div>
             </div>
 
-            <div style={{ maxHeight: 240, overflowY: "auto", padding: 4 }}>
+            <div
+              style={{
+                maxHeight: "min(240px, 40vh)",
+                overflowY: "auto",
+                padding: 4,
+                minHeight: 0,
+              }}
+            >
               <div
                 role="option"
                 onClick={() => pick("")}
@@ -615,15 +705,21 @@ function SingleSelectField({
                   fontSize: 12,
                   borderRadius: 5,
                   cursor: "pointer",
-                  color: "#6b7280",
-                  background: !value ? "#eff6ff" : "transparent",
+                  color: "var(--muted, #6b7a8d)",
+                  background: !value ? "var(--primary-soft, #e8f0ff)" : "transparent",
                   fontWeight: !value ? 600 : 400,
                 }}
               >
                 {placeholder}
               </div>
               {filtered.length === 0 && (
-                <div style={{ padding: "8px 10px", fontSize: 12, color: "#9ca3af" }}>
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    fontSize: 12,
+                    color: "var(--muted, #6b7a8d)",
+                  }}
+                >
                   No options match
                 </div>
               )}
@@ -640,15 +736,20 @@ function SingleSelectField({
                       fontSize: 12,
                       borderRadius: 5,
                       cursor: "pointer",
-                      color: active ? "#1e3a8a" : "#374151",
-                      background: active ? "#eff6ff" : "transparent",
+                      color: active
+                        ? "var(--primary, #00378c)"
+                        : "var(--text, #1a1a2e)",
+                      background: active
+                        ? "var(--primary-soft, #e8f0ff)"
+                        : "transparent",
                       fontWeight: active ? 600 : 400,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                     }}
                     onMouseEnter={(e) => {
-                      if (!active) e.currentTarget.style.background = "#f9fafb";
+                      if (!active)
+                        e.currentTarget.style.background = "var(--panel-soft, #f0f4f8)";
                     }}
                     onMouseLeave={(e) => {
                       if (!active) e.currentTarget.style.background = "transparent";
@@ -666,11 +767,11 @@ function SingleSelectField({
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "6px 10px",
-                borderTop: "1px solid #e5e7eb",
-                background: "#f9fafb",
+                borderTop: "1px solid var(--border, #cbd5e1)",
+                background: "var(--panel-soft, #f0f4f8)",
               }}
             >
-              <span style={{ fontSize: 11, color: "#6b7280" }}>
+              <span style={{ fontSize: 11, color: "var(--muted, #6b7a8d)" }}>
                 {filtered.length} item{filtered.length === 1 ? "" : "s"}
               </span>
               <button
@@ -679,9 +780,9 @@ function SingleSelectField({
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: "#374151",
-                  background: "#fff",
-                  border: "1px solid #d1d5db",
+                  color: "var(--text, #1a1a2e)",
+                  background: "var(--panel, #ffffff)",
+                  border: "1px solid var(--border, #cbd5e1)",
                   borderRadius: 5,
                   padding: "4px 10px",
                   cursor: "pointer",
@@ -700,8 +801,8 @@ function SingleSelectField({
       <button
         ref={triggerRef}
         type="button"
-        disabled={loading}
-        onClick={() => !loading && setOpen((o) => !o)}
+        disabled={isDisabled}
+        onClick={() => !isDisabled && setOpen((o) => !o)}
         style={{
           width: "100%",
           display: "flex",
@@ -709,16 +810,26 @@ function SingleSelectField({
           justifyContent: "space-between",
           gap: 8,
           padding: "0 12px",
-          height: 36,
-          fontSize: 13,
-          color: loading || !selected ? "#94a3b8" : "#0f172a",
-          background: "#fff",
-          border: `1px solid ${open ? THEME : "#e2e8f0"}`,
+          height: "var(--app-control-height, 36px)",
+          fontSize: "var(--app-control-font-size, 12px)",
+          color:
+            loading || !selected
+              ? "var(--muted, #6b7a8d)"
+              : "var(--text, #1a1a2e)",
+          background: isDisabled
+            ? "var(--panel-soft, #f0f4f8)"
+            : "var(--panel, #ffffff)",
+          border: `1px solid ${
+            open ? "var(--primary, #00378c)" : "var(--border, #cbd5e1)"
+          }`,
           borderRadius: 6,
-          cursor: loading ? "not-allowed" : "pointer",
+          cursor: isDisabled ? "not-allowed" : "pointer",
           textAlign: "left",
-          boxShadow: open ? "0 0 0 3px rgba(29,78,216,0.12)" : "none",
+          boxShadow: open
+            ? "0 0 0 3px color-mix(in srgb, var(--primary, #00378c) 18%, transparent)"
+            : "none",
           boxSizing: "border-box",
+          opacity: isDisabled && !loading ? 0.75 : 1,
         }}
       >
         <span
@@ -727,12 +838,20 @@ function SingleSelectField({
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             flex: 1,
+            minWidth: 0,
           }}
         >
           {display}
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          {value && !loading && (
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            flexShrink: 0,
+          }}
+        >
+          {value && !loading && !disabled && (
             <span
               onClick={clear}
               title="Clear"
@@ -742,7 +861,7 @@ function SingleSelectField({
                 justifyContent: "center",
                 width: 16,
                 height: 16,
-                color: "#9ca3af",
+                color: "var(--muted, #6b7a8d)",
                 cursor: "pointer",
               }}
             >
@@ -752,7 +871,7 @@ function SingleSelectField({
           <ChevronDown
             size={14}
             style={{
-              color: "#94a3b8",
+              color: "var(--muted, #6b7a8d)",
               transform: open ? "rotate(180deg)" : undefined,
               transition: "transform 0.15s",
             }}

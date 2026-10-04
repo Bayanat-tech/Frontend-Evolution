@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Download, FileText, Loader2, Printer, X } from "lucide-react";
 // import { PurchaseOrderForm } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
@@ -12,7 +12,8 @@ import {
   getSalesAccountDetailsReportExcel,
 } from "../../../api/transactions";
 import { PurchaseOrderForm } from "./SalesOrdertypes";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // The 3 report types available in the dropdown/radio group.
 type SalesPrintReportType = "SI" | "SI_TAX" | "ACCOUNT";
@@ -30,25 +31,26 @@ function formatDate(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-// ─── Shared styles — same design system as PurchaseInvoicePrintDialog ─────
+// ─── Shared styles — BISC blue theme (same palette as PO Order Register) ───
 
-const BG = "#EEF5FD";
+const BORDER = "#aebdce";
+const BG = "#f4f7fb";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   fontSize: 12,
   padding: "8px 10px",
-  border: "1px solid #d1d5db",
+  border: `1px solid ${BORDER}`,
   borderRadius: 7,
-  background: "#fff",
-  color: "#111827",
+  background: BG,
+  color: "#172033",
   boxSizing: "border-box",
   outline: "none",
 };
 
 const readOnlyBoxStyle: React.CSSProperties = {
   ...inputStyle,
-  color: "#111827",
+  color: "#172033",
   fontWeight: 500,
 };
 
@@ -61,9 +63,9 @@ function FloatLabel({ label, required, children, bgColor = "#fff" }: {
   return (
     <div style={{ position: "relative", marginTop: 6 }}>
       <span style={{
-        position: "absolute", top: -8, left: 10, fontSize: 11, color: "#6b7280",
+        position: "absolute", top: -8, left: 10, fontSize: 11, color: "#61748d",
         background: bgColor, padding: "0 4px", zIndex: 1, textTransform: "uppercase",
-        letterSpacing: "0.05em", fontWeight: 500,
+        letterSpacing: "0.05em", fontWeight: 600,
       }}>
         {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
       </span>
@@ -81,17 +83,29 @@ const RadioGroup: React.FC<{
     {options.map((opt) => (
       <label
         key={opt.dataValue}
-        style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}
+        onClick={() => onChange(opt.dataValue)}
+        style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 500, color: "#172033", cursor: "pointer", whiteSpace: "nowrap" }}
       >
-        <input
-          type="radio"
-          name="si-print-type"
-          value={opt.dataValue}
-          checked={value === opt.dataValue}
-          onChange={() => onChange(opt.dataValue)}
-          style={{ width: 16, height: 16, margin: 0, accentColor: "#185FA5", cursor: "pointer" }}
-        />
-        {opt.displayValue}
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 16,
+            height: 16,
+            borderRadius: "999px",
+            border: `2px solid ${value === opt.dataValue ? "#1d4ed8" : "#9ca3af"}`,
+            transition: "border-color 0.15s ease",
+            flexShrink: 0,
+          }}
+        >
+          {value === opt.dataValue && (
+            <span style={{ width: 8, height: 8, borderRadius: "999px", background: "#1d4ed8" }} />
+          )}
+        </span>
+        <span style={{ color: value === opt.dataValue ? "#1d4ed8" : "#172033" }}>
+          {opt.displayValue}
+        </span>
       </label>
     ))}
   </div>
@@ -116,20 +130,7 @@ export function SalesInvoicePrintDialog({
   const [loadingAction, setLoadingAction] = useState<"print" | "excel" | null>(null);
   const [reportError, setReportError] = useState("");
 
-  // ── Report preview dialog state (same pattern used across the app) ─────
-  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
-  const [reportPreviewError, setReportPreviewError] = useState("");
-  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
-  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
-
-  // Revoke the blob URL whenever it changes or the component unmounts, so we
-  // don't leak memory across repeated print actions.
-  useEffect(() => {
-    return () => {
-      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    };
-  }, [reportPreviewUrl]);
+  
 
   if (!open) return null;
 
@@ -143,48 +144,48 @@ export function SalesInvoicePrintDialog({
 
   const getHtmlFn = () =>
     reportType === "SI_TAX" ? getSalesInvoiceTaxReportHtml :
-    reportType === "ACCOUNT" ? getSalesAccountDetailsReportHtml :
-    getSalesInvoiceReportHtml;
+      reportType === "ACCOUNT" ? getSalesAccountDetailsReportHtml :
+        getSalesInvoiceReportHtml;
 
   const getExcelFn = () =>
     reportType === "SI_TAX" ? getSalesInvoiceTaxReportExcel :
-    reportType === "ACCOUNT" ? getSalesAccountDetailsReportExcel :
-    getSalesInvoiceReportExcel;
+      reportType === "ACCOUNT" ? getSalesAccountDetailsReportExcel :
+        getSalesInvoiceReportExcel;
 
   // ── Print now opens the in-app preview dialog instead of a new window ───
-  const handlePrint = async () => {
-    if (!docNo) {
-      setReportError("Doc No is missing — cannot fetch the report.");
-      return;
-    }
-    setReportError("");
+ const handlePrint = async () => {
+  if (!docNo) {
+    setReportError("Doc No is missing — cannot fetch the report.");
+    return;
+  }
+  setReportError("");
+  setLoadingAction("print");
 
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-    setLoadingAction("print");
+  const reportLabel = REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue || "Sales Invoice";
+  const preview = openPurchaseReport(`${reportLabel} ${docNo}`.trim());
 
-    try {
-      const html = await getHtmlFn()(buildApiParams());
-      const blob = new Blob([html], { type: "text/html" });
-      const url = window.URL.createObjectURL(blob);
-      setReportPreviewUrl(url);
-    } catch (err: any) {
-      setReportPreviewError(err?.message || "Failed to load report.");
-    } finally {
-      setReportPreviewLoading(false);
-      setLoadingAction(null);
-    }
-  };
+  try {
+    const html = await getHtmlFn()(buildApiParams());
+    preview.ready({
+      html,
+      filename: `${reportType.toLowerCase()}_${docNo}_${new Date().toISOString().slice(0, 10)}`,
+    orientation: reportType === "SI" ? "portrait" : "landscape",
+      onExcel: async () => {
+        await getExcelFn()(buildApiParams());
+      },
+    });
+  } catch (err: any) {
+    preview.fail(new Error(err?.message || "Failed to load report."));
+  } finally {
+    setLoadingAction(null);
+  }
+};
 
-  const closeReportPreview = () => {
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewOpen(false);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-  };
+  // const closeReportPreview = () => {
+  //   setReportPreviewOpen(false);
+  //   setReportHtml(null);
+  //   setReportPreviewError("");
+  // };
 
   const handleExcel = async () => {
     if (!docNo) {
@@ -202,18 +203,18 @@ export function SalesInvoicePrintDialog({
     }
   };
 
-  // Excel button inside the report-preview dialog itself (mirrors PurchaseGRNPage pattern)
-  const handleReportPreviewExcel = async () => {
-    if (!docNo) return;
-    setReportPreviewExporting(true);
-    try {
-      await getExcelFn()(buildApiParams());
-    } catch (err: any) {
-      setReportPreviewError(err?.message || "Excel export failed.");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  };
+  // Excel button inside the report-preview dialog itself
+  // const handleReportPreviewExcel = async () => {
+  //   if (!docNo) return;
+  //   setReportPreviewExporting(true);
+  //   try {
+  //     await getExcelFn()(buildApiParams());
+  //   } catch (err: any) {
+  //     setReportPreviewError(err?.message || "Excel export failed.");
+  //   } finally {
+  //     setReportPreviewExporting(false);
+  //   }
+  // };
 
   return (
     <div style={{
@@ -222,20 +223,20 @@ export function SalesInvoicePrintDialog({
       fontFamily: "system-ui, sans-serif",
     }}>
       <style>{`
-        .si-print-btn-primary:hover { background: #12457f !important; }
-        .si-print-btn-outline:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+        .si-print-btn-primary:hover { background: #002e76 !important; }
+        .si-print-btn-outline:hover { background: #EBF4FF !important; border-color: #00449b !important; color: #00449b !important; }
       `}</style>
 
       <div style={{
         width: "100%", maxWidth: 760, maxHeight: "90vh", display: "flex", flexDirection: "column",
-        overflow: "hidden", background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12,
+        overflow: "hidden", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12,
         boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
       }}>
         {/* Card header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <FileText size={17} color="#185FA5" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
+            <FileText size={17} color="#00449b" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#172033" }}>
               Print Preview {docNo ? `— ${docNo}` : ""}
             </span>
           </div>
@@ -274,7 +275,7 @@ export function SalesInvoicePrintDialog({
 
             <div style={{ marginTop: 12 }}>
               <FloatLabel label="Print Type" bgColor={BG}>
-                <div style={{ border: "1px solid #d1d5db", borderRadius: 7, background: "#fff", boxSizing: "border-box" }}>
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: 7, background: "#fff", boxSizing: "border-box" }}>
                   <RadioGroup value={reportType} onChange={(v) => setReportType(v as SalesPrintReportType)} options={REPORT_OPTIONS} />
                 </div>
               </FloatLabel>
@@ -307,19 +308,19 @@ export function SalesInvoicePrintDialog({
         </div>
 
         {/* Action bar */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "0.5px solid #e5e7eb" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: `1px solid ${BORDER}` }}>
           <button onClick={onClose} className="si-print-btn-outline" style={{
-            padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer",
+            padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer",
             display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
           }}>
-            <X size={13} /> Close
+            Close
           </button>
           <button
             onClick={handleExcel}
             disabled={loadingAction !== null}
             className="si-print-btn-outline"
             style={{
-              padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff",
+              padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff",
               cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.6 : 1,
               display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
             }}
@@ -332,7 +333,7 @@ export function SalesInvoicePrintDialog({
             disabled={loadingAction !== null}
             className="si-print-btn-primary"
             style={{
-              padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5",
+              padding: "7px 16px", border: "1px solid #00449b", background: "#00449b",
               cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.8 : 1,
               display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff",
               transition: "background 0.2s",
@@ -344,18 +345,7 @@ export function SalesInvoicePrintDialog({
         </div>
       </div>
 
-      {reportPreviewOpen && (
-        <ReportPreviewDialog
-          title={`Sales Invoice ${docNo}`.trim()}
-          pdfUrl={reportPreviewUrl}
-          error={reportPreviewError}
-          exporting={reportPreviewExporting}
-          onExcel={handleReportPreviewExcel}
-          onClose={closeReportPreview}
-          onDownload={() => {}}
-          downloadName={`SalesInvoice_${docNo || "report"}.html`}
-        />
-      )}
+      <PurchaseReportPreview />
     </div>
   );
 }

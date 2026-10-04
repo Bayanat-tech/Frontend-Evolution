@@ -7,7 +7,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+
 
 import {
   ActionKey,
@@ -41,6 +41,8 @@ import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { getSOrderReportHtml, getSoOrderReportExcel } from "../../../api/transactions";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 
 export type { PurchaseOrderEditorState };
@@ -88,12 +90,11 @@ export function SalesOrderEditor({
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
-  // ── Report preview dialog state ──────────────────────────────────────────
-  // reportPreviewUrl is a local blob: URL built from the HTML string the
-  // backend returns — ReportPreviewDialog just treats it like any pdfUrl.
+  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
 
@@ -229,13 +230,6 @@ export function SalesOrderEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
-  // Revoke the blob URL whenever it changes or the component unmounts.
-  useEffect(() => {
-    return () => {
-      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    };
-  }, [reportPreviewUrl]);
-
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
@@ -351,38 +345,36 @@ export function SalesOrderEditor({
     }
   };
 
-  // ── Print now opens the in-app ReportPreviewDialog instead of a new tab ──
+  // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
-    if (!form.doc_no) {
-      setError("Save the Sales Order before printing");
-      return;
-    }
+  if (!form.doc_no) {
+    setError("Save the Sales Order before printing");
+    return;
+  }
 
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-
-    try {
-      const html = await getSOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: SO_DOC_TYPE.SO,
-        doc_no: form.doc_no,
-      });
-      const blob = new Blob([html], { type: "text/html" });
-      setReportPreviewUrl(window.URL.createObjectURL(blob));
-    } catch (printError) {
-      setReportPreviewError(printError instanceof Error ? printError.message : "Unable to load report");
-    }
+  const params = {
+    company_code: user?.company_code,
+    doc_type: SO_DOC_TYPE.SO,
+    doc_no: form.doc_no,
   };
+  const preview = openPurchaseReport(`Sales Order ${form.doc_no}`.trim());
 
-  const closeReportPreview = () => {
-    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewOpen(false);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-  };
+  try {
+    const html = await getSOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `sales_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getSoOrderReportExcel(params);
+      },
+    });
+  } catch (printError) {
+    preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
+  }
+};
+
+  
 
   const handleExportExcel = async () => {
     if (!form.doc_no) {
@@ -708,18 +700,7 @@ export function SalesOrderEditor({
         </div>
       </form>
 
-      {reportPreviewOpen && (
-        <ReportPreviewDialog
-          title={`Sales Order ${form.doc_no || ""}`.trim()}
-          pdfUrl={reportPreviewUrl}
-          error={reportPreviewError}
-          exporting={reportPreviewExporting}
-          onExcel={handleExportExcel}
-          onClose={closeReportPreview}
-          onDownload={() => { }}
-          downloadName={`SO_${form.doc_no || "report"}.html`}
-        />
-      )}
+      <PurchaseReportPreview />
 
       <SendBackDialog
         open={sendBackDialogOpen}

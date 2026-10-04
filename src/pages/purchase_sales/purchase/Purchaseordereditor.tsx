@@ -46,7 +46,14 @@ import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getPoOrderReportHtml } from "../../../api/transactions";
+import {
+  getPoOrderReportHtml,
+  getPoOrderReportExcel,
+} from "../../../api/transactions";
+
+
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 
 export type { PurchaseOrderEditorState };
@@ -90,6 +97,12 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+
+
+  // ---- Report Preview state ----
+  
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
 
@@ -371,34 +384,52 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handlePrint = () => {
+  // ---- Report Preview ----
+  const handlePrint = async () => {
+  if (!form.doc_no) return;
+
+  const params = {
+    company_code: user?.company_code,
+    doc_type: PO_DOC_TYPE.LPO,
+    doc_no: form.doc_no,
+  };
+  const preview = openPurchaseReport(`Purchase Order ${form.doc_no}`.trim());
+
+  try {
+    const html = await getPoOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `purchase_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getPoOrderReportExcel(params);
+      },
+    });
+  } catch (error) {
+    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+  }
+};
+  
+
+  const handleReportPreviewExcel = async () => {
     if (!form.doc_no) return;
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Popup blocked — please allow popups to print.");
-      return;
-    }
-    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+    setReportPreviewExporting(true);
+    setReportPreviewError("");
 
-    getPoOrderReportHtml({
-      company_code: user?.company_code,
-      doc_type: PO_DOC_TYPE.LPO,
-      doc_no: form.doc_no,
-    })
-      .then((html) => {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-      })
-      .catch((printError) => {
-        printWindow.document.open();
-        printWindow.document.write(
-          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
-          }</p>`
-        );
-        printWindow.document.close();
+    try {
+      await getPoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.LPO,
+        doc_no: form.doc_no,
       });
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Unable to export report"
+      );
+    } finally {
+      setReportPreviewExporting(false);
+    }
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
@@ -582,7 +613,17 @@ export function PurchaseOrderEditor({
                   <Button type="button" variant="secondary" onClick={handlePrint}>
                     <Printer size={15} /> Print
                   </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button
+                    aria-label="Excel"
+                    title="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => void handleReportPreviewExcel()}
+                    disabled={reportPreviewExporting}
+                  >
+                    <Download size={15} />
+                  </Button>
                 </>
               )}
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -738,6 +779,9 @@ export function PurchaseOrderEditor({
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
       />
+
+
+     <PurchaseReportPreview />
     </>
   );
 }

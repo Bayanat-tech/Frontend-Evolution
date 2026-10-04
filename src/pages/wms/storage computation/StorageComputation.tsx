@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, RefreshCw, Save, X } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -13,6 +13,7 @@ import { api } from "../../../api/client";
 // ─── Types ────────────────────────────────────────────────────────────────────
 type WmsRow = Record<string, unknown>;
 type NoticeState = { type: "success" | "error"; message: string } | null;
+type ViewMode = "list" | "editor";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function val(row: WmsRow, key: string) {
@@ -120,11 +121,11 @@ const TABS = [
 export function StorageComputationPage() {
   const { user } = useAuth();
 
+  const [view, setView] = useState<ViewMode>("list");
   const [selectedTab] = useState("active");
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<NoticeState>(null);
-  const [addOpen, setAddOpen] = useState(false);
 
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
@@ -220,6 +221,32 @@ export function StorageComputationPage() {
     []
   );
 
+  const openAdd = () => setView("editor");
+  const closeForm = () => setView("list");
+
+  const handleSuccess = () => {
+    setView("list");
+    void loadRows(false);
+    setNotice({
+      type: "success",
+      message: "Storage computation processed successfully.",
+    });
+  };
+
+  // ── RENDER EDITOR (FULL PAGE) ──
+  if (view === "editor") {
+    return (
+      <AddStorageForm
+        companyCode={user?.company_code || ""}
+        loginId={user?.username || user?.loginid || "Admin"}
+        onClose={closeForm}
+        onSuccess={handleSuccess}
+        onError={(msg) => setNotice({ type: "error", message: msg })}
+      />
+    );
+  }
+
+  // ── RENDER LIST ──
   return (
     <section className="grid gap-4">
       {/* ── Header ── */}
@@ -236,7 +263,7 @@ export function StorageComputationPage() {
           <Button variant="outline" onClick={() => loadRows()}>
             <RefreshCw size={15} /> Refresh
           </Button>
-          <Button onClick={() => setAddOpen(true)}>
+          <Button onClick={openAdd}>
             <Plus size={15} /> Add Storage
           </Button>
         </div>
@@ -274,39 +301,18 @@ export function StorageComputationPage() {
         pageSize={50}
         getRowId={(row, index) => String((row as WmsRow)._id || index)}
       />
-
-      {/* ── Add Storage Modal ── */}
-      {addOpen && (
-        <AddStorageModal
-          open={addOpen}
-          companyCode={user?.company_code || ""}
-          loginId={user?.username || user?.loginid || "Admin"}
-          onClose={() => setAddOpen(false)}
-          onSuccess={() => {
-            setAddOpen(false);
-            void loadRows(false);
-            setNotice({
-              type: "success",
-              message: "Storage computation processed successfully.",
-            });
-          }}
-          onError={(msg) => setNotice({ type: "error", message: msg })}
-        />
-      )}
     </section>
   );
 }
 
-// ─── Add Storage Modal ────────────────────────────────────────────────────────
-function AddStorageModal({
-  open,
+// ─── Full Page Add Storage Form ──────────────────────────────────────────────
+function AddStorageForm({
   companyCode,
   loginId,
   onClose,
   onSuccess,
   onError,
 }: {
-  open: boolean;
   companyCode: string;
   loginId: string;
   onClose: () => void;
@@ -463,10 +469,9 @@ function AddStorageModal({
     setDetailRows([]);
     setChargeType("");
     setSiteInd("");
-    setChargeTime("")
-        setFreeStorage("");
+    setChargeTime("");
+    setFreeStorage("");
     setInbJobwiseBill("");
-
   };
 
   // ── Validation ──
@@ -556,207 +561,141 @@ function AddStorageModal({
     []
   );
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[1px]"
-      onMouseDown={onClose}
-    >
-      <div
-        className="grid max-h-[94vh] w-[min(96vw,1100px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border bg-card shadow-2xl"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* ── Modal Header ── */}
-        <div className="flex items-center justify-between border-b bg-card px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className="h-7 w-1 rounded-full bg-primary" />
-            <div>
-              <p className="m-0 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
-                Storage Computation
-              </p>
-              <h2 className="m-0 text-lg font-bold text-foreground">
-                Add Storage
-              </h2>
-            </div>
-          </div>
+    <section className="grid gap-2">
+      {/* ── Page Header ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
           <button
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground"
             type="button"
             onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-md border bg-card text-muted-foreground hover:bg-secondary transition-colors cursor-pointer"
           >
-            <X size={16} />
+            <ArrowLeft size={16} />
           </button>
+          <div>
+            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Storage Computation</p>
+            <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Add Storage</h1>
+          </div>
         </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleReset} disabled={processing}>
+            Initialize
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={processing}>
+            <X size={14} /> Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canSubmit}
+            onClick={handleProcess}
+          >
+            <Save size={14} />
+            {processing ? "Processing..." : "Process"}
+          </Button>
+        </div>
+      </div>
 
-        {/* ── Modal Body ── */}
-        <div className="min-h-0 overflow-y-auto bg-muted/20 p-4 text-sm">
-          <div className="grid gap-4">
-
-            {/* ── Section 1: Left form + Right charge master ── */}
-            <div className="grid gap-4 md:grid-cols-[340px_1fr]">
-
-              {/* Left: form fields */}
-              <fieldset className="rounded-md border border-border bg-card p-3">
-                <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Details
-                </legend>
-                <div className="grid gap-2.5">
-
-                  {/* Principal */}
-                  <LookupField
-                    label="Principal"
-                    required
-                    value={prinCode}
-                    displayValue={
-                      prinCode && prinName ? `${prinCode} - ${prinName}` : prinCode
-                    }
-                    valueField="prin_code"
-                    displayFields={["prin_code", "prin_name"]}
-                    columns={[
-                      { field: "prin_code", header: "Principal Code" },
-                      { field: "prin_name", header: "Principal Name" },
-                    ]}
-                    placeholder="Select principal"
-                    loadOptions={async () => {
-                      const rows = await executeWmsInboundSql(
-                        `SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${companyCode}' ORDER BY PRIN_CODE`
-                      );
-                      return rows.map((r) =>
-                        normalizeRow(r as WmsRow)
-                      ) as WmsRow[];
-                    }}
-                    onChange={(selected, selectedRow) => {
-                      void handlePrinChange(
-                        selected,
-                        selectedRow
-                          ? String(
-                              selectedRow["prin_name"] ??
-                                selectedRow["PRIN_NAME"] ??
-                                ""
-                            )
-                          : ""
-                      );
-                    }}
-                  />
-
-                  {/* Month */}
-                  <Field label="Month" required horizontal>
-                    <input
-                      type="month"
-                      className="ui-input h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={storageMonth}
-                      onChange={(e) => setStorageMonth(e.target.value)}
-                    />
-                  </Field>
-
-                  {/* Last Invoice Date (read-only, derived) */}
-                  <ReadOnlyField label="Last Invoice Date" value={lastInvoiceDate} />
-
-                  {/* Current Date (read-only) */}
-                  <ReadOnlyField
-                    label="Current Date"
-                    value={new Date().toLocaleDateString("en-GB")}
-                  />
-
-                  {/* Inv Start + Inv End */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Inv Start Date" required>
-                      <input
-                        type="date"
-                        className="ui-input h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        value={
-                          invStartDate
-                            ? invStartDate.toISOString().slice(0, 10)
-                            : ""
-                        }
-                        onChange={(e) =>
-                          setInvStartDate(
-                            e.target.value ? new Date(e.target.value) : null
-                          )
-                        }
-                      />
-                    </Field>
-                    <Field label="Inv End Date" required>
-                      <input
-                        type="date"
-                        className="ui-input h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        value={
-                          invEndDate
-                            ? invEndDate.toISOString().slice(0, 10)
-                            : ""
-                        }
-                        onChange={(e) =>
-                          setInvEndDate(
-                            e.target.value ? new Date(e.target.value) : null
-                          )
-                        }
-                      />
-                    </Field>
-                  </div>
-
-                  {/* Days (auto-calculated, editable) */}
-                  <Field label="Days" horizontal>
-                    <Input
-                      type="number"
-                      className="bg-muted/40"
-                      readOnly
-                      value={noDays > 0 ? String(noDays) : ""}
-                      placeholder="Auto-calculated"
-                    />
-                  </Field>
-
-                  {/* Storage Month display */}
-                  {storageMonth && (
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                      Storage Month:{" "}
-                      <strong className="text-foreground">
-                        {formatMonth(fromYyyyMm(storageMonth))}
-                      </strong>
-                    </div>
-                  )}
-                </div>
-              </fieldset>
-
-              {/* Right: Storage Charge Master */}
-              <fieldset className="rounded-md border border-border bg-card p-3">
-                <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Storage Charge Master
-                </legend>
-                <DataTable
-                  columns={chargeMasterCols}
-                  data={chargeMasterRows}
-                  loading={chargeMasterLoading}
-                  height="220px"
-                  minWidth={500}
-                  density="grid"
-                  enablePagination={false}
-                  searchPlaceholder=""
-                  subtitle=""
-                  getRowId={(row, i) =>
-                    String((row as WmsRow)._id || i)
-                  }
-                />
-                {!prinCode && (
-                  <p className="mt-2 text-center text-xs text-muted-foreground">
-                    Select a principal to load charge master.
-                  </p>
-                )}
-              </fieldset>
-            </div>
-
-            {/* ── Section 2: Storage Detail grid ── */}
+      {/* ── Page Body ── */}
+      <div className="grid gap-4 bg-muted/20 p-4 rounded-md border">
+        <div className="grid gap-4">
+          {/* ── Section 1: Left form + Right charge master ── */}
+          <div className="grid gap-4 md:grid-cols-[340px_1fr]">
+            {/* Left: form fields */}
             <fieldset className="rounded-md border border-border bg-card p-3">
               <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Storage Detail
+                Details
+              </legend>
+              <div className="grid gap-2.5">
+                <LookupField
+                  label="Principal"
+                  required
+                  value={prinCode}
+                  displayValue={prinCode && prinName ? `${prinCode} - ${prinName}` : prinCode}
+                  valueField="prin_code"
+                  displayFields={["prin_code", "prin_name"]}
+                  columns={[
+                    { field: "prin_code", header: "Principal Code" },
+                    { field: "prin_name", header: "Principal Name" },
+                  ]}
+                  placeholder="Select principal"
+                  loadOptions={async () => {
+                    const rows = await executeWmsInboundSql(
+                      `SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${companyCode}' ORDER BY PRIN_CODE`
+                    );
+                    return rows.map((r) => normalizeRow(r as WmsRow)) as WmsRow[];
+                  }}
+                  onChange={(selected, selectedRow) => {
+                    void handlePrinChange(
+                      selected,
+                      selectedRow
+                        ? String(selectedRow["prin_name"] ?? selectedRow["PRIN_NAME"] ?? "")
+                        : ""
+                    );
+                  }}
+                />
+
+                <Field label="Month" required horizontal>
+                  <input
+                    type="month"
+                    className="ui-input h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={storageMonth}
+                    onChange={(e) => setStorageMonth(e.target.value)}
+                  />
+                </Field>
+
+                <ReadOnlyField label="Last Invoice Date" value={lastInvoiceDate} />
+                <ReadOnlyField label="Current Date" value={new Date().toLocaleDateString("en-GB")} />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Inv Start Date" required>
+                    <input
+                      type="date"
+                      className="ui-input h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={invStartDate ? invStartDate.toISOString().slice(0, 10) : ""}
+                      onChange={(e) => setInvStartDate(e.target.value ? new Date(e.target.value) : null)}
+                    />
+                  </Field>
+                  <Field label="Inv End Date" required>
+                    <input
+                      type="date"
+                      className="ui-input h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={invEndDate ? invEndDate.toISOString().slice(0, 10) : ""}
+                      onChange={(e) => setInvEndDate(e.target.value ? new Date(e.target.value) : null)}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Days" horizontal>
+                  <Input
+                    type="number"
+                    className="bg-muted/40"
+                    readOnly
+                    value={noDays > 0 ? String(noDays) : ""}
+                    placeholder="Auto-calculated"
+                  />
+                </Field>
+
+                {storageMonth && (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    Storage Month: <strong className="text-foreground">{formatMonth(fromYyyyMm(storageMonth))}</strong>
+                  </div>
+                )}
+              </div>
+            </fieldset>
+
+            {/* Right: Storage Charge Master */}
+            <fieldset className="rounded-md border border-border bg-card p-3">
+              <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Storage Charge Master
               </legend>
               <DataTable
-                columns={detailCols}
-                data={detailRows}
-                loading={detailLoading}
-                height="200px"
-                minWidth={900}
+                columns={chargeMasterCols}
+                data={chargeMasterRows}
+                loading={chargeMasterLoading}
+                height="220px"
+                minWidth={500}
                 density="grid"
                 enablePagination={false}
                 searchPlaceholder=""
@@ -765,47 +704,38 @@ function AddStorageModal({
               />
               {!prinCode && (
                 <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Select a principal to load storage detail.
+                  Select a principal to load charge master.
                 </p>
               )}
             </fieldset>
           </div>
-        </div>
 
-        {/* ── Modal Footer ── */}
-        <div className="flex items-center justify-between gap-2 border-t bg-card px-5 py-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={processing}
-            onClick={handleReset}
-          >
-            Initialize
-          </Button>
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              disabled={processing}
-            >
-              <X size={14} /> Close
-            </Button>
-            <Button
-              size="sm"
-              disabled={!canSubmit}
-              onClick={handleProcess}
-            >
-              <Save size={14} />
-              {processing ? "Processing..." : "Process"}
-            </Button>
-          </div>
+          {/* ── Section 2: Storage Detail grid ── */}
+          <fieldset className="rounded-md border border-border bg-card p-3">
+            <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Storage Detail
+            </legend>
+            <DataTable
+              columns={detailCols}
+              data={detailRows}
+              loading={detailLoading}
+              height="200px"
+              minWidth={900}
+              density="grid"
+              enablePagination={false}
+              searchPlaceholder=""
+              subtitle=""
+              getRowId={(row, i) => String((row as WmsRow)._id || i)}
+            />
+            {!prinCode && (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Select a principal to load storage detail.
+              </p>
+            )}
+          </fieldset>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 

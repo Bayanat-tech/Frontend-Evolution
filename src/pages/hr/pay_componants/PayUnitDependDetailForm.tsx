@@ -14,7 +14,6 @@ function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -230,7 +229,7 @@ const PayUnitDependDetailForm = ({ formik, disabled = false }: TProps) => {
           row.original.country_code ? (
             <span title={`Nationality: ${row.original.nationality || 'N/A'}`}>
               {row.original.country_code} - {row.original.country_name}
-              {row.original.nationality}
+              
             </span>
           ) : (
             ''

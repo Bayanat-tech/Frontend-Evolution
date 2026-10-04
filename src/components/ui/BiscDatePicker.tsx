@@ -3,13 +3,16 @@ import ReactDOM from "react-dom";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 
 export type BiscDatePickerProps = {
-  value?: string; // YYYY-MM-DD
+  value?: string; // YYYY-MM-DD or ISO string
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   minYear?: number;
   maxYear?: number;
+  error?: boolean;
+  required?: boolean;
+  compact?: boolean;
 };
 
 const MONTH_NAMES = [
@@ -22,24 +25,37 @@ const WEEKDAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 export function BiscDatePicker({
   value = "",
   onChange,
-  placeholder = "DD / MM / YYYY",
+  placeholder,
   disabled = false,
   className = "",
   minYear = 1950,
   maxYear = 2050,
+  error = false,
+  compact = false,
 }: BiscDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  // Parse current value date
+  // Parse current value date safely
   const parsedDate = useMemo(() => {
     if (!value) return null;
-    const parts = value.split("-").map(Number);
-    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-      return new Date(parts[0], parts[1] - 1, parts[2]);
+    const str = String(value).trim();
+    if (!str) return null;
+
+    // Match YYYY-MM-DD prefix (ignores ISO timestamp if present)
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]) - 1;
+      const day = Number(match[3]);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) return d;
     }
+
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
     return null;
   }, [value]);
 
@@ -75,7 +91,9 @@ export function BiscDatePicker({
     setCoords({ top, left });
   };
 
-  const handleToggle = () => {
+  const handleToggle = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
     if (disabled) return;
     if (!isOpen) {
       updatePosition();
@@ -255,14 +273,16 @@ export function BiscDatePicker({
     setIsOpen(false);
   };
 
-  // Format display string e.g. "01 / 09 / 2026"
+  // Format display string e.g. "01 / 09 / 2026" or "01/09/2026"
   const formattedDisplay = useMemo(() => {
     if (!parsedDate) return "";
     const dStr = String(parsedDate.getDate()).padStart(2, "0");
     const mStr = String(parsedDate.getMonth() + 1).padStart(2, "0");
     const yStr = String(parsedDate.getFullYear());
-    return `${dStr} / ${mStr} / ${yStr}`;
-  }, [parsedDate]);
+    return compact ? `${dStr}/${mStr}/${yStr}` : `${dStr} / ${mStr} / ${yStr}`;
+  }, [parsedDate, compact]);
+
+  const defaultPlaceholder = compact ? "DD/MM/YYYY" : "DD / MM / YYYY";
 
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
@@ -271,13 +291,17 @@ export function BiscDatePicker({
         type="button"
         disabled={disabled}
         onClick={handleToggle}
-        className={`w-full h-8 px-2.5 rounded-[10px] border border-border bg-slate-100 text-foreground text-xs flex items-center justify-between transition-all cursor-pointer select-none
-          ${disabled ? "opacity-60 cursor-not-allowed bg-slate-100/50" : "hover:border-[#00378C]/50 focus:bg-white focus:ring-2 focus:ring-[#00378C]/20 shadow-sm"}`}
+        className={`bisc-date-picker-trigger w-full ${
+          compact ? "h-[22px] px-1.5 py-0 text-[10.5px] rounded" : "h-[28px] px-2 rounded-[6px] text-xs"
+        } border ${
+          error ? "border-destructive ring-1 ring-destructive/40" : "border-[#94a3b8]"
+        } bg-white text-foreground flex items-center justify-between transition-all cursor-pointer select-none
+          ${disabled ? "opacity-60 cursor-not-allowed bg-slate-50" : "hover:border-[#64748b] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30 shadow-2xs"}`}
       >
-        <span className={formattedDisplay ? "text-foreground font-medium text-[11.5px]" : "text-muted-foreground/60 text-[11.5px]"}>
-          {formattedDisplay || placeholder}
+        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-[10.5px] font-mono tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-[10px]" : "text-[12px]"} text-slate-400`}>
+          {formattedDisplay || placeholder || defaultPlaceholder}
         </span>
-        <CalendarIcon className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+        <CalendarIcon className={`${compact ? "w-3 h-3 ml-0.5" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />
       </button>
 
       {/* Portaled Interactive Calendar Popover */}
@@ -360,7 +384,7 @@ export function BiscDatePicker({
                     ${cell.isSelected
                       ? "bg-[#00378C] text-white font-semibold shadow-sm"
                       : cell.isToday
-                      ? "border border-[#00378C] text-[#00378C] font-semibold hover:bg-blue-50"
+                      ? "bg-[#e0e7ff] text-[#00378C] font-semibold hover:bg-blue-100"
                       : cell.isCurrentMonth
                       ? "text-[#1a1a2e] hover:bg-slate-100"
                       : "text-slate-300 hover:bg-slate-50"
@@ -372,18 +396,18 @@ export function BiscDatePicker({
             </div>
 
             {/* Footer (Today and Clear Buttons) */}
-            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 mt-2">
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 mt-2">
               <button
                 type="button"
                 onClick={handleSelectToday}
-                className="cursor-pointer flex-1 py-1 px-3 text-xs font-semibold text-[#00378C] bg-blue-50 hover:bg-blue-100 rounded-md transition-colors text-center"
+                className="cursor-pointer py-1 px-4 text-xs font-semibold text-[#00378C] bg-[#e8eef6] hover:bg-[#d8e4f2] rounded-full transition-colors text-center"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={handleClear}
-                className="cursor-pointer flex-1 py-1 px-3 text-xs font-medium text-slate-500 hover:text-[#1a1a2e] hover:bg-slate-100 rounded-md transition-colors text-center"
+                className="cursor-pointer py-1 px-3 text-xs font-medium text-slate-500 hover:text-[#1a1a2e] transition-colors text-right"
               >
                 Clear
               </button>

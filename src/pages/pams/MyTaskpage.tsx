@@ -791,7 +791,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         onClose={closeDialog}
         footer={
           <>
-            <Button variant="outline" onClick={closeDialog}><X size={15} /> Close</Button>
+            <Button variant="outline" onClick={closeDialog}>Close</Button>
             {editMode && (
               <Button disabled={saving} onClick={saveRecord}>
                 <Save size={15} /> {saving ? "Saving..." : "Save Changes"}

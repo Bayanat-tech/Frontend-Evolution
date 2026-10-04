@@ -25,8 +25,8 @@ type LookupFieldProps = {
   required?: boolean;
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
-  /** ⭐ NEW — per-row action renderer (Edit / Delete buttons etc.) */
   renderRowActions?: (row: LookupRow) => ReactNode;
+  className?: string;
 };
 
 export function LookupField({
@@ -46,7 +46,8 @@ export function LookupField({
   required,
   enforceRequired,
   multiSelect,
-  renderRowActions,       // ⭐ NEW
+  renderRowActions,      
+  className,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -221,7 +222,7 @@ export function LookupField({
 
   return (
     <>
-      <label className={compact ? "block w-full min-w-0" : "field"}>
+      <label className={`${compact ? "block w-full min-w-0" : "field"} ${className || ""}`}>
         {(!compact || showLabelInCompact) && (
           <span>
             {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}

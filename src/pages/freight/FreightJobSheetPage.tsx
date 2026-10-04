@@ -9,7 +9,7 @@ import { Input } from "../../components/ui/Input";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
-import { Field } from "../vendor/components";
+import { Field } from "../../components/commonComponents";
 
 const modeMap = {
   air: { code: "A", label: "Air", icon: Plane },

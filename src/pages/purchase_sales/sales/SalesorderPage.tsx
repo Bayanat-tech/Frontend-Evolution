@@ -6,15 +6,18 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
+import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "./SalesOrdereditor";
 import { SDN_CONFIG, SO_CONFIG } from "./SalesOrdertypes";
+import { TabStrip } from "../../../components/commonComponents";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -88,12 +91,11 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // ── Row-level report preview dialog state ────────────────────────────────
-  // reportPreviewUrl is a local blob: URL built from the HTML string the
-  // backend returns — ReportPreviewDialog just treats it like any pdfUrl.
+  // ── Row-level report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
   const [reportPreviewRow, setReportPreviewRow] = useState<SalesOrderRow | null>(null);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
@@ -129,61 +131,35 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     return response as unknown as SalesOrderRow[];
   };
 
-  // Revoke the blob URL whenever it changes or the component unmounts.
-  useEffect(() => {
-    return () => {
-      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    };
-  }, [reportPreviewUrl]);
-
   // ── Row-level print handler ───────────────────────────────────────────────
   const handlePrintSalesOrder = async (row: SalesOrderRow) => {
-    if (!row.doc_no) return;
+  if (!row.doc_no) return;
 
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-    setReportPreviewDocNo(row.doc_no);
-    setReportPreviewRow(row);
-    setReportPreviewOpen(true);
-
-    try {
-      const html = await getSOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: row.doc_type,
-        doc_no: row.doc_no,
-      });
-      const blob = new Blob([html], { type: "text/html" });
-      setReportPreviewUrl(window.URL.createObjectURL(blob));
-    } catch (error) {
-      setReportPreviewError(error instanceof Error ? error.message : "Unable to load report");
-    }
+  const params = {
+    company_code: user?.company_code,
+    doc_type: row.doc_type,
+    doc_no: row.doc_no,
   };
+  const preview = openPurchaseReport(`Sales Order ${row.doc_no}`.trim());
 
-  const closeReportPreview = () => {
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewOpen(false);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-    setReportPreviewDocNo("");
-    setReportPreviewRow(null);
-  };
+  try {
+    const html = await getSOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `sales_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getSoOrderReportExcel(params);
+      },
+    });
+  } catch (error) {
+    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+  }
+};
 
-  const handleReportPreviewExcel = async () => {
-    if (!reportPreviewRow) return;
-    setReportPreviewExporting(true);
-    try {
-      await getSoOrderReportExcel({
-        company_code: user?.company_code,
-        doc_type: reportPreviewRow.doc_type,
-        doc_no: reportPreviewRow.doc_no,
-      });
-    } catch (error) {
-      setReportPreviewError(error instanceof Error ? error.message : "Unable to export report");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  };
+
+
+  
 
   useEffect(() => {
     if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
@@ -383,40 +359,15 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
         </div>
       )}
 
-      {reportPreviewOpen && (
-        <ReportPreviewDialog
-          title={`Sales Order ${reportPreviewDocNo}`.trim()}
-          pdfUrl={reportPreviewUrl}
-          error={reportPreviewError}
-          exporting={reportPreviewExporting}
-          onExcel={handleReportPreviewExcel}
-          onClose={closeReportPreview}
-          onDownload={() => {}}
-          downloadName={`SO_${reportPreviewDocNo || "report"}.html`}
-        />
-      )}
+      <PurchaseReportPreview />
 
-      <Dialog
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
+        divisions={divisions}
         description="Choose the division before opening the sales order form."
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+      />
     </section>
   );
 }

@@ -7,6 +7,7 @@ import AddPayUnitsForm from './AddPayUnitsForm';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
+import { DivisionPickerDialog } from '../../../components/ui/DivisionPickerDialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { useAuth } from '../../../state/AuthContext';
 
@@ -99,7 +100,7 @@ const PayUnitsPage = () => {
   }, [payUnitsData?.tableData, globalFilter]);
 
   // ==========fetch Division==================
-  const { data: divisionData } = useQuery({
+  const { data: divisionData, isLoading: isLoadingDivision } = useQuery({
     queryKey: ['division', companyCode],
     queryFn: async () => {
       const response = await getDynamicLookup({
@@ -246,21 +247,14 @@ const PayUnitsPage = () => {
         </Button>
       </div>
 
-      <Dialog open={openDivision} title="Select Division" onClose={() => setOpenDivision(false)}>
-        <div className="max-h-[60vh] w-full overflow-y-auto">
-          {(divisionData?.tableData ?? []).map((item: any, index: number) => (
-            <div
-              key={index}
-              className="mb-0.5 flex items-center justify-between rounded-lg border border-gray-200 p-2 hover:bg-blue-50 cursor-pointer"
-            >
-              <h5 className="text-base font-medium text-[#082a89]">{item.DIV_NAME}</h5>
-              <Button type="button" onClick={() => handleSelectDivision(item.DIV_CODE, item.DIV_NAME)} variant="outline">
-                Select
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Dialog>
+      <DivisionPickerDialog
+        open={openDivision}
+        divisions={divisionData?.tableData ?? []}
+        loading={isLoadingDivision}
+        description="Choose a division to continue."
+        onSelect={(item, code, name) => handleSelectDivision(code || item.DIV_CODE || item.div_code, name || item.DIV_NAME || item.div_name)}
+        onClose={() => setOpenDivision(false)}
+      />
 
       <DataTable
         columns={columns}

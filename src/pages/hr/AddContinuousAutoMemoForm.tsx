@@ -511,7 +511,7 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
             onClose(false);
           }}
         >
-          <X size={15} /> {readonly ? "Close" : "Cancel"}
+          {readonly ? "Close" : "Cancel"}
         </Button>
         {!readonly && (
           <>

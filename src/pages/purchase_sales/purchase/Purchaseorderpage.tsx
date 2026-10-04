@@ -1,18 +1,22 @@
 import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Division, getDivisions, getPoOrderReportExcel, getPoOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
+import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
+import { NewReportDialog } from "../../../components/new_report_format";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
+import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
 import { LPO_CONFIG } from "./Purchaseordertypes";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -22,7 +26,7 @@ export interface PurchaseOrderRow {
   quotn_no?: string;
   purchase_actype?: any;
   quotn_date?: string;
-   ref_no?: string;
+  ref_no?: string;
   ref_date?: string;
   dept_name?: string;
   uppp?: number;
@@ -100,7 +104,7 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
-  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";  
+  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
@@ -108,9 +112,14 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  const [printLoading, setPrintLoading] = useState(false);
-  const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
-  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
+  // ── Row-level report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
+  const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
+  const [reportPreviewRow, setReportPreviewRow] = useState<PurchaseOrderRow | null>(null);
+  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -143,33 +152,33 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     return response as unknown as PurchaseOrderRow[];
   };
 
-  const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
-    setPrintLoading(true);
-    setPrintReportHtml(null);
-    try {
-      const html = await getPoOrderReportHtml({
-        company_code: user?.company_code,
-        doc_type: row.doc_type,
-        doc_no: row.doc_no,
-      });
-      setPrintReportHtml(html);
-    } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load report",
-      });
-    } finally {
-      setPrintLoading(false);
-    }
+  // ── Row-level print handler ───────────────────────────────────────────────
+ const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
+  if (!row.doc_no) return;
+
+  const params = {
+    company_code: user?.company_code,
+    doc_type: row.doc_type,
+    doc_no: row.doc_no,
   };
+  const preview = openPurchaseReport(`Purchase Order ${row.doc_no}`.trim());
 
-
-  const handlePrintFrame = () => {
-  const frame = printFrameRef.current;
-  if (!frame) return;
-  frame.contentWindow?.focus();
-  frame.contentWindow?.print();
+  try {
+    const html = await getPoOrderReportHtml(params);
+    preview.ready({
+      html,
+      filename: `purchase_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await getPoOrderReportExcel(params);
+      },
+    });
+  } catch (error) {
+    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+  }
 };
+
+ 
 
   const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
     try {
@@ -184,10 +193,10 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
   };
 
   useEffect(() => {
-  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
-    setTab("PENDING");
-  }
-}, [approvalLevel, tab]);
+    if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+      setTab("PENDING");
+    }
+  }, [approvalLevel, tab]);
 
   useEffect(() => {
     void loadLookups().catch((error) => {
@@ -238,13 +247,13 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
       header: "Status",
       cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
     },
-     {
-  id: "reason",
-  header: "Reason",
-  accessorFn: (row) =>
-    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
-},
-        { accessorKey: "last_action", header: "Last Action" },
+    {
+      id: "reason",
+      header: "Reason",
+      accessorFn: (row) =>
+        row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+    },
+    { accessorKey: "last_action", header: "Last Action" },
     {
       id: "actions",
       header: "Actions",
@@ -257,14 +266,14 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
 
 
           <Button
-  size="icon"
-  variant="ghost"
-  onClick={() => setEditor({ mode: "edit", row: row.original })}
-  title={isViewOnlyTab ? "View" : "Edit"}
->
-  {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
-</Button>
-          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => handlePrintPurchaseOrder(row.original)}>
+            size="icon"
+            variant="ghost"
+            onClick={() => setEditor({ mode: "edit", row: row.original })}
+            title={isViewOnlyTab ? "View" : "Edit"}
+          >
+            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+          </Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintPurchaseOrder(row.original)}>
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
@@ -291,34 +300,34 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-        { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-     <TabStrip
-  value={tab}
-  onChange={(value) => setTab(value as RequestTab)}
-  tabs={
-    approvalLevel === 0
-      ? [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-        ]
-      : [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-        ]
-  }
-/>
+      <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={
+          approvalLevel === 0
+            ? [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+            ]
+            : [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+              { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+            ]
+        }
+      />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -376,101 +385,15 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
         </div>
       )}
 
-      <Dialog
+      <PurchaseReportPreview />
+
+      <DivisionPickerDialog
         open={divisionPicker}
-        title="Select Division"
+        divisions={divisions}
         description="Choose the division before opening the purchase order form."
+        onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
-      >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
-
-      {printLoading && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 8,
-              padding: 24,
-            }}
-          >
-            <p style={{ fontFamily: "sans-serif", margin: 0 }}>Loading report…</p>
-          </div>
-        </div>
-      )}
-
-      {printReportHtml && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000,
-    }}
-  >
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: 8,
-        width: "90%",
-        maxWidth: 1000,
-        height: "90vh",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
-      <iframe
-        ref={printFrameRef}
-        srcDoc={printReportHtml}
-        style={{ flex: 1, width: "100%", border: "none" }}
-        title="Purchase Order Report"
       />
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 8,
-          padding: "10px 16px",
-          borderTop: "1px solid #e5e7eb",
-        }}
-      >
-        <Button size="sm" variant="outline" onClick={handlePrintFrame}>
-          <Printer size={14} className="mr-1" /> Print
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setPrintReportHtml(null)}>
-          Close
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
     </section>
   );
 }

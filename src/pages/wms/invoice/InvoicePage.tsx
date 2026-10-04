@@ -132,7 +132,7 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
       cell: ({ row }) => <span className="block text-right tabular-nums">{val(row.original, "inv_amount")}</span>,
     },
     // { accessorKey: "crdr", header: "Cr/Dr", size: 80, cell: ({ row }) => val(row.original, "crdr") || "-" },
-    { accessorKey: "inv_status", header: "Status", size: 90 },
+    // { accessorKey: "inv_status", header: "Status", size: 90 },
     // {
     //   accessorKey: "allocated",
     //   header: "Allocated",

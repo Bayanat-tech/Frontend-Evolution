@@ -594,7 +594,7 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
       {/* ── Actions ─────────────────────────────────────────────────────────── */}
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => onClose(false)}>
-          <X size={15} /> {readonly ? "Close" : "Cancel"}
+          {readonly ? "Close" : "Cancel"}
         </Button>
         {!readonly && (
           <Button disabled={saving} onClick={() => void handleSubmit()}>

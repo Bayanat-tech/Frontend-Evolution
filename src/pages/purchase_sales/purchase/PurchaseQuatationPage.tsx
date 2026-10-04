@@ -5,14 +5,17 @@ import { Division, getDivisions } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
-import { Dialog } from "../../../components/ui/Dialog";
+// import { Dialog } from "../../../components/ui/Dialog";
+import { DivisionPickerDialog } from "../../../components/ui/DivisionPickerDialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { TabStrip } from "../../vendor/components";
-import {  PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
+import { TabStrip } from "../../../components/commonComponents";
+import { PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
 import { PQA_CONFIG } from "./Purchaseordertypes";
+import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
+import { Dialog } from "../../../components/mms_ui";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -78,11 +81,12 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
-  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";  
+  const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
+  const [printTarget, setPrintTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -118,10 +122,10 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   };
 
   useEffect(() => {
-  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
-    setTab("PENDING");
-  }
-}, [approvalLevel, tab]);
+    if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+      setTab("PENDING");
+    }
+  }, [approvalLevel, tab]);
 
   useEffect(() => {
     void loadLookups().catch((error) => {
@@ -172,13 +176,13 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       header: "Status",
       cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
     },
-     {
-  id: "reason",
-  header: "Reason",
-  accessorFn: (row) =>
-    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
-},
-        { accessorKey: "last_action", header: "Last Action" },
+    {
+      id: "reason",
+      header: "Reason",
+      accessorFn: (row) =>
+        row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+    },
+    { accessorKey: "last_action", header: "Last Action" },
     {
       id: "actions",
       header: "Actions",
@@ -190,14 +194,14 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           </Button> */}
 
           <Button
-  size="icon"
-  variant="ghost"
-  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
-  title={isViewOnlyTab ? "View" : "Edit"}
->
-  {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
-</Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
+            size="icon"
+            variant="ghost"
+            onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+            title={isViewOnlyTab ? "View" : "Edit"}
+          >
+            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+          </Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => setPrintTarget(row.original as any)}>
             <Printer size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Excel">
@@ -224,34 +228,34 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          { tab === "PENDING" && (
-          <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-     <TabStrip
-  value={tab}
-  onChange={(value) => setTab(value as RequestTab)}
-  tabs={
-    approvalLevel === 0
-      ? [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-        ]
-      : [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-        ]
-  }
-/>
+      <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={
+          approvalLevel === 0
+            ? [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+            ]
+            : [
+              { label: "Pending", value: "PENDING", icon: "pending" },
+              { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+              { label: "Closed", value: "CLOSED", icon: "closed" },
+              ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+              { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+            ]
+        }
+      />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -309,31 +313,36 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       )}
 
-      <Dialog
-        open={divisionPicker}
-        title="Select Division"
-        description="Choose the division before opening the Purchase Quotation form."
-        onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
+    <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
+  <div className="grid max-h-[420px] gap-2 overflow-auto">
+    {divisions.map((division) => (
+      <button
+        key={division.div_code}
+        className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
+        onClick={() => openCreateForDivision(division)}
+        type="button"
       >
-        <div className="grid max-h-[420px] gap-2 overflow-auto">
-          {divisions.map((division) => (
-            <button
-              key={division.div_code}
-              className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-              onClick={() => openCreateForDivision(division)}
-              type="button"
-            >
-              <span className="font-medium">{division.div_name}</span>
-              <span className="text-muted-foreground">{division.div_code}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
+        <span className="font-medium">{division.div_name}</span>
+        <span className="text-muted-foreground">{division.div_code}</span>
+      </button>
+    ))}
+  </div>
+  <div className="mt-4 flex justify-end">
+    <Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>
+  </div>
+</Dialog>
+      {printTarget && (
+        <PurchaseQuotationPrintDialog
+          open={!!printTarget}
+          onClose={() => setPrintTarget(null)}
+          form={printTarget as any}
+          companyCode={user?.company_code || ""}
+          docType="PQA"
+        />
+      )}
     </section>
   );
 }
-
 function formatDate(value: unknown) {
   if (!value) return "";
   const date = new Date(String(value));
