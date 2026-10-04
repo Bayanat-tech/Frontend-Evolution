@@ -129,7 +129,6 @@ type DashboardData = {
   attention?: AttentionRow[];
   currency_code?: string;
   currency_symbol?: string;
-  currency_decimals?: number;
 };
 
 const months = [
@@ -172,7 +171,6 @@ export function FinanceDashboardPanel() {
         "/api/finance/dashboard",
         {
           company_code: companyCode,
-          company_name: companyName,
           user_id: userId,
           fy_period: fyPeriod || undefined,
           div_code: divCode !== "All" ? divCode : undefined,
@@ -198,7 +196,7 @@ export function FinanceDashboardPanel() {
     } finally {
       setLoading(false);
     }
-  }, [companyCode, companyName, divCode, fyPeriod, month]);
+  }, [companyCode, divCode, fyPeriod, month]);
 
   useEffect(() => {
     void loadDashboard();
@@ -206,22 +204,13 @@ export function FinanceDashboardPanel() {
 
   const summary = data.summary || {};
   const exposure = data.exposureSummary || {};
-  const isIndiaCompany =
-    companyCode === "GNL" ||
-    companyCode === "GRL" ||
-    companyCode === "BTIND" ||
-    companyName.toUpperCase().includes("INDIA");
-  const currencyCode = data.currency_code || (isIndiaCompany ? "INR" : "OMR");
-  const currencyDecimals =
-    data.currency_decimals != null
-      ? data.currency_decimals
-      : ["OMR", "BHD", "KWD", "KD", "JOD", "TND"].includes(currencyCode.toUpperCase())
-        ? 3
-        : 2;
+  const currencyCode = data.currency_code || "OMR";
   const masterCurrencySymbol = String(data.currency_symbol || "").trim();
-  const currencySymbol = isUsableCurrencySymbol(masterCurrencySymbol, currencyCode)
-    ? masterCurrencySymbol
-    : currencySymbolFor(currencyCode);
+  const currencySymbol = currencyCode.toUpperCase() === "OMR"
+    ? currencySymbolFor("OMR")
+    : isUsableCurrencySymbol(masterCurrencySymbol, currencyCode)
+      ? masterCurrencySymbol
+      : currencySymbolFor(currencyCode);
 
   // Hero Overview Cards
   const netFlow = number(summary.NET_CASH_FLOW);
@@ -426,9 +415,8 @@ export function FinanceDashboardPanel() {
           icon={TrendingUp}
           tone="emerald"
           loading={loading}
-          caption={`${formatCurrency(number(exposure.RECEIVABLE_OVERDUE), false, currencySymbol, currencyDecimals)} overdue`}
+          caption={`${formatCurrency(number(exposure.RECEIVABLE_OVERDUE), false, currencySymbol)} overdue`}
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
 
         <HeroCard
@@ -437,9 +425,8 @@ export function FinanceDashboardPanel() {
           icon={TrendingDown}
           tone="rose"
           loading={loading}
-          caption={`${formatCurrency(number(exposure.PAYABLE_OVERDUE), false, currencySymbol, currencyDecimals)} overdue`}
+          caption={`${formatCurrency(number(exposure.PAYABLE_OVERDUE), false, currencySymbol)} overdue`}
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
 
         <HeroCard
@@ -450,7 +437,6 @@ export function FinanceDashboardPanel() {
           loading={loading}
           caption="Bank and cash receipts"
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
 
         <HeroCard
@@ -461,7 +447,6 @@ export function FinanceDashboardPanel() {
           loading={loading}
           caption="Bank and cash payments"
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
 
         <HeroCard
@@ -474,7 +459,6 @@ export function FinanceDashboardPanel() {
           caption="Receipts less payments"
           isBalance
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
 
         <HeroCard
@@ -486,7 +470,6 @@ export function FinanceDashboardPanel() {
           caption={`${number(summary.TOTAL_CANCELED_COUNT)} cancelled · ${number(summary.UNPOSTED_JOURNAL_COUNT)} unposted JVs`}
           isCount
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
       </section>
 
@@ -499,14 +482,7 @@ export function FinanceDashboardPanel() {
         </div>
         <div className="finance-dashboard-kpis finance-dashboard-kpis-summary">
           {[...commercialCards, ...treasuryCards].map((card) => (
-            <ModuleCard
-              key={card.title}
-              {...card}
-              loading={loading}
-              onNavigate={navigate}
-              currencySymbol={currencySymbol}
-              decimals={currencyDecimals}
-            />
+            <ModuleCard key={card.title} {...card} loading={loading} onNavigate={navigate} currencySymbol={currencySymbol} />
           ))}
         </div>
       </section>
@@ -518,7 +494,6 @@ export function FinanceDashboardPanel() {
           rows={data.monthly || []}
           loading={loading}
           currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
         />
         <ActivityMixChart
           title="Monthly Transaction Volume"
@@ -529,34 +504,12 @@ export function FinanceDashboardPanel() {
 
       {/* Outstanding exposure: actionable collection and payment priorities */}
       <div className="finance-dashboard-panel-grid finance-dashboard-exposure-grid">
-        <ExposurePanel
-          title="Top 5 Customers to Collect"
-          subtitle="Open sales invoices"
-          rows={data.topCustomers || []}
-          loading={loading}
-          currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
-          tone="customer"
-        />
-        <ExposurePanel
-          title="Top 5 Suppliers to Pay"
-          subtitle="Open purchase invoices"
-          rows={data.topSuppliers || []}
-          loading={loading}
-          currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
-          tone="supplier"
-        />
+        <ExposurePanel title="Top 5 Customers to Collect" subtitle="Open sales invoices" rows={data.topCustomers || []} loading={loading} currencySymbol={currencySymbol} tone="customer" />
+        <ExposurePanel title="Top 5 Suppliers to Pay" subtitle="Open purchase invoices" rows={data.topSuppliers || []} loading={loading} currencySymbol={currencySymbol} tone="supplier" />
       </div>
 
       <div className="finance-dashboard-panel-grid finance-dashboard-activity-grid">
-        <AttentionQueuePanel
-          rows={data.attention || []}
-          loading={loading}
-          onNavigate={navigate}
-          currencySymbol={currencySymbol}
-          decimals={currencyDecimals}
-        />
+        <AttentionQueuePanel rows={data.attention || []} loading={loading} onNavigate={navigate} currencySymbol={currencySymbol} />
       </div>
     </div>
   );
@@ -575,7 +528,6 @@ type HeroCardProps = {
   isBalance?: boolean;
   isCount?: boolean;
   currencySymbol: string;
-  decimals?: number;
 };
 
 function HeroCard({
@@ -589,7 +541,6 @@ function HeroCard({
   isBalance,
   isCount,
   currencySymbol,
-  decimals = 2,
 }: HeroCardProps) {
   const change =
     prevValue !== undefined && prevValue > 0
@@ -611,7 +562,7 @@ function HeroCard({
         ) : isCount ? (
           value.toLocaleString()
         ) : (
-          formatCurrency(value, isBalance, currencySymbol, decimals)
+          formatCurrency(value, isBalance, currencySymbol)
         )}
       </div>
 
@@ -644,7 +595,6 @@ type ModuleCardProps = {
   loading?: boolean;
   onNavigate?: (route: string) => void;
   currencySymbol?: string;
-  decimals?: number;
 };
 
 function ModuleCard({
@@ -659,7 +609,6 @@ function ModuleCard({
   loading,
   onNavigate,
   currencySymbol = "¤",
-  decimals = 2,
 }: ModuleCardProps) {
   const amt = number(amount);
   const cnt = number(count);
@@ -685,7 +634,7 @@ function ModuleCard({
         {loading ? (
           <span className="finance-dashboard-skeleton" />
         ) : (
-          formatCurrency(amt, false, currencySymbol, decimals)
+          formatCurrency(amt, false, currencySymbol)
         )}
       </strong>
 
@@ -713,13 +662,11 @@ function CashFlowTrendChart({
   rows,
   loading,
   currencySymbol,
-  decimals = 2,
 }: {
   title: string;
   rows: MonthlyRow[];
   loading: boolean;
   currencySymbol: string;
-  decimals?: number;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -935,14 +882,14 @@ function CashFlowTrendChart({
               <strong style={{ fontSize: "10.5px" }}>{months[hoverIndex + 1]}</strong>
               <div style={{ display: "flex", gap: "10px", marginTop: "3px" }}>
                 <span style={{ color: "#93c5fd" }}>
-                  Received: {formatCurrency(number(hoveredRow.RECEIPTS), false, currencySymbol, decimals)}
+                  Received: {formatCurrency(number(hoveredRow.RECEIPTS), false, currencySymbol)}
                 </span>
                 <span style={{ color: "#fda4af" }}>
-                  Paid: {formatCurrency(number(hoveredRow.PAYMENTS), false, currencySymbol, decimals)}
+                  Paid: {formatCurrency(number(hoveredRow.PAYMENTS), false, currencySymbol)}
                 </span>
               </div>
               <div style={{ marginTop: "2px", fontSize: "9px", color: number(hoveredRow.RECEIPTS) >= number(hoveredRow.PAYMENTS) ? "#86efac" : "#fca5a5" }}>
-                Net: {formatCurrency(number(hoveredRow.RECEIPTS) - number(hoveredRow.PAYMENTS), true, currencySymbol, decimals)}
+                Net: {formatCurrency(number(hoveredRow.RECEIPTS) - number(hoveredRow.PAYMENTS), true, currencySymbol)}
               </div>
             </div>
           )}
@@ -1205,7 +1152,6 @@ function ExposurePanel({
   loading,
   currencySymbol,
   tone,
-  decimals = 2,
 }: {
   title: string;
   subtitle: string;
@@ -1213,7 +1159,6 @@ function ExposurePanel({
   loading: boolean;
   currencySymbol: string;
   tone: "customer" | "supplier";
-  decimals?: number;
 }) {
   const largest = Math.max(1, ...rows.map((row) => number(row.OUTSTANDING_AMOUNT)));
 
@@ -1243,13 +1188,13 @@ function ExposurePanel({
               <div>
                 <div>
                   <strong title={row.AC_NAME}>{row.AC_NAME}</strong>
-                  <span>{formatCurrency(outstanding, false, currencySymbol, decimals)}</span>
+                  <span>{formatCurrency(outstanding, false, currencySymbol)}</span>
                 </div>
                 <i>
                   <span style={{ width: `${Math.min(100, (outstanding / largest) * 100)}%` }} />
                 </i>
                 <small>
-                  {number(row.OPEN_INVOICE_COUNT)} open invoices &middot; {formatCurrency(overdue, false, currencySymbol, decimals)} overdue ({overduePercent.toFixed(0)}%)
+                  {number(row.OPEN_INVOICE_COUNT)} open invoices &middot; {formatCurrency(overdue, false, currencySymbol)} overdue ({overduePercent.toFixed(0)}%)
                 </small>
               </div>
             </div>
@@ -1271,13 +1216,11 @@ function AttentionQueuePanel({
   loading,
   onNavigate,
   currencySymbol,
-  decimals = 2,
 }: {
   rows: AttentionRow[];
   loading: boolean;
   onNavigate: (route: string) => void;
   currencySymbol: string;
-  decimals?: number;
 }) {
   const getDocRoute = (docType: string) => {
     switch (docType?.toUpperCase()) {
@@ -1341,7 +1284,7 @@ function AttentionQueuePanel({
                 </div>
 
                 <div className="finance-dashboard-attention-amount">
-                  {formatCurrency(number(row.AMOUNT), false, currencySymbol, decimals)}
+                  {formatCurrency(number(row.AMOUNT), false, currencySymbol)}
                 </div>
 
                 <span
@@ -1382,10 +1325,10 @@ function number(val: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatCurrency(val: number, isBalance = false, symbol = "¤", decimals = 2): string {
+function formatCurrency(val: number, isBalance = false, symbol = "¤"): string {
   const absFormatted = Math.abs(val).toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
   });
   const amount = usesCurrencySuffix(symbol)
     ? `${absFormatted} ${symbol}`
@@ -1421,21 +1364,12 @@ function currencySymbolFor(code: string): string {
     QAR: "ر.ق",
     SAR: "ر.س",
     USD: "$",
-    KWD: "د.ك",
-    KD: "د.ك",
-    BHD: "ب.د",
-    JPY: "¥",
   };
-  return symbols[code.toUpperCase()] || code.toUpperCase() || "¤";
+  return symbols[code.toUpperCase()] || "¤";
 }
 
 function isUsableCurrencySymbol(symbol: string, code: string): boolean {
-  return Boolean(
-    symbol &&
-    !symbol.includes("?") &&
-    symbol.trim() !== "" &&
-    symbol.toUpperCase() !== code.toUpperCase()
-  );
+  return Boolean(symbol && !symbol.includes("?") && symbol.toUpperCase() !== code.toUpperCase());
 }
 
 function compactNumber(val: number): string {
