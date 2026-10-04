@@ -1,321 +1,253 @@
-    import { Edit2, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+// Employee Master page — new UI
+//  • List view: Freight-style header + DataTable
+//  • Add / Edit opens the full-page editor (same page, no dialog)
+//  • Editor header owns Back / Save; the form owns the logic
+//  • Header Save calls formRef.current?.save()
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useAuth } from "../../../state/AuthContext";
+import { ArrowLeft, Edit2, FileText, Loader2, Plus, RefreshCw, Save, Trash2, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { executeDynamicDelete, getDynamicLookup } from "../../../api/lookups";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
-// import AddEmployeeHrForm from "components/forms/HR/Masters/Employee/AddEmployeeHrForm";
-import { TEmployeeHr } from "./employee-hr.types";
-import { getDynamicLookup, executeDynamicDelete } from "../../../api/lookups";
-import AddEmployeeHrForm from "./AddEmployeeHrForm";
+import { useAuth } from "../../../state/AuthContext";
+import { formatDate } from "../../../hooks/apiDate";
+import AddEmployeeHrForm, { type EmployeeFormHandle } from "./AddEmployeeHrForm";
+import { mapEmployeeHr } from "./employee-hr.mapper";
+import type { TEmployeeHr } from "./employee-hr.types";
+
+type Editor = { editMode: boolean; row?: TEmployeeHr } | null;
 
 export function EmployeeMasterPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const companyCode = user?.company_code ?? "";
+  const loginid = user?.loginid ?? "";
+  const queryKey = useMemo(() => ["employee-hr", companyCode], [companyCode]);
 
-  const [rows, setRows] = useState<TEmployeeHr[]>([]);
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [existingData, setExistingData] = useState<Partial<TEmployeeHr>>({});
-
-  // Delete confirm
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editor, setEditor] = useState<Editor>(null);
+  const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TEmployeeHr | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const loadRows = async () => {
-    setLoading(true);
-    try {
+  const formRef = useRef<EmployeeFormHandle>(null);
+
+  /* ── Employees ── */
+  const { data: rows = [], isLoading, isFetching, error, refetch } = useQuery({
+    queryKey,
+    queryFn: async (): Promise<TEmployeeHr[]> => {
       const response = await getDynamicLookup({
         parameter: "MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE",
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code,
-        // code2: user?.loginid ?? "",
+        loginid,
+        code1: companyCode,
       });
-      const tableData = (Array.isArray(response) ? response : []) as Record<string, unknown>[];
-        setRows(tableData.map(mapEmployeeHr));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to load employees");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return ((Array.isArray(response) ? response : []) as Record<string, unknown>[]).map(mapEmployeeHr);
+    },
+    enabled: !!companyCode,
+  });
 
   useEffect(() => {
-    void loadRows();
-  }, []);
+    if (error) toast.error(error instanceof Error ? error.message : "Unable to load employees");
+  }, [error, toast]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((row) =>
-      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term))
-    );
+    return rows.filter((r) => Object.values(r).some((v) => String(v ?? "").toLowerCase().includes(term)));
   }, [query, rows]);
 
-  const openAdd = () => {
-    setEditMode(false);
-    setExistingData({});
-    setOpenDialog(true);
-  };
-
-  const openEdit = (row: TEmployeeHr) => {
-    setEditMode(true);
-    setExistingData(row);
-    setOpenDialog(true);
-  };
-
-  const closeDialog = (refetch?: boolean) => {
-    setOpenDialog(false);
-    setExistingData({});
-    setEditMode(false);
-    if (refetch) void loadRows();
-  };
-
-  const requestDelete = (row: TEmployeeHr) => {
-    setDeleteTarget(row);
-    setDeleteOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await executeDynamicDelete({
+  /* ── Delete ── */
+  const deleteMutation = useMutation({
+    mutationFn: (row: TEmployeeHr) =>
+      executeDynamicDelete({
         parameter: "MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE_DELETE",
-        loginid: user?.loginid ?? "",
-        code1: deleteTarget.employee_code,
-        code2: user?.company_code,
-      });
+        loginid,
+        code1: row.employee_code,
+        code2: companyCode,
+      }),
+    onSuccess: () => {
       toast.success("Employee deleted successfully");
-      setDeleteOpen(false);
       setDeleteTarget(null);
-      await loadRows();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to delete employee");
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Unable to delete employee"),
+  });
+
+  /* ── Editor open / close ── */
+  const openAdd = () => setEditor({ editMode: false });
+  const openEdit = useCallback((row: TEmployeeHr) => setEditor({ editMode: true, row }), []);
+  const backToList = () => setEditor(null);
+  const handleSaved = () => {
+    setEditor(null);
+    queryClient.invalidateQueries({ queryKey });
+  };
+
+  /* ── Header Save ── */
+  const handleHeaderSave = async () => {
+    setSaving(true);
+    try {
+      await formRef.current?.save();
     } finally {
-      setDeleting(false);
+      setSaving(false);
     }
-};
+  };
 
-  const formatDate = (value: unknown) => {
-  if (!value) return "";
-  const d = new Date(value as string | Date);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    };
-
+  /* ── Columns ── */
   const columns = useMemo<ColumnDef<TEmployeeHr>[]>(
     () => [
       { accessorKey: "rpt_name", header: "Employee Name", size: 270 },
       { accessorKey: "desg_code", header: "Designation", size: 80 },
-      { accessorKey: "join_date", header: "Join Date", size: 100 , cell: ({getValue})=>formatDate(getValue())},
+      { accessorKey: "join_date", header: "Join Date", size: 100, cell: ({ getValue }) => formatDate(getValue()) },
       { accessorKey: "dept_code", header: "Department", size: 80 },
       {
         id: "actions",
         header: "Actions",
+        size: 90,
+        enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title="Edit employee">
-              <Edit2 size={14} />
-            </Button>
-            <Button size="icon" variant="ghost" onClick={() => requestDelete(row.original)} title="Delete employee">
-              <Trash2 size={14} />
-            </Button>
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEdit(row.original)}
+              title="Edit employee"
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => setDeleteTarget(row.original)}
+              title="Delete employee"
+            >
+              <Trash2 size={13} />
+            </button>
           </div>
         ),
-        size: 90,
       },
     ],
-    [],
+    [openEdit],
   );
 
-  return (
-    <section className="grid gap-4">
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="eyebrow">HR Master</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Employee Master</h1>
+  /* ── Editor view ── */
+  if (editor) {
+    const { editMode, row } = editor;
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Employee Master</h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {editMode ? "Editing" : "New"}
+                </span>
+                {editMode && row && (
+                  <span className="text-xs text-muted-foreground">
+                    {row.employee_code}
+                    {row.rpt_name ? ` - ${row.rpt_name}` : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={backToList} disabled={saving}>
+              <ArrowLeft size={14} /> Back to List
+            </Button>
+            <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
+              {saving ? "Saving" : "Save"}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => loadRows()}>
-            <RefreshCw size={15} /> Refresh
+
+        <AddEmployeeHrForm
+          key={row?.employee_code || "new"}
+          ref={formRef}
+          isEditMode={editMode}
+          existingData={editMode ? row : undefined}
+          onSaved={handleSaved}
+        />
+      </section>
+    );
+  }
+
+  /* ── List view ── */
+  return (
+    <section className="freight-workspace-ui freight-ui-standard grid gap-2">
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <Users size={15} />
+          </div>
+          <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Employee Master</h1>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} /> Refresh
           </Button>
-          <Button onClick={openAdd}>
-            <Plus size={15} /> Add Employee
+          <Button type="button" size="sm" onClick={openAdd}>
+            <Plus size={14} /> Add Employee
           </Button>
         </div>
       </div>
 
-      {/* ── Table ── */}
       <DataTable
         columns={columns}
         data={filteredRows}
-        title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Employees`}
+        title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} Employees`}
         subtitle="Employee Master List"
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search employee, designation..."
-        loading={loading}
+        loading={isLoading}
         emptyText="No Employee found"
         height={620}
         minWidth={900}
         density="grid"
-        getRowId={(row) => `${row.employee_code}-${row.employee_id}-${row.join_date}`}
+        getRowId={(row) => `${row.employee_code}-${row.employee_id}`}
       />
 
-      {/* ── Add / Edit Form Dialog ── */}
+      {/* ── Delete confirmation dialog ── */}
       <Dialog
-        open={openDialog}
-        title={editMode ? "Edit Employee Details" : "Add Employee Details"}
-        description="Employee information"
-        compact
-        wide
-        onClose={() => closeDialog()}
-      >
-        <AddEmployeeHrForm
-        onClose={() => closeDialog(true)}
-        isEditMode={editMode}
-        employee_code={existingData.employee_code ?? ""}
-        existingData={editMode ? (existingData as TEmployeeHr) : undefined}
-        />
-      </Dialog>
-
-      {/* ── Delete Confirm Dialog ── */}
-      <Dialog
-        open={deleteOpen}
+        open={!!deleteTarget}
         title="Delete Employee"
         description={deleteTarget ? `Delete ${deleteTarget.rpt_name}?` : undefined}
         compact
         tone="danger"
-        onClose={() => setDeleteOpen(false)}
+        onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button disabled={deleting} variant="destructive" onClick={confirmDelete}>
-              {deleting ? "Deleting..." : "Delete"}
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </>
         }
       >
-        <div className="grid gap-3">
-          <p className="m-0 text-sm text-muted-foreground">Are you sure you want to delete?</p>
-        </div>
+        <p className="m-0 text-sm text-muted-foreground">
+          This action cannot be undone. Are you sure you want to delete this employee?
+        </p>
       </Dialog>
     </section>
   );
-}
-
-function toDate(value: unknown): Date {
-  if (value instanceof Date) return value;
-  if (!value) return new Date(0);
-  const d = new Date(String(value));
-  return isNaN(d.getTime()) ? new Date(0) : d;
-}
-
-function toNullableDate(value: unknown): Date | null {
-  if (value === null || value === undefined || value === "") return null;
-  return toDate(value);
-}
-
-function text(value: unknown): string {
-  return value === null || value === undefined ? "" : String(value);
-}
-
-function num(value: unknown): number {
-  const n = Number(value);
-  return isNaN(n) ? 0 : n;
-}
-
-function mapEmployeeHr(row: Record<string, unknown>): TEmployeeHr {
-  return {
-    // TPersnolHr
-    company_code: text(row.company_code ?? row.COMPANY_CODE),
-    employer_code: text(row.employer_code ?? row.EMPLOYER_CODE),
-    section_code: text(row.section_code ?? row.SECTION_CODE),
-    dept_code: text(row.dept_code ?? row.DEPT_CODE),
-    div_code: text(row.div_code ?? row.DIV_CODE),
-    emp_photo: text(row.emp_photo ?? row.EMP_PHOTO),
-    employee_id: text(row.employee_id ?? row.EMPLOYEE_ID),
-    employee_code: text(row.employee_code ?? row.EMPLOYEE_CODE),
-    alternate_id: text(row.alternate_id ?? row.ALTERNATE_ID),
-    rpt_name: text(row.rpt_name ?? row.RPT_NAME),
-    grade_code: text(row.grade_code ?? row.GRADE_CODE),
-    desg_code: text(row.desg_code ?? row.DESG_CODE),
-    labour_desg_code: text(row.labour_desg_code ?? row.LABOUR_DESG_CODE),
-    category_code: text(row.category_code ?? row.CATEGORY_CODE),
-    birth_date: toDate(row.birth_date ?? row.DOB),
-    join_date: toDate(row.join_date ?? row.JOIN_DATE),
-    probation_end_date: toDate(row.probation_end_date ?? row.PROBATION_END_DATE),
-    probation_confirm_date: toDate(row.probation_confirm_date ?? row.PROBATION_CONFIRM_DATE),
-    emp_status: text(row.emp_status ?? row.EMP_STATUS),
-    country_code: text(row.country_code ?? row.PPT_COUNTRY),
-
-    // TPayrollHr
-    include_in_payroll: text(row.include_in_payroll ?? row.INCLUDE_IN_PAYROLL),
-    payroll_start_date: toDate(row.payroll_start_date ?? row.COMP_PAYROLL_DATE),
-    payment_mode: text(row.payment_mode ?? row.PAYMENT_MODE),
-    company_bank_code: text(row.company_bank_code ?? row.COMPANY_BANK_CODE),
-    salary_acct_no: text(row.salary_acct_no ?? row.SALARY_ACCT_NO),
-    salary_bank_code: text(row.salary_bank_code ?? row.SALARY_BANK_CODE),
-    currency_id: text(row.currency_id ?? row.CURR_CODE),
-    exch_rate: num(row.exch_rate ?? row.EX_RATE),
-    emp_iban_no: text(row.emp_iban_no ?? row.IBAN_NO),
-
-    // TPassportHr
-    ppt_no: text(row.ppt_no ?? row.PASSPORT_NO),
-    ppt_name: text(row.ppt_name ?? row.PASSPORT_NAME),
-    ppt_country: text(row.ppt_country ?? row.PPT_COUNTRY),
-    ppt_status: text(row.ppt_status ?? row.PPT_STATUS),
-    ppt_valid_from: toDate(row.ppt_valid_from ?? row.PPT_VALID_FROM),
-    ppt_valid_to: toDate(row.ppt_valid_to ?? row.PPT_VALID_TO),
-    passport_with: text(row.passport_with ?? row.PPT_WITH),
-
-    // TContractHr
-    contract_type: text(row.contract_type ?? row.CONTRACT_TYPE),
-    contract_start_date: toDate(row.contract_start_date ?? row.CONTRACT_START_DATE),
-    contract_end_date: toNullableDate(row.contract_end_date ?? row.CONTRACT_END_DATE),
-    contract_renewable: text(row.contract_renewable ?? row.CONTRACT_RENEW),
-    contract_type_desc: text(row.contract_type_desc ?? row.CONTRACT_TYPE_DESC),
-
-    // TSponsorHr
-    sponsor_id: text(row.sponsor_id ?? row.SPONSOR_ID),
-    visa_type: text(row.visa_type ?? row.SPONSOR_VISA_TYPE),
-    visa_valid_from: toDate(row.visa_valid_from ?? row.SPONSOR_VISA_FROM_DT),
-    visa_valid_to: toNullableDate(row.visa_valid_to ?? row.SPONSOR_VISA_TO_DT),
-
-    // TIsuranceHr
-    ins_card_no: text(row.ins_card_no ?? row.INS_CARD_NO),
-    ins_card_issue_dt: toDate(row.ins_card_issue_dt ?? row.INS_CARD_ISSUE_DT),
-    ins_card_exp_dt: toDate(row.ins_card_exp_dt ?? row.INS_CARD_EXP_DT),
-    ins_card_type: text(row.ins_card_type ?? row.INS_CARD_TYPE),
-
-    // TILPHr
-    labourcard_no: text(row.labourcard_no ?? row.LABOUR_CARD_NO),
-    pasi_no: text(row.pasi_no ?? row.PASI_NO),
-    labourcard_valid_from: toDate(row.labourcard_valid_from),
-    labourcard_valid_to: toDate(row.labourcard_valid_to),
-    labourcard_status: text(row.labourcard_status),
-
-    // TAirfareHr
-    airport_code: text(row.airport_code ?? row.AIRPORT_CODE),
-    ticket_eligibility: text(row.ticket_eligibility),
-    ticket_dpend_adult: num(row.ticket_dpend_adult ?? row.ADULT_FARE),
-    ta_no: num(row.ta_no),
-    tc_no: num(row.tc_no),
-    ti_no: num(row.ti_no),
-    ticket_eligible_period: num(row.ticket_eligible_period),
-
-    actions: undefined,
-  };
 }
 
 export default EmployeeMasterPage;

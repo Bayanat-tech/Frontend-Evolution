@@ -64,3 +64,20 @@ export const toIsoDate =(value: string): string => {
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   return "";
 }
+
+export const toInputDatenull = (value: Date | string | null | undefined) => {
+  if (!value) return "";
+  const d = new Date(value);
+  // epoch (new Date(0)) is the mapper's "empty" placeholder
+  if (isNaN(d.getTime()) || d.getTime() === 0) return "";
+  return d.toISOString().slice(0, 10);
+};
+
+export const fromInputDate = (value: string): Date | null => (value ? new Date(value) : null);
+
+export const formatDate = (value: unknown) => {
+  if (!value) return "";
+  const d = new Date(value as string | Date);
+  if (isNaN(d.getTime()) || d.getTime() === 0) return "";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+};
