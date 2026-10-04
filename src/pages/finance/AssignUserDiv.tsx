@@ -255,7 +255,7 @@ const AssignUserDiv = () => {
 
   const handleDivChange = (value: string, row: any) => {
     setDivCode(value);
-    setDivName(row ? (row.div_name ?? row.description ?? row.name ?? "") : "");
+    setDivName(row ? (row.div_name ?? row.DIV_NAME ?? row.description ?? row.name ?? "") : "");
     setPendingUsers([]);
     setEditedSavedUsers({});
   };
@@ -267,17 +267,17 @@ const AssignUserDiv = () => {
       {/* Header bar */}
       <div className="rounded-lg border border-[#c7d2e3] bg-card px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
-          <div style={{ minWidth: 240 }}>
+          <div style={{ minWidth: 320, flex: 1 }}>
             <LookupField
-              label="Division Code"
+              label="Division"
               value={divCode}
-              displayValue={divCode}
+              displayValue={divCode ? (divName ? `${divCode} - ${divName}` : divCode) : ""}
               columns={[
                 { field: "div_code", header: "Code" },
                 { field: "div_name", header: "Division Name" },
               ]}
               valueField="div_code"
-              displayFields={["div_code"]}
+              displayFields={["div_code", "div_name"]}
               loadOptions={loadDivisions}
               onChange={handleDivChange}
               placeholder="Select Division"

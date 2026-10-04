@@ -7,7 +7,32 @@ import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm } from "./Purchaseorde
 import { numberOrZero, text } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
+import { FileText, Percent } from "lucide-react";
 
+
+function HeaderBlock({
+    label,
+    icon,
+    children,
+    gridCols = "grid-cols-4",
+}: {
+    label: string;
+    icon: ReactNode;
+    children: ReactNode;
+    gridCols?: string;
+}) {
+    return (
+        <div className="finance-payment-header-block">
+            <div className="finance-section-title">
+                <span className="finance-section-icon">{icon}</span>
+                <span>{label}</span>
+            </div>
+            <div className={`grid gap-x-1 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+                {children}
+            </div>
+        </div>
+    );
+}
 function CompactSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
     return (
         <div className={`border-t px-3 py-1.5 first:border-t-0 ${className || ""}`}>
@@ -57,15 +82,12 @@ export function PurchaseGrnHeaderForm({
     const loginIdOrAdmin = loginid || "ADMIN";
 
     return (
-        <div className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
-                <div>
-                    <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
-                </div>
-            </div>
-
-            <CompactSection label="Document & Party">
+       <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+            {/* HEADER SECTION - HEIGHT UNCHANGED */}
+         
+ <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 items-start">
+       <div className="flex flex-col gap-2">
+        <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
                 <div className="col-span-2">
                     <LookupField
                         label="A/c code *"
@@ -116,6 +138,7 @@ export function PurchaseGrnHeaderForm({
                                     ...current,
                                     po_doc_no: value,
                                     ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                    ac_name: text(getLookupValue(row || {}, "ac_name")),
                                    po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                     po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                     po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
@@ -224,21 +247,29 @@ export function PurchaseGrnHeaderForm({
 
 
 
-                <CField label="Pay Terms" className="col-span-2">
+              
+              
+            </HeaderBlock>
+</div>
+        <div className="flex flex-col gap-2">
+            <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
+
+  <CField label="Pay Terms" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
                 </CField>
 
-                <CField label="Remarks" className="col-span-2">
+               <CField label="Remarks" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
                 <CField label="Delivery Term" className="col-span-1">
                     <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
                 </CField>
+            
+            </HeaderBlock>
+        </div>
 
-            </CompactSection>
-
-
+        </div>
         </div>
     );
 }

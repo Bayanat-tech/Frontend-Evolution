@@ -11,7 +11,8 @@ import {
   getPurchaseQuotationCompareReportHtml,
   getPurchaseQuotationCompareReportExcel,
 } from "../../../api/transactions";
-import { NewReportDialog } from "../../../components/new_report_format";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
 // The 3 report types available in the dropdown/radio group.
 type PurchaseQuotationPrintReportType = "QUOTATION" | "QUOTATION_WITH_RATES" | "COMPARE_QUOTATION";
@@ -148,12 +149,9 @@ export function PurchaseQuotationPrintDialog({
   const [reportError, setReportError] = useState("");
 
   // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL / new tab) ──
-  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState<string | null>(null);
-  const [reportPreviewError, setReportPreviewError] = useState("");
-  const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
-  const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
+
+ 
   if (!open) return null;
 
   const docNo = String(form.doc_no || "");
@@ -176,34 +174,34 @@ export function PurchaseQuotationPrintDialog({
 
   // ── Print now opens the in-app preview dialog instead of a new window ───
   const handlePrint = async () => {
-    if (!docNo) {
-      setReportError("Doc No is missing — cannot fetch the report.");
-      return;
-    }
-    setReportError("");
+  if (!docNo) {
+    setReportError("Doc No is missing — cannot fetch the report.");
+    return;
+  }
+  setReportError("");
+  setLoadingAction("print");
 
-    setReportHtml(null);
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-    setReportPreviewLoading(true);
-    setLoadingAction("print");
+  const reportLabel = REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue || "Purchase Quotation";
+  const preview = openPurchaseReport(`${reportLabel} ${docNo}`.trim());
 
-    try {
-      const html = await getHtmlFn()(buildApiParams());
-      setReportHtml(html);
-    } catch (err: any) {
-      setReportPreviewError(err?.message || "Failed to load report.");
-    } finally {
-      setReportPreviewLoading(false);
-      setLoadingAction(null);
-    }
-  };
+  try {
+    const html = await getHtmlFn()(buildApiParams());
+    preview.ready({
+      html,
+      filename: `${reportType.toLowerCase()}_${docNo}_${new Date().toISOString().slice(0, 10)}`,
+     orientation: "landscape",
+      onExcel: async () => {
+        await getExcelFn()(buildApiParams());
+      },
+    });
+  } catch (err: any) {
+    preview.fail(new Error(err?.message || "Failed to load report."));
+  } finally {
+    setLoadingAction(null);
+  }
+};
 
-  const closeReportPreview = () => {
-    setReportPreviewOpen(false);
-    setReportHtml(null);
-    setReportPreviewError("");
-  };
+  
 
   const handleExcel = async () => {
     if (!docNo) {
@@ -221,18 +219,7 @@ export function PurchaseQuotationPrintDialog({
     }
   };
 
-  // Excel button inside the report-preview dialog itself
-  const handleReportPreviewExcel = async () => {
-    if (!docNo) return;
-    setReportPreviewExporting(true);
-    try {
-      await getExcelFn()(buildApiParams());
-    } catch (err: any) {
-      setReportPreviewError(err?.message || "Excel export failed.");
-    } finally {
-      setReportPreviewExporting(false);
-    }
-  };
+  
 
   return (
     <div style={{
@@ -363,16 +350,7 @@ export function PurchaseQuotationPrintDialog({
         </div>
       </div>
 
-      <NewReportDialog
-        open={reportPreviewOpen}
-        onClose={closeReportPreview}
-        title={`Purchase Quotation ${docNo}`.trim()}
-        htmlContent={reportHtml}
-        loading={reportPreviewLoading}
-        error={reportPreviewError || null}
-        onExportExcel={handleReportPreviewExcel}
-        exportingExcel={reportPreviewExporting}
-      />
+     <PurchaseReportPreview />
     </div>
   );
 }

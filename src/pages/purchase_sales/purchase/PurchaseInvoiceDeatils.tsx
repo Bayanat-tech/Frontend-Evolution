@@ -1,4 +1,4 @@
-import { Plus, X } from "lucide-react";
+import { Columns3, List, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -29,6 +29,7 @@ import {
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
+import { useMemo, useState } from "react";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -141,12 +142,24 @@ export function PurchaseInvoiceLinesTable({
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
-  const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
   const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-  const grandTotal = totalAmount - TotalDiscAmount(rows);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const discountScope = form.discount_scoope || "ITEM";
+  const [lineSearch, setLineSearch] = useState("");
+  const [showAllColumns, setShowAllColumns] = useState(false);
+  const filteredRows = useMemo(() => {
+    const q = lineSearch.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) =>
+      r.prod_name?.toLowerCase().includes(q) ||
+      r.prod_code?.toLowerCase().includes(q) ||
+      r.line_remarks?.toLowerCase().includes(q) ||
+      r.job_no?.toLowerCase().includes(q)
+    );
+  }, [rows, lineSearch]);
 
   // Quantity is always derived, never typed directly:
   // - same UOM: quantity mirrors qty_luom
@@ -154,20 +167,58 @@ export function PurchaseInvoiceLinesTable({
 
   return (
     <div className="commercial-lines-card rounded-md border bg-card">
-      <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-        <div>
-          <p className="eyebrow m-0">Lines</p>
-          <h3 className="m-0 text-sm font-semibold leading-tight"></h3>
+      <div className="finance-line-actions">
+        <div className="finance-line-actions-left">
+          <span className="finance-line-actions-icon"><List size={14} /></span>
+          <span className="finance-line-actions-title">Accounting Lines</span>
+          <span className="finance-line-actions-badge">
+            {lineSearch.trim()
+              ? `${filteredRows.length} of ${rows.length} lines`
+              : `${rows.length} ${rows.length === 1 ? "line" : "lines"}`}
+          </span>
+          {lineSearch.trim() && (
+            <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              Filtered ({filteredRows.length})
+            </span>
+          )}
         </div>
-        {/* <div className="flex items-center gap-2">
-          <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAllColumns(!showAllColumns)}
+            className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
+              ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
+              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
+          >
+            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+          </button>
+
+          <div className="bisc-table-search">
+            <Search size={13} className="bisc-table-search-icon" />
+            <input
+              className="bisc-search-input"
+              type="text"
+              value={lineSearch}
+              onChange={(e) => setLineSearch(e.target.value)}
+              placeholder="Search lines..."
+            />
+            {lineSearch && (
+              <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          {/* <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
             <Plus size={14} /> Add Line
-          </Button>
-        </div> */}
+          </Button> */}
+        </div>
       </div>
       <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-        <table className="finance-lines-table w-full min-w-[2600px] text-sm" style={{ tableLayout: "fixed" }}>
-          <thead className="text-xs text-primary-foreground">
+        <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
+          <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
             <tr>
               <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("sno")}>SNo</th>
               <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("div")}>Div</th>
@@ -175,36 +226,37 @@ export function PurchaseInvoiceLinesTable({
               {/* {hasGrnColumn(docType) && (
                 <th className="finance-sticky-col px-2 py-2 text-center w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
               )} */}
+
               <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("product", docType)}>Product Code</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>P Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Qty Puom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(20)}>Qty Puom</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>L Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Qty Luom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Uppp</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Unit Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Quantity</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(70)}>Qty Luom</th>
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Uppp</th>}
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Unit Price</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Quantity</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Amount Before Disc</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Disc %</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc %</th>
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Unit price Net Amt</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128)}>Lcurr Amount Before Tax</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax Type</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Tax %</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Tax Amount</th>
-              <th className="px-2 py-2 text-center" style={plainHeaderStyle(128)}>Req Date</th>
+              {/* <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Unit price Net Amt</th> */}
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Final Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Lcurr Amount Before Tax</th>
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Tax Type</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Tax %</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Tax Amount</th>}
+              {showAllColumns && <th className="px-2 py-2 text-center" style={plainHeaderStyle(150)}>Req Date</th>}
               <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160)}>Remarks</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Tax Cat</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax code</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Tax Lcurr amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128)}>Lcurr amount After Tax</th>
-              <th className="px-2 py-2 text-center" style={plainHeaderStyle(64)}>Action</th>
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Tax Cat</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax code</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Tax Lcurr amount</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128)}>Lcurr amount After Tax</th>}
+              <th className="finance-sticky-col-right px-2 py-2 text-center" style={plainHeaderStyle(64)}>Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-            ) : rows.map((row, index) => {
+          ) : filteredRows.map((row, index) => {
               const qtyPuomNum = numberOrZero(row.qty_puom);
               const qtyLuomNum = numberOrZero(row.qty_luom);
               const upppNum = numberOrZero(row.uppp);
@@ -279,7 +331,7 @@ export function PurchaseInvoiceLinesTable({
                       readOnly
                     />
                   </td>
-                  <td className="finance-amount-cell px-2 py-1">
+                  <td className=" px-2 py-1">
                     <Input
                       className="finance-money-input"
                       disabled={headerAndLineDisabled}
@@ -312,7 +364,7 @@ export function PurchaseInvoiceLinesTable({
                       readOnly
                     />
                   </td>
-                  <td className="finance-amount-cell w-24 px-2 py-1">
+                  <td className=" w-24 px-2 py-1">
                     <Input
                       className="finance-money-input"
                       disabled={headerAndLineDisabled || sameUom}
@@ -336,27 +388,27 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
-                 <td className="finance-amount-cell px-2 py-1">
-                                        <Input
-                                            className="finance-money-input"
-                                            disabled
-                                            readOnly
-                                            type="number"
-                                            style={{ textAlign: "right" }}
-                                            step="0.001"
-                                            value={row.uppp}
-                                        />
-                                    </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1">
+                  {showAllColumns && (<td className=" px-2 py-1">
+                    <Input
+                      className="finance-money-input"
+                      disabled
+                      readOnly
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.uppp}
+                    />
+                  </td>)}
+                  <td className="w-28 px-2 py-1">
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">
+                  <td className=" px-2 py-1 text-right">
                     {formatAmount(quantity)}
                   </td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">
+                  <td className=" px-2 py-1 text-right">
                     {formatAmount(amountBeforeDiscPrice(row))}
                   </td>
-                  <td className="finance-amount-cell w-24 px-2 py-1">
+                  <td className=" w-24 px-2 py-1">
                     <Input
                       className="finance-money-input px-2 py-1"
                       disabled={headerAndLineDisabled || discountScope !== "ITEM"}
@@ -376,7 +428,7 @@ export function PurchaseInvoiceLinesTable({
                     />
                   </td>
                   {/* <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td> */}
-                  <td className="finance-amount-cell w-24 px-2 py-1">
+                  <td className=" w-24 px-2 py-1">
                     <Input
                       className="finance-money-input px-2 py-1"
                       disabled={headerAndLineDisabled || discountScope !== "ITEM"}
@@ -397,12 +449,12 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
-                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                  <td className=" px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
+                  <td className=" w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
+                  <td className=" w-32 px-2 py-1 text-right">
                     {formatAmount(lcurrAmountValue)}
                   </td>
-                  <td className="w-40 px-2 py-1">
+                  {showAllColumns && (<td className="w-40 px-2 py-1">
                     <Select
                       value={row.tx_compnt_1_expmt || "N"}
                       onChange={(event) => {
@@ -422,32 +474,32 @@ export function PurchaseInvoiceLinesTable({
                       <option value="Z">Zero</option>
                       <option value="E">Exempt</option>
                     </Select>
-                  </td>
-                  <td className="finance-amount-cell w-24 px-2 py-1">
+                  </td>)}
+                  {showAllColumns && (<td className=" w-24 px-2 py-1">
                     {/* FIX #2: write to porder_tx_compnt_perc_1, matching the displayed value */}
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
-                  </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxpoAmount(row))}</td>
+                  </td>)}
+                  {showAllColumns && (<td className=" w-28 px-2 py-1 text-right">{formatAmount(lineTaxpoAmount(row))}</td>)}
 
-                  <td className="w-32 px-2 py-1">
+                  {showAllColumns && (<td className="w-32 px-2 py-1">
                     <Input type="date" disabled={headerAndLineDisabled} value={row.porder_required_dt} onChange={(event) => updateRow(row.id, { porder_required_dt: event.target.value })} />
-                  </td>
+                  </td>)}
                   <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
                     <textarea disabled={headerAndLineDisabled} value={row.porder_remarks} onChange={(event) => updateRow(row.id, { porder_remarks: event.target.value })} />
                   </td>
 
 
-                  <td className="w-32 px-2 py-1">
+                  {showAllColumns && (<td className="w-32 px-2 py-1">
                     {/* FIX #3: read porder_tx_cat_code so the field reflects what onChange writes */}
                     <LookupField
                       label="Tax Category"
                       compact
                       placeholder="Tax code"
-                      value={row.porder_tx_cat_code || ""}
+                      value={row.tx_cat_code || ""}
                       displayValue={
-                        row.porder_tx_cat_name
-                          ? `${row.porder_tx_cat_code} - ${row.porder_tx_cat_name}`
-                          : row.porder_tx_cat_code || ""
+                        row.tx_cat_name
+                          ? `${row.tx_cat_code} - ${row.tx_cat_name}`
+                          : row.tx_cat_code || ""
                       }
                       columns={[
                         { field: "tx_cat_code", header: "Code" },
@@ -463,24 +515,24 @@ export function PurchaseInvoiceLinesTable({
                       }
                       onChange={(value, selectedRow) => {
                         updateRow(row.id, {
-                          porder_tx_cat_code: text(value),
-                          // tx_cat_name: text(
-                          //   getLookupValue(selectedRow || {}, "tx_cat_name")
-                          // ),
+                          tx_cat_code: text(value),
+                          tx_cat_name: text(
+                            getLookupValue(selectedRow || {}, "tx_cat_name")
+                          ),
                         });
                       }}
                     />
-                  </td>
-                  <td className="w-32 px-2 py-1">
+                  </td>)}
+                  {showAllColumns && (<td className="w-32 px-2 py-1">
                     <LookupField
                       label="Tax Code"
                       compact
                       placeholder="Tax code"
-                      value={row.porder_tx_compntcat_code_1 || ""}
+                      value={row.tx_compntcat_code_1 || ""}
                       displayValue={
                         row.porder_tx_compntcat_name_1
-                          ? `${row.porder_tx_compntcat_code_1} - ${row.porder_tx_compntcat_name_1}`
-                          : row.porder_tx_compntcat_code_1 || ""
+                          ? `${row.tx_compntcat_code_1} - ${row.porder_tx_compntcat_name_1}`
+                          : row.tx_compntcat_code_1 || ""
                       }
                       columns={[
                         { field: "tx_compntcat_code", header: "Code" },
@@ -497,22 +549,30 @@ export function PurchaseInvoiceLinesTable({
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
                         updateRow(row.id, {
-                          porder_tx_compntcat_code_1: text(value),
+                          tx_compntcat_code_1: text(value),
                           // tx_compntcat_name_1: text(
                           //   getLookupValue(selectedRow || {}, "tx_compntcat_name")
                           // ),
                         });
                       }}
                     />
-                  </td>
-                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                  </td>)}
+                  {showAllColumns && (<td className=" w-32 px-2 py-1 text-right">
                     {formatAmount(taxLcurrAmountValue)}
-                  </td>
-                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                  </td>)}
+                  {showAllColumns && (<td className=" w-32 px-2 py-1 text-right">
                     {formatAmount(lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate))}
-                  </td>
-                  <td className="px-2 py-1">
-                    <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>
+                  </td>)}
+                  <td className="finance-sticky-col-right px-1 py-1 text-center">
+                    <button
+                      type="button"
+                      disabled={headerAndLineDisabled}
+                      title="Delete row"
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                      onClick={() => removeRow(row.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </td>
                 </tr>
               )
@@ -520,34 +580,44 @@ export function PurchaseInvoiceLinesTable({
           </tbody>
         </table>
       </div>
-      <div className="grid grid-cols-2 gap-x-8 gap-y-1 border-t px-3 py-2 text-sm max-md:grid-cols-1">
-        <div className="flex items-center justify-end gap-8">
+       <div
+        className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
+        style={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 10,
+          backgroundColor: "#f8fafc",
+          boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
+          fontSize:14
+        }}
+      >
+        <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Puom)</span>
           <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
-        <div className="flex items-center justify-end gap-8">
+        <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Luom)</span>
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
-        <div className="flex items-center justify-end gap-8">
-         <span className="text-muted-foreground">Base Total Amount</span>
-          <strong className="text-emerald-600">{formatAmount(totalAmount)}</strong>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Amount Before Discount</span>
+          <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
         </div>
-        <div className="flex items-center justify-end gap-8">
+        <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>
           <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
         </div>
-        <div className="flex items-center justify-end gap-8">
-          <span className="text-muted-foreground">Total</span>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Amount Before Tax</span>
           <strong>{formatAmount(grandTotal)}</strong>
         </div>
-        <div className="flex items-center justify-end gap-8">
+        <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Tax</span>
           <strong>{formatAmount(totalTaxAmount)}</strong>
         </div>
-        <div className="col-span-2 flex items-center justify-end gap-8 border-t pt-1 max-md:col-span-1">
-          <span className="font-semibold text-muted-foreground">Total</span>
-          <strong className="text-base text-emerald-600">{formatAmount(finalTotal)}</strong>
+        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
+          <span className="font-semibold text-[#00378C]">Amount After Tax</span>
+          <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>
     </div>

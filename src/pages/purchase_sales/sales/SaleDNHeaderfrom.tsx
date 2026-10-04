@@ -8,7 +8,32 @@ import { PurchaseOrderForm, SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import { numberOrZero, text } from "./SalesOrderutils";
 import { PODocType } from "../purchase/Purchaseordertypes";
+import { FileText, Percent } from "lucide-react";
 
+
+function HeaderBlock({
+    label,
+    icon,
+    children,
+    gridCols = "grid-cols-4",
+}: {
+    label: string;
+    icon: ReactNode;
+    children: ReactNode;
+    gridCols?: string;
+}) {
+    return (
+        <div className="finance-payment-header-block">
+            <div className="finance-section-title">
+                <span className="finance-section-icon">{icon}</span>
+                <span>{label}</span>
+            </div>
+            <div className={`grid gap-x-1 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+                {children}
+            </div>
+        </div>
+    );
+}
 function CompactSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
     return (
         <div className={`border-t px-3 py-1.5 first:border-t-0 ${className || ""}`}>
@@ -66,15 +91,13 @@ export function SalesDNHeaderForm({
     };
 
     return (
-        <div className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
-                <div>
-                    <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
-                </div>
-            </div>
+  <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+            {/* HEADER SECTION - HEIGHT UNCHANGED */}
+          
+ <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 items-start">
+       <div className="flex flex-col gap-2">
 
-            <CompactSection label="Document & Party">
+          <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
                 <div className="col-span-2">
                     <LookupField
                         label="A/c code *"
@@ -229,7 +252,23 @@ export function SalesDNHeaderForm({
                 <CField label="DN Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
-
+ <div className="col-span-2">
+                    <LookupField
+                        label="Division *"
+                        value={form.div_code}
+                        displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
+                        columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
+                        valueField="div_code"
+                        displayFields={["div_code", "div_name"]}
+                        loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: companyCode, loginid: loginIdOrAdmin })}
+                        disabled={headerAndLineDisabled}
+                        onChange={(value, row) => setForm((current) => ({
+                            ...current,
+                            div_code: value,
+                            div_name: text(getLookupValue(row || {}, "div_name")),
+                        }))}
+                    />
+                </div>
 
                 {/* <div className="col-span-2">
                     <LookupField
@@ -252,7 +291,15 @@ export function SalesDNHeaderForm({
 
 
 
-                <CField label="Pay Terms" className="col-span-2">
+              
+
+            </HeaderBlock>
+
+    </div>
+    <div className="flex flex-col gap-2">
+            <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
+            
+              <CField label="Pay Terms" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
                 </CField>
 
@@ -263,10 +310,9 @@ export function SalesDNHeaderForm({
                 <CField label="Delivery Term" className="col-span-1">
                     <Input disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
                 </CField>
-
-            </CompactSection>
-
-
+                </HeaderBlock>
         </div>
+            </div>
+            </div>
     );
 }

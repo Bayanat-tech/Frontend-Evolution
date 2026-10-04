@@ -1046,7 +1046,7 @@ function PaymentDocumentEditor({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-2.5 max-xl:grid-cols-1">
+                <div className="grid grid-cols-3 gap-2.5 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1054,13 +1054,14 @@ function PaymentDocumentEditor({
                       <span>Document & Payment Instrument</span>
                     </div>
                     <div className="finance-payment-header-fields">
-
                       <Field label="Doc Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
                       {docType !== "CR" && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
                       {docType !== "CR" && <Field label="Cheque Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.cheque_date)} onChange={(val) => updateField("cheque_date", val)} /></Field>}
                       {docType === "BR" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
                       {docType === "BP" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
+                      <Field label="Ref No"><Input disabled={disabled} value={form.ref_no || ""} onChange={(event) => updateField("ref_no", event.target.value)} /></Field>
+                      <Field label="Ref Date"><BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} /></Field>
                     </div>
                   </div>
 
@@ -1171,6 +1172,34 @@ function PaymentDocumentEditor({
                           <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
                         </Field>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Party & Order Details (Compact Block) */}
+                  <div className="finance-payment-header-block">
+                    <div className="finance-section-title">
+                      <span className="finance-section-icon"><Building2 size={11} /></span>
+                      <span>Party & Order Details</span>
+                    </div>
+                    <div className="finance-payment-header-fields">
+                      <Field label="Payment Terms">
+                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="30 Days" />
+                      </Field>
+                      <Field label="LPO No">
+                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO Reference" />
+                      </Field>
+                      <Field label="LPO Date">
+                        <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
+                      </Field>
+                      <Field label="Phone">
+                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(e) => updateField("party_phone", e.target.value)} placeholder="Phone" />
+                      </Field>
+                      <Field label="Fax">
+                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
+                      </Field>
+                      <Field label="Party Address">
+                        <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Address" />
+                      </Field>
                     </div>
                   </div>
                 </div>
