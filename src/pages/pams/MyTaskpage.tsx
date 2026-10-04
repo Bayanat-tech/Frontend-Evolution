@@ -12,7 +12,8 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
-import { DataTable } from "../../components/ui/PamsDataTable";
+import { DataTable } from "../../components/ui/DataTable";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
@@ -48,7 +49,6 @@ interface HodBatch {
 const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
-// FLOW_LEVEL jispe HOD ke docs pahunchte hain jab HOD apna review complete kar leta hai (2 -> 3)
 const HOD_READY_FLOW_LEVEL = 3;
 const taskPageCache = new Map<string, Row[]>();
 
@@ -65,13 +65,11 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function formatPeriodQuarter(row: Row): string {
-  const dateValue = row.PERIOD_FROM_DATE;
-  if (!dateValue) return text(row.PERIOD_NUMBER);
-  const parsed = new Date(String(dateValue));
-  if (isNaN(parsed.getTime())) return text(row.PERIOD_NUMBER);
-  const quarter = Math.floor(parsed.getMonth() / 3) + 1;
-  return `Q${quarter} ${parsed.getFullYear()}`;
+
+function formatPeriodDisplay(periodNumber: unknown): string {
+  const raw = text(periodNumber);
+  if (!raw) return "";
+  return raw.replace(/-/g, " ");
 }
 
 function getStatusMeta(
@@ -232,10 +230,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       setSelectedRows(initSelected);
     } catch (err: unknown) {
-      if (myRequestId !== fetchRequestId.current) return; // stale error, ignore
+      if (myRequestId !== fetchRequestId.current) return;
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to load data" });
     } finally {
-      // Only clear loading spinner if we're still the latest request
       if (myRequestId === fetchRequestId.current) setLoading(false);
     }
   }, [loginid, companyCode, cacheKey]);
@@ -412,7 +409,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     setSelectedRows(next);
   };
 
-  // flowLevel = jis level pe docs abhi khade hain (HOD ke liye ye hamesha 3 hai)
   const handleNotifyNextLevel = async (flowLevel: number, periodNumber: string) => {
     const key = `${flowLevel}-${periodNumber}`;
     setNotifying(key);
@@ -420,7 +416,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       const res = await pamsSelect({
         parameter: "notify_next_level_hod_bulk",
         loginid, code1: companyCode,
-        code2: String(flowLevel - 1),   // p_flow_level jispe wo baitha tha (2 for HOD)
+        code2: String(flowLevel - 1),
         code3: periodNumber,
       });
       const result = text((res as unknown as Row[])?.[0]?.P_RESULT);
@@ -496,16 +492,21 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       cell: ({ row }) => fmtDate(row.original.APPRAISAL_DOC_DATE),
     });
 
+
     cols.push({
-  accessorKey: "PERIOD_NUMBER",
-  header: "Period No",
-  size: 100,
-  cell: ({ row }) =>
-    formatPeriodQuarter({
-      PERIOD_FROM_DATE: row.original.APPRAISAL_FROM,
-      PERIOD_NUMBER: row.original.PERIOD_NUMBER,
-    }) || "—",
-});
+      accessorKey: "PERIOD_NUMBER",
+      header: "Period No",
+      size: 130,
+      cell: ({ row }) => {
+        const periodNumber = text(row.original.PERIOD_NUMBER);
+        if (!periodNumber) return <span style={{ color: "#9ca3af" }}>—</span>;
+        return (
+          <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+            {formatPeriodDisplay(periodNumber)}
+          </span>
+        );
+      },
+    });
 
     cols.push({
       accessorKey: "EMPLOYEE_CODE",
@@ -538,20 +539,14 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         const fromDate = row.original.APPRAISAL_FROM;
         const toDate = row.original.APPRAISAL_TO;
 
-
         const formatDateRange = (dateVal: unknown) => {
           if (!dateVal) return null;
-
-
           let dateStr = String(dateVal);
-
           if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
             return dateStr;
           }
-
           const d = new Date(dateStr);
           if (isNaN(d.getTime())) return null;
-
           const day = String(d.getDate()).padStart(2, "0");
           const month = String(d.getMonth() + 1).padStart(2, "0");
           const year = d.getFullYear();
@@ -691,7 +686,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
 
-      {/* Breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
         <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
         <span style={{ color: "#d1d5db" }}>/</span>
@@ -702,7 +696,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Tabs */}
       <div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
         {TAB_LABELS.map((label, index) => (
           <button
@@ -724,7 +717,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         ))}
       </div>
 
-      {/* Select All */}
       {isHRApprover && rows.length > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
           <input
@@ -739,7 +731,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         </div>
       )}
 
-      {/* HOD — Notify Next Level batches */}
       {hodBatches
         .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
         .map((batch) => {
@@ -769,12 +760,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         columns={columns}
         data={rows}
         title={`${rows.length.toLocaleString()} Records`}
-        subtitle={`${statusFilter} Appraisals`}
+        // subtitle={`${statusFilter} Appraisals`}
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search appraisal..."
         loading={loading}
-        loaderType="circle" 
+        loaderType="circle"
         height={550}
         minWidth={1300}
         density="compact"
@@ -784,7 +775,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
       />
 
-      {/* Bulk Approve */}
       {isHRApprover && Object.values(selectedRows).some(Boolean) && (
         <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
           <Button onClick={handleBulkApprove} style={{ background: "#082a89" }}>
@@ -864,7 +854,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                   <option value="">Select Period</option>
                   {periods.map((period, idx) => (
                     <option key={idx} value={text(period.PERIOD_NUMBER)}>
-                      {text(period.PERIOD_NUMBER)}
+                      {formatPeriodDisplay(period.PERIOD_NUMBER)}
                     </option>
                   ))}
                 </select>
