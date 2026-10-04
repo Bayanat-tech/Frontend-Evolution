@@ -37,6 +37,9 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../utils/date";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
@@ -69,6 +72,8 @@ type Line = {
   tx_compnt_amt_1?: number;
   prod_code?: string;
   other_remarks?: string;
+  qty_rcv?: number;
+  amount_rcv?: number;
 };
 
 type FormState = {
@@ -101,6 +106,8 @@ type FormState = {
   hse_compliance?: string;
   app_ref_no?: string;
 pdo_type?: string;
+cash_ind?: string;
+inv_generated?: string;
 delivery_to?: string;
 dlvr_mobile?: string;
 dlvr_email?: string;
@@ -252,7 +259,10 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       cell: ({ row, getValue }) => (
         <button
           type="button"
-          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${String(getValue() || "")}`}
         >
@@ -307,7 +317,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       header: () => <div className="text-center w-full">Actions</div>,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
           <Button size="icon" variant="ghost" 
           onClick={() =>
             void handleOpenReport(
@@ -338,6 +348,11 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
       <div className="finance-list-heading flex items-center justify-between gap-3">
         <div className="finance-list-title flex items-center gap-2.5">
           <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+          {fyPeriod && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+              FY {fyPeriod}
+            </span>
+          )}
         </div>
       </div>
 
@@ -359,28 +374,29 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         density="grid"
         enablePagination
         manualPagination
-        toolbar={
-          <div className="finance-list-controls">
-            <label className="finance-period-control">
-              <span>FY</span>
-              <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-              {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-              </Select>
-            </label>
+        enableExport={false}
+        actionButton={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              title={meta.addLabel}
+              onClick={() => setDivisionPicker(true)}
+            >
+              <Plus size={14} /> Add
+            </Button>
+            <FinanceListActionsMenu
+              fyPeriod={fyPeriod}
+              fyPeriods={fyPeriods}
+              onFyPeriodChange={(val) => {
+                setFyPeriod(val);
+                setPageIndex(0);
+              }}
+              onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+              onRefresh={() => void loadRows(pageIndex, pageSize)}
+            />
           </div>
         }
-        enableExport
-        actionButton={
-          <Button
-            type="button"
-            className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
-            title={meta.addLabel}
-            onClick={() => setDivisionPicker(true)}
-          >
-            <Plus size={14} /> Add
-          </Button>
-        }
-        exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
         initialSorting={[{ id: "doc_date", desc: true }]}
         pageIndex={pageIndex}
         pageSize={pageSize}
@@ -398,7 +414,10 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           <CommercialEditor
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -412,6 +431,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         open={divisionPicker}
         divisions={divisions}
         onSelect={(division) => {
+          setNotice(null);
           setEditor({ mode: "create", div: division });
         }}
         onClose={() => setDivisionPicker(false)}
@@ -615,7 +635,18 @@ function CommercialEditor({
     });
   }, [visibleLines, lineSearch]);
 
-  const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
+  const update = (field: keyof FormState, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) => ({ ...row, ex_rate: numRate })),
+      }));
+      return;
+    }
+    setForm((current) => ({ ...current, [field]: value }));
+  };
   const updateLine = (id: string, patch: Partial<Line>) => {
     setForm((current) => ({ ...current, detail: current.detail.map((line) => line.id === id ? { ...line, ...patch } : line) }));
   };
@@ -736,7 +767,7 @@ function CommercialEditor({
 };
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -747,11 +778,13 @@ function CommercialEditor({
             divCode={form.div_code}
             divName={form.div_name}
             onBack={onClose}
-          headerExpanded={showHeaderDetails}
+            headerExpanded={showHeaderDetails}
             onToggleHeader={() => setShowHeaderDetails(value => !value)}
           />
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <span className="rounded-full border border-primary-foreground/35 px-2.5 py-1 text-xs font-semibold text-primary-foreground">Cancelled</span>}
+            {form.inv_generated === "Y" && <span className="rounded-full bg-emerald-500/20 border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-100">Invoice Generated</span>}
+            {form.cash_ind === "Y" && <span className="rounded-full bg-amber-500/20 border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-100">CPO</span>}
             {form.doc_no && form.doc_no !== "0" && (
               <>
                 <Button type="button" variant="secondary" 
@@ -772,7 +805,19 @@ function CommercialEditor({
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -974,6 +1019,15 @@ function CommercialEditor({
       </Select>
     </Field>
   )}
+  {isPO && (
+    <Field label="Order Type (LPO/CPO)">
+      <Select value={form.cash_ind || "N"}
+        onChange={(e) => update("cash_ind", e.target.value)}>
+        <option value="N">LPO - Credit Purchase</option>
+        <option value="Y">CPO - Cash Purchase</option>
+      </Select>
+    </Field>
+  )}
           </div>
         </section>
 
@@ -1062,7 +1116,17 @@ function CommercialEditor({
       valueField="curr_code"
       displayFields={["curr_code", "curr_name", "ex_rate"]}
       loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
-      onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || c.ex_rate || 1) }))}
+      onChange={(value, row) => {
+        const newRate = Number(getLookupValue(row || {}, "ex_rate") || form.ex_rate || 1);
+        const currName = text(getLookupValue(row || {}, "curr_name"));
+        setForm((c) => ({
+          ...c,
+          curr_code: value,
+          curr_name: currName,
+          ex_rate: newRate,
+          detail: c.detail.map((row) => ({ ...row, ex_rate: newRate })),
+        }));
+      }}
     />
     {fieldErrors.curr_code && (
       <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
@@ -1072,9 +1136,13 @@ function CommercialEditor({
   </div>
 
   <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
-    <Input disabled={isCancelled} type="number" step="0.000001" value={form.ex_rate}
-      className={fieldErrors.ref_no ? "border-destructive" : ""}
-      onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
+    <ExchangeRateInput
+      disabled={isCancelled}
+      required
+      value={form.ex_rate}
+      onChange={(rate) => update("ex_rate", rate)}
+      className={fieldErrors.ex_rate ? "border-destructive" : ""}
+    />
   </Field>
 
   <Field label="Address" className="col-span-2">
@@ -1354,8 +1422,10 @@ function CommercialEditor({
                       <th className="px-2 py-2 text-left">Description</th>
                       {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
                       <th className="px-2 py-2 text-left">Qty</th>
+                      {isPO && <th className="px-2 py-2 text-left">Qty Rcv</th>}
                       <th className="px-2 py-2 text-left">Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
+                      {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>}
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
@@ -1438,14 +1508,15 @@ function CommercialEditor({
                         </td>
                         )}
                         <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        {isPO && <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
                         <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
-                        // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const amount = Number(e.target.value || 0);
     const taxperc   = Number(line.tx_compnt_perc_1 || 0);
     updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
   }} /></td>
+                        {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-14 max-w-[60px] px-1 py-1">
                           <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
@@ -1567,21 +1638,6 @@ function CommercialEditor({
           </div>
         )}
       </CardContent>
-      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + taxTotal)}</strong>
-        </div>
-
-        {/* <div className="text-sm text-muted-foreground flex items-center gap-4">
-  <span>Total Amt <strong className="text-emerald-600">{formatAmount(total)}</strong></span>
-  <span>Tax <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong></span>
-  <span>Net Total <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong></span>
-</div> */}
-        <div className="flex items-center gap-2">
-        <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-        <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-        </div>
-      </div>
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
@@ -1717,6 +1773,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     dlvr_mobile:        text(header.dlvr_mobile ?? header.mobile_no),
     dlvr_email:         text(header.dlvr_email ?? header.e_mail),
     pdo_type:      text(header.pdo_type),
+    cash_ind:      text(header.cash_ind || "N"),
+    inv_generated: text(header.inv_generated || "N"),
     salesman_code: text(header.salesman_code),
     salesman_name: text(nested(headerRaw, ["Salesman", "salesman_name"]) ?? header.salesman_name),
     sector_code:   text(header.sector_code),
@@ -1732,7 +1790,13 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
     tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
     print_letter_head: !!header.print_letter_head,
-    detail: detailRaw.map((raw, index) => {
+    detail: (detailRaw.filter((raw) => {
+      const sn = Number(lowerRecord(raw).serial_no || 0);
+      return sn === 0 || sn < 9000;
+    }).length > 0 ? detailRaw.filter((raw) => {
+      const sn = Number(lowerRecord(raw).serial_no || 0);
+      return sn === 0 || sn < 9000;
+    }) : detailRaw).map((raw, index) => {
       const row = lowerRecord(raw);
       const lineCurrCode = text(row.curr_code) || text(header.curr_code);
       const lineCurrName = text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name) || text(nested(headerRaw, ["Currency", "curr_name"]) ?? header.curr_name);
@@ -1762,6 +1826,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         prod_code:     docType === "PO" ? text(row.prod_code) : undefined,
         other_remarks: docType === "PO" ? text(row.other_remarks) : undefined,
         cost_code: docType === "PO" ? text(row.cost_code) : undefined,
+        qty_rcv: docType === "PO" ? Number(row.qty_rcv || 0) : undefined,
+        amount_rcv: docType === "PO" ? Number(row.amount_rcv || 0) : undefined,
       };
     }),
   };
@@ -1778,6 +1844,8 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     party_name: form.ac_name || "",
     invoice_no: form.inv_no || "",
     invoice_date: form.inv_date || "",
+    cash_ind: form.cash_ind || "N",
+    inv_generated: form.inv_generated || "N",
     
     detail: form.detail.map((line) => {
       const lineCurrCode = line.curr_code || form.curr_code || "";
@@ -1812,6 +1880,8 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
         prod_code: line.prod_code || "",
         cost_code: line.cost_code || "", 
         other_remarks: line.other_remarks || "",
+        qty_rcv: Number(line.qty_rcv || 0),
+        amount_rcv: Number(line.amount_rcv || 0),
         header_ac_code: form.ac_code,
       };
     }),

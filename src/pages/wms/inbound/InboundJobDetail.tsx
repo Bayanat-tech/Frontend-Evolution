@@ -50,7 +50,7 @@ const REPORTS: TReport[] = [
     apiFn:       getPutawayReport,
     excelFn:     downloadPutawayReportExcel,
   },
-    {
+  {
     id:          3,
     reportTitle: "Tally Report",
     apiFn:       getTallyReport,
@@ -81,14 +81,12 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   // ── Report dialog state ───────────────────────────────────────────────────
   const [listOpen,       setListOpen]       = useState(false);
-  const [reportOpen,     setReportOpen]     = useState(false);
+  const [previewOpen,    setPreviewOpen]    = useState(false);
   const [selectedReport, setSelectedReport] = useState<TReport | null>(null);
-  const [reportHtml,     setReportHtml]     = useState<string>("");
+  const [reportHtml,     setReportHtml]     = useState<string | null>(null);
   const [reportLoading,  setReportLoading]  = useState(false);
   const [reportError,    setReportError]    = useState<string>("");
   const [excelLoading,   setExcelLoading]   = useState(false);
-
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const tabRef = useRef<InboundOperationalTabHandle>(null);
 
@@ -102,7 +100,7 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
       return;
     }
 
-    setReportHtml("");
+    setReportHtml(null);
     setReportError("");
     setReportLoading(true);
 
@@ -118,10 +116,6 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   // ── Toolbar handlers ──────────────────────────────────────────────────────
 
-  const handlePrint = () => {
-    iframeRef.current?.contentWindow?.postMessage("print", "*");
-  };
-
   const handleExcel = async () => {
     if (!selectedReport?.excelFn) return;
     const prinCode = value(job || {}, "prin_code");
@@ -136,19 +130,71 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
     }
   };
 
+  // Open the current report in a new browser tab
+  const handleOpenInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Trigger browser print dialog (Save as PDF) for the current report
+  const handleDownloadPdf = () => {
+    if (!reportHtml) return;
+    const PRINT_IFRAME_ID = "inbound-job-report-print-iframe";
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
   // ── Dialog helpers ────────────────────────────────────────────────────────
   const openListDialog = () => setListOpen(true);
 
   const selectReport = (rp: TReport) => {
     setListOpen(false);
     setSelectedReport(rp);
-    setReportOpen(true);
+    setPreviewOpen(true);
   };
 
-  const closeReportDialog = () => {
-    setReportOpen(false);
+  const closePreview = () => {
+    setPreviewOpen(false);
     setSelectedReport(null);
-    setReportHtml("");
+    setReportHtml(null);
     setReportError("");
   };
 
@@ -191,9 +237,8 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   useEffect(() => { void loadJob(); }, [jobNo]);
 
-const availableTabs = loading ? [] : getTabsForJob(value(job || {}, "job_class"));
-const activeTab = availableTabs.some((t: any) => t.value === tab) ? tab : "job_details";
-  // console.log("value(job || {}, 'job_class'):", value(job || {}, "job_class"));
+  const availableTabs = loading ? [] : getTabsForJob(value(job || {}, "job_class"));
+  const activeTab = availableTabs.some((t: any) => t.value === tab) ? tab : "job_details";
 
   const jobStatus   = isCanceled(job || {}) ? "Canceled"
     : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
@@ -202,9 +247,8 @@ const activeTab = availableTabs.some((t: any) => t.value === tab) ? tab : "job_d
     : jobStatus === "Confirmed" ? "text-emerald-600 bg-emerald-50 border-emerald-200"
     : "text-blue-600 bg-blue-50 border-blue-200";
 
-  const reportReady   = !reportLoading && !reportError && !!reportHtml;
   const hasExcelExport = !!selectedReport?.excelFn;
-console.log("job_class:", value(job || {}, "job_class"), "availableTabs:", availableTabs);
+
   return (
     <section className="grid gap-3">
 
@@ -349,7 +393,8 @@ console.log("job_class:", value(job || {}, "job_class"), "availableTabs:", avail
       </div>
 
       {/* ── Tab content ── */}
-<InboundOperationalTab ref={tabRef} job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} onJobUpdated={loadJob} />
+      <InboundOperationalTab ref={tabRef} job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} onJobUpdated={loadJob} />
+
       {/* ── Dialog 1: Report list ── */}
       <Dialog
         open={listOpen}
@@ -371,68 +416,26 @@ console.log("job_class:", value(job || {}, "job_class"), "availableTabs:", avail
         </div>
       </Dialog>
 
-      {/* ── Dialog 2: Report viewer ── */}
-      <Dialog
-        open={reportOpen}
+      {/* ── Report preview dialog (NewReportDialog — same as VisaExpiryListingPage) ── */}
+      <NewReportDialog
+        open={previewOpen}
+        onClose={closePreview}
         title={selectedReport?.reportTitle ?? "Report"}
-        wide
-        onClose={closeReportDialog}
-      >
-        <div className="flex flex-col" style={{ height: "75vh" }}>
-
-          {/* Toolbar — only visible when the report has loaded */}
-          {reportReady && (
-            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
-              {/* Print / Save as PDF — fires window.print() inside the iframe */}
-              <Button size="sm" variant="outline" onClick={handlePrint}>
-                <Printer size={13} /> Print / Save as PDF
-              </Button>
-
-              {/* Excel — only rendered if the selected report has an excelFn */}
-              {hasExcelExport && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExcel}
-                  disabled={excelLoading}
-                >
-                  {excelLoading
-                    ? <RefreshCw size={13} className="animate-spin" />
-                    : <FileSpreadsheet size={13} />}
-                  {excelLoading ? "Exporting…" : "Export Excel"}
-                </Button>
-              )}
-            </div>
-          )}
-
-          {/* Loading */}
-          {reportLoading && (
-            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-              <RefreshCw size={14} className="animate-spin" />
-              Loading report…
-            </div>
-          )}
-
-          {/* Error */}
-          {!reportLoading && reportError && (
-            <div className="flex flex-1 items-center justify-center text-sm text-red-600">
-              {reportError}
-            </div>
-          )}
-
-          {/* Report iframe */}
-          {reportReady && (
-            <iframe
-              ref={iframeRef}
-              srcDoc={reportHtml}
-              title={selectedReport?.reportTitle}
-              className="flex-1 w-full rounded border-0"
-              style={{ minHeight: 0 }}
-            />
-          )}
-
-        </div>
-      </Dialog>
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportError || null}
+        meta={{
+          companyName: value(job || {}, "prin_code") ?? "",
+          user: user?.loginid ?? user?.username ?? "",
+          period: jobNo,
+          status: jobStatus,
+          generatedAt: new Date().toLocaleString(),
+        }}
+        onExportExcel={hasExcelExport ? handleExcel : undefined}
+        exportingExcel={excelLoading}
+        onOpenInNewWindow={handleOpenInNewWindow}
+        onDownloadPdf={handleDownloadPdf}
+      />
 
     </section>
   );

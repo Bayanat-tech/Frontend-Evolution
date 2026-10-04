@@ -40,6 +40,9 @@ import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { CardContent, CardHeader } from "../../components/ui/Card";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -178,7 +181,10 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       cell: ({ row }) => (
         <button
           type="button"
-          onClick={() => setEditor({ mode: "edit", row: row.original })}
+          onClick={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
           className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
@@ -229,7 +235,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
             <Edit2 size={15} />
           </Button>
           <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print / PDF">
@@ -250,6 +256,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
 
 
   const openCreateForDivision = (division: Division) => {
+    setNotice(null);
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
@@ -272,6 +279,11 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       <div className="finance-list-heading flex items-center justify-between gap-3">
         <div className="finance-list-title flex items-center gap-2.5">
           <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+          {fyPeriod && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+              FY {fyPeriod}
+            </span>
+          )}
         </div>
       </div>
 
@@ -295,28 +307,29 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
           density="grid"
           enablePagination
           manualPagination
-          toolbar={
-            <div className="finance-list-controls">
-              <label className="finance-period-control">
-                <span>FY</span>
-                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                  {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-                </Select>
-              </label>
+          enableExport={false}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                title={meta.addLabel}
+                onClick={() => setDivisionPicker(true)}
+              >
+                <Plus size={14} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                fyPeriod={fyPeriod}
+                fyPeriods={fyPeriods}
+                onFyPeriodChange={(val) => {
+                  setFyPeriod(val);
+                  setPageIndex(0);
+                }}
+                onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+                onRefresh={() => void loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false)}
+              />
             </div>
           }
-          enableExport
-          actionButton={
-            <Button
-              type="button"
-              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
-              title={meta.addLabel}
-              onClick={() => setDivisionPicker(true)}
-            >
-              <Plus size={14} /> Add
-            </Button>
-          }
-          exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
           initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -341,7 +354,10 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
           <PaymentDocumentEditor
             docType={docType}
             editor={editor}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onCancelled={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Document cancelled successfully" });
@@ -484,7 +500,7 @@ function PaymentDocumentEditor({
                     try {
                       const resp = await getFinanceOutstanding(mapped.div_code, invNo);
                       const balance = resp?.balances?.[0];
-                      if (balance) {
+                      if (balance && !balance.error && balance.original_amount > 0) {
                         childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
                       }
                     } catch {
@@ -572,6 +588,19 @@ function PaymentDocumentEditor({
   }, [form.detail, lineSearch]);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
+    if (field === "ex_rate") {
+      const numRate = Number(value) || 0;
+      setForm((current) => ({
+        ...current,
+        ex_rate: numRate,
+        detail: current.detail.map((row) =>
+          !row.curr_code || row.curr_code === current.curr_code
+            ? { ...row, ex_rate: numRate }
+            : row
+        ),
+      }));
+      return;
+    }
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -743,11 +772,11 @@ function PaymentDocumentEditor({
               if (!invNo) return m;
               const resp = await getFinanceOutstanding(divCode, invNo);
               const balance = resp?.balances?.[0];
-              if (balance && balance.outstanding_amount != null) {
+              if (balance && !balance.error && balance.original_amount > 0) {
                 return {
                   ...m,
-                  inv_amt: balance.original_amount ?? m.inv_amt,
-                  c_bal_amt_org: balance.outstanding_amount ?? m.c_bal_amt_org,
+                  inv_amt: balance.original_amount,
+                  c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
               return m;
@@ -811,6 +840,7 @@ function PaymentDocumentEditor({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const removeChildRow = (childId: string, targetDetailId?: string) => {
@@ -829,6 +859,7 @@ function PaymentDocumentEditor({
         ),
       };
     });
+    setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
   };
 
   const submit = async (event: FormEvent) => {
@@ -878,7 +909,7 @@ function PaymentDocumentEditor({
     }
     void fetchOutstanding(invNo).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance) return;
+      if (!balance || balance.error || !(balance.original_amount > 0)) return;
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
@@ -908,14 +939,14 @@ function PaymentDocumentEditor({
   });
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={DOCUMENT_META[docType]?.title || "Payment Voucher"}
             documentNo={form.doc_no}
             documentDate={form.doc_date}
-            total={formatAmount(total)}
+            total={formatAmount(total + totalTax)}
             divCode={form.div_code}
             divName={form.div_name}
             onBack={onClose}
@@ -943,7 +974,19 @@ function PaymentDocumentEditor({
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+            <Button
+              disabled={saving}
+              aria-label="Close"
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Close
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -1003,7 +1046,7 @@ function PaymentDocumentEditor({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-2.5 max-xl:grid-cols-1">
+                <div className="grid grid-cols-3 gap-2.5 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1011,13 +1054,14 @@ function PaymentDocumentEditor({
                       <span>Document & Payment Instrument</span>
                     </div>
                     <div className="finance-payment-header-fields">
-
                       <Field label="Doc Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
                       {docType !== "CR" && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
                       {docType !== "CR" && <Field label="Cheque Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.cheque_date)} onChange={(val) => updateField("cheque_date", val)} /></Field>}
                       {docType === "BR" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
                       {docType === "BP" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
+                      <Field label="Ref No"><Input disabled={disabled} value={form.ref_no || ""} onChange={(event) => updateField("ref_no", event.target.value)} /></Field>
+                      <Field label="Ref Date"><BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} /></Field>
                     </div>
                   </div>
 
@@ -1099,19 +1143,63 @@ function PaymentDocumentEditor({
                           loginid: user?.loginid || user?.username || "ADMIN"
                         })}
                         disabled={disabled}
-                        onChange={(value, row) => setForm((current) => ({
-                          ...current,
-                          curr_code: value,
-                          curr_name: text(getLookupValue(row || {}, "curr_name")),
-                          ex_rate: Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || current.ex_rate || 1),
-                        }))}
+                        onChange={(value, row) => {
+                          const newRate = Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || form.ex_rate || 1);
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? { ...d, curr_code: value, curr_name: currName, ex_rate: newRate }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
-                      <Field label="Exchange Rate *"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
+                      <Field label="Exchange Rate *">
+                        <ExchangeRateInput
+                          disabled={disabled}
+                          required
+                          value={form.ex_rate}
+                          onChange={(rate) => updateField("ex_rate", rate)}
+                        />
+                      </Field>
                       <div className="col-span-2 max-md:col-span-1">
                         <Field label="Remarks">
                           <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
                         </Field>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Party & Order Details (Compact Block) */}
+                  <div className="finance-payment-header-block">
+                    <div className="finance-section-title">
+                      <span className="finance-section-icon"><Building2 size={11} /></span>
+                      <span>Party & Order Details</span>
+                    </div>
+                    <div className="finance-payment-header-fields">
+                      <Field label="Payment Terms">
+                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="30 Days" />
+                      </Field>
+                      <Field label="LPO No">
+                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO Reference" />
+                      </Field>
+                      <Field label="LPO Date">
+                        <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
+                      </Field>
+                      <Field label="Phone">
+                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(e) => updateField("party_phone", e.target.value)} placeholder="Phone" />
+                      </Field>
+                      <Field label="Fax">
+                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
+                      </Field>
+                      <Field label="Party Address">
+                        <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Address" />
+                      </Field>
                     </div>
                   </div>
                 </div>
@@ -1403,10 +1491,10 @@ function PaymentDocumentEditor({
                             </td>
                           )}
 
-                          <td className="w-14 max-w-[55px] px-1 py-1">
+                          <td className="w-16 min-w-[62px] px-1 py-1">
                             <Input className="commercial-number-input finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
                           </td>
-                          <td className="finance-amount-cell w-20 px-1 py-1">
+                          <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
                             <Input className="commercial-number-input finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} />
                           </td>
 
@@ -1417,8 +1505,13 @@ function PaymentDocumentEditor({
                           )}
 
                           {showAllColumns && (
-                            <td className="w-16 max-w-[65px] px-1 py-1">
-                              <Input className="commercial-number-input finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(4) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} />
+                            <td className="w-20 max-w-[85px] px-1 py-1">
+                              <ExchangeRateInput
+                                disabled={disabled}
+                                className="commercial-number-input finance-money-input h-7 text-xs"
+                                value={detail.ex_rate}
+                                onChange={(rate) => updateDetail(detail.id, { ex_rate: rate })}
+                              />
                             </td>
                           )}
 
@@ -1442,9 +1535,9 @@ function PaymentDocumentEditor({
                         </tr>
 
                         {expandedRowIds[detail.id] && (
-                          <tr key={`${detail.id}_alloc`} className="bg-slate-50/70 border-b border-blue-200/60">
-                            <td colSpan={showAllColumns ? 15 : 9} className="p-0 pl-8 pr-3 pb-2 pt-1">
-                              <div className="sticky left-0 max-w-[calc(100vw-60px)]">
+                          <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
+                            <td colSpan={showAllColumns ? 15 : 9} className="finance-allocation-cell">
+                              <div className="finance-allocation-branch">
                                 <SmartInlineAllocationTable
                                   detail={detail}
                                   rows={(form.children[detail.id] || []) as TransactionChildRow[]}
@@ -1489,20 +1582,6 @@ function PaymentDocumentEditor({
         )}
       </CardContent>
 
-      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-        <div className="text-sm text-muted-foreground">
-          Net Total <strong className={total + totalTax < 0 ? "text-destructive" : "text-[#00378C]"}>{formatAmount(total + totalTax)}</strong>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button
-            disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError}
-            type="submit"
-          >
-            <Save size={15} /> {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
-      </div>
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
@@ -1973,7 +2052,13 @@ function mapExistingDocument(
 ): TransactionHeader {
   const header = lowerRecord(headerRaw);
   const fallbackDetail = detailRaw[0] ? lowerRecord(detailRaw[0]) : {};
-  const detail = detailRaw.map((raw, index) => {
+  // Exclude system-generated balancing rows (e.g. 9010 Tax row, 9001 Control row) so tax is not double-counted
+  const userRows = detailRaw.filter((raw) => {
+    const sn = Number(lowerRecord(raw).serial_no || 0);
+    return sn === 0 || sn < 9000;
+  });
+  const detailToMap = userRows.length > 0 ? userRows : detailRaw;
+  const detail = detailToMap.map((raw, index) => {
     const row = lowerRecord(raw);
     const serialNo = Number(row.serial_no || index + 1);
     const table = inferChildTable(serialNo, childrenRaw);
@@ -2139,12 +2224,12 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     div_code: row.div_code || originalForm.div_code,
   }));
 
+  const seenDetailSerials = new Set<number>();
   const uniqueDetails = details.map((row, index) => {
-    const seen = new Set<number>();
     const raw = Number(row.serial_no ?? index + 1);
-    let next = Number.isFinite(raw) && raw > 0 && !seen.has(raw) ? raw : index + 1;
-    while (seen.has(next)) next = index + 1 + seen.size;
-    seen.add(next);
+    let next = Number.isFinite(raw) && raw > 0 && !seenDetailSerials.has(raw) ? raw : index + 1;
+    while (seenDetailSerials.has(next)) next += 1;
+    seenDetailSerials.add(next);
     return { ...row, serial_no: next };
   });
 
@@ -2176,7 +2261,7 @@ function groupChildren(form: TransactionHeader) {
     if (!detail.child_table || !["invoice", "job", "expense"].includes(detail.child_table)) return;
     const table = detail.child_table as "invoice" | "job" | "expense";
     const rows = (form.children?.[detail.id] || []) as TransactionChildRow[];
-    rows.forEach((row) => {
+    rows.forEach((row, childIndex) => {
       if (table === "invoice" && Number(row.amount || 0) === 0) return;
       const cleaned: Record<string, unknown> = { ...row };
       delete cleaned.id;
@@ -2189,7 +2274,7 @@ function groupChildren(form: TransactionHeader) {
       cleaned.doc_type = form.doc_type;
       cleaned.doc_no = form.doc_no || cleaned.doc_no || "1";
       cleaned.serial_no = detail.serial_no;
-      cleaned.dtl_sr_no = Number(cleaned.dtl_sr_no || grouped[table].length + 1);
+      cleaned.dtl_sr_no = childIndex + 1;
       cleaned.doc_date = form.doc_date;
       cleaned.div_code = form.div_code;
       cleaned.ac_code = detail.ac_code;

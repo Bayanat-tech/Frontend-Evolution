@@ -313,7 +313,7 @@ export async function fetchexpenseDetailsDetail(
     });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType, rows?: PurchaseOrderLineRow[]) {
     const poForm = form as PurchaseOrderForm & {
         quotn_no?: string | number;
         quotn_date?: string | number | Date;
@@ -496,7 +496,7 @@ export async function runWorkflow(
 ) {
     return upsertBulkJobProductionEntryApi(
         {
-            header: buildHeaderPayload(form, companyCode, loginid, docType),
+            header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
             details: buildDetailsPayload(rows),
             jmiConsumDetails: buildTteJmiConsumPayload(subrow),
             expenseDetails: buildExpensePayload(expenserow),

@@ -1,5 +1,5 @@
-import { Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
@@ -36,11 +36,15 @@ import {
   lineTaxAmount,
   runWorkflow,
 } from "./SalesOrderutils";
-import ReportDialogPage from "../../../components/ReportDialogPage";
-import { SalesDNReport, downloadSalesDNExcel } from "./SalesDNReport";
+
 import { SalesDNHeaderForm } from "./SaleDNHeaderfrom";
 import { SalesDnDetailsTable } from "./salesDNDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
+import { createPortal } from "react-dom";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
 
 export type { PurchaseOrderEditorState };
 
@@ -60,7 +64,7 @@ export function SalesDNEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() =>
+  const [rows, setRows] = useState<SalesOrderLineRow[]>(() =>
     editMode ? [] : [emptyLineRow(form.div_code)],
   );
   const [loading, setLoading] = useState(Boolean(editMode));
@@ -80,32 +84,40 @@ export function SalesDNEditor({
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const submitBtnRef = useRef<HTMLDivElement>(null);
+const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
-
+ const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   // ---- Report dialog state ----
-  const [reportOpen, setReportOpen] = useState(false);
-
-  const reportValues = form.doc_no
-    ? {
-      company_code: user?.company_code,
-      doc_type: SO_DOC_TYPE.SDN,
-      doc_no: form.doc_no,
-    }
-    : null;
-
-  const openReport = () => {
+  const openReport = async () => {
     if (!form.doc_no) {
       setError("Save the document before printing");
       return;
     }
-    setReportOpen(true);
+    const params = {
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.SDN,
+      doc_no: form.doc_no,
+    };
+    const preview = openPurchaseReport(`Delivery Note - ${form.doc_no}`);
+    try {
+      const html = await getSalesDNReportHtml(params);
+      preview.ready({
+        html,
+        filename: `delivery_note_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await downloadSalesDNExcel(params);
+        },
+      });
+    } catch (e) {
+      preview.fail(e instanceof Error ? e : new Error("Unable to load Delivery Note report"));
+    }
   };
-
-  const closeReport = () => setReportOpen(false);
 
   const handleExcel = async () => {
     if (!form.doc_no) {
@@ -363,7 +375,14 @@ export function SalesDNEditor({
     if (invalidRow) {
       return setError("Delivered Quantity must be greater than 0 for all line items");
     }
-
+const rect = submitBtnRef.current?.getBoundingClientRect();
+if (rect) {
+  setSubmitConfirmPos({
+    top: rect.bottom + 8,
+    right: window.innerWidth - rect.right,
+  });
+}
+setShowSubmitConfirm(true);
     setShowSubmitConfirm(true);
   };
 
@@ -502,61 +521,24 @@ export function SalesDNEditor({
 
   return (
     <>
-      <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled
-          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
-          : "grid-rows-[auto_minmax(0,1fr)_auto]"
-          }`}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleSubmitClick();
-        }}
-      >
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+       <div className="finance-document-ui finance-document-editor commercial-editor payment-workbench flex h-screen flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm px-4 py-2">
+        <form
+          data-header-expanded={showHeaderDetails} className={` finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+          onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
+        >
+          <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <div>
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Sales Delivery Note" : "New Sales Delivery Note"}
-                </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
-                  Sales Delivery Note
-                </h2>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">
-                  Doc No
-                </span>
-                <strong className="block text-sm leading-tight text-primary-foreground">
-                  {form.doc_no || "New"}
-                </strong>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">
-                  Total
-                </span>
-                <strong className="block text-sm leading-tight text-primary-foreground">
-                  {formatAmount(finalTotal)}
-                </strong>
-              </div>
-              {form.ac_code && (
-                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">
-                    A/c Code
-                  </span>
-                  <strong className="block truncate text-sm leading-tight text-primary-foreground">
-                    {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                  </strong>
-                </div>
-              )}
-
-              {form.div_code && (
-                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
-                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
-                </div>
-              )}
-            </div>
+         <FinanceDocumentIdentity
+                        title="Purchase GRN"
+                        documentNo={form.doc_no}
+                        documentDate={form.doc_date}
+                        total={formatAmount(finalTotal)}
+                        divCode={form.div_code}
+                        divName={form.div_name}
+                        onBack={onClose}
+                      headerExpanded={showHeaderDetails}
+                        onToggleHeader={() => setShowHeaderDetails(value => !value)}
+                      />
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && (
                 <Badge
@@ -585,6 +567,66 @@ export function SalesDNEditor({
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
+                   <div className="flex items-center gap-2">
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                      {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                    </Button>
+                  )}
+                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
+                      {isPendingTab && (
+                    <Button
+                      type="button"
+                      onClick={handleSubmitClick}
+                      disabled={actionDisabled || actionBarBusy}
+                    >
+                      {actionLoading === "submit" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-4 w-4" />
+                      )}
+                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                    </Button>
+   )}
+                    {showSubmitConfirm &&
+                      createPortal(
+                        <div
+                          style={{ position: "fixed", top: submitConfirmPos.top, right: submitConfirmPos.right }}
+                          className="z-[9999] w-56 rounded-lg border border-slate-200 bg-white p-3 text-black shadow-xl"
+                        >
+                          <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>
+                              No
+                            </Button>
+                            <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>
+                              Yes
+                            </Button>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                  </div>
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
+                  )}
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                    </Button>
+                  )}
+
+                </div>
               <Button
                 aria-label="Close"
                 type="button"
@@ -608,18 +650,45 @@ export function SalesDNEditor({
           </div>
         )}
 
-        <CardContent className="min-h-0 overflow-auto p-3">
+            <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
-              Loading Sales Delivery Note...
-            </div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
           ) : (
-            <div className="grid gap-3">
-              <AutoDismissAlert
-                notice={error ? { type: "error", message: error } : null}
-                onClose={() => setError("")}
-              />
+            <div className="commercial-editor-sections grid gap-3 min-w-0">
+              <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
+              {!showHeaderDetails ? (
+                <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                  <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                      <span className="font-medium">{form.doc_date}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Division:</span>
+                      <span className="font-medium">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 truncate">
+                      <span className="font-semibold text-[#00378C]">A/c Code:</span>
+                      <span className="font-medium truncate">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "Not selected"}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Currency:</span>
+                      <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+                    onClick={() => setShowHeaderDetails(true)}
+                  >
+                    Show Header Fields <ChevronDown size={13} className="ml-1" />
+                  </Button>
+                </div>
+              ) : (
+                <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
               <SalesDNHeaderForm
                 form={form}
                 setForm={setForm}
@@ -632,6 +701,10 @@ export function SalesDNEditor({
                 loginid={user?.loginid || user?.username}
                 setdetails={setRows}
               />
+
+        
+              </div>
+                    )}
 
               <SalesDnDetailsTable
                 rows={rows}
@@ -651,111 +724,63 @@ export function SalesDNEditor({
           )}
         </CardContent>
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            {isPendingTab && (
-              <Button
-                type="button"
-                onClick={handleSaveAsDraft}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "draft" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-              </Button>
-            )}
-            {isPendingTab && (
-              <div className="relative">
-                <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-                  {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                </Button>
-                {showSubmitConfirm && (
-                  <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-                    <p className="mb-2 text-sm text-gray-700">Submit this Sales Dn?</p>
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
-                      <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
-                    </div>
-                  </div>
-                )}
+      {/* <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
+                <span className="text-[11px] font-medium text-slate-500">Total Amount</span>
+                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal)}</strong>
               </div>
-            )}
 
-            {isPendingTab && canSendBackOrReject && (
-              <Button
-                type="button"
-                onClick={openSendBackDialog}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-              </Button>
-            )}
 
-            {isPendingTab && canSendBackOrReject && (
-              <Button
-                type="button"
-                onClick={openRejectDialog}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-              </Button>
-            )}
-            {isPendingTab && (
-              <Button
-                type="button"
-                onClick={handleCancel}
-                disabled={actionDisabled || actionBarBusy}
-                className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60"
-              >
-                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              aria-label="Print"
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={!canPrint}
-              onClick={openReport}
-              title={canPrint ? "Print Delivery Note" : "Save document first"}
-            >
-              <Printer size={15} />
-            </Button>
-            <Button
-              aria-label="Attachment"
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={actionDisabled}
-            >
-              <Paperclip size={15} />
-            </Button>
-            <Button
-              aria-label="Download"
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={!canPrint}
-              onClick={() => void handleExcel()}
-              title={canPrint ? "Export Excel" : "Save document first"}
-            >
-              <Download size={15} />
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isPendingTab && (
+                <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                  {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <div className="relative">
+                  <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy}>
+                    {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                  </Button>
+                  {showSubmitConfirm && (
+                    <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                        <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                </Button>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                </Button>
+              )}
+
+            </div>
+          </div> */}
       </form>
+
+      </div>
 
       <SendBackDialog
         open={sendBackDialogOpen}
@@ -788,16 +813,10 @@ export function SalesDNEditor({
       />
 
       {/* Report dialog — Print icon opens this; Excel uses same required_values */}
-      {reportOpen && reportValues && (
-        <ReportDialogPage
-          Report={SalesDNReport}
-          required_values={reportValues}
-          title={`Delivery Note - ${reportValues.doc_no}`}
-          onClose={closeReport}
-          excel={() => void handleExcel()}
-        />
 
-      )}
+
+      <PurchaseReportPreview />
+
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}

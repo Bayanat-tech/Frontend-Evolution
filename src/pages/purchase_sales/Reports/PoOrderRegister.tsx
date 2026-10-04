@@ -8,12 +8,13 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Input } from "../../../components/ui/Input";
 import { Button } from "../../../components/ui/Button";
-import { NewReportDialog } from "../../../components/new_report_format";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import {
     getPoOrderRegisterReportHtml,
     getPoOrderRegisterReportExcel,
 } from "../../../api/transactions";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
 
 interface PoOrderRegisterParams {
     loginid: string;
@@ -32,10 +33,10 @@ const text = (v: any) => (v === null || v === undefined ? "" : String(v));
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+        <div className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
             {label}
             {children}
-        </label>
+        </div>
     );
 }
 
@@ -83,6 +84,8 @@ function ProductMultiSelectField({
     const triggerRef = useRef<HTMLDivElement | null>(null);
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const selectAllRef = useRef<HTMLInputElement | null>(null);
+
+  
 
     const selectedValues = React.useMemo(
         () => value.split(",").map((v) => v.trim()).filter(Boolean),
@@ -300,16 +303,60 @@ export default function PoOrderRegisterPage() {
     const [reportCriteria, setReportCriteria] = useState<"SO_REF_ONLY" | "ALL">("ALL");
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState("Select filters and run the report.");
+      const [poNumberOptions, setPoNumberOptions] = useState<string[]>([]);
+const [poNumberLoading, setPoNumberLoading] = useState(false);
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
 
-    // ── Report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
-    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-    const [reportHtml, setReportHtml] = useState<string | null>(null);
-    const [reportPreviewError, setReportPreviewError] = useState("");
-    const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
+
+
+useEffect(() => {
+    let cancelled = false;
+
+    async function loadPoNumbers() {
+        if (!acCode) {
+            setPoNumberOptions([]);
+            setPoNumber("");
+            return;
+        }
+
+        setPoNumberLoading(true);
+        try {
+            const rows = await getDynamicLookup({
+                parameter: "Account_PO_Number_By_Supplier_Serach_HDR",
+                code1: companyCode,
+                code2: acCode,
+                loginid: loginId,
+            });
+
+            if (cancelled) return;
+
+            const numbers = Array.from(
+                new Set(
+                    (rows || [])
+                        .map((r: any) => String(r?.PO_NUMBER ?? r?.po_number ?? r?.DOC_NO ?? "").trim())
+                        .filter(Boolean)
+                )
+            );
+
+            setPoNumberOptions(numbers);
+            setPoNumber((current) => (current && !numbers.includes(current) ? "" : current));
+        } catch (err) {
+            if (!cancelled) {
+                console.error("Failed to load PO numbers:", err);
+                setPoNumberOptions([]);
+            }
+        } finally {
+            if (!cancelled) setPoNumberLoading(false);
+        }
+    }
+
+    loadPoNumbers();
+    return () => { cancelled = true; };
+}, [acCode, companyCode, loginId]);
+
 
     const buildRequestParams = (): PoOrderRegisterParams => ({
         loginid: loginId,
@@ -328,19 +375,25 @@ export default function PoOrderRegisterPage() {
         const params = buildRequestParams();
         lastRequestRef.current = params;
 
-        setReportHtml(null);
-        setReportPreviewError("");
-        setReportPreviewOpen(true);
         setLoading(true);
         setMessage("");
 
+        const preview = openPurchaseReport("PO Order Register");
+
         try {
             const html = await getPoOrderRegisterReportHtml(params);
-            setReportHtml(html);
+            preview.ready({
+                html,
+                filename: `po_order_register_${new Date().toISOString().slice(0, 10)}`,
+                orientation: "landscape",
+                onExcel: async () => {
+                    await getPoOrderRegisterReportExcel(params);
+                },
+            });
             setMessage("Report generated.");
         } catch (err: any) {
             const errorMessage = err?.response?.data?.details || err?.message || "Failed to load report. Please try again.";
-            setReportPreviewError(errorMessage);
+            preview.fail(new Error(errorMessage));
             setMessage(errorMessage);
         } finally {
             setLoading(false);
@@ -348,23 +401,7 @@ export default function PoOrderRegisterPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
 
-    const closeReportPreview = () => {
-        setReportPreviewOpen(false);
-        setReportHtml(null);
-        setReportPreviewError("");
-    };
 
-    const handleReportPreviewExcel = async () => {
-        if (!lastRequestRef.current) return;
-        setReportPreviewExporting(true);
-        try {
-            await getPoOrderRegisterReportExcel(lastRequestRef.current);
-        } catch (exportError: any) {
-            setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
-        } finally {
-            setReportPreviewExporting(false);
-        }
-    };
 
     function resetFilters() {
         setFromDateIso(""); setToDateIso("");
@@ -419,9 +456,36 @@ export default function PoOrderRegisterPage() {
                         />
                     </Field>
 
-                    <Field label="PO Number">
+                    {/* <Field label="PO Number">
                         <Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="number" />
-                    </Field>
+                    </Field> */}
+
+                    <Field label="PO Number">
+    <select
+        className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+        value={poNumber}
+        onChange={(e) => setPoNumber(e.target.value)}
+        disabled={!acCode || poNumberLoading}
+    >
+        <option value="">
+            {!acCode
+                ? "Select Supplier first"
+                : poNumberLoading
+                    ? "Loading..."
+                    : poNumberOptions.length === 0
+                        ? "No PO numbers found"
+                        : "All"}
+        </option>
+        {poNumberOptions.map((num) => (
+            <option key={num} value={num}>
+                {num}
+            </option>
+        ))}
+    </select>
+</Field>
+
+
+                    
 
                     <ProductMultiSelectField
                         label="Product"
@@ -443,37 +507,44 @@ export default function PoOrderRegisterPage() {
 
                     <div>
                         <Field label="Report Criteria">
+
                             <div
-                                className="flex min-h-[36px] flex-wrap items-center gap-x-7 gap-y-1 rounded-md px-3 py-1.5 shadow-sm"
-                                style={{ border: "1px solid #aebdce", background: "#f4f7fb" }}
+                                className="flex flex-row items-center gap-x-7 rounded-md px-3 py-1.5 shadow-sm"
+                                style={{ border: "1px solid #aebdce", background: "#f4f7fb", minHeight: "36px" }}
                             >
                                 {[
                                     { value: "SO_REF_ONLY", label: "With SO Ref." },
                                     { value: "ALL", label: "All" },
                                 ].map((opt) => (
-                                    <label
+                                    <div
                                         key={opt.value}
-                                        className="inline-flex items-center gap-2 cursor-pointer select-none normal-case whitespace-nowrap"
+                                        onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
+                                        className="flex flex-row items-center gap-2 cursor-pointer select-none whitespace-nowrap"
+                                        style={{ display: "flex", flexDirection: "row", alignItems: "center" }}
                                     >
+                                        {/* Radio Circle */}
                                         <span
-                                            onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
-                                            className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${reportCriteria === opt.value ? "border-blue-600" : "border-gray-300"
+                                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${reportCriteria === opt.value ? "border-blue-600" : "border-gray-300"
                                                 }`}
+                                            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
                                         >
                                             {reportCriteria === opt.value && (
                                                 <span className="h-2 w-2 rounded-full bg-blue-600" />
                                             )}
                                         </span>
+
+                                        {/* Text Label */}
                                         <span
-                                            onClick={() => setReportCriteria(opt.value as "SO_REF_ONLY" | "ALL")}
                                             className={`text-sm font-normal ${reportCriteria === opt.value ? "text-blue-700" : "text-foreground"
                                                 }`}
                                         >
                                             {opt.label}
                                         </span>
-                                    </label>
+                                    </div>
                                 ))}
                             </div>
+
+
                         </Field>
                     </div>
                 </div>
@@ -486,16 +557,7 @@ export default function PoOrderRegisterPage() {
                 {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
             </div>
 
-            <NewReportDialog
-                open={reportPreviewOpen}
-                onClose={closeReportPreview}
-                title="PO Order Register"
-                htmlContent={reportHtml}
-                loading={loading}
-                error={reportPreviewError || null}
-                onExportExcel={handleReportPreviewExcel}
-                exportingExcel={reportPreviewExporting}
-            />
+            <PurchaseReportPreview />
         </section>
     );
 }

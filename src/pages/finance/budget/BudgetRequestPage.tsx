@@ -147,7 +147,7 @@ useEffect(() => {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
             <Edit2 size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Print / PDF">
@@ -162,6 +162,7 @@ useEffect(() => {
   ], []);
 
   const openCreateForDivision = (division: Division) => {
+    setNotice(null);
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
@@ -242,7 +243,10 @@ useEffect(() => {
             key={editor?.mode === "edit" ? editor.row.request_number : editor?.mode || "create"}
             editor={editor}
             isPendingTab={isPendingTab}
-            onClose={() => setEditor(null)}
+            onClose={() => {
+              setNotice(null);
+              setEditor(null);
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });

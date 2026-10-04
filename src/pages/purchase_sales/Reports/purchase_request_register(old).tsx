@@ -16,6 +16,8 @@ import {
     getPrRegisterOldDetailReportHtml,
     getPrRegisterOldDetailReportExcel,
 } from "../../../api/transactions";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
 
 interface PrRegisterOldParams {
     loginid: string;
@@ -90,12 +92,6 @@ export default function PrRegisterOldPage() {
     const lastRequestRef = useRef<PrRegisterOldParams | null>(null);
     const lastReportTypeRef = useRef<"SUMMARY" | "DETAILS">("SUMMARY");
 
-    // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
-    const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-    const [reportHtml, setReportHtml] = useState<string | null>(null);
-    const [reportPreviewError, setReportPreviewError] = useState("");
-    const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
-
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
     const buildRequestParams = (): PrRegisterOldParams => ({
@@ -123,20 +119,29 @@ export default function PrRegisterOldPage() {
         lastRequestRef.current = params;
         lastReportTypeRef.current = reportType;
 
-        setReportHtml(null);
-        setReportPreviewError("");
-        setReportPreviewOpen(true);
         setLoading(true);
         setMessage("");
+
+        const preview = openPurchaseReport(
+            reportType === "DETAILS" ? "Purchase Request Register (Old) - Details" : "Purchase Request Register (Old) - Summary"
+        );
 
         try {
             const fetchHtml = getReportHtmlFn(reportType);
             const html = await fetchHtml(params);
-            setReportHtml(html);
+            preview.ready({
+                html,
+                filename: `pr_register_old_${reportType.toLowerCase()}_${new Date().toISOString().slice(0, 10)}`,
+                orientation: reportType === "DETAILS" ? "landscape" : "portrait",
+                onExcel: async () => {
+                    const fetchExcel = getReportExcelFn(reportType);
+                    await fetchExcel(params);
+                },
+            });
             setMessage("Report generated.");
         } catch (err: any) {
             const errorMessage = err?.message ?? "Failed to load report. Please try again.";
-            setReportPreviewError(errorMessage);
+            preview.fail(new Error(errorMessage));
             setMessage(errorMessage);
         } finally {
             setLoading(false);
@@ -144,24 +149,24 @@ export default function PrRegisterOldPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRangeValid, fromDateIso, toDateIso, userId, searchText, status, reportType, companyCode, loginId]);
 
-    const closeReportPreview = () => {
-        setReportPreviewOpen(false);
-        setReportHtml(null);
-        setReportPreviewError("");
-    };
+    // const closeReportPreview = () => {
+    //     setReportPreviewOpen(false);
+    //     setReportHtml(null);
+    //     setReportPreviewError("");
+    // };
 
-    const handleReportPreviewExcel = async () => {
-        if (!lastRequestRef.current) return;
-        setReportPreviewExporting(true);
-        try {
-            const fetchExcel = getReportExcelFn(lastReportTypeRef.current);
-            await fetchExcel(lastRequestRef.current);
-        } catch (exportError: any) {
-            setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
-        } finally {
-            setReportPreviewExporting(false);
-        }
-    };
+    // const handleReportPreviewExcel = async () => {
+    //     if (!lastRequestRef.current) return;
+    //     setReportPreviewExporting(true);
+    //     try {
+    //         const fetchExcel = getReportExcelFn(lastReportTypeRef.current);
+    //         await fetchExcel(lastRequestRef.current);
+    //     } catch (exportError: any) {
+    //         setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
+    //     } finally {
+    //         setReportPreviewExporting(false);
+    //     }
+    // };
 
     function resetFilters() {
         setFromDateIso(""); setToDateIso("");
@@ -235,42 +240,47 @@ export default function PrRegisterOldPage() {
                             ))}
                         </select>
                     </Field>
-
                     <div className="sm:col-span-1">
                         <Field label="Report Type">
                             <div
-                                className="flex flex-nowrap items-center gap-x-7 gap-y-1 rounded-md px-4 py-1 shadow-sm"
-                                style={{ border: "1px solid #aebdce", background: "#f4f7fb", minHeight: 30 }}
+                                className="flex flex-row items-center gap-x-7 rounded-md px-4 py-1 shadow-sm"
+                                style={{ border: "1px solid #aebdce", background: "#f4f7fb", minHeight: 30, display: "flex", flexDirection: "row", alignItems: "center" }}
                             >
                                 {[
                                     { value: "SUMMARY" as const, label: "Summary" },
                                     { value: "DETAILS" as const, label: "Details" },
                                 ].map((opt) => (
-                                    <label
+                                    <div
                                         key={opt.value}
-                                        className="inline-flex flex-nowrap items-center gap-2 cursor-pointer select-none normal-case whitespace-nowrap"
+                                        onClick={() => setReportType(opt.value)}
+                                        className="flex flex-row items-center gap-2 cursor-pointer select-none whitespace-nowrap"
+                                        style={{ display: "flex", flexDirection: "row", alignItems: "center" }}
                                     >
+                                        {/* Radio Circle */}
                                         <span
-                                            onClick={() => setReportType(opt.value)}
-                                            className={`flex h-4 w-4 items-center justify-center rounded-full border-2 transition-colors ${reportType === opt.value ? "border-blue-600" : "border-gray-300"
+                                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${reportType === opt.value ? "border-blue-600" : "border-gray-300"
                                                 }`}
+                                            style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
                                         >
                                             {reportType === opt.value && (
                                                 <span className="h-2 w-2 rounded-full bg-blue-600" />
                                             )}
                                         </span>
+
+                                        {/* Text Label */}
                                         <span
-                                            onClick={() => setReportType(opt.value)}
                                             className={`text-sm font-normal ${reportType === opt.value ? "text-blue-700" : "text-foreground"
                                                 }`}
                                         >
                                             {opt.label}
                                         </span>
-                                    </label>
+                                    </div>
                                 ))}
                             </div>
                         </Field>
                     </div>
+
+
                 </div>
 
                 <div className="freight-report-actions">
@@ -281,16 +291,7 @@ export default function PrRegisterOldPage() {
                 {message ? <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p> : null}
             </div>
 
-            <NewReportDialog
-                open={reportPreviewOpen}
-                onClose={closeReportPreview}
-                title="Purchase Request Register (Old)"
-                htmlContent={reportHtml}
-                loading={loading}
-                error={reportPreviewError || null}
-                onExportExcel={handleReportPreviewExcel}
-                exportingExcel={reportPreviewExporting}
-            />
+            <PurchaseReportPreview />
         </section>
     );
 }
