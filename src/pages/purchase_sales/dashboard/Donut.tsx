@@ -14,7 +14,7 @@ export default function Donut({
           {shown.map((d) => <Cell key={d.name} fill={d.color} />)}
         </Pie>
         {total > 0 && (
-          <Tooltip formatter={(v) => format(Number(v ?? 0))} contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
+          <Tooltip formatter={(v: any) => format(Number(v ?? 0))} contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
         )}
       </PieChart>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
