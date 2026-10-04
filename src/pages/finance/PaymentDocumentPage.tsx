@@ -1001,11 +1001,11 @@ function PaymentDocumentEditor({
         </div>
       )}
 
-      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
+      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-1.5">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="commercial-editor-sections grid gap-3">
+          <div className="commercial-editor-sections grid gap-1.5">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             {/* Smart Collapsible Payment Header */}
@@ -1047,7 +1047,7 @@ function PaymentDocumentEditor({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-2.5 max-xl:grid-cols-1">
+                <div className="grid grid-cols-2 gap-1.5 max-xl:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1179,18 +1179,23 @@ function PaymentDocumentEditor({
                 </div>
 
                 {/* Section 3: Party & Order Details (Optional / PB Parity) */}
-                <div className="finance-payment-header-block border-t border-slate-200/80 pt-2 mt-1">
-                  <div className="flex items-center justify-between cursor-pointer py-1 select-none" onClick={() => setShowPartyDetails(!showPartyDetails)}>
-                    <div className="finance-section-title mb-0">
+                <div className="finance-payment-header-block">
+                  <div
+                    className="finance-section-title cursor-pointer select-none flex items-center justify-between"
+                    onClick={() => setShowPartyDetails(!showPartyDetails)}
+                    title={showPartyDetails ? "Collapse Party & Order Details" : "Expand Party & Order Details"}
+                  >
+                    <div className="flex items-center gap-1.5">
                       <span className="finance-section-icon"><Building2 size={11} /></span>
                       <span>Party & Order Details (Optional)</span>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground p-0 hover:bg-transparent">
-                      {showPartyDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </Button>
+                    <div className="flex items-center gap-1 text-[11px] text-[#00378c] font-medium hover:underline mr-1">
+                      <span>{showPartyDetails ? "Collapse" : "Expand"}</span>
+                      {showPartyDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </div>
                   </div>
                   {showPartyDetails && (
-                    <div className="finance-payment-header-fields grid-cols-4 max-lg:grid-cols-2 max-sm:grid-cols-1 mt-2 pt-2 border-t border-slate-100">
+                    <div className="finance-payment-party-fields grid grid-cols-6 max-xl:grid-cols-3 max-sm:grid-cols-2 gap-2 p-2 bg-white">
                       <Field label="Payment Terms">
                         <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="e.g. 30 Days" />
                       </Field>
@@ -1206,7 +1211,7 @@ function PaymentDocumentEditor({
                       <Field label="Party Fax">
                         <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
                       </Field>
-                      <div className="col-span-3 max-lg:col-span-2 max-sm:col-span-1">
+                      <div className="col-span-1 max-xl:col-span-3 max-sm:col-span-2">
                         <Field label="Party Address">
                           <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Full Party Address" />
                         </Field>
