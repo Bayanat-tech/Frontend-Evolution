@@ -56,6 +56,15 @@ type Summary = {
   JOURNAL_VOUCHER_COUNT?: number;
   UNPOSTED_JOURNAL_COUNT?: number;
 
+  SALES_INVOICE_CANCELED_COUNT?: number;
+  PURCHASE_INVOICE_CANCELED_COUNT?: number;
+  BANK_PAYMENT_CANCELED_COUNT?: number;
+  BANK_RECEIPT_CANCELED_COUNT?: number;
+  CASH_PAYMENT_CANCELED_COUNT?: number;
+  CASH_RECEIPT_CANCELED_COUNT?: number;
+  CREDIT_NOTE_CANCELED_COUNT?: number;
+  DEBIT_NOTE_CANCELED_COUNT?: number;
+
   TOTAL_INFLOW?: number;
   PREV_TOTAL_INFLOW?: number;
   TOTAL_OUTFLOW?: number;
@@ -232,6 +241,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Sales Invoices (SI)",
       count: summary.SALES_INVOICE_COUNT,
+      canceledCount: summary.SALES_INVOICE_CANCELED_COUNT,
       amount: summary.SALES_INVOICE_AMOUNT,
       prevAmount: summary.PREV_SALES_INVOICE_AMOUNT,
       icon: Receipt,
@@ -242,6 +252,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Purchase Invoices (PI)",
       count: summary.PURCHASE_INVOICE_COUNT,
+      canceledCount: summary.PURCHASE_INVOICE_CANCELED_COUNT,
       amount: summary.PURCHASE_INVOICE_AMOUNT,
       prevAmount: summary.PREV_PURCHASE_INVOICE_AMOUNT,
       icon: FileText,
@@ -252,6 +263,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Credit Notes (CN)",
       count: summary.CREDIT_NOTE_COUNT,
+      canceledCount: summary.CREDIT_NOTE_CANCELED_COUNT,
       amount: summary.CREDIT_NOTE_AMOUNT,
       icon: TrendingDown,
       tone: "red",
@@ -261,6 +273,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Debit Notes (DN)",
       count: summary.DEBIT_NOTE_COUNT,
+      canceledCount: summary.DEBIT_NOTE_CANCELED_COUNT,
       amount: summary.DEBIT_NOTE_AMOUNT,
       icon: TrendingUp,
       tone: "violet",
@@ -274,6 +287,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Bank Receipts (BR)",
       count: summary.BANK_RECEIPT_COUNT,
+      canceledCount: summary.BANK_RECEIPT_CANCELED_COUNT,
       amount: summary.BANK_RECEIPT_AMOUNT,
       prevAmount: summary.PREV_BANK_RECEIPT_AMOUNT,
       icon: Landmark,
@@ -284,6 +298,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Bank Payments (BP)",
       count: summary.BANK_PAYMENT_COUNT,
+      canceledCount: summary.BANK_PAYMENT_CANCELED_COUNT,
       amount: summary.BANK_PAYMENT_AMOUNT,
       prevAmount: summary.PREV_BANK_PAYMENT_AMOUNT,
       icon: CreditCard,
@@ -294,6 +309,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Cash Receipts (CR)",
       count: summary.CASH_RECEIPT_COUNT,
+      canceledCount: summary.CASH_RECEIPT_CANCELED_COUNT,
       amount: summary.CASH_RECEIPT_AMOUNT,
       prevAmount: summary.PREV_CASH_RECEIPT_AMOUNT,
       icon: Banknote,
@@ -304,6 +320,7 @@ export function FinanceDashboardPanel() {
     {
       title: "Cash Payments (CP)",
       count: summary.CASH_PAYMENT_COUNT,
+      canceledCount: summary.CASH_PAYMENT_CANCELED_COUNT,
       amount: summary.CASH_PAYMENT_AMOUNT,
       prevAmount: summary.PREV_CASH_PAYMENT_AMOUNT,
       icon: Wallet,
@@ -635,6 +652,7 @@ function HeroCard({
 type ModuleCardProps = {
   title: string;
   count?: number;
+  canceledCount?: number;
   amount?: number;
   prevAmount?: number;
   icon: LucideIcon;
@@ -650,6 +668,7 @@ type ModuleCardProps = {
 function ModuleCard({
   title,
   count,
+  canceledCount,
   amount,
   prevAmount,
   icon: Icon,
@@ -692,6 +711,11 @@ function ModuleCard({
       <div className="finance-dashboard-kpi-foot">
         <span className="finance-dashboard-kpi-badge">
           {cnt.toLocaleString()} vouchers
+          {canceledCount && canceledCount > 0 ? (
+            <span className="text-[#b45309] dark:text-[#f59e0b] font-normal ml-1">
+              ({canceledCount} cancelled)
+            </span>
+          ) : null}
         </span>
         {change !== null && Number.isFinite(change) ? (
           <span className={change >= 0 ? "text-[#059669] font-bold" : "text-[#dc2626] font-bold"}>
