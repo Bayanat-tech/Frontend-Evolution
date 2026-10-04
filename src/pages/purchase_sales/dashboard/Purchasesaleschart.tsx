@@ -83,7 +83,7 @@ export default function PurchaseSalesChart({
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis dataKey="month" tickFormatter={shortLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} interval={0} />
                   <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={44} />
-                  <Tooltip formatter={(v) => fmtAmt(Number(v ?? 0))} contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
+                  <Tooltip formatter={(v: any) => fmtAmt(Number(v ?? 0))} contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
                   {!hidden.purchase && (
                     <Area type="monotone" dataKey="purchase" name="Purchase" stroke={COLORS.purchase} strokeWidth={2} fill="url(#gPurchase)" dot={false} activeDot={{ r: 4 }} />
                   )}
