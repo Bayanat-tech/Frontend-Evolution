@@ -46,6 +46,8 @@ import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
@@ -264,6 +266,11 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           <div className="finance-list-heading flex items-center justify-between gap-3">
             <div className="finance-list-title flex items-center gap-2.5">
               <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{meta.title}</h1>
+              {fyPeriod && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#00378C] border border-blue-200 shadow-2xs">
+                  FY {fyPeriod}
+                </span>
+              )}
             </div>
           </div>
 
@@ -288,28 +295,29 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
               enablePagination
               manualPagination
               manualFiltering
-              toolbar={
-                <div className="finance-list-controls">
-                  <label className="finance-period-control">
-                    <span>FY</span>
-                    <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-                    {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-                    </Select>
-                  </label>
+              enableExport={false}
+              actionButton={
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                    title={meta.addLabel}
+                    onClick={() => setDivisionPicker(true)}
+                  >
+                    <Plus size={14} /> Add
+                  </Button>
+                  <FinanceListActionsMenu
+                    fyPeriod={fyPeriod}
+                    fyPeriods={fyPeriods}
+                    onFyPeriodChange={(val) => {
+                      setFyPeriod(val);
+                      setPageIndex(0);
+                    }}
+                    onExport={() => exportToCsv(rows, columns, `${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`)}
+                    onRefresh={() => void loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false)}
+                  />
                 </div>
               }
-              enableExport
-              actionButton={
-                <Button
-                  type="button"
-                  className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
-                  title={meta.addLabel}
-                  onClick={() => setDivisionPicker(true)}
-                >
-                  <Plus size={14} /> Add
-                </Button>
-              }
-              exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalRows={totalRows}
@@ -801,6 +809,22 @@ function JVDocument({
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
+    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+
+    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
+    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+
+    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
+    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+
+    const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
+    if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
+
+    const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
+    if (diff > 0.001) {
+      return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -870,8 +894,10 @@ function JVDocument({
             documentNo={form.doc_no}
             documentDate={form.doc_date}
             total={formatAmount(debitTotal > 0 ? debitTotal : total + totalTax)}
+            divCode={form.div_code}
+            divName={form.div_name}
             onBack={onClose}
-          headerExpanded={showHeaderDetails}
+            headerExpanded={showHeaderDetails}
             onToggleHeader={() => setShowHeaderDetails(value => !value)}
           />
           <div className="flex items-center gap-2">

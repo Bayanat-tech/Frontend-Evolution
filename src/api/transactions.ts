@@ -41,6 +41,13 @@ export type TransactionHeader = {
   party_address?: string;
   party_phone?: string;
   party_fax?: string;
+  party_name?: string;
+  payment_terms?: string;
+  lpo_no?: string;
+  lpo_date?: string;
+  cash_ind?: string;
+  inv_generated?: string;
+  sys_gen?: string;
   bank_ac_code?: string;
   bank_ac_name?: string;
   curr_code: string;
