@@ -1178,7 +1178,7 @@ function PaymentDocumentEditor({
                   </div>
                 </div>
 
-                {/* Section 3: Party & Order Details (Optional / PB Parity) */}
+                {/* Section 3: Party & Order Details (Optional / PB Parity) - Commented out to maximize space for Accounting Lines
                 <div className="finance-payment-header-block">
                   <div
                     className="finance-section-title cursor-pointer select-none flex items-center justify-between"
@@ -1219,6 +1219,7 @@ function PaymentDocumentEditor({
                     </div>
                   )}
                 </div>
+                */}
               </div>
             )}
 
