@@ -26,7 +26,7 @@ import {
   isCanceled, hasDate, locationSearchPrincipal, JobClassPill,
 } from "../../../utils/inboundHelpers";
 import { Dialog } from "../../../components/ui/Dialog";
-
+import NewReportDialog from "../../../components/new_report_format/NewReportDialog";
 
 type Props = { jobNo: string; tab: string };
 
