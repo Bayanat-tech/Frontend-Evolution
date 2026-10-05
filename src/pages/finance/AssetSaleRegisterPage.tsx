@@ -1,17 +1,18 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Edit2, Eye, Plus, Trash2, Save, X, FileText, DollarSign, Landmark } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-// Card removed: editor will open in modal Dialog
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 
+// ===================== TYPES =====================
 type AssetSaleRow = {
   company_code: string;
   doc_no: string;
@@ -96,6 +97,7 @@ const EMPTY_SALE: AssetSaleRow = {
   pl_fa_disposal_ac: "",
 };
 
+// ===================== MAIN PAGE =====================
 export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disposal" }) {
   const { user } = useAuth();
   const companyCode = user?.company_code || "";
@@ -163,8 +165,8 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "view", row: row.original })}><Eye size={15} /></Button>
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "view", row: row.original }); }}><Eye size={15} /></Button>
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
           <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)}><Trash2 size={15} /></Button>
         </div>
       ),
@@ -188,62 +190,105 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
     }
   };
 
+  const closeEditor = () => {
+    setNotice(null);
+    setEditor(null);
+  };
+
+  // ===================== INLINE EDITOR VIEW =====================
+  if (editor) {
+    return (
+      <AssetSaleEditor
+        key={`${editor.mode}_${editor.row?.doc_no || "new"}`}
+        editor={editor}
+        title={title}
+        mode={mode}
+        companyCode={companyCode}
+        loginId={loginId}
+        onClose={closeEditor}
+        onSaved={async () => {
+          setEditor(null);
+          setNotice({ type: "success", message: `${title} saved successfully` });
+          await loadRows(false);
+        }}
+      />
+    );
+  }
+
+  // ===================== LIST VIEW =====================
   return (
     <section className="finance-utility-page finance-list-page grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="eyebrow">Asset Utility</p>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">{title}</h1>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Create {title}</Button>
+      {/* Page Header - Matching Prepaid Register */}
+      <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tariff-page-icon">
+            <DollarSign size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">{title} Register</h1>
+            <p className="m-0 text-xs text-slate-500">Asset Utility</p>
+          </div>
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <DataTable
-        columns={columns}
-        data={filteredRows}
-        title={loading ? "Loading" : `${filteredRows.length} Records`}
-        subtitle={title}
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search document, asset, account..."
-        loading={loading}
-        emptyText={`No ${title.toLowerCase()} records found`}
-        height={650}
-        minWidth={1450}
-        density="grid"
-        getRowId={(row, index) => `${row.doc_no || "new"}_${row.asset_id}_${index}`}
-      />
-
-      {editor && (
-        <Dialog
-          open
-          wide
-          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} ${title}`}
-          description="Details"
-          onClose={() => setEditor(null)}
-        >
-          <AssetSaleEditor
-            editor={editor}
-            title={title}
-            companyCode={companyCode}
-            loginId={loginId}
-            onClose={() => setEditor(null)}
-            onSaved={async () => {
-              setEditor(null);
-              setNotice({ type: "success", message: `${title} saved successfully` });
-              await loadRows(false);
-            }}
-          />
-        </Dialog>
-      )}
+      <div className="min-h-[650px]">
+        <DataTable
+          columns={columns}
+          data={filteredRows}
+          title={loading ? "Loading" : `${filteredRows.length} Records`}
+          subtitle={title}
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search document, asset, account..."
+          loading={loading}
+          emptyText={`No ${title.toLowerCase()} records found`}
+          height={650}
+          minWidth={1450}
+          density="grid"
+          enableExport={false}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold cursor-pointer transition-colors"
+                title={`Create ${title}`}
+                onClick={() => { setNotice(null); setEditor({ mode: "create" }); }}
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() =>
+                  exportToCsv(
+                    filteredRows,
+                    columns.filter((column) => column.id !== "actions"),
+                    `${title.toLowerCase().replace(/\s+/g, "-")}-register.csv`,
+                  )
+                }
+                onRefresh={() => void loadRows(false)}
+              />
+            </div>
+          }
+          getRowId={(row, index) => `${row.doc_no || "new"}_${row.asset_id}_${index}`}
+        />
+      </div>
 
       {deleteTarget && (
-        <Dialog open compact tone="danger" title={`Delete ${title}`} description="This action cannot be undone." onClose={() => setDeleteTarget(null)} footer={<><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="destructive" onClick={() => void deleteRow()}>Delete</Button></>}>
+        <Dialog
+          open
+          compact
+          tone="danger"
+          title={`Delete ${title}`}
+          description="This action cannot be undone."
+          onClose={() => setDeleteTarget(null)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={() => void deleteRow()}>Delete</Button>
+            </>
+          }
+        >
           <p className="modal-copy">Delete <strong>{deleteTarget.doc_no || "this record"}</strong>?</p>
         </Dialog>
       )}
@@ -251,7 +296,27 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
   );
 }
 
-function AssetSaleEditor({ editor, title, companyCode, loginId, onClose, onSaved }: { editor: Exclude<EditorState, null>; title: string; companyCode: string; loginId: string; onClose: () => void; onSaved: () => Promise<void> }) {
+// ---------------------------------------------------------------------------
+// INLINE EDITOR — MATCHING PREPAID REGISTER / AIRLINE TARIFF UI
+// ---------------------------------------------------------------------------
+
+function AssetSaleEditor({
+  editor,
+  title,
+  mode,
+  companyCode,
+  loginId,
+  onClose,
+  onSaved,
+}: {
+  editor: Exclude<EditorState, null>;
+  title: string;
+  mode: "sale" | "disposal";
+  companyCode: string;
+  loginId: string;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const readOnly = editor.mode === "view";
   const [form, setForm] = useState<AssetSaleRow>(() => ({ ...EMPTY_SALE, company_code: companyCode, ...(editor.row || {}) }));
   const [saving, setSaving] = useState(false);
@@ -296,57 +361,304 @@ function AssetSaleEditor({ editor, title, companyCode, loginId, onClose, onSaved
     }
   };
 
+  const pageTitle =
+    editor.mode === "create"
+      ? `New ${title}`
+      : editor.mode === "edit"
+      ? `Edit ${title}`
+      : `View ${title}`;
+
   return (
-    <div className="finance-utility-editor flex min-h-0 flex-col">
-      <div className="border-b p-4">
-        <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
-        <h2 className="m-0 text-xl font-semibold tracking-tight">{title}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Doc No: {form.doc_no || "Autogenerated"}</p>
+    <section className="freight-airline-tariff-screen grid gap-2 freight-ui-standard freight-dense-form">
+      {/* ============ HEADER CARD ============ */}
+      <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tariff-page-icon">
+            <DollarSign size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">{pageTitle}</h1>
+            <p className="m-0 text-xs text-slate-500">Doc No: {form.doc_no || "Autogenerated"}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="rounded-md border bg-secondary px-3 py-1 text-right">
+            <span className="block text-[10px] uppercase leading-tight text-muted-foreground">
+              {mode === "disposal" ? "Disposal Amt" : "Sales Amt"}
+            </span>
+            <strong className="text-sm tabular-nums">{form.sales_amount || "0.000"}</strong>
+          </div>
+          {!readOnly && (
+            <Button
+              type="submit"
+              form="asset-sale-form"
+              disabled={saving}
+              className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
+            >
+              {saving ? <span className="spinner small" /> : <Save size={14} />} Save
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close form"
+            title="Close form"
+            className="h-8 w-8 rounded-lg"
+          >
+            <X size={16} />
+          </Button>
+        </div>
       </div>
-      <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="asset-sale-form" onSubmit={handleSubmit}>
-        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
-        <div className="grid grid-cols-2 gap-3">
-          {/* <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly} numeric /> */}
-          <Field label="Doc Date" type="date" value={form.doc_date} onChange={(value) => setField("doc_date", value)} disabled={readOnly} />
-          <Lookup label="Division" parameter="Account_division" value={form.div_code} displayValue={display(form.div_code, form.div_name)} valueField="div_code" displayFields={["div_code", "div_name"]} columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]} companyCode={companyCode} disabled={readOnly} onSelect={(value, row) => { setField("div_code", value); setField("div_name", String(getLookupValue(row || {}, "div_name") || "")); }} />
-          <Lookup label="Asset *" parameter="AC_ASSETS_SearchID" value={form.asset_id} displayValue={display(form.asset_id, form.asset_name)} valueField="asset_id" displayFields={["asset_id", "asset_name"]} columns={[{ field: "asset_id", header: "Asset ID" }, { field: "asset_name", header: "Asset Name" }]} companyCode={companyCode} disabled={readOnly} onSelect={(value, row) => { setField("asset_id", value); setField("asset_name", String(getLookupValue(row || {}, "asset_name") || "")); }} />
-          <Lookup label="Asset A/C" parameter="Account_AC_CODE_Serach" value={form.asset_ac_code} displayValue={form.asset_ac_code} valueField="ac_code" displayFields={["ac_code", "ac_name"]} columns={accountColumns} companyCode={companyCode} disabled={readOnly} onSelect={(value) => setField("asset_ac_code", value)} />
-          <Lookup label="Customer A/C" parameter="Account_AC_CODE_Serach" value={form.customer_ac_code} displayValue={form.customer_ac_code} valueField="ac_code" displayFields={["ac_code", "ac_name"]} columns={accountColumns} companyCode={companyCode} disabled={readOnly} onSelect={(value) => setField("customer_ac_code", value)} />
-          <Lookup label="FA Disposal A/C" parameter="Account_AC_CODE_Serach" value={form.fa_disposal_ac} displayValue={form.fa_disposal_ac} valueField="ac_code" displayFields={["ac_code", "ac_name"]} columns={accountColumns} companyCode={companyCode} disabled={readOnly} onSelect={(value) => setField("fa_disposal_ac", value)} />
-          <Lookup label="P/L Disposal A/C" parameter="Account_AC_CODE_Serach" value={form.pl_fa_disposal_ac} displayValue={form.pl_fa_disposal_ac} valueField="ac_code" displayFields={["ac_code", "ac_name"]} columns={accountColumns} companyCode={companyCode} disabled={readOnly} onSelect={(value) => setField("pl_fa_disposal_ac", value)} />
-          <Field label="Customer Name" value={form.customer_name} onChange={(value) => setField("customer_name", value)} disabled={readOnly} />
-          <label className="field"><span>Status</span><Select value={form.status} onChange={(event) => setField("status", event.target.value)} disabled={readOnly}><option value="Y">Active</option><option value="N">Inactive</option></Select></label>
+
+      <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+
+      <form className="flex flex-col gap-2" id="asset-sale-form" onSubmit={handleSubmit}>
+        {/* ============ CARD 1: DOCUMENT DETAILS ============ */}
+        <div className="freight-master-form-card">
+          <div className="freight-master-form-header">
+            <h3><span className="freight-section-icon"><FileText size={16} /></span>Document Details</h3>
+          </div>
+          <div className="freight-master-form-body">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <Field label="Doc Date" type="date" value={form.doc_date} onChange={(v) => setField("doc_date", v)} disabled={readOnly} required />
+              
+              <div className="freight-master-field">
+                <label className="freight-master-label">Division</label>
+                <LookupField
+                  compact
+                  value={form.div_code}
+                  displayValue={display(form.div_code, form.div_name)}
+                  columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
+                  disabled={readOnly}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "Account_division",
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                  })}
+                  onChange={(value, row) => {
+                    setField("div_code", value);
+                    setField("div_name", String(getLookupValue(row || {}, "div_name") || ""));
+                  }}
+                />
+              </div>
+
+              <div className="freight-master-field">
+                <label className="freight-master-label">
+                  <span>Asset</span>
+                  <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
+                <LookupField
+                  compact
+                  value={form.asset_id}
+                  displayValue={display(form.asset_id, form.asset_name)}
+                  columns={[{ field: "asset_id", header: "Asset ID" }, { field: "asset_name", header: "Asset Name" }]}
+                  valueField="asset_id"
+                  displayFields={["asset_id", "asset_name"]}
+                  disabled={readOnly}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "AC_ASSETS_SearchID",
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                  })}
+                  onChange={(value, row) => {
+                    setField("asset_id", value);
+                    setField("asset_name", String(getLookupValue(row || {}, "asset_name") || ""));
+                  }}
+                />
+              </div>
+
+              <Field className="col-span-1 sm:col-span-2" label="Asset Properties" value={form.asset_properties} onChange={(v) => setField("asset_properties", v)} disabled={readOnly} />
+
+              <div className="freight-master-field">
+                <label className="freight-master-label">Status</label>
+                <Select className="freight-master-select" value={form.status} onChange={(event) => setField("status", event.target.value)} disabled={readOnly}>
+                  <option value="Y">Active</option>
+                  <option value="N">Inactive</option>
+                </Select>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Sales Date *" type="date" value={form.sales_date} onChange={(value) => setField("sales_date", value)} disabled={readOnly} />
-          <Field label="Sales Amount *" value={form.sales_amount} onChange={(value) => setField("sales_amount", value)} onBlur={(value) => setMoney("sales_amount", value)} disabled={readOnly} numeric />
-          <Field label="Profit/Loss" value={form.sales_profitloss} onChange={(value) => setField("sales_profitloss", value)} onBlur={(value) => setMoney("sales_profitloss", value)} disabled={readOnly} numeric />
-          <Field label="Quantity" value={form.quantity} onChange={(value) => setField("quantity", value)} onBlur={(value) => setMoney("quantity", value)} disabled={readOnly} numeric />
-          <Field label="Price" value={form.price} onChange={(value) => setField("price", value)} onBlur={(value) => setMoney("price", value)} disabled={readOnly} numeric />
-          <Field label="Asset Value" value={form.asset_amount} onChange={(value) => setField("asset_amount", value)} onBlur={(value) => setMoney("asset_amount", value)} disabled={readOnly} numeric />
-          <Field label="WD Value" value={form.wd_value} onChange={(value) => setField("wd_value", value)} onBlur={(value) => setMoney("wd_value", value)} disabled={readOnly} numeric />
-          <Field label="Total Dep." value={form.total_depreciation_amount} onChange={(value) => setField("total_depreciation_amount", value)} onBlur={(value) => setMoney("total_depreciation_amount", value)} disabled={readOnly} numeric />
-          <Field label="Salvage" value={form.salvage_value} onChange={(value) => setField("salvage_value", value)} onBlur={(value) => setMoney("salvage_value", value)} disabled={readOnly} numeric />
+
+        {/* ============ CARD 2: ACCOUNTS ============ */}
+        <div className="freight-master-form-card">
+          <div className="freight-master-form-header">
+            <h3><span className="freight-section-icon"><Landmark size={16} /></span>Accounts</h3>
+          </div>
+          <div className="freight-master-form-body">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="freight-master-field">
+                <label className="freight-master-label">Asset A/C</label>
+                <LookupField
+                  compact
+                  value={form.asset_ac_code}
+                  displayValue={form.asset_ac_code}
+                  columns={accountColumns}
+                  valueField="ac_code"
+                  displayFields={["ac_code", "ac_name"]}
+                  disabled={readOnly}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "Account_AC_CODE_Serach",
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                  })}
+                  onChange={(value) => setField("asset_ac_code", value)}
+                />
+              </div>
+
+              <div className="freight-master-field">
+                <label className="freight-master-label">Customer A/C</label>
+                <LookupField
+                  compact
+                  value={form.customer_ac_code}
+                  displayValue={form.customer_ac_code}
+                  columns={accountColumns}
+                  valueField="ac_code"
+                  displayFields={["ac_code", "ac_name"]}
+                  disabled={readOnly}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "Account_AC_CODE_Serach",
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                  })}
+                  onChange={(value) => setField("customer_ac_code", value)}
+                />
+              </div>
+
+              <div className="freight-master-field">
+                <label className="freight-master-label">FA Disposal A/C</label>
+                <LookupField
+                  compact
+                  value={form.fa_disposal_ac}
+                  displayValue={form.fa_disposal_ac}
+                  columns={accountColumns}
+                  valueField="ac_code"
+                  displayFields={["ac_code", "ac_name"]}
+                  disabled={readOnly}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "Account_AC_CODE_Serach",
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                  })}
+                  onChange={(value) => setField("fa_disposal_ac", value)}
+                />
+              </div>
+
+              <div className="freight-master-field">
+                <label className="freight-master-label">P/L Disposal A/C</label>
+                <LookupField
+                  compact
+                  value={form.pl_fa_disposal_ac}
+                  displayValue={form.pl_fa_disposal_ac}
+                  columns={accountColumns}
+                  valueField="ac_code"
+                  displayFields={["ac_code", "ac_name"]}
+                  disabled={readOnly}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "Account_AC_CODE_Serach",
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                  })}
+                  onChange={(value) => setField("pl_fa_disposal_ac", value)}
+                />
+              </div>
+
+              <Field className="col-span-1 sm:col-span-2 lg:col-span-4" label="Customer Name" value={form.customer_name} onChange={(v) => setField("customer_name", v)} disabled={readOnly} />
+            </div>
+          </div>
         </div>
-        <Field label="Asset Properties" value={form.asset_properties} onChange={(value) => setField("asset_properties", value)} disabled={readOnly} />
+
+        {/* ============ CARD 3: SALE / DISPOSAL VALUES ============ */}
+        <div className="freight-master-form-card">
+          <div className="freight-master-form-header">
+            <h3><span className="freight-section-icon"><DollarSign size={16} /></span>{mode === "disposal" ? "Disposal Values" : "Sale Values"}</h3>
+          </div>
+          <div className="freight-master-form-body">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <Field label={mode === "disposal" ? "Disposal Date *" : "Sales Date *"} type="date" value={form.sales_date} onChange={(v) => setField("sales_date", v)} disabled={readOnly} required />
+              <Field label={mode === "disposal" ? "Disposal Amount *" : "Sales Amount *"} value={form.sales_amount} onChange={(v) => setField("sales_amount", v)} onBlur={(v) => setMoney("sales_amount", v)} disabled={readOnly} numeric required />
+              <Field label="Profit/Loss" value={form.sales_profitloss} onChange={(v) => setField("sales_profitloss", v)} onBlur={(v) => setMoney("sales_profitloss", v)} disabled={readOnly} numeric />
+              <Field label="Quantity" value={form.quantity} onChange={(v) => setField("quantity", v)} onBlur={(v) => setMoney("quantity", v)} disabled={readOnly} numeric />
+              <Field label="Price" value={form.price} onChange={(v) => setField("price", v)} onBlur={(v) => setMoney("price", v)} disabled={readOnly} numeric />
+              <Field label="Asset Value" value={form.asset_amount} onChange={(v) => setField("asset_amount", v)} onBlur={(v) => setMoney("asset_amount", v)} disabled={readOnly} numeric />
+              <Field label="WD Value" value={form.wd_value} onChange={(v) => setField("wd_value", v)} onBlur={(v) => setMoney("wd_value", v)} disabled={readOnly} numeric />
+              <Field label="Total Depreciation" value={form.total_depreciation_amount} onChange={(v) => setField("total_depreciation_amount", v)} onBlur={(v) => setMoney("total_depreciation_amount", v)} disabled={readOnly} numeric />
+              <Field label="Salvage Value" value={form.salvage_value} onChange={(v) => setField("salvage_value", v)} onBlur={(v) => setMoney("salvage_value", v)} disabled={readOnly} numeric />
+            </div>
+          </div>
+        </div>
       </form>
-      <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
-        <Button variant="outline" onClick={onClose}>Close</Button>
-        {!readOnly && <Button disabled={saving} type="submit" form="asset-sale-form">{saving ? <span className="spinner small" /> : <Save size={15} />} Save</Button>}
-      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FIELD COMPONENT MATCHING PREPAID REGISTER
+// ---------------------------------------------------------------------------
+
+function Field({
+  label,
+  value,
+  onChange,
+  onBlur,
+  disabled,
+  type = "text",
+  numeric,
+  required,
+  placeholder,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur?: (value: string) => void;
+  disabled?: boolean;
+  type?: "text" | "date" | "number";
+  numeric?: boolean;
+  required?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`freight-master-field ${className || ""}`}>
+      <label className="freight-master-label">
+        <span>{label}</span>
+        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+      </label>
+      <input
+        className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={(event) => onBlur?.(event.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+        required={required}
+      />
     </div>
   );
 }
 
-function Lookup({ label, parameter, value, displayValue, valueField, displayFields, columns, companyCode, disabled, onSelect }: { label: string; parameter: string; value: string; displayValue: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; companyCode: string; disabled?: boolean; onSelect: (value: string, row: LookupRow | null) => void }) {
-  return <LookupField label={label} value={value} displayValue={displayValue} columns={columns} valueField={valueField} displayFields={displayFields} disabled={disabled} loadOptions={() => getDynamicLookup({ parameter, code1: companyCode, code2: "", code3: "", code4: "", number1: 0, number2: 0, number3: 0, number4: 0, date1: null, date2: null, date3: null, date4: null })} onChange={onSelect} />;
-}
+const accountColumns = [
+  { field: "ac_code", header: "A/C Code" },
+  { field: "ac_name", header: "A/C Name" },
+];
 
-function Field({ label, value, onChange, onBlur, disabled, type = "text", numeric }: { label: string; value: string; onChange: (value: string) => void; onBlur?: (value: string) => void; disabled?: boolean; type?: "text" | "date"; numeric?: boolean }) {
-  return <label className="field"><span>{label}</span><Input className={numeric ? "text-right tabular-nums" : ""} type={type} value={value} onChange={(event) => onChange(event.target.value)} onBlur={(event) => onBlur?.(event.target.value)} disabled={disabled} /></label>;
-}
-
-const accountColumns = [{ field: "ac_code", header: "A/C Code" }, { field: "ac_name", header: "A/C Name" }];
+// ---------------------------------------------------------------------------
+// HELPERS
+// ---------------------------------------------------------------------------
 
 function mapAssetSale(row: LookupRow): AssetSaleRow {
   return {
@@ -385,10 +697,23 @@ function mapAssetSale(row: LookupRow): AssetSaleRow {
   };
 }
 
-function display(code: string, name: string) { return code ? (name ? `${code} - ${name}` : code) : ""; }
-function num(value: unknown) { const parsed = Number(value || 0); return Number.isFinite(parsed) ? parsed : 0; }
-function money(value: unknown) { return num(value).toFixed(3); }
-function today() { return new Date().toISOString().slice(0, 10); }
+function display(code: string, name: string) {
+  return code ? (name ? `${code} - ${name}` : code) : "";
+}
+
+function num(value: unknown) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function money(value: unknown) {
+  return num(value).toFixed(3);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function dateInput(value: unknown) {
   if (!value) return "";
   const date = new Date(String(value));

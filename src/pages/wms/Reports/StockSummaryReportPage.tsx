@@ -1,6 +1,11 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
     BarChart2,
+    CalendarDays,
+    Filter,
+    Package,
+    UserRound,
+    Warehouse,
 } from "lucide-react";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
@@ -44,13 +49,6 @@ const getField = (row: LookupRow, ...keys: string[]): string => {
 };
 
 // Rows with a code + name pair → { value: "code::name", label: "code - name" }
-// The option value is a unique composite of code+name (not just the code),
-// because the same code can legitimately appear on multiple distinct rows
-// with different names (e.g. same PROD_CODE reused across different
-// products in the source data). If two options shared the same `value`,
-// the multi-select would visually tick both when only one was clicked.
-// Use codeFromOptionValue/codesFromSelection below to recover the actual
-// code(s) whenever building a SQL filter or the API payload.
 const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] => {
     const seen = new Set<string>();
     const options: Option[] = [];
@@ -59,7 +57,7 @@ const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string)
         const name = getField(r, nameKey);
         if (!code) return;
         const value = `${code}::${name}`;
-        if (seen.has(value)) return; // skip exact duplicate rows only
+        if (seen.has(value)) return;
         seen.add(value);
         options.push({ value, label: name ? `${code} - ${name}` : code });
     });
@@ -69,9 +67,7 @@ const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string)
 // Recovers the underlying code from a composite "code::name" option value.
 const codeFromOptionValue = (v: string): string => v.split("::")[0];
 
-// Converts a selection array (which may hold composite option values, or
-// the special "All" sentinel) into a deduped list of real codes for use in
-// SQL IN-clauses and API payloads.
+// Converts a selection array into a deduped list of real codes.
 const codesFromSelection = (values: string[]): string[] => {
     if (!values.length || values.includes("All")) return ["All"];
     const codes = new Set<string>();
@@ -138,6 +134,24 @@ function FloatLabel({ label, required, children, bgColor = "#fff" }: {
     );
 }
 
+// ─── Summary strip item (mirrors Freight's SummaryStripItem) ──────────────────
+
+function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+    return (
+        <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+                <Icon size={16} />
+            </span>
+            <div className="min-w-0 leading-tight">
+                <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+                <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>
+                    {value}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── SelectField ──────────────────────────────────────────────────────────────
 
 const SelectField: React.FC<{
@@ -166,11 +180,6 @@ const SelectField: React.FC<{
     </div>
 );
 
-/**
- * getGrnPrintReportPreviewUrl-style helpers are not needed here since the
- * stock summary endpoint already returns HTML/blob directly via `api.post`.
- */
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function StockSummaryReport() {
@@ -179,7 +188,7 @@ export default function StockSummaryReport() {
     const [error, setError] = useState<string>("");
     const [exportingExcel, setExportingExcel] = useState(false);
 
-    // ── Report preview dialog state (HTML fed straight into NewReportDialog) ──
+    // ── Report preview dialog state
     const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
     const [reportHtml, setReportHtml] = useState<string | null>(null);
     const [reportPreviewError, setReportPreviewError] = useState("");
@@ -192,7 +201,7 @@ export default function StockSummaryReport() {
     const [optLoading, setOptLoading] = useState(false);
     const [optError, setOptError] = useState<string>("");
 
-    // ── Parameter values (no job_no — summary does not filter by job)
+    // ── Parameter values
     const [params, setParams] = useState<Params>({
         prin_code: ["All"],
         prod_code: ["All"],
@@ -203,7 +212,7 @@ export default function StockSummaryReport() {
 
     const optionsRequestRef = useRef(0);
 
-    // ── Cross-filtered option loader ─────────────────────────────────────────
+    // ── Cross-filtered option loader
     const loadCascadedOptions = useCallback(async (p: Params) => {
         const requestId = ++optionsRequestRef.current;
         setOptLoading(true);
@@ -265,7 +274,6 @@ export default function StockSummaryReport() {
                 let nextLocationCode = reset(prev.location_code, nextLocation);
 
                 if (siteIsSpecific && nextLocation.length > 0 && nextLocationCode.includes("All")) {
-                    // Auto-fill the location code once a specific site is selected
                     nextLocationCode = [nextLocation[0].value];
                 } else if (!siteIsSpecific) {
                     nextLocationCode = ["All"];
@@ -312,9 +320,8 @@ export default function StockSummaryReport() {
         group_by: p.group_by || null,
     });
 
-    // ── Fetch the report HTML and feed it into NewReportDialog ───────────────
+    // ── Fetch the report HTML
     const fetchReport = useCallback(async (p: Params) => {
-        // Open the dialog immediately so its spinner shows while we fetch.
         setReportHtml(null);
         setReportPreviewError("");
         setReportPreviewOpen(true);
@@ -343,7 +350,7 @@ export default function StockSummaryReport() {
         setReportPreviewError("");
     };
 
-    // ── Excel export — direct blob download (mirrors GRN's export pattern) ──
+    // ── Excel export
     const handleExportExcel = useCallback(async () => {
         setExportingExcel(true);
         setError("");
@@ -371,7 +378,7 @@ export default function StockSummaryReport() {
         }
     }, [params]);
 
-    // Open the report HTML in a new browser tab
+    // Open report HTML in a new tab
     const handleOpenReportInNewWindow = () => {
         if (!reportHtml) return;
         const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
@@ -384,7 +391,7 @@ export default function StockSummaryReport() {
         }
     };
 
-    // Trigger the browser print dialog (Save as PDF) for the current report
+    // Print dialog (Save as PDF)
     const handleDownloadReportPdf = () => {
         if (!reportHtml) return;
         const PRINT_IFRAME_ID = "stock-summary-print-iframe";
@@ -424,9 +431,6 @@ export default function StockSummaryReport() {
     };
 
     // ── Generate report
-    // NOTE: Principal is now a multi-select with an "All" default (same as
-    // Product/Site), so it's always populated and no longer needs a
-    // "must pick one" guard before generating.
     const handleGenerateReport = () => {
         fetchReport(params);
     };
@@ -455,150 +459,198 @@ export default function StockSummaryReport() {
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
     const BG = "#EEF5FD";
 
+    // ── Display helpers for summary strip
+    const principalDisplay = params.prin_code.includes("All")
+        ? "All principals"
+        : params.prin_code
+            .map((v) => codeFromOptionValue(v))
+            .join(", ");
+
+    const productDisplay = params.prod_code.includes("All")
+        ? "All products"
+        : params.prod_code
+            .map((v) => codeFromOptionValue(v))
+            .join(", ");
+
+    const siteDisplay = params.site_code.includes("All")
+        ? "All sites"
+        : params.site_code.join(", ");
+
+    const locationDisplay = params.location_code.includes("All")
+        ? "All locations"
+        : params.location_code.join(", ");
+
+    const groupByDisplay =
+        groupByOptions.find((o) => o.value === params.group_by)?.label || "No grouping";
+
     return (
-        <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
-            <style>{`
-                .action-btn-primary:hover { background: #1e40af !important; }
-                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
+        <section className="freight-ui-standard freight-report-screen">
+            <div className="freight-report-card">
+                <style>{`
+                    .action-btn-primary:hover { background: #1e40af !important; }
+                    .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+                    .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
+                    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                `}</style>
 
-            <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
-
-                    {/* Header */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                        <BarChart2 size={17} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Stock Summary Report</span>
-                    </div>
-
-                    <ReportFilterHeader onClear={handleReset} label="Stock Summary Filters" />
-
-                    {/* Error display */}
-                    {error && (
-                        <div style={{
-                            marginBottom: 10,
-                            padding: "8px 14px",
-                            background: "#fef2f2",
-                            border: "1px solid #fecaca",
-                            borderRadius: 6,
-                            color: "#dc2626",
-                            fontSize: 12,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                        }}>
-                            <span>⚠️</span>
-                            {error}
-                            <button
-                                onClick={() => setError("")}
-                                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    )}
-
-                    {optError && (
-                        <div style={{
-                            marginBottom: 10,
-                            padding: "8px 14px",
-                            background: "#fef2f2",
-                            border: "1px solid #fecaca",
-                            borderRadius: 6,
-                            color: "#dc2626",
-                            fontSize: 12,
-                        }}>
-                            {optError}
-                        </div>
-                    )}
-
-                    {/* Main layout */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, alignItems: "start" }}>
-
-                        {/* ── Left: form fields ── */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-
-                            {/* Principal + Product */}
-                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
-                                <FloatLabel label="Principal" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={prinOptions}
-                                        value={params.prin_code}
-                                        onChange={(v: string[]) => setParam("prin_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                                <FloatLabel label="Product" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={prodOptions}
-                                        value={params.prod_code}
-                                        onChange={(v) => setParam("prod_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                            </div>
-
-                            {/* Site + Location Code (side by side; location auto-fills once a site is chosen) */}
-                            <div className="field-row" style={row2}>
-                                <FloatLabel label="Site" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={siteOptions}
-                                        value={params.site_code}
-                                        onChange={(v) => setParam("site_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                                <FloatLabel label="Location Code" bgColor={BG}>
-                                    <MultiSelectField
-                                        label=""
-                                        options={locationOptions}
-                                        value={params.location_code}
-                                        onChange={(v: string[]) => setParam("location_code", v)}
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
-                            </div>
-
-                            {/* Group By */}
-                            <div className="field-row" style={row2}>
-                                <div>
-                                    <FloatLabel label="Group By" bgColor={BG}>
-                                        <SelectField
-                                            label=""
-                                            options={[{ value: "", label: "No grouping" }, ...groupByOptions]}
-                                            value={params.group_by}
-                                            onChange={(v) => setParam("group_by", v)}
-                                            placeholder="Select grouping"
-                                            loading={optLoading}
-                                        />
-                                    </FloatLabel>
-                                </div>
-                                <div />
-                            </div>
+                {/* ── Title bar ── */}
+                <div className="freight-report-titlebar">
+                    <h1>Stock Summary Report</h1>
+                    <span className="freight-report-title-dot" aria-hidden="true" />
+                    <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
+                        <div className="rounded-md border bg-muted/40 px-3 py-1.5 text-foreground">
+                            <div className="text-[9px] font-semibold uppercase text-muted-foreground">Filters</div>
+                            <div className="text-sm font-semibold">{optLoading ? "Loading…" : "Ready"}</div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Action bar */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
-                        <Button
-                            className="action-btn-primary"
-                            size="sm"
-                            onClick={handleGenerateReport}
-                            disabled={loading}
+                {/* ── Filter header with Clear All ── */}
+                <ReportFilterHeader onClear={handleReset} label="Report Filters" />
+
+                {/* ── Summary strip ── */}
+                <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
+                    <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplay} />
+                    <SummaryStripItem icon={Package} label="Product" value={productDisplay} />
+                    <SummaryStripItem icon={Warehouse} label="Site" value={siteDisplay} />
+                    <SummaryStripItem icon={Filter} label="Group By" value={groupByDisplay} />
+                </div>
+
+                {/* ── Errors ── */}
+                {error && (
+                    <div style={{
+                        margin: "10px 12px",
+                        padding: "8px 14px",
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        borderRadius: 6,
+                        color: "#dc2626",
+                        fontSize: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                    }}>
+                        <span>⚠️</span>
+                        {error}
+                        <button
+                            onClick={() => setError("")}
+                            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}
                         >
-                            {loading ? "Generating..." : "Generate Report"}
-                        </Button>
+                            ✕
+                        </button>
+                    </div>
+                )}
+
+                {optError && (
+                    <div style={{
+                        margin: "0 12px 10px",
+                        padding: "8px 14px",
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        borderRadius: 6,
+                        color: "#dc2626",
+                        fontSize: 12,
+                    }}>
+                        {optError}
+                    </div>
+                )}
+
+                {/* ── Field rows ── */}
+                <div style={{ padding: "0 12px" }}>
+                    {/* Principal + Product */}
+                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
+                        <FloatLabel label="Principal" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={prinOptions}
+                                value={params.prin_code}
+                                onChange={(v: string[]) => setParam("prin_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                        <FloatLabel label="Product" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={prodOptions}
+                                value={params.prod_code}
+                                onChange={(v) => setParam("prod_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
                     </div>
 
+                    {/* Site + Location */}
+                    <div className="field-row" style={{ ...row2, marginTop: 10 }}>
+                        <FloatLabel label="Site" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={siteOptions}
+                                value={params.site_code}
+                                onChange={(v) => setParam("site_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                        <FloatLabel label="Location Code" bgColor={BG}>
+                            <MultiSelectField
+                                label=""
+                                options={locationOptions}
+                                value={params.location_code}
+                                onChange={(v: string[]) => setParam("location_code", v)}
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                    </div>
+
+                    {/* Group By */}
+                    <div className="field-row" style={{ ...row2, marginTop: 10 }}>
+                        <div>
+                            <FloatLabel label="Group By" bgColor={BG}>
+                                <SelectField
+                                    label=""
+                                    options={[{ value: "", label: "No grouping" }, ...groupByOptions]}
+                                    value={params.group_by}
+                                    onChange={(v) => setParam("group_by", v)}
+                                    placeholder="Select grouping"
+                                    loading={optLoading}
+                                />
+                            </FloatLabel>
+                        </div>
+                        <div />
+                    </div>
+                </div>
+
+                {/* ── Actions bar ── */}
+                <div className="freight-report-actions">
+                    <Button
+                        className="action-btn-primary"
+                        size="sm"
+                        onClick={handleGenerateReport}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <>
+                                <span
+                                    style={{
+                                        display: "inline-block",
+                                        width: 12,
+                                        height: 12,
+                                        border: "2px solid #ffffff",
+                                        borderTopColor: "transparent",
+                                        borderRadius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                        marginRight: 6,
+                                    }}
+                                />
+                                Generating…
+                            </>
+                        ) : (
+                            "Generate Report"
+                        )}
+                    </Button>
                 </div>
             </div>
 
-            {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+            {/* ── Report preview dialog ── */}
             <NewReportDialog
                 open={reportPreviewOpen}
                 onClose={closeReportPreview}
@@ -611,6 +663,6 @@ export default function StockSummaryReport() {
                 onOpenInNewWindow={handleOpenReportInNewWindow}
                 onDownloadPdf={handleDownloadReportPdf}
             />
-        </div>
+        </section>
     );
 }

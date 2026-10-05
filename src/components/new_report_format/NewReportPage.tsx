@@ -39,6 +39,7 @@ const responsiveSpan = (span: number, bp: Breakpoint) =>
  */
 export function NewReportPage({
   title,
+  filterLabel,
   fields,
   values,
   onChange,
