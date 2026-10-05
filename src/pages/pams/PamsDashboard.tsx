@@ -109,7 +109,7 @@ const FilterSelect = ({ label, value, onChange, options, showReset, onReset }: F
   </div>
 );
 
-// ── Modern KPI card with icon + color system ─────────────────
+// ── Modern KPI card ─────────────────────────────────────────
 type KpiTone = 'neutral' | 'success' | 'warning' | 'accent' | 'good' | 'bad';
 
 const TONE_STYLES: Record<KpiTone, { bg: string; icon: string; text: string }> = {
@@ -377,6 +377,7 @@ const PamsDashboard = () => {
     },
   });
 
+
   const { data: TopEmployees } = useQuery({
     queryKey: ['top_employees', ddivision, ddepartment, dsection, dperiod],
     enabled: !!ddivision && !!ddepartment && !!dsection && !!dperiod,
@@ -403,6 +404,70 @@ const PamsDashboard = () => {
       )
       WHERE ROWNUM <= 5
     `;
+      return (await executeWmsInboundSql(sql)) as any[] | null;
+    },
+  });
+
+
+  const { data: BottomEmployees } = useQuery({
+    queryKey: ['bottom_employees', ddivision, ddepartment, dsection, dperiod],
+    enabled: !!ddivision && !!ddepartment && !!dsection && !!dperiod,
+    queryFn: async () => {
+      const sql = `
+      SELECT
+        ROWNUM AS RANK,
+        EMPLOYEE_NAME,
+        DEPT_NAME,
+        TOTAL_RATING
+      FROM (
+        SELECT
+          EMPLOYEE_NAME,
+          DEPT_NAME,
+          TOTAL_RATING
+        FROM VW_PAMS_DASH_BOARD
+        WHERE ('${ddivision}' = 'All' OR DIV_CODE = '${ddivision}')
+        AND ('${ddepartment}' = 'All' OR DEPT_CODE = '${ddepartment}')
+        AND ('${dsection}' = 'All' OR SECTION_CODE = '${dsection}')
+        AND PERIOD_NUMBER = '${dperiod}'
+        AND NVL(FINAL_APPROVED,'No') = 'YES'
+        AND TOTAL_RATING IS NOT NULL
+        ORDER BY TOTAL_RATING ASC
+      )
+      WHERE ROWNUM <= 5
+    `;
+      return (await executeWmsInboundSql(sql)) as any[] | null;
+    },
+  });
+
+
+  const { data: DeptTopBottom } = useQuery({
+    queryKey: ['dept_top_bottom', ddivision, ddepartment, dsection, dperiod],
+    enabled: !!ddivision && !!ddepartment && !!dsection && !!dperiod,
+    queryFn: async () => {
+      const sql = `
+      WITH ranked AS (
+        SELECT
+          EMPLOYEE_NAME,
+          DEPT_NAME,
+          DEPT_CODE,
+          TOTAL_RATING,
+          ROW_NUMBER() OVER (PARTITION BY DEPT_CODE ORDER BY TOTAL_RATING DESC) AS RN_TOP,
+          ROW_NUMBER() OVER (PARTITION BY DEPT_CODE ORDER BY TOTAL_RATING ASC)  AS RN_BOTTOM
+        FROM VW_PAMS_DASH_BOARD
+        WHERE ('${ddivision}' = 'All' OR DIV_CODE = '${ddivision}')
+        AND ('${ddepartment}' = 'All' OR DEPT_CODE = '${ddepartment}')
+        AND ('${dsection}' = 'All' OR SECTION_CODE = '${dsection}')
+        AND PERIOD_NUMBER = '${dperiod}'
+        AND NVL(FINAL_APPROVED,'No') = 'YES'
+        AND TOTAL_RATING IS NOT NULL
+      )
+      SELECT DEPT_NAME, 'TOP' AS CATEGORY, EMPLOYEE_NAME, TOTAL_RATING
+      FROM ranked WHERE RN_TOP <= 5
+      UNION ALL
+      SELECT DEPT_NAME, 'BOTTOM' AS CATEGORY, EMPLOYEE_NAME, TOTAL_RATING
+      FROM ranked WHERE RN_BOTTOM <= 5
+      ORDER BY DEPT_NAME, CATEGORY, TOTAL_RATING DESC
+      `;
       return (await executeWmsInboundSql(sql)) as any[] | null;
     },
   });
@@ -529,7 +594,6 @@ const PamsDashboard = () => {
               },
             },
           },
-          // ── CHANGED: axes now visible with titles ──
           scales: {
             x: {
               type: 'linear',
@@ -544,10 +608,7 @@ const PamsDashboard = () => {
               afterBuildTicks: (axis: any) => {
                 axis.ticks = [1, 2, 3, 4, 5].map((v) => ({ value: v }));
               },
-              ticks: {
-                font: { size: 11 },
-                color: '#9ca3af',
-              },
+              ticks: { font: { size: 11 }, color: '#9ca3af' },
               grid: { display: false },
               border: { display: true, color: '#e5e7eb' },
             },
@@ -742,7 +803,6 @@ const PamsDashboard = () => {
         });
       }
 
-      // ── NEW: rating range breakdown doughnut (1-5) ──
       const ratingRangeCanvas = document.getElementById('ratingRangeChart') as HTMLCanvasElement;
       if (ratingRangeCanvas) {
         Chart.getChart(ratingRangeCanvas)?.destroy();
@@ -792,6 +852,19 @@ const PamsDashboard = () => {
 
   const statusRow = (AppraisalStatus as any[])?.[0] ?? {};
   const totalStatus = Number(statusRow.TOTAL ?? 1);
+
+
+  const deptTopBottomGrouped = (() => {
+    const rows = (DeptTopBottom as any[]) ?? [];
+    const byDept: Record<string, { top: any[]; bottom: any[] }> = {};
+    rows.forEach((r) => {
+      const key = r.DEPT_NAME ?? 'Unknown';
+      if (!byDept[key]) byDept[key] = { top: [], bottom: [] };
+      if (r.CATEGORY === 'TOP') byDept[key].top.push(r);
+      else byDept[key].bottom.push(r);
+    });
+    return Object.entries(byDept);
+  })();
 
   return (
     <div className='p-4 bg-gray-50 min-h-screen'>
@@ -860,11 +933,9 @@ const PamsDashboard = () => {
 
       <div className='bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-5'>
         <PanelHeader title='Performance distribution' />
-
         <div style={{ position: 'relative', width: '100%', height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <canvas id='bellChart'></canvas>
         </div>
-
         <div className='flex justify-center gap-4 flex-wrap mt-4 pt-4 border-t border-gray-100'>
           {legendItems.map((r) => (
             <div key={r.num} className='flex flex-col items-center gap-0.5'>
@@ -879,7 +950,6 @@ const PamsDashboard = () => {
         </div>
       </div>
 
-      {/* ── NEW: rating range breakdown panel ── */}
       <div className='bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-5'>
         <PanelHeader title='Rating range breakdown' />
         <div className='flex gap-5 items-center'>
@@ -929,7 +999,7 @@ const PamsDashboard = () => {
         </div>
       </div>
 
-      <div className='grid grid-cols-2 gap-4'>
+      <div className='grid grid-cols-2 gap-4 mb-5'>
         <div className='bg-white rounded-xl border border-gray-100 shadow-sm p-5'>
           <PanelHeader title='Appraisal status' />
           <div className='flex gap-5 items-center'>
@@ -965,7 +1035,7 @@ const PamsDashboard = () => {
         </div>
 
         <div className='bg-white rounded-xl border border-gray-100 shadow-sm p-5'>
-          <PanelHeader title='Top rated employees' />
+          <PanelHeader title='Top 5 rated employees' />
           <table className='w-full text-sm'>
             <thead>
               <tr>
@@ -993,13 +1063,99 @@ const PamsDashboard = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className='py-6 text-center text-gray-400 text-xs'>
-                    No data available
-                  </td>
+                  <td colSpan={4} className='py-6 text-center text-gray-400 text-xs'>No data available</td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+
+      <div className='grid grid-cols-2 gap-4'>
+        {/* Bottom 5 */}
+        <div className='bg-white rounded-xl border border-gray-100 shadow-sm p-5'>
+          <PanelHeader title='Bottom 5 performers' />
+          <table className='w-full text-sm'>
+            <thead>
+              <tr>
+                <th className='text-left pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide'>Rank</th>
+                <th className='text-left pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide'>Employee</th>
+                <th className='text-center pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide'>Department</th>
+                <th className='text-center pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide'>Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(BottomEmployees as any[])?.length > 0 ? (
+                (BottomEmployees as any[]).map((emp: any, i: number) => (
+                  <tr key={i} className='border-t border-gray-50 hover:bg-gray-50 transition-colors'>
+                    <td className='py-2.5'>
+                      <div className='w-6 h-6 rounded-full bg-rose-50 text-rose-700 text-xs font-semibold flex items-center justify-center'>
+                        {i + 1}
+                      </div>
+                    </td>
+                    <td className='py-2.5 font-medium text-gray-800'>{emp.EMPLOYEE_NAME}</td>
+                    <td className='py-2.5 text-center text-gray-500 text-xs'>{emp.DEPT_NAME}</td>
+                    <td className='py-2.5 text-center'>
+                      <span className='font-semibold text-rose-700'>{Number(emp.TOTAL_RATING).toFixed(1)}</span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className='py-6 text-center text-gray-400 text-xs'>No data available</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Department-wise Top/Bottom */}
+        <div className='bg-white rounded-xl border border-gray-100 shadow-sm p-5'>
+          <PanelHeader title='Top & Bottom 5 per Department' />
+          <div className='overflow-auto pr-1' style={{ maxHeight: '340px' }}>
+            {deptTopBottomGrouped.length === 0 ? (
+              <div className='py-6 text-center text-gray-400 text-xs'>No data available</div>
+            ) : (
+              <div className='grid gap-3'>
+                {deptTopBottomGrouped.map(([deptName, { top, bottom }]) => (
+                  <div key={deptName} className='rounded-lg border border-gray-100 p-3'>
+                    <div className='text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide'>
+                      {deptName}
+                    </div>
+                    <div className='grid grid-cols-2 gap-3'>
+                      <div>
+                        <div className='text-[10px] font-semibold text-emerald-700 mb-1 uppercase tracking-wider'>
+                          ▲ Top {top.length}
+                        </div>
+                        {top.slice(0, 5).map((r, i) => (
+                          <div key={i} className='flex justify-between text-xs py-0.5'>
+                            <span className='text-gray-600 truncate mr-2'>{r.EMPLOYEE_NAME}</span>
+                            <span className='font-semibold text-emerald-600'>
+                              {Number(r.TOTAL_RATING).toFixed(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div className='text-[10px] font-semibold text-rose-700 mb-1 uppercase tracking-wider'>
+                          ▼ Bottom {bottom.length}
+                        </div>
+                        {bottom.slice(0, 5).map((r, i) => (
+                          <div key={i} className='flex justify-between text-xs py-0.5'>
+                            <span className='text-gray-600 truncate mr-2'>{r.EMPLOYEE_NAME}</span>
+                            <span className='font-semibold text-rose-600'>
+                              {Number(r.TOTAL_RATING).toFixed(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

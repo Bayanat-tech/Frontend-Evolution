@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsUpdateRatings } from "../../api/pams";
-import TaskDetailsAppraisalTab   from "./Taskdetailsappraisaltab";
+import TaskDetailsAppraisalTab from "./Taskdetailsappraisaltab";
 import TaskCharacterAppraisalTab from "./Taskcharacterappraisaltab";
-import TaskGoalAppraisalTab      from "./Taskgoalappraisaltab";
-import TaskSkillAppraisalTab     from "./Taskskillappraisaltab";
-import AppraiserCommentsTab      from "./Appraisercommentstab";
-import PerformanceReportDesign   from "./Performancereportdesign";
+import TaskGoalAppraisalTab from "./Taskgoalappraisaltab";
+import TaskSkillAppraisalTab from "./Taskskillappraisaltab";
+import AppraiserCommentsTab from "./Appraisercommentstab";
+import PerformanceReportDesign from "./Performancereportdesign";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,12 +40,12 @@ function calcFinalRating(taskTotal: number, charTotal: number, cfg: WeightageCon
 }
 
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
-  if (rating === 5) return { label: "Exceptional",        numColor: "#16a34a", labelColor: "#16a34a" };
+  if (rating === 5) return { label: "Exceptional", numColor: "#16a34a", labelColor: "#16a34a" };
   if (rating === 4) return { label: "Above Expectation", numColor: "#2563eb", labelColor: "#2563eb" };
   if (rating === 3) return { label: "Meets Expectation", numColor: "#7c3aed", labelColor: "#7c3aed" };
   if (rating === 2) return { label: "Below Expectation", numColor: "#d97706", labelColor: "#d97706" };
-  if (rating === 1) return { label: "Unsatisfactory",     numColor: "#dc2626", labelColor: "#dc2626" };
-  return             { label: "—",                        numColor: "#6b7280", labelColor: "#6b7280" };
+  if (rating === 1) return { label: "Unsatisfactory", numColor: "#dc2626", labelColor: "#dc2626" };
+  return { label: "—", numColor: "#6b7280", labelColor: "#6b7280" };
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -361,8 +361,8 @@ const HeaderSkeleton: React.FC<{ docNo: string; employeeName: string; employeeCo
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const AppraisalViewTabsPage: React.FC = () => {
-  const navigate       = useNavigate();
-  const location       = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   // ── Prefetched row from MyTaskPage navigate state ──────────────────────────
@@ -373,39 +373,39 @@ const AppraisalViewTabsPage: React.FC = () => {
     return match ? match[1] : "";
   };
 
-  const docNo        = getDocNoFromPath();
+  const docNo = getDocNoFromPath();
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
-  const { user }    = useAuth();
-  const loginid     = user?.loginid || user?.username || "";
+  const { user } = useAuth();
+  const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-  const [selectedTab,    setSelectedTab]    = useState<SelectedTab>("task_details");
-  const [flowLevel,      setFlowLevel]      = useState<number>(
+  const [selectedTab, setSelectedTab] = useState<SelectedTab>("task_details");
+  const [flowLevel, setFlowLevel] = useState<number>(
     prefetchedRow ? num(prefetchedRow.FLOW_LEVEL_RUNNING) : 0
   );
-  const [finalApproved,  setFinalApproved]  = useState<string>(
+  const [finalApproved, setFinalApproved] = useState<string>(
     prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
   );
   // NEW: doc's creator — used to detect the "employee is their own HOD"
   // self-rating case (CREATED_BY === EMPLOYEE_CODE). Backend's
   // 'get_appraisal_flow_level' select must return CREATED_BY for this to work.
-  const [createdBy,      setCreatedBy]      = useState<string>(
+  const [createdBy, setCreatedBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
   );
-  const [taskTotal,      setTaskTotal]      = useState<number>(0);
+  const [taskTotal, setTaskTotal] = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
-  const [sentBackPopup,  setSentBackPopup]  = useState(false);
-  const [sentBackLevel,  setSentBackLevel]  = useState("1");
+  const [sentBackPopup, setSentBackPopup] = useState(false);
+  const [sentBackLevel, setSentBackLevel] = useState("1");
   const [sentBackReason, setSentBackReason] = useState("");
   const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
-  const [notice,         setNotice]         = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
   // ── KEY CHANGE: prefetchedRow hai to loading=false se start karo ───────────
-  const [loading,        setLoading]        = useState(!prefetchedRow);
+  const [loading, setLoading] = useState(!prefetchedRow);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
 
-  const [showReportModal,setShowReportModal]= useState(false);
-  const [userFlowLevel,  setUserFlowLevel]  = useState<number>(0);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
 
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
     taskPct: 50,
@@ -414,13 +414,13 @@ const AppraisalViewTabsPage: React.FC = () => {
   });
 
   // ── Refs ───────────────────────────────────────────────────────────────────
-  const taskRowsRef         = useRef<Row[]>([]);
-  const charRowsRef         = useRef<Row[]>([]);
-  const goalRowsRef         = useRef<Row[]>([]);
-  const skillRowsRef        = useRef<Row[]>([]);
+  const taskRowsRef = useRef<Row[]>([]);
+  const charRowsRef = useRef<Row[]>([]);
+  const goalRowsRef = useRef<Row[]>([]);
+  const skillRowsRef = useRef<Row[]>([]);
   const appraiserCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
   const appraiseeCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
-  const reportPrintRef      = useRef<HTMLDivElement>(null);
+  const reportPrintRef = useRef<HTMLDivElement>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const isFinalized = finalApproved === "YES";
@@ -435,12 +435,12 @@ const AppraisalViewTabsPage: React.FC = () => {
     !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
 
   const showSaveSubmitButtons =
-  !isFinalized && (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
-const showApproveRejectButtons =
-  !isFinalized && (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
+    !isFinalized && (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
+  const showApproveRejectButtons =
+    !isFinalized && (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
 
-  const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
-  const showFinalRating          = taskTotal > 0 && characterTotal > 0;
+  const finalRating = calcFinalRating(taskTotal, characterTotal, weightageConfig);
+  const showFinalRating = taskTotal > 0 && characterTotal > 0;
   const [reportReady, setReportReady] = useState(false);
 
   // ── Fetch — prefetchedRow hai to background mein, nahi to blocking ─────────
@@ -453,9 +453,9 @@ const showApproveRejectButtons =
 
       try {
         const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
-          pamsSelect({ parameter: "get_appraisal_flow_level",    loginid, code1: docNo }),
-          pamsSelect({ parameter: "sentback_levels",              loginid, code1: docNo }),
-          pamsSelect({ parameter: "appraisal_comments",           loginid, code1: docNo }),
+          pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
+          pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
+          pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
           pamsSelect({
             parameter: "appraisal_weightage_active",
@@ -466,11 +466,11 @@ const showApproveRejectButtons =
         ]);
 
         let currentFlowLevel = 0;
-        let nextActionBy     = "";
+        let nextActionBy = "";
 
         if (flowRes.length > 0) {
           currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
-          nextActionBy     = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
+          nextActionBy = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
           setFlowLevel(currentFlowLevel);
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
           setCreatedBy(text(flowRes[0].CREATED_BY));
@@ -479,8 +479,8 @@ const showApproveRejectButtons =
         if (weightageRes.length > 0) {
           const wRow = weightageRes[0];
           setWeightageConfig({
-            taskPct:     num(wRow.TASK_PCT),
-            charPct:     num(wRow.CHARACTER_PCT),
+            taskPct: num(wRow.TASK_PCT),
+            charPct: num(wRow.CHARACTER_PCT),
             isHrDefined: true,
           });
         } else {
@@ -506,7 +506,7 @@ const showApproveRejectButtons =
           appraiserCommentRef.current = { text: text(commentRes[0].APPRAISER_COMMENTS), level: num(commentRes[0].APPRAISER_COMMENT_LEVEL) };
           appraiseeCommentRef.current = { text: text(commentRes[0].APPRAISEE_COMMENTS), level: num(commentRes[0].APPRAISEE_COMMENT_LEVEL) };
         }
-        
+
       } catch {
         // silent
       } finally {
@@ -519,102 +519,176 @@ const showApproveRejectButtons =
   }, [docNo, employeeCode, loginid, companyCode]); // prefetchedRow intentionally excluded
 
   // ── Validation ─────────────────────────────────────────────────────────────
-  const validateBeforeSubmit = (): string[] => {
-  const missing: string[] = [];
-  
-  // 🔹 RATING VALIDATIONS
-  const emptyTask = taskRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptyTask.length) missing.push(`Task Details — Rating missing for ${emptyTask.length} KPI(s)`);
-  
-  const emptyChar = charRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptyChar.length) missing.push(`Characteristics — Rating missing for ${emptyChar.length} KPI(s)`);
-  
-  const emptyGoal = goalRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptyGoal.length) missing.push(`Goals — Rating missing for ${emptyGoal.length} KPI(s)`);
-  
-  const emptySkill = skillRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-  if (emptySkill.length) missing.push(`Skill — Rating missing for ${emptySkill.length} KPI(s)`);
+  const validateBeforeSubmit = async (): Promise<string[]> => {
+    const missing: string[] = [];
 
-  // 🔹 COMMENT VALIDATION
-  const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
-  
-  if (isEmployee) {
-    // Self-rating: Appraisee comment required
-    if (!appraiseeCommentRef.current.text || !appraiseeCommentRef.current.text.trim()) {
-      missing.push("Comments — Appraisee comment is required");
-    }
-  } else {
-    // Appraiser: Appraiser comment required
-    if (!appraiserCommentRef.current.text || !appraiserCommentRef.current.text.trim()) {
-      missing.push("Comments — Appraiser comment is required");
-    }
-  }
-  
-  return missing;
-};
+    // 🔹 RATING VALIDATIONS
+    const emptyTask = taskRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+    if (emptyTask.length) missing.push(`Task Details — Rating missing for ${emptyTask.length} KPI(s)`);
 
-  // ── Action ─────────────────────────────────────────────────────────────────
-  const handleAction = async (action: "D" | "S" | "A" | "R") => {
-  setNotice(null);
-  try {
-    if (action === "D" || action === "S" || action === "A") {
-      const allRows = [
-        ...taskRowsRef.current,
-        ...charRowsRef.current,
-        ...goalRowsRef.current,
-        ...skillRowsRef.current,
-      ];
-      if (allRows.length > 0) await pamsUpdateRatings(allRows as Record<string, unknown>[]);
+    const emptyChar = charRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+    if (emptyChar.length) missing.push(`Characteristics — Rating missing for ${emptyChar.length} KPI(s)`);
 
-      // Comments ab bilkul alag, independent table mein save hote hain —
-      // status/flow update se koi relation nahi
-      if (appraiserCommentRef.current.text.trim()) {
-        await pamsSelect({
-          parameter: "save_appraisal_comment",
-          loginid,
-          code1: docNo,
-          code2: employeeCode,
-          code3: String(appraiserCommentRef.current.level),
-          code4: "APPRAISER",
-          code5: appraiserCommentRef.current.text.trim(),
-        });
+    const emptyGoal = goalRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+    if (emptyGoal.length) missing.push(`Goals — Rating missing for ${emptyGoal.length} KPI(s)`);
+
+    const emptySkill = skillRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+    if (emptySkill.length) missing.push(`Skill — Rating missing for ${emptySkill.length} KPI(s)`);
+
+    // 🔹 COMMENT VALIDATION
+    const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase(); /* * First check current React ref. */ let appraiseeComment = appraiseeCommentRef.current.text?.trim() || ""; let appraiserComment = appraiserCommentRef.current.text?.trim() || ""; /* * IMPORTANT FIX: * * If user previously clicked Save as Draft, * page can be reloaded. * * Therefore fetch latest saved comments from DB * before validating Submit. */ try { const commentLog = await pamsSelect<{ FLOW_LEVEL: number | string; COMMENT_TYPE: string; COMMENT_TEXT: string; COMMENT_DATE?: string; }>({ parameter: "get_appraisal_comments_log", loginid, code1: docNo, }); const rows = commentLog || []; /* * Appraisee comment always uses level 0. */ const appraiseeRows = rows.filter((r) => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISEE" && String(r.FLOW_LEVEL) === "0").sort((a, b) => { const da = new Date(a.COMMENT_DATE || 0).getTime(); const db = new Date(b.COMMENT_DATE || 0).getTime(); return db - da; }); /* * Current appraiser level. */ const currentAppraiserLevel = appraiserCommentRef.current.level || flowLevel; const appraiserRows = rows.filter((r) => String(r.COMMENT_TYPE).toUpperCase() === "APPRAISER" && String(r.FLOW_LEVEL) === String(currentAppraiserLevel)).sort((a, b) => { const da = new Date(a.COMMENT_DATE || 0).getTime(); const db = new Date(b.COMMENT_DATE || 0).getTime(); return db - da; }); /* * If React ref is empty but DB has saved comment, * use DB value. */ if (!appraiseeComment && appraiseeRows.length > 0) { appraiseeComment = String(appraiseeRows[0].COMMENT_TEXT || "").trim(); /* * Sync back into ref. */ appraiseeCommentRef.current = { text: appraiseeComment, level: 0, }; } if (!appraiserComment && appraiserRows.length > 0) { appraiserComment = String(appraiserRows[0].COMMENT_TEXT || "").trim(); /* * Sync back into ref. */ appraiserCommentRef.current = { text: appraiserComment, level: currentAppraiserLevel, }; } } catch (error) { console.error("Failed to load comments for validation:", error); } /* * Final validation. */ if (isEmployee) { if (!appraiseeComment) { missing.push("Comments — Appraisee comment is required"); } } else { if (!appraiserComment) { missing.push("Comments — Appraiser comment is required"); } } return missing;
+  };
+
+  // ── Action ────────────────────────────────────────────────────────────────
+  const handleAction = async (
+    action: "D" | "S" | "A" | "R"
+  ) => {
+    setNotice(null);
+
+    try {
+      /*
+       * -------------------------------------------------------
+       * D = Draft
+       * S = Submit
+       * A = Approve
+       * R = Reject
+       * -------------------------------------------------------
+       */
+
+      if (
+        action === "D" ||
+        action === "S" ||
+        action === "A"
+      ) {
+        // -----------------------------------------------------
+        // SAVE RATINGS
+        // -----------------------------------------------------
+
+        const allRows = [
+          ...taskRowsRef.current,
+          ...charRowsRef.current,
+          ...goalRowsRef.current,
+          ...skillRowsRef.current,
+        ];
+
+        if (allRows.length > 0) {
+          await pamsUpdateRatings(
+            allRows as Record<string, unknown>[]
+          );
+        }
+
+        // -----------------------------------------------------
+        // SAVE APPRAISER COMMENT
+        // -----------------------------------------------------
+
+        const appraiserText =
+          appraiserCommentRef.current.text?.trim() || "";
+
+        const appraiserLevel =
+          Number(
+            appraiserCommentRef.current.level ||
+            flowLevel ||
+            0
+          );
+
+        if (appraiserText) {
+          await pamsSelect({
+            parameter: "save_appraisal_comment",
+            loginid,
+            code1: docNo,
+            code2: employeeCode,
+            code3: String(appraiserLevel),
+            code4: "APPRAISER",
+            code5: appraiserText,
+          });
+        }
+
+        // -----------------------------------------------------
+        // SAVE APPRAISEE COMMENT
+        // -----------------------------------------------------
+
+        const appraiseeText =
+          appraiseeCommentRef.current.text?.trim() || "";
+
+        /*
+         * Appraisee always Level 0.
+         */
+        if (appraiseeText) {
+          await pamsSelect({
+            parameter: "save_appraisal_comment",
+            loginid,
+            code1: docNo,
+            code2: employeeCode,
+            code3: "0",
+            code4: "APPRAISEE",
+            code5: appraiseeText,
+          });
+        }
       }
-      if (appraiseeCommentRef.current.text.trim()) {
-        await pamsSelect({
-          parameter: "save_appraisal_comment",
-          loginid,
-          code1: docNo,
-          code2: employeeCode,
-          code3: "0",
-          code4: "APPRAISEE",
-          code5: appraiseeCommentRef.current.text.trim(),
-        });
-      }
+
+      // -------------------------------------------------------
+      // UPDATE STATUS
+      // -------------------------------------------------------
+
+      const ratingToSend =
+        action === "S" ||
+          action === "A" ||
+          action === "D"
+          ? finalRating
+          : 0;
+
+      await pamsSelect({
+        parameter: "update_appraisal_status",
+        loginid,
+        code1: docNo,
+        code2: employeeCode,
+        code3: action,
+        code4: "",
+        number1: ratingToSend,
+      });
+
+      // -------------------------------------------------------
+      // SUCCESS MESSAGE
+      // -------------------------------------------------------
+
+      const msg =
+        action === "D"
+          ? "Saved as draft"
+          : action === "S"
+            ? "Submitted successfully"
+            : action === "A"
+              ? "Approved successfully"
+              : "Rejected successfully";
+
+      setNotice({
+        type: "success",
+        message: msg,
+      });
+
+      /*
+       * Draft ke baad bhi current behavior same rakha hai:
+       * page previous screen par jayega.
+       */
+      setTimeout(() => {
+        navigate(-1);
+      }, 900);
+    } catch (err: unknown) {
+      console.error(
+        "handleAction error:",
+        err
+      );
+
+      setNotice({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Something went wrong",
+      });
     }
+  };
 
-    const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
 
-    await pamsSelect({
-      parameter: "update_appraisal_status",
-      loginid,
-      code1: docNo,
-      code2: employeeCode,
-      code3: action,
-      code4: "",
-      number1: ratingToSend,
-    });
-
-    const msg =
-      action === "D" ? "Saved as draft" :
-      action === "S" ? "Submitted successfully" :
-      action === "A" ? "Approved successfully" :
-                       "Rejected successfully";
-    setNotice({ type: "success", message: msg });
-    setTimeout(() => navigate(-1), 900);
-  } catch (err: unknown) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
-  }
-};
 
   // ── Sent Back ──────────────────────────────────────────────────────────────
   const handleSentBack = async () => {
@@ -636,7 +710,7 @@ const showApproveRejectButtons =
 
   // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrintReport = () => {
-    if (!reportReady || !reportPrintRef.current) return; 
+    if (!reportReady || !reportPrintRef.current) return;
     const fileName = `Performance-Report-${docNo}-${new Date().toISOString().slice(0, 10)}`;
     const printStyles = `
       @page { size: A4 portrait; margin: 10mm 8mm; }
@@ -671,6 +745,29 @@ const showApproveRejectButtons =
       </div>
     );
   }
+
+
+  const handleAppraiserCommentChange = useCallback(
+    (val: string, level: number) => {
+      appraiserCommentRef.current = {
+        text: val,
+        level,
+      };
+    },
+    []
+  );
+
+  const handleAppraiseeCommentChange = useCallback(
+    (val: string, level: number) => {
+      appraiseeCommentRef.current = {
+        text: val,
+        level,
+      };
+    },
+    []
+  );
+
+
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -728,11 +825,11 @@ const showApproveRejectButtons =
       <div style={S.tabBar}>
         {(
           [
-            { value: "task_details",    label: "Task Details" },
+            { value: "task_details", label: "Task Details" },
             { value: "characteristics", label: "Characteristics" },
-            { value: "goals",           label: "Goals" },
-            { value: "skill",           label: "Skill" },
-            { value: "comments",        label: "Appraiser Comments" },
+            { value: "goals", label: "Goals" },
+            { value: "skill", label: "Skill" },
+            { value: "comments", label: "Appraiser Comments" },
           ] as { value: SelectedTab; label: string }[]
         ).map(({ value, label }) => (
           <button key={value} style={S.tab(selectedTab === value)} onClick={() => setSelectedTab(value)}>
@@ -742,7 +839,7 @@ const showApproveRejectButtons =
       </div>
 
       <div style={S.panel}>
-        <div style={{ display: selectedTab === "task_details"    ? "block" : "none" }}>
+        <div style={{ display: selectedTab === "task_details" ? "block" : "none" }}>
           <TaskDetailsAppraisalTab
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "task_details"}
@@ -758,34 +855,34 @@ const showApproveRejectButtons =
             onGrandTotalChange={(total) => setCharacterTotal(total)}
           />
         </div>
-        <div style={{ display: selectedTab === "goals"           ? "block" : "none" }}>
+        <div style={{ display: selectedTab === "goals" ? "block" : "none" }}>
           <TaskGoalAppraisalTab
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "goals"}
             onRowsChange={(rows) => { goalRowsRef.current = rows; }}
           />
         </div>
-        <div style={{ display: selectedTab === "skill"           ? "block" : "none" }}>
+        <div style={{ display: selectedTab === "skill" ? "block" : "none" }}>
           <TaskSkillAppraisalTab
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "skill"}
             onRowsChange={(rows) => { skillRowsRef.current = rows; }}
           />
         </div>
-        <div style={{ display: selectedTab === "comments"        ? "block" : "none" }}>
+        <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
           <AppraiserCommentsTab
-  docNo={docNo}
-  employeeCode={employeeCode}
-  isVisible={selectedTab === "comments"}
-  taskTotal={taskTotal}
-  characterTotal={characterTotal}
-  flowLevel={flowLevel}
-  userFlowLevel={userFlowLevel}
-  weightageConfig={weightageConfig}
-  showAllComments={true} 
-  onAppraiserCommentChange={(val, level) => { appraiserCommentRef.current = { text: val, level }; }}
-  onAppraiseeCommentChange={(val, level) => { appraiseeCommentRef.current = { text: val, level }; }}
-/>
+            docNo={docNo}
+            employeeCode={employeeCode}
+            isVisible={selectedTab === "comments"}
+            taskTotal={taskTotal}
+            characterTotal={characterTotal}
+            flowLevel={flowLevel}
+            userFlowLevel={userFlowLevel}
+            weightageConfig={weightageConfig}
+            showAllComments={true}
+            onAppraiserCommentChange={handleAppraiserCommentChange}
+            onAppraiseeCommentChange={handleAppraiseeCommentChange}
+          />
         </div>
       </div>
 
@@ -803,24 +900,70 @@ const showApproveRejectButtons =
               >
                 💾 Save as Draft
               </button>
+
               <button
                 style={S.solidBtn()}
-                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-                onClick={() => {
-                  const missing = validateBeforeSubmit();
-                   console.log("SUBMIT BLOCKED BY:", missing); 
-                  if (missing.length > 0) {
-                    setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
-                    return;
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "#d0deff")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "#E8F0FF")
+                }
+                onMouseDown={(e) =>
+                  (e.currentTarget.style.transform = "scale(0.97)")
+                }
+                onMouseUp={(e) =>
+                  (e.currentTarget.style.transform = "scale(1)")
+                }
+                onClick={async () => {
+                  try {
+                    setNotice(null);
+
+                    /*
+                     * IMPORTANT:
+                     * DB validation is async.
+                     */
+                    const missing =
+                      await validateBeforeSubmit();
+
+                    console.log(
+                      "SUBMIT VALIDATION:",
+                      missing
+                    );
+
+                    if (missing.length > 0) {
+                      setNotice({
+                        type: "warning",
+                        message:
+                          `Please fill before submitting: ` +
+                          missing.join(" | "),
+                      });
+
+                      return;
+                    }
+
+                    /*
+                     * Validation passed.
+                     */
+                    await handleAction("S");
+                  } catch (error) {
+                    console.error(
+                      "Submit validation error:",
+                      error
+                    );
+
+                    setNotice({
+                      type: "error",
+                      message:
+                        "Unable to validate appraisal comments. Please try again.",
+                    });
                   }
-                  void handleAction("S");
                 }}
               >
                 ➤ Submit
               </button>
+
+
             </>
           )}
           {showApproveRejectButtons && (
@@ -928,9 +1071,9 @@ const showApproveRejectButtons =
             <div style={S.reportModalBody}>
               <PerformanceReportDesign
                 required_values={{
-                  doc_no:        docNo ?? "",
+                  doc_no: docNo ?? "",
                   employee_code: employeeCode,
-                  company_code:  "BSG",
+                  company_code: "BSG",
                 }}
                 printRef={reportPrintRef}
                 onReady={setReportReady}

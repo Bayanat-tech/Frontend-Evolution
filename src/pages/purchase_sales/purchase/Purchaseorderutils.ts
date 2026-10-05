@@ -833,7 +833,6 @@ export async function fetchPurchaseOrderDetail(
       porder_required_dt: toDateInputValue(row.porder_required_dt) || "",
       porder_tx_cat_code: text(row.porder_tx_cat_code),
       porder_tx_cat_name: text(row.porder_tx_cat_name),
-      porder_tx_compntcat_code_1: text(row.porder_tx_compntcat_code_1),
       porder_tx_compntcat_name_1: text(row.porder_tx_compntcat_name_1),
       porder_tx_compnt_perc_1: numberOrZero(row.porder_tx_compnt_perc_1),
       porder_tx_compnt_amt_1: numberOrZero(row.porder_tx_compnt_amt_1),
