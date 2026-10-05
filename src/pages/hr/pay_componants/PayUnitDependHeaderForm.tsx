@@ -361,7 +361,7 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
               value={editHeaderRow?.depend_pay_comp_type || ''}
               onChange={(e) => {
                 const selected = dependUnitOptions.find((opt) => opt.pay_comp_id === e.target.value);
-                setEditHeaderRow((prev) =>
+                setEditHeaderRow((prev : any) =>
                   prev
                     ? {
                       ...prev,
@@ -393,10 +393,10 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
               max={100}
               className="text-right"
               value={editHeaderRow?.percent ?? 0}
-              onChange={(e) => setEditHeaderRow((prev) => (prev ? { ...prev, percent: parseFloat(e.target.value) || 0 } : prev))}
+              onChange={(e) => setEditHeaderRow((prev : any) => (prev ? { ...prev, percent: parseFloat(e.target.value) || 0 } : prev))}
               onBlur={(e) => {
                 const val = parseFloat(e.target.value);
-                setEditHeaderRow((prev) => (prev ? { ...prev, percent: isNaN(val) ? 0 : parseFloat(val.toFixed(2)) } : prev));
+                setEditHeaderRow((prev : any) => (prev ? { ...prev, percent: isNaN(val) ? 0 : parseFloat(val.toFixed(2)) } : prev));
               }}
             />
           </label>
@@ -411,10 +411,10 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
               max={100}
               className="text-right"
               value={editHeaderRow?.emp_percent ?? 0}
-              onChange={(e) => setEditHeaderRow((prev) => (prev ? { ...prev, emp_percent: parseFloat(e.target.value) || 0 } : prev))}
+              onChange={(e) => setEditHeaderRow((prev : any) => (prev ? { ...prev, emp_percent: parseFloat(e.target.value) || 0 } : prev))}
               onBlur={(e) => {
                 const val = parseFloat(e.target.value);
-                setEditHeaderRow((prev) => (prev ? { ...prev, emp_percent: isNaN(val) ? 0 : parseFloat(val.toFixed(2)) } : prev));
+                setEditHeaderRow((prev : any) => (prev ? { ...prev, emp_percent: isNaN(val) ? 0 : parseFloat(val.toFixed(2)) } : prev));
               }}
             />
           </label>
@@ -427,7 +427,7 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
               onChange={(e) => {
                 const code = e.target.value;
                 const selected = statusOptions.find((opt) => opt.value_code === code);
-                setEditHeaderRow((prev) => (prev ? { ...prev, status: code, status_desc: selected?.value_desc ?? '' } : prev));
+                setEditHeaderRow((prev : any) => (prev ? { ...prev, status: code, status_desc: selected?.value_desc ?? '' } : prev));
               }}
               className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             >
@@ -445,7 +445,7 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
             <span className="text-xs font-medium text-muted-foreground">Remarks</span>
             <Input
               value={editHeaderRow?.remarks ?? ''}
-              onChange={(e) => setEditHeaderRow((prev) => (prev ? { ...prev, remarks: e.target.value } : prev))}
+              onChange={(e) => setEditHeaderRow((prev : any) => (prev ? { ...prev, remarks: e.target.value } : prev))}
             />
           </label>
         </div>
