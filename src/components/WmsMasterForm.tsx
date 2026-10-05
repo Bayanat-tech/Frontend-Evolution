@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { X, CheckCircle2, ChevronRight, Loader2, Plus, RefreshCw, PackageCheck } from "lucide-react";
-import type { FormEvent } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
+import { CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Save } from "lucide-react";
 import { getDynamicLookup } from "../api/lookups";
-import { Input } from "./ui/Input";
-import { Select } from "./ui/Select";
 import { LookupField } from "./ui/LookupField";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { LookupRow } from "../api/lookups";
@@ -17,7 +15,12 @@ interface DropdownOption {
 
 type Props = {
   fields: WmsMasterField[];
+  /** Optional. When provided (and non-empty) the form is split into steps with Back / Next buttons. */
   tabs?: WmsMasterFormTab[];
+  /** Used for the default section heading, e.g. "Location Details". */
+  title?: string;
+  /** id applied to the <form> so the page header can submit it. */
+  formId?: string;
   fieldsPerRow?: number;
   form: Record<string, unknown>;
   editMode: boolean;
@@ -25,47 +28,49 @@ type Props = {
   user?: UserProfile | null;
   onChange: (name: string, value: unknown) => void;
   onSave: (e: FormEvent) => void;
-  onCancel: () => void;
+  onCancel?: () => void;
 };
 
-type FieldError = { [key: string]: string };
+type FieldError = Record<string, string>;
 
-/* Section panel — EXACT structure. CSS does the styling. */
-function SectionPanel({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: typeof PackageCheck;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="freight-panel-body p-3">{children}</div>
-    </section>
-  );
+const inputClass =
+  "h-7 w-full rounded-md border bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed";
+const inputOk = "border-slate-200 focus:border-[#00378C] focus:ring-[#00378C]/30";
+const inputBad = "border-red-400 focus:border-red-500 focus:ring-red-300";
+
+const COL_SPAN: Record<number, string> = { 2: "lg:col-span-2", 3: "lg:col-span-3", 4: "lg:col-span-4" };
+
+function isEmpty(value: unknown) {
+  return value === "" || value === null || value === undefined || (typeof value === "string" && !value.trim());
 }
 
 export function WmsMasterForm({
-  fields, tabs, fieldsPerRow = 2, form, editMode, saving, user, onChange, onSave, onCancel,
+  fields,
+  tabs,
+  title = "Master",
+  formId = "wms-master-form",
+  fieldsPerRow = 4,
+  form,
+  editMode,
+  saving,
+  user,
+  onChange,
+  onSave,
 }: Props) {
+  const hasTabs = Boolean(tabs && tabs.length > 0);
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
   const [fieldErrors, setFieldErrors] = useState<FieldError>({});
 
   useEffect(() => {
     setActiveTab(tabs?.[0]?.key ?? "__default");
   }, [tabs]);
+
+  /* ---------------- helpers ---------------- */
+
+  const isVisible = (field: WmsMasterField) => !(field.hideOnAdd && !editMode);
+  const fieldTab = (field: WmsMasterField) => field.tab ?? tabs![0].key;
+  const tabFields = (tabKey: string) =>
+    (hasTabs ? fields.filter((f) => fieldTab(f) === tabKey) : fields).filter(isVisible);
 
   const validateField = (field: WmsMasterField, value: unknown): string => {
     if (field.maxLength && typeof value === "string" && value.length > field.maxLength) {
@@ -81,6 +86,78 @@ export function WmsMasterForm({
     }
     onChange(name, value);
   };
+
+  /** Validates every visible field of one tab (or the whole form when there are no tabs). */
+  const validateTab = (tabKey: string): boolean => {
+    const list = tabFields(tabKey);
+    const errs: FieldError = {};
+    list.forEach((field) => {
+      const value = form[field.name];
+      if (field.required && field.type !== "checkbox" && isEmpty(value)) {
+        errs[field.name] = `${field.label} is required`;
+      } else {
+        const lengthError = validateField(field, value);
+        if (lengthError) errs[field.name] = lengthError;
+      }
+    });
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      list.forEach((field) => delete next[field.name]);
+      return { ...next, ...errs };
+    });
+    return Object.keys(errs).length === 0;
+  };
+
+  const isTabCompleted = (tabKey: string): boolean => {
+    const required = tabFields(tabKey).filter((f) => f.required && f.type !== "checkbox");
+    if (!required.length) return false;
+    return required.every((f) => !isEmpty(form[f.name]));
+  };
+
+  const hasTabErrors = (tabKey: string): boolean => tabFields(tabKey).some((f) => fieldErrors[f.name]);
+
+  const activeTabIndex = Math.max(0, tabs?.findIndex((t) => t.key === activeTab) ?? 0);
+  const isLastTab = !hasTabs || activeTabIndex === tabs!.length - 1;
+
+  /** Jump to a step. Moving forward is only allowed when every step before it has valid entries. */
+  const goToTab = (index: number) => {
+    if (!tabs) return;
+    if (index <= activeTabIndex) {
+      setActiveTab(tabs[index].key);
+      return;
+    }
+    for (let i = activeTabIndex; i < index; i++) {
+      if (!validateTab(tabs[i].key)) {
+        setActiveTab(tabs[i].key);
+        return;
+      }
+    }
+    setActiveTab(tabs[index].key);
+  };
+
+  const handleSubmit = (event: FormEvent) => {
+    if (hasTabs && !isLastTab) {
+      event.preventDefault();
+      goToTab(activeTabIndex + 1);
+      return;
+    }
+    if (hasTabs) {
+      // Final step: every step must be valid before saving.
+      for (const tab of tabs!) {
+        if (!validateTab(tab.key)) {
+          event.preventDefault();
+          setActiveTab(tab.key);
+          return;
+        }
+      }
+    } else if (!validateTab("__default")) {
+      event.preventDefault();
+      return;
+    }
+    onSave(event);
+  };
+
+  /* ---------------- lookups ---------------- */
 
   const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
     if (!field.dropdownParam) return [];
@@ -122,171 +199,263 @@ export function WmsMasterForm({
     }
   };
 
-  const hasTabs = tabs && tabs.length > 0;
-  const activeTabIndex = tabs?.findIndex((t) => t.key === activeTab) ?? 0;
-  const isLastTab = activeTabIndex === (tabs?.length ?? 1) - 1;
+  /* ---------------- field rendering ---------------- */
 
-  const handleTabNext = () => {
-    if (tabs && activeTabIndex < tabs.length - 1) {
-      setActiveTab(tabs[activeTabIndex + 1].key);
+  const renderField = (field: WmsMasterField) => {
+    const value = form[field.name];
+    const disabled = Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form));
+    const error = fieldErrors[field.name];
+    const border = error ? inputBad : inputOk;
+
+    const spanClass =
+      field.type === "textarea"
+        ? "col-span-full"
+        : field.colSpan && COL_SPAN[field.colSpan]
+          ? COL_SPAN[field.colSpan]
+          : "";
+
+    const errorText = error ? <span className="mt-0.5 text-[10px] font-medium text-red-600">{error}</span> : null;
+
+    // Shared label used by all field types (including LookupField) so labels are always visible
+    // and styled consistently.
+    const label = (
+      <div className="mb-0.5 flex items-center justify-between">
+        <label className="block text-[11px] font-medium text-slate-600 text-left">
+          {field.label}
+          {field.required && <span className="ml-0.5 text-red-500">*</span>}
+        </label>
+        {field.maxLength && typeof value === "string" && (
+          <span className={`text-[10px] font-medium ${value.length > field.maxLength ? "text-red-600" : "text-slate-400"}`}>
+            {value.length}/{field.maxLength}
+          </span>
+        )}
+      </div>
+    );
+
+    if (field.type === "checkbox") {
+      const checked = value === true || value === "true" || value === "Y";
+      return (
+        <div key={field.name} className={`flex flex-col justify-end ${spanClass}`}>
+          <label className="inline-flex h-7 cursor-pointer select-none items-center gap-2">
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={disabled}
+              onChange={(e) => handleFieldChange(field.name, e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300 accent-[#00378C] disabled:opacity-50"
+            />
+            <span className="text-sm text-slate-900">
+              {field.label}
+              {field.required && <span className="ml-0.5 text-red-500">*</span>}
+            </span>
+          </label>
+          {errorText}
+        </div>
+      );
     }
-  };
 
-  const renderFields = (tabKey?: string) => {
-    const visible = hasTabs ? fields.filter((f) => (f.tab ?? tabs![0].key) === tabKey) : fields;
-    const filtered = visible.filter((f) => !(f.hideOnAdd && !editMode));
+    if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
+      if (!field.asyncOptions && !field.dropdownParam && field.options) {
+        return (
+          <div key={field.name} className={`flex flex-col ${spanClass}`}>
+            {label}
+            <select
+              disabled={disabled}
+              value={String(value ?? "")}
+              onChange={(e) => handleFieldChange(field.name, e.target.value)}
+              className={`${inputClass} ${border}`}
+            >
+              <option value="">Select {field.label}</option>
+              {field.options.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {errorText}
+          </div>
+        );
+      }
 
-    const sections: Record<string, typeof filtered> = {};
-    filtered.forEach((field) => {
-      const sectionKey = field.section || "__default";
-      if (!sections[sectionKey]) sections[sectionKey] = [];
-      sections[sectionKey].push(field);
-    });
+      // Lookup / async dropdown: render the same outer label as other fields so it is always
+      // visible. Do not pass a label into LookupField when compact, to avoid a second (or
+      // missing) label inside the component.
+      return (
+        <div key={field.name} className={`flex flex-col ${spanClass}`}>
+          {label}
+          <LookupField
+            key={`${field.name}__${getFieldDependencyKey(field, form)}`}
+            value={String(value ?? "")}
+            displayValue={undefined}
+            columns={[{ field: "label", header: "Label" }]}
+            valueField="value"
+            displayFields={["label"]}
+            loadOptions={async () => {
+              const options = await loadDropdownOptions(field);
+              return options.map((opt) => ({ ...(opt.raw || {}), value: opt.value, label: opt.label }));
+            }}
+            onChange={(val) => handleFieldChange(field.name, val)}
+            disabled={disabled}
+            placeholder={`Search ${field.label}…`}
+            compact
+          />
+          {errorText}
+        </div>
+      );
+    }
+
+    let control: ReactNode;
+    if (field.type === "textarea") {
+      control = (
+        <textarea
+          disabled={disabled}
+          maxLength={field.maxLength}
+          value={String(value ?? "")}
+          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+          className={`w-full h-[52px] resize-none rounded-md border bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 disabled:bg-slate-50 disabled:text-slate-500 ${border}`}
+        />
+      );
+    } else {
+      const tooLong = field.maxLength && String(value ?? "").length > field.maxLength;
+      control = (
+        <input
+          disabled={disabled}
+          type={
+            field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : "text"
+          }
+          value={String(value ?? "")}
+          onChange={(e) =>
+            handleFieldChange(field.name, field.type === "number" ? Number(e.target.value || 0) : e.target.value)
+          }
+          className={`${inputClass} ${tooLong ? inputBad : border}`}
+        />
+      );
+    }
 
     return (
-      <div className="grid gap-3">
-        {Object.entries(sections).map(([sectionKey, sectionFields]) => (
-          <SectionPanel key={sectionKey} title={sectionKey !== "__default" ? sectionKey : "Basic Information"} icon={PackageCheck}>
-            <div
-              className="wms-fields-grid grid gap-x-3 gap-y-3 grid-cols-1"
-              style={{ gridTemplateColumns: undefined }}
-            >
-              <style>{`
-                @media (min-width: 640px) {
-                  .wms-fields-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-                }
-                @media (min-width: 1024px) {
-                  .wms-fields-grid { grid-template-columns: repeat(${fieldsPerRow}, minmax(0, 1fr)) !important; }
-                }
-              `}</style>
-              {sectionFields.map((field) => {
-                const spanClass = field.colSpan === 1
-                  ? "md:col-span-1"
-                  : field.type === "textarea"
-                  ? "col-span-full"
-                  : "";
-                const isCheckbox = field.type === "checkbox";
-                const hasError = fieldErrors[field.name];
-                const disabled = Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form));
+      <div key={field.name} className={`flex flex-col ${spanClass}`}>
+        {label}
+        {control}
+        {errorText}
+      </div>
+    );
+  };
 
-                return isCheckbox ? (
-                  <div key={field.name} className={`flex items-center py-1 ${spanClass}`}>
-                    {renderInput(field, form[field.name], disabled, form, handleFieldChange, loadDropdownOptions)}
-                  </div>
-                ) : (
-                  <label key={field.name} className={`freight-field-label group flex flex-col gap-0.5 ${spanClass}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
-                        {field.label}
-                        {field.required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
-                      </span>
-                      {field.maxLength && typeof form[field.name] === "string" && (
-                        <span
-                          className={`text-[9px] font-medium ${
-                            (form[field.name] as string).length > field.maxLength
-                              ? "text-destructive"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {(form[field.name] as string).length}/{field.maxLength}
-                        </span>
-                      )}
-                    </div>
-                    {renderInput(field, form[field.name], disabled, form, handleFieldChange, loadDropdownOptions)}
-                    {hasError && <span className="text-[9px] text-destructive font-medium">{hasError}</span>}
-                  </label>
-                );
-              })}
+  const renderSections = (tabKey?: string) => {
+    const list = tabFields(tabKey ?? "__default");
+    const sections: Record<string, WmsMasterField[]> = {};
+    list.forEach((field) => {
+      const key = field.section || "__default";
+      (sections[key] ||= []).push(field);
+    });
+
+    const defaultTitle = hasTabs ? tabs!.find((t) => t.key === tabKey)?.label ?? "Details" : `${title} Details`;
+    const fieldsStyle = { "--cols": fieldsPerRow } as CSSProperties;
+    const fieldsCls =
+      fieldsPerRow > 1
+        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(var(--cols),minmax(0,1fr))] gap-x-3 gap-y-2.5"
+        : "grid grid-cols-1 gap-y-2.5";
+
+    return (
+      <div className="grid grid-cols-1 gap-2">
+        {Object.entries(sections).map(([sectionKey, sectionFields]) => (
+          <div key={sectionKey} className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center gap-2 rounded-t-lg border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
+              <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
+                <FileText size={12} />
+              </div>
+              <h3 className="m-0 text-xs font-semibold text-slate-800">
+                {sectionKey === "__default" ? defaultTitle : sectionKey}
+              </h3>
             </div>
-          </SectionPanel>
+            <div className="p-3">
+              <div className={fieldsCls} style={fieldsStyle}>
+                {sectionFields.map(renderField)}
+              </div>
+            </div>
+          </div>
         ))}
       </div>
     );
   };
 
-  const submitLabel = hasTabs ? (isLastTab ? (editMode ? "Update Record" : "Save Record") : "Next") : (editMode ? "Update" : "Add");
-  const submitIcon = hasTabs && !isLastTab
-    ? <ChevronRight size={11} className="ml-1" />
-    : saving
-    ? <Loader2 size={11} className="ml-1 animate-spin" />
-    : editMode
-    ? <RefreshCw size={11} className="ml-1" />
-    : <Plus size={11} className="ml-1" />;
-
-  const handleSubmitOrNext = (e: FormEvent) => {
-    if (hasTabs && !isLastTab) {
-      e.preventDefault();
-      handleTabNext();
-    } else {
-      onSave(e);
-    }
-  };
+  /* ---------------- layout ---------------- */
 
   return (
-    <form
-      className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2"
-      onSubmit={handleSubmitOrNext}
-    >
-      {hasTabs ? (
-        <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
-          <div className="freight-tabs-list flex overflow-x-auto">
-            {tabs!.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                aria-pressed={activeTab === tab.key}
-                className={`freight-workspace-tab ${activeTab === tab.key ? "active" : ""}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div className="freight-tabs-panel border-t p-3">{renderFields(activeTab)}</div>
+    <form id={formId} className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
+      {/* ---------- Step strip (only when tabs are provided) ---------- */}
+      {hasTabs && (
+        <div className="flex items-center gap-0 overflow-x-auto rounded-lg border border-slate-200 bg-white px-2 shadow-sm">
+          {tabs!.map((tab, index) => {
+            const completed = isTabCompleted(tab.key);
+            const errored = !completed && hasTabErrors(tab.key);
+            const current = activeTab === tab.key;
+            return (
+              <div key={tab.key} className="flex shrink-0 items-center">
+                <button
+                  type="button"
+                  onClick={() => goToTab(index)}
+                  className={`relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors ${
+                    current
+                      ? "text-[#00378C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t-full after:bg-[#00378C]"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                      completed
+                        ? "bg-green-500 text-white"
+                        : errored
+                          ? "bg-red-500 text-white"
+                          : current
+                            ? "bg-[#00378C] text-white"
+                            : "bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {completed ? <CheckCircle2 size={9} /> : index + 1}
+                  </span>
+                  <span>{tab.label}</span>
+                </button>
+                {index < tabs!.length - 1 && <ChevronRight size={11} className="mx-0.5 shrink-0 text-slate-300" />}
+              </div>
+            );
+          })}
         </div>
-      ) : (
-        <div className="p-3">{renderFields()}</div>
       )}
 
-      {/* Bottom action row (Freight style) */}
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <X size={11} /> Cancel
-        </button>
-        <div className="flex items-center gap-2">
-          {hasTabs && (
-            <span className="text-[9px] text-muted-foreground">
-              Step {activeTabIndex + 1} of {tabs!.length}
-            </span>
-          )}
+      {renderSections(hasTabs ? activeTab : undefined)}
+
+      {/* ---------- Back / Next (only when tabs are provided).
+          Save lives in the page header (formId), so the last step has no bottom Save/Submit. */}
+      {hasTabs && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
           <button
-            disabled={saving}
-            type="submit"
-            className={`inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm transition-all ${
-              saving
-                ? "bg-primary/60 text-primary-foreground cursor-not-allowed"
-                : editMode
-                ? "bg-amber-600 hover:bg-amber-700 text-white"
-                : "bg-primary hover:bg-primary/90 text-primary-foreground"
-            }`}
+            type="button"
+            disabled={activeTabIndex === 0 || saving}
+            onClick={() => goToTab(activeTabIndex - 1)}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? (
-              <>
-                <Loader2 size={11} className="animate-spin" /> Saving…
-              </>
-            ) : (
-              <>
-                {submitLabel}
-                {submitIcon}
-              </>
-            )}
+            <ChevronLeft size={13} /> Back
           </button>
+
+          <span className="text-[11px] text-slate-500">
+            Step {activeTabIndex + 1} of {tabs!.length}
+          </span>
+
+          {!isLastTab ? (
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-[#00378C] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[#002d72] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Next <ChevronRight size={13} />
+            </button>
+          ) : (
+            // Keep layout balanced on the last step; header Save is the only submit control.
+            <div className="w-[72px]" aria-hidden />
+          )}
         </div>
-      </div>
+      )}
     </form>
   );
 }
@@ -302,113 +471,4 @@ function getFieldDependencyKey(field: WmsMasterField, form: Record<string, unkno
   }
   if (field.asyncOptions?.dependsOn) deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
   return deps.length > 0 ? deps.join("__") : Date.now().toString();
-}
-
-function renderInput(
-  field: WmsMasterField,
-  value: unknown,
-  disabled: boolean,
-  form: Record<string, unknown>,
-  onChange: (name: string, value: unknown) => void,
-  loadDropdownOptions: (field: WmsMasterField) => Promise<DropdownOption[]>,
-) {
-  const baseInputClass = "w-full";
-
-  if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
-    if (!field.asyncOptions && !field.dropdownParam && field.options) {
-      return (
-        <Select
-          disabled={disabled}
-          value={String(value ?? "")}
-          onChange={(event) => onChange(field.name, event.target.value)}
-          className={baseInputClass}
-        >
-          <option value="">— Select {field.label} —</option>
-          {field.options.map((option) => (
-            <option value={option.value} key={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      );
-    }
-    return (
-      <LookupField
-        label=""
-        key={`${field.name}__${getFieldDependencyKey(field, form)}`}
-        value={String(value ?? "")}
-        displayValue={undefined}
-        columns={[{ field: "label", header: "Label" }]}
-        valueField="value"
-        displayFields={["label"]}
-        loadOptions={async () => {
-          const options = await loadDropdownOptions(field);
-          return options.map((opt) => ({ ...(opt.raw || {}), value: opt.value, label: opt.label }));
-        }}
-        onChange={(val) => onChange(field.name, val)}
-        disabled={disabled}
-        placeholder={`Search ${field.label}…`}
-        compact
-      />
-    );
-  }
-
-  if (field.type === "textarea") {
-    return (
-      <textarea
-        disabled={disabled}
-        maxLength={field.maxLength}
-        rows={2}
-        value={String(value ?? "")}
-        onChange={(e) => onChange(field.name, e.target.value)}
-      />
-    );
-  }
-
-if (field.type === "checkbox") {
-  const isChecked = value === true || value === "true" || value === "Y";
-  return (
-    <div className="inline-flex items-center gap-2 select-none">
-      <input
-        type="checkbox"
-        checked={isChecked}
-        disabled={disabled}
-        onChange={(e) => onChange(field.name, e.target.checked)}
-        style={{ accentColor: "#00378C", width: "15px", height: "15px" }}
-        className="shrink-0 cursor-pointer rounded border border-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00378C]/25 disabled:cursor-not-allowed disabled:opacity-50"
-      />
-      <span
-        onClick={() => !disabled && onChange(field.name, !isChecked)}
-        className={`text-[11.5px] font-medium text-slate-700 leading-none transition-colors ${
-          disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
-        }`}
-      >
-        {field.label}
-        {field.required === true && (
-          <strong className="text-destructive ml-0.5 font-bold"> *</strong>
-        )}
-      </span>
-    </div>
-  );
-}
-
-  return (
-    <Input
-      disabled={disabled}
-      type={
-        field.type === "number"
-          ? "number"
-          : field.type === "email"
-          ? "email"
-          : field.type === "date"
-          ? "date"
-          : "text"
-      }
-      value={String(value ?? "")}
-      onChange={(e) =>
-        onChange(field.name, field.type === "number" ? Number(e.target.value || 0) : e.target.value)
-      }
-      className={baseInputClass}
-    />
-  );
 }
