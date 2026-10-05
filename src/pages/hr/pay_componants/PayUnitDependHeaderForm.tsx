@@ -2,7 +2,7 @@ import { Edit2, Trash2, Plus } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { FormikProps } from 'formik';
 import { useEffect, useMemo, useState } from 'react';
-import { THeaderDetail, TPayUnitFormValues } from './AddPayUnitDependentForm';
+// import { THeaderDetail, TPayUnitFormValues } from './AddPayUnitDependentForm';
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup, executeDynamicDelete } from '../../../api/lookups';
 import { Button } from '../../../components/ui/Button';
@@ -13,6 +13,27 @@ function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
+// ===================== TYPES (defined locally) =====================
+type THeaderDetail = {
+  id: string;
+  depend_pay_comp_type: string;
+  depend_pay_comp_desc: string;
+  depend_pay_comp_short_desc: string;
+  percent: number;
+  emp_percent: number;
+  status: string;
+  status_desc: string;
+  remarks: string;
+  isEditMode: boolean;
+};
+
+type TPayUnitFormValues = {
+  div_code: string;
+  div_name: string;
+  pay_comp_id: string;
+  pay_comp_desc: string;
+  headerDetail: THeaderDetail[];
+};
 
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
