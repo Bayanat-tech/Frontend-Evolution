@@ -180,22 +180,23 @@ export function PrepaidRegisterPage() {
     },
   ], []);
 
-  const deleteRow = async () => {
-    if (!deleteTarget) return;
-    try {
-      await executeDynamicDelete({
-        parameter: "AC_PREPAID_DELETE",
-        loginid: loginId,
-        code1: deleteTarget.doc_no,
-        code2: companyCode,
-      });
-      setDeleteTarget(null);
-      setNotice({ type: "success", message: "Prepaid record deleted successfully" });
-      await loadRows(false);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete prepaid record" });
-    }
-  };
+ const deleteRow = async () => {
+  if (!deleteTarget) return;
+  try {
+    await executeDynamicDelete({
+      parameter: "AC_ASSETS_PREPAID_delete_register",
+      loginid: loginId,
+      code1: companyCode,
+      code2: deleteTarget.doc_type || "PRE",
+      code3: String(Number(deleteTarget.doc_no)),
+    });
+    setDeleteTarget(null);
+    setNotice({ type: "success", message: "Prepaid record deleted successfully" });
+    await loadRows(false);
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete prepaid record" });
+  }
+};
 
   const closeEditor = () => {
     setNotice(null);
