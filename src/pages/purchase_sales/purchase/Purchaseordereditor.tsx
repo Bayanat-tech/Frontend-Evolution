@@ -103,7 +103,7 @@ export function PurchaseOrderEditor({
 
 
   // ---- Report Preview state ----
-  
+
   const [reportPreviewError, setReportPreviewError] = useState("");
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
@@ -158,6 +158,22 @@ export function PurchaseOrderEditor({
           fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -169,17 +185,22 @@ export function PurchaseOrderEditor({
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
-          ac_name: text(headerRaw.ac_name || current.ac_name),
-          party_address: text(headerRaw.address || current.party_address),
-          credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
+          ac_name: text(headerRaw.ac_name || acRow?.ac_name || current.ac_name),
+          party_address: text(headerRaw.address || acRow?.party_address || current.party_address),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_period: Number(headerRaw.credit_period || acRow?.credit_period || current.credit_period || 0),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
+          party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
-          ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          ex_rate: Number(headerRaw.ex_rate || acRow?.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
           dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
@@ -269,7 +290,7 @@ export function PurchaseOrderEditor({
   const amountBeforeTax = baseTotalAmount - totalDiscountAmt;
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
-    const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
 
   // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -400,30 +421,30 @@ export function PurchaseOrderEditor({
 
   // ---- Report Preview ----
   const handlePrint = async () => {
-  if (!form.doc_no) return;
+    if (!form.doc_no) return;
 
-  const params = {
-    company_code: user?.company_code,
-    doc_type: PO_DOC_TYPE.LPO,
-    doc_no: form.doc_no,
+    const params = {
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.LPO,
+      doc_no: form.doc_no,
+    };
+    const preview = openPurchaseReport(`Purchase Order ${form.doc_no}`.trim());
+
+    try {
+      const html = await getPoOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `purchase_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getPoOrderReportExcel(params);
+        },
+      });
+    } catch (error) {
+      preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
+    }
   };
-  const preview = openPurchaseReport(`Purchase Order ${form.doc_no}`.trim());
 
-  try {
-    const html = await getPoOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `purchase_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getPoOrderReportExcel(params);
-      },
-    });
-  } catch (error) {
-    preview.fail(error instanceof Error ? error : new Error("Unable to load report"));
-  }
-};
-  
 
   const handleReportPreviewExcel = async () => {
     if (!form.doc_no) return;
@@ -669,20 +690,20 @@ export function PurchaseOrderEditor({
                     </Button>
                   )}
                   <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                      {isPendingTab && (
-                    <Button
-                      type="button"
-                      onClick={handleSubmitClick}
-                      disabled={actionDisabled || actionBarBusy}
-                    >
-                      {actionLoading === "submit" ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                    </Button>
-   )}
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
                     {showSubmitConfirm &&
                       createPortal(
                         <div
@@ -916,7 +937,7 @@ export function PurchaseOrderEditor({
       />
 
 
-     <PurchaseReportPreview />
+      <PurchaseReportPreview />
     </>
   );
 }
