@@ -1,22 +1,15 @@
-// src/pages/hr/GradeMasterPage.tsx
-//
-// Grade Master list page. Structured identically to InterviewEvalPage.tsx:
-// DataTable + Dialog-hosted add/edit/view form, getDynamicLookup for list,
-// executeDynamicDelete for delete. Save (add/edit) goes through the
-// dedicated insUpdHrGrade backend via AddGradeMasterForm, not the dynamic
-// proc dispatcher.
-
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { executeCommonProcedure, executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
+import {
+  ArrowLeft, Edit2, Eye, FileText, Plus, RefreshCw, Save, Trash2, X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
-import { AddGradeMasterForm } from "./Addgrademasterform";
-
-
+import { AddGradeMasterForm, type GradeFormHandle } from "./Addgrademasterform";
 
 export type GradeRow = {
   company_code: string;
@@ -36,11 +29,7 @@ export type GradeRow = {
   [key: string]: unknown;
 };
 
-type PopupState = {
-  open: boolean;
-  mode: "add" | "edit" | "view";
-  data: Partial<GradeRow>;
-};
+type EditorMode = "add" | "edit" | "view";
 
 // NOTE: reuses the same list proc your old GradeComponentsPage.tsx used
 // (MST_HR_MS_HR_Grade_Page). Swap the parameter name if yours differs —
@@ -64,26 +53,37 @@ const baseParams = (loginid: string, companyCode: string) => ({
 
 export function GradeMasterPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const loginid = user?.loginid || "ADMIN";
   const companyCode = user?.company_code || "";
 
   const [rows, setRows] = useState<GradeRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
+  const [loading, setLoading] = useState(true);
+
+  // view state
+  const [view, setView] = useState<"list" | "editor">("list");
+  const [editorMode, setEditorMode] = useState<EditorMode>("add");
+  const [activeGrade, setActiveGrade] = useState<GradeRow | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+
+
+  // delete state
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GradeRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Ref to the form so the header Save button can trigger it
+  const formRef = useRef<GradeFormHandle>(null);
 
   const loadRows = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
-    setNotice(null);
     try {
       const data = await getDynamicLookup(baseParams(loginid, companyCode));
       const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
-      // Keep every field the backend returns (not just a narrow subset) so
-      // the edit form can populate directly from the row, same as
-      // InterviewEvalPage does for its rows.
+      // Keep every field the backend returns so the edit form can populate
+      // directly from the row.
       const list: GradeRow[] = raw.map((r) => ({
         ...(r as GradeRow),
         company_code: String(r.company_code ?? r.COMPANY_CODE ?? companyCode),
@@ -96,23 +96,54 @@ export function GradeMasterPage() {
       }));
       setRows(list);
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load grades",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to load grades");
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginid, companyCode]);
 
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
+  /* ── Navigation handlers ── */
+  const openEditor = (mode: EditorMode, row: GradeRow | null = null) => {
+    setEditorMode(mode);
+    setActiveGrade(row);
+    setView("editor");
+  };
+
+  const handleCloseEditor = () => {
+    setView("list");
+    setEditorMode("add");
+    setActiveGrade(null);
+  };
+
+  const handleSaved = () => {
+    handleCloseEditor();
+    void loadRows();
+  };
+
+  /* ── Header Save button handler ── */
+  const handleHeaderSave = async () => {
+    setSaving(true);
+    try {
+      await formRef.current?.save();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ── Delete ── */
+  const requestDelete = (row: GradeRow) => {
+    setDeleteTarget(row);
+    setDeleteOpen(true);
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    setNotice(null);
     try {
       await executeDynamicDelete({
         parameter: "MST_HR_GRADE_DELETE",
@@ -120,14 +151,12 @@ export function GradeMasterPage() {
         code1: deleteTarget.grade_code,
         code2: companyCode,
       });
+      toast.success(`Grade ${deleteTarget.grade_code} deleted successfully`);
+      setDeleteOpen(false);
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `Grade ${deleteTarget.grade_code} deleted successfully.` });
       await loadRows();
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to delete grade",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to delete grade");
     } finally {
       setDeleting(false);
     }
@@ -162,127 +191,185 @@ export function GradeMasterPage() {
         header: "Status",
         size: 110,
         enableSorting: false,
-        cell: ({ getValue }) => {
-          const val = String(getValue() || "A");
-          return val === "A" ? (
-            <span style={{ color: "#16a34a", fontWeight: 600, fontSize: "0.8125rem" }}>Active</span>
+        cell: ({ getValue }) =>
+          String(getValue() || "A") === "A" ? (
+            <span className="text-[0.8125rem] font-semibold text-green-600">Active</span>
           ) : (
-            <span style={{ color: "#dc2626", fontWeight: 600, fontSize: "0.8125rem" }}>Inactive</span>
-          );
-        },
+            <span className="text-[0.8125rem] font-semibold text-red-600">Inactive</span>
+          ),
       },
       {
         id: "actions",
         header: "Actions",
-        size: 100,
+        size: 110,
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Edit"
-              onClick={() => setPopup({ open: true, mode: "edit", data: row.original })}
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor("edit", row.original)}
+              title="Edit grade"
             >
-              <Edit2 size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="View"
-              onClick={() => setPopup({ open: true, mode: "view", data: row.original })}
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor("view", row.original)}
+              title="View grade"
             >
-              <Eye size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Delete"
-              onClick={() => setDeleteTarget(row.original)}
+              <Eye size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => requestDelete(row.original)}
+              title="Delete grade"
             >
-              <Trash2 size={14} />
-            </Button>
+              <Trash2 size={13} />
+            </button>
           </div>
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">HR General Masters - Grades</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Maintain employee grades, entitlements, and pay component bands.
-          </p>
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header (with Save button)
+     ───────────────────────────────────────────────────────── */
+  if (view === "editor") {
+    const isView = editorMode === "view";
+    const title =
+      editorMode === "add" ? "New Grade" : editorMode === "edit" ? "Edit Grade" : "View Grade";
+    const badge = editorMode === "add" ? "Draft" : editorMode === "edit" ? "Editing" : "View only";
+
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{title}</h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {badge}
+                </span>
+                {activeGrade?.grade_code && (
+                  <span className="text-xs text-muted-foreground">
+                    {activeGrade.grade_code}
+                    {activeGrade.grade_name ? ` - ${activeGrade.grade_name}` : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions: List / Close / Save (Save hidden in view mode) */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor}>
+              <ArrowLeft size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            {!isView && (
+              <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
+                <Save size={14} /> {saving ? "Saving" : "Save"}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
-          <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
-            <Plus size={15} /> Add Grade
-          </Button>
+
+        {/* Form content — ref lets the header Save trigger the form */}
+        <AddGradeMasterForm
+          ref={formRef}
+          mode={editorMode}
+          existingData={activeGrade ?? {}}
+          onClose={(shouldRefetch?: boolean) =>
+            shouldRefetch ? handleSaved() : handleCloseEditor()
+          }
+        />
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            HR General Masters - Grades
+          </h2>
         </div>
       </div>
-
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
 
       <DataTable
         columns={columns}
         data={rows}
-        title={`${rows.length.toLocaleString()} Grades`}
+        title={loading ? "Loading" : `${rows.length.toLocaleString()} Grades`}
         subtitle="Grade Master List"
+        searchValue={query}
+        onSearchChange={(value) => {
+          setQuery(value);
+        }}
         searchPlaceholder="Search grade code, name..."
         loading={loading}
+        emptyText="No grades found"
         height={560}
         minWidth={1000}
         density="grid"
         enablePagination
         pageSize={100}
         getRowId={(row) => `${row.company_code}-${row.grade_code}`}
+        enableExport
+        exportFilename="hr-grades-list.csv"
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadRows()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={() => openEditor("add")}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Grade
+            </button>
+          </div>
+        }
       />
 
-      {popup.open && (
-        <Dialog
-          open
-          title={
-            popup.mode === "add"
-              ? "Add Grade"
-              : popup.mode === "edit"
-                ? "Edit Grade"
-                : "View Grade"
-          }
-          wide
-          onClose={() => setPopup((p) => ({ ...p, open: false }))}
-        >
-          <AddGradeMasterForm
-            mode={popup.mode}
-            existingData={popup.data}
-            onClose={(shouldRefetch?: boolean) => {
-              setPopup((p) => ({ ...p, open: false }));
-              if (shouldRefetch) void loadRows();
-            }}
-          />
-        </Dialog>
-      )}
-
+      {/* Delete confirmation dialog */}
       <Dialog
-        open={Boolean(deleteTarget)}
+        open={deleteOpen}
         title="Delete Grade"
-        description="This action cannot be undone."
+        description={deleteTarget ? `Delete ${deleteTarget.grade_code} - ${deleteTarget.grade_name}?` : undefined}
         compact
         tone="danger"
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => setDeleteOpen(false)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
               Cancel
             </Button>
             <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>
@@ -291,8 +378,9 @@ export function GradeMasterPage() {
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          Confirm delete for grade <strong>{deleteTarget?.grade_code}</strong>?
+        <p className="m-0 text-sm text-muted-foreground">
+          This action cannot be undone. Are you sure you want to delete grade{" "}
+          <strong>{deleteTarget?.grade_code}</strong>?
         </p>
       </Dialog>
     </section>
