@@ -1,6 +1,7 @@
 import {
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
   Edit2,
   FileText,
   Folder,
@@ -11,6 +12,17 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Landmark,
+  Scale,
+  PiggyBank,
+  TrendingUp,
+  TrendingDown,
+  Layers3,
+  MapPin,
+  CreditCard,
+  ReceiptText,
+  ChartNoAxesCombined,
+  SlidersHorizontal,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -24,6 +36,7 @@ import {
 } from "../../api/finance";
 import { getDynamicLookup, getLookupText, getMasterLookup } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -526,10 +539,9 @@ function TreeNodeView({
           title={`${node.label} (${node.id})`}
           aria-current={selected ? "true" : undefined}
         >
-          {hasChildren ? <Folder size={15} /> : <FileText size={15} />}
+          <AccountTreeIcon node={node} />
           <span className={`tree-level-badge level-${node.level}`}>L{node.level}</span>
           <span className="min-w-0 flex-1 truncate">{node.label}</span>
-          {hasChildren && <span className="tree-child-count" title={`${node.children.length} child accounts`}>{node.children.length}</span>}
           {node.level >= 3 && <code className="ml-auto rounded border bg-card px-1.5 py-0.5 text-[11px] text-primary">{node.id}</code>}
         </button>
       </div>
@@ -684,23 +696,30 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
 
   return (
       <div className="finance-utility-editor account-editor flex flex-col">
-      <div className="flex items-start justify-between gap-4 border-b p-4">
-        <div>
-          <p className="eyebrow">{isEdit ? "Modify Node" : "Create Node"}</p>
-          <h2 className="m-0 text-xl font-semibold tracking-tight">{title}</h2>
+      <div className="account-editor-header flex items-center justify-between gap-4 border-b p-4">
+        <div className="account-editor-title flex min-w-0 items-center gap-3">
+          <div className={`account-editor-title-icon level-${level}`}>
+            <AccountTreeIcon node={node || parent || null} size={19} fallbackLevel={level} />
+          </div>
+          <div className="min-w-0">
+          <p className="eyebrow">{isEdit ? "Modify Account" : "Create Account"}</p>
+          <h2 className="m-0 truncate text-lg font-semibold tracking-tight">{title}</h2>
           {(parent || node) && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {parent ? `Parent: ${parent.label} (${parent.id})` : node ? `Code: ${node.id}` : ""}
-            </p>
+            <div className="account-editor-context mt-1">
+              <span className={`tree-level-badge level-${level}`}>L{level}</span>
+              <code>{parent ? `Parent ${parent.id}` : node ? node.id : ""}</code>
+              <span>{parent ? parent.label : node?.label}</span>
+            </div>
           )}
+          </div>
         </div>
-        <Button variant="outline" type="button" onClick={onClose}>
-          Back to Details
+        <Button className="account-editor-back" variant="outline" type="button" onClick={onClose}>
+          <ArrowLeft size={15} /> Back to Details
         </Button>
       </div>
 
 
-      <form id="account-node-form" className="account-node-form min-h-0 flex-1 overflow-auto p-4" onSubmit={handleSubmit}>
+      <form id="account-node-form" className="account-node-form account-editor-body min-h-0 flex-1 overflow-auto p-4" onSubmit={handleSubmit}>
         <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
         {loadingDetails ? (
@@ -712,7 +731,15 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
         ) : level === 5 ? (
           <AccountLevelFiveForm value={accountForm} onChange={(next) => { setAccountForm(next); onDirtyChange(true); }} />
         ) : (
-          <>
+          <section className="account-simple-form-card">
+            <div className="account-simple-form-head">
+              <div className={`account-block-icon level-${level}`}><Layers3 size={15} /></div>
+              <div>
+                <h3>Level {level} Information</h3>
+                <p>Maintain the account hierarchy name and applicable controls.</p>
+              </div>
+            </div>
+            <div className="account-simple-form-grid">
             {isEdit && node && (
               <label className="field">
                 <span>Code</span>
@@ -725,17 +752,18 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
             </label>
 
             {level === 4 && (
-              <div className="toggle-grid">
+              <div className="toggle-grid account-level-flags">
                 <FlagSelect label="Type" value={l4Type} onChange={(value) => { setL4Type(value); onDirtyChange(true); }} />
                 <FlagSelect label="Invoice Splitting" value={l4Bill} onChange={(value) => { setL4Bill(value); onDirtyChange(true); }} />
                 <FlagSelect label="Job" value={l4Job} onChange={(value) => { setL4Job(value); onDirtyChange(true); }} />
               </div>
             )}
-          </>
+            </div>
+          </section>
         )}
       </form>
 
-      <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
+      <div className="account-editor-footer flex items-center justify-end gap-2 border-t bg-card p-3">
          <div>
     {isEdit && level === 5 && node && (
       <Button variant="outline" type="button" onClick={() => onDetails(node)}>
@@ -910,7 +938,10 @@ function AccountLevelFiveForm({
       {ACCOUNT_FORM_SECTIONS.map((section) => (
         <details className="form-section account-form-section" key={section.title} open>
           <summary className="form-section-title">
-            <h3>{section.title}</h3>
+            <span className="account-section-heading">
+              <span className="account-block-icon"><AccountSectionIcon title={section.title} /></span>
+              <h3>{section.title}</h3>
+            </span>
             <ChevronDown size={15} />
           </summary>
           <div className="form-grid">
@@ -935,6 +966,11 @@ function AccountLevelFiveForm({
                         className="ui-textarea"
                         value={value[field.name]}
                         onChange={(event) => setField(field.name, event.target.value)}
+                      />
+                    ) : field.type === "date" ? (
+                      <BiscDatePicker
+                        value={value[field.name]}
+                        onChange={(nextValue) => setField(field.name, nextValue)}
                       />
                     ) : (
                       <Input
@@ -1134,6 +1170,29 @@ function TreeSkeleton() {
       ))}
     </div>
   );
+}
+
+function AccountTreeIcon({ node, size = 15, fallbackLevel }: { node: AccountTreeNode | null; size?: number; fallbackLevel?: number }) {
+  const level = node?.level || fallbackLevel || 1;
+  const label = node?.label.toLowerCase() || "";
+  if (level === 1) {
+    if (label.includes("asset")) return <Landmark size={size} />;
+    if (label.includes("liabil")) return <Scale size={size} />;
+    if (label.includes("equity")) return <PiggyBank size={size} />;
+    if (label.includes("income")) return <TrendingUp size={size} />;
+    if (label.includes("expense")) return <TrendingDown size={size} />;
+  }
+  if (level === 5) return <FileText size={size} />;
+  return node?.children?.length ? <Folder size={size} /> : <FolderOpen size={size} />;
+}
+
+function AccountSectionIcon({ title }: { title: string }) {
+  if (title === "Basic Information") return <Layers3 size={14} />;
+  if (title === "Address and Contact") return <MapPin size={14} />;
+  if (title === "Credit and Bank") return <CreditCard size={14} />;
+  if (title === "Contract, Sales and Tax") return <ReceiptText size={14} />;
+  if (title === "BI and Expense") return <ChartNoAxesCombined size={14} />;
+  return <SlidersHorizontal size={14} />;
 }
 
 function flattenTree(nodes: AccountTreeNode[]): AccountTreeNode[] {

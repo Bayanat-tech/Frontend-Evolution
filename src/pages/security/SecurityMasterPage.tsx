@@ -1,14 +1,13 @@
-import { Check, ChevronDown, Edit2, Eye, EyeOff, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Edit2, Eye, EyeOff, FileText, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { deleteSecurityMaster, getSecurityMaster, saveSecurityMaster } from "../../api/security";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
-import { NoticeToast } from "../../components/ui/NoticeToast";
-import { Select } from "../../components/ui/Select";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 
 type SecurityField = {
@@ -278,6 +277,13 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
   },
 };
 
+const inputClass =
+  "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500";
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
 export function SecurityMasterPage({ config }: { config: SecurityMasterConfig }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
@@ -386,23 +392,49 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
-      ...tableFields.map((field) => ({
+      ...tableFields.map((field, index) => ({
         accessorKey: field.name,
         header: field.label,
         size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) =>
+          index === 0 ? (
+            <button
+              type="button"
+              onClick={() => openEdit(row.original)}
+              className="font-semibold text-[#00378C] hover:underline cursor-pointer text-left bg-transparent border-none p-0"
+              title="Click to edit"
+            >
+              {formatValue(row.original[field.name])}
+            </button>
+          ) : (
+            formatValue(row.original[field.name])
+          ),
       })),
       {
         id: "actions",
-        header: "Actions",
+        header: () => <div className="text-center">Actions</div>,
         size: 90,
+        enableSorting: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title={`Edit ${config.title}`}>
-              <Edit2 size={14} />
+          <div className="flex items-center justify-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
+              onClick={() => openEdit(row.original)}
+              title="Edit"
+            >
+              <Edit2 size={15} />
             </Button>
-            <Button size="icon" variant="ghost" disabled={!config.deleteEnabled} onClick={() => setDeleteTarget(row.original)} title={`Delete ${config.title}`}>
-              <Trash2 size={14} />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+              disabled={!config.deleteEnabled}
+              onClick={() => setDeleteTarget(row.original)}
+              title="Delete"
+            >
+              <Trash2 size={15} />
             </Button>
           </div>
         ),
@@ -515,139 +547,196 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     }
   };
 
+  const pageTitle = formOpen ? (editMode ? `Edit ${config.title}` : `New ${config.title}`) : config.title;
+
   return (
-    <section className="security-page grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>
+    <section className="grid gap-2 p-1">
+      {/* ---------- Top Header (compact) ---------- */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+            <FileText size={14} />
+          </div>
+          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
+            {pageTitle}
+          </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={`Add ${config.title}`} onClick={openAdd}>
-            <Plus size={15} /> Add
-          </Button>
-        </div>
+
+        {formOpen && (
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="submit"
+              form="security-master-form"
+              disabled={saving}
+              className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
+            >
+              <Save size={13} /> {saving ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setFormOpen(false)}
+              disabled={saving}
+              aria-label="Close"
+              title="Close"
+              className="h-7 w-7 rounded-md"
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        )}
       </div>
 
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
-        subtitle={`${config.title} List`}
-        searchValue={query}
-        onSearchChange={(value) => {
-          setQuery(value);
-          setPageIndex(0);
-        }}
-        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-        loading={loading}
-        emptyText={`No ${config.title.toLowerCase()} records found`}
-        height={620}
-        minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
-        density="grid"
-        enablePagination
-        manualPagination={!hasSearch}
-        manualFiltering={false}
-        pageIndex={pageIndex}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        columnFilters={columnFilters}
-        onColumnFiltersChange={(filters) => {
-          setColumnFilters(filters);
-          setPageIndex(0);
-        }}
-        onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPageIndex(0);
-        }}
-        getRowId={(row, index) => `${String(row[config.keyField] ?? row[config.keyField.toLowerCase()] ?? config.master)}_${index}`}
-      />
-
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} wide onClose={() => setFormOpen(false)}>
-        <form className="grid gap-4" onSubmit={saveRecord}>
-          <Card>
-            <CardHeader className="border-b bg-muted/30">
-              <div>
-                <p className="eyebrow">Details</p>
-                <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
+      {/* ---------- EDITOR ---------- */}
+      {formOpen && (
+        <form id="security-master-form" className="flex flex-col gap-2" onSubmit={saveRecord}>
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            {/* Section Header – very compact */}
+            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5 rounded-t-lg">
+              <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
+                <FileText size={12} />
               </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 pt-4 md:grid-cols-2 xl:grid-cols-3">
-              {config.fields.map((field) => (
-                <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
-                  {renderInput(
-                    field,
-                    form[field.name],
-                    Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
-                    editMode,
-                    showPassword,
-                    getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
-                    getSelectOptions(field, masterOptionRows, form[field.name]),
-                    selectSearch[field.name] || "",
-                    openOptionField === field.name,
-                    (open) => {
-                      setOpenOptionField(open ? field.name : null);
-                      if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
-                    },
-                    (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
-                    () => setShowPassword((current) => !current),
-                    (value) => updateFormField(field, value),
-                  )}
-                </Field>
-              ))}
+              <h3 className="m-0 text-xs font-semibold text-slate-800">{config.title} Details</h3>
+            </div>
+
+            <div className="p-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5">
+                {config.fields.map((field) => (
+                  <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
+                    {renderInput(
+                      field,
+                      form[field.name],
+                      Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
+                      editMode,
+                      showPassword,
+                      getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
+                      getSelectOptions(field, masterOptionRows, form[field.name]),
+                      selectSearch[field.name] || "",
+                      openOptionField === field.name,
+                      (open) => {
+                        setOpenOptionField(open ? field.name : null);
+                        if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
+                      },
+                      (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
+                      () => setShowPassword((current) => !current),
+                      (value) => updateFormField(field, value),
+                    )}
+                  </Field>
+                ))}
+              </div>
               {positionImpact ? (
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground md:col-span-2 xl:col-span-3">
-                  <strong className="text-foreground">Position preview:</strong>{" "}
+                <div className="mt-2.5 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 text-xs text-slate-600 text-left">
+                  <strong className="text-slate-900">Position preview:</strong>{" "}
                   {positionImpact.summary}
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button disabled={saving} type="submit">
-              <Save size={15} /> {saving ? "Saving..." : "Save"}
-            </Button>
+            </div>
           </div>
         </form>
-      </Dialog>
+      )}
 
+      {/* ---------- LIST ---------- */}
+      {!formOpen && (
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+          searchValue={query}
+          onSearchChange={(value) => {
+            setQuery(value);
+            setPageIndex(0);
+          }}
+          searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+          loading={loading}
+          emptyText={`No ${config.title.toLowerCase()} records found`}
+          height="calc(100dvh - 150px)"
+          minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
+          density="grid"
+          enablePagination
+          enableExport={false}
+          manualPagination={!hasSearch}
+          manualFiltering={false}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPageIndex(0);
+          }}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={openAdd}
+                disabled={saving}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                fyPeriod=""
+                fyPeriods={[]}
+                onFyPeriodChange={() => {}}
+                onExport={() =>
+                  exportToCsv(
+                    rows,
+                    columns,
+                    `${config.master}-${new Date().toISOString().slice(0, 10)}.csv`,
+                  )
+                }
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
+          getRowId={(row, index) => `${String(row[config.keyField] ?? row[config.keyField.toLowerCase()] ?? config.master)}_${index}`}
+        />
+      )}
+
+      {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
-        description={deleteTarget ? `Delete ${formatValue(deleteTarget[config.keyField])}?` : undefined}
+        description="This action cannot be undone."
         compact
         tone="danger"
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
             <Button disabled={saving} variant="destructive" onClick={confirmDelete}>Delete</Button>
           </>
         }
       >
-        <p className="m-0 text-sm text-muted-foreground">This action uses the existing Bayanat Security backend endpoint.</p>
+        <p className="m-0 text-sm text-muted-foreground">
+          Delete <strong>{deleteTarget ? formatValue(deleteTarget[config.keyField]) : ""}</strong>?
+        </p>
       </Dialog>
     </section>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Form Field – ultra compact                                         */
+/* ------------------------------------------------------------------ */
+
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
-    <label className="field">
-      <span>
+    <div className="flex flex-col">
+      <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
         {label}
-        {required && <strong className="text-destructive"> *</strong>}
-      </span>
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -677,12 +766,12 @@ function renderInput(
       .slice(0, 12);
     return (
       <div className="relative">
-        <Input
+        <input
           disabled={disabled}
           type={field.type === "number" ? "number" : "text"}
           value={disabled && !value ? "" : String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
-          className="pr-9"
+          className={`${inputClass} pr-8`}
           onFocus={() => onOptionsOpenChange(true)}
           onChange={(event) => {
             onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value);
@@ -695,15 +784,15 @@ function renderInput(
         <button
           type="button"
           disabled={disabled}
-          className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none"
+          className="absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none"
           onClick={() => onOptionsOpenChange(!optionsOpen)}
           aria-label={`Show ${field.label} options`}
         >
-          <span className="text-[10px]">▼</span>
+          <span className="text-[9px]">▼</span>
         </button>
         {optionsOpen && !disabled && (
           <div
-            className="absolute left-0 right-0 top-[calc(100%+6px)] z-[90] overflow-hidden rounded-md border bg-popover text-sm shadow-xl"
+            className="absolute left-0 right-0 top-[calc(100%+4px)] z-[90] overflow-hidden rounded-md border border-slate-200 bg-white text-sm shadow-xl"
             onMouseDown={(event) => event.preventDefault()}
           >
             <div className="max-h-56 overflow-auto p-1">
@@ -711,7 +800,7 @@ function renderInput(
                 visibleOptions.map((option) => (
                   <button
                     type="button"
-                    className="flex w-full items-center rounded px-3 py-2 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                    className="flex w-full items-center rounded px-2.5 py-1.5 text-left text-sm font-medium hover:bg-[#eff6ff] hover:text-[#00378C]"
                     onClick={() => {
                       onChange(field.type === "number" ? Number(option || 0) : option);
                       onOptionsOpenChange(false);
@@ -722,7 +811,7 @@ function renderInput(
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-xs text-muted-foreground">No matching options</div>
+                <div className="px-3 py-2 text-xs text-slate-500">No matching options</div>
               )}
             </div>
           </div>
@@ -748,7 +837,7 @@ function renderInput(
           <button
             type="button"
             disabled={disabled}
-            className="ui-select flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1 text-left text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-7 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-900 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
             onClick={() => onOptionsOpenChange(!optionsOpen)}
             onKeyDown={(event) => {
               if (event.key === "Escape") onOptionsOpenChange(false);
@@ -756,21 +845,21 @@ function renderInput(
             aria-haspopup="listbox"
             aria-expanded={optionsOpen}
           >
-            <span className={selectedOption ? "min-w-0 truncate" : "min-w-0 truncate text-muted-foreground"}>
+            <span className={selectedOption ? "min-w-0 truncate" : "min-w-0 truncate text-slate-400"}>
               {selectedOption?.label || `Select ${field.label}`}
             </span>
-            <ChevronDown size={15} className="shrink-0 text-muted-foreground" />
+            <ChevronDown size={14} className="shrink-0 text-slate-500" />
           </button>
           {optionsOpen && !disabled && (
             <div
-              className="absolute left-0 top-[calc(100%+6px)] z-[140] w-full min-w-[260px] overflow-hidden rounded-lg border border-border bg-popover text-sm shadow-xl"
+              className="absolute left-0 top-[calc(100%+4px)] z-[140] w-full min-w-[260px] overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-xl"
               onMouseDown={(event) => event.preventDefault()}
             >
-              <div className="border-b bg-background p-2">
+              <div className="border-b border-slate-100 bg-white p-1.5">
                 <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    className="h-8 w-full rounded-md border border-input bg-background py-1 pl-8 pr-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    className="h-7 w-full rounded-md border border-slate-200 bg-white py-1 pl-7 pr-2 text-sm outline-none focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30"
                     placeholder={`Search ${field.label.toLowerCase()}...`}
                     value={selectSearch}
                     autoFocus
@@ -788,7 +877,7 @@ function renderInput(
                     return (
                       <button
                         type="button"
-                        className="flex h-8 w-full items-center justify-between gap-2 rounded-md px-3 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                        className="flex h-7 w-full items-center justify-between gap-2 rounded-md px-2.5 text-left text-sm font-medium hover:bg-[#eff6ff] hover:text-[#00378C]"
                         onClick={() => {
                           onChange(option.value);
                           onSelectSearchChange("");
@@ -799,12 +888,12 @@ function renderInput(
                         aria-selected={selected}
                       >
                         <span className="min-w-0 truncate">{option.label}</span>
-                        {selected && <Check size={14} className="shrink-0 text-primary" />}
+                        {selected && <Check size={14} className="shrink-0 text-[#00378C]" />}
                       </button>
                     );
                   })
                 ) : (
-                  <div className="px-3 py-3 text-xs text-muted-foreground">No matching options</div>
+                  <div className="px-3 py-2 text-xs text-slate-500">No matching options</div>
                 )}
               </div>
             </div>
@@ -813,47 +902,57 @@ function renderInput(
       );
     }
     return (
-      <Select disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
+      <select
+        disabled={disabled}
+        value={String(value ?? "")}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputClass}
+      >
         <option value="">Select {field.label}</option>
         {options.map((option) => (
           <option value={option.value} key={option.value}>{option.label}</option>
         ))}
-      </Select>
+      </select>
     );
   }
   if (field.type === "password") {
     return (
       <div className="relative">
-        <Input
+        <input
           disabled={disabled}
           type={showPassword ? "text" : "password"}
           value={String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
-          className="pr-10"
+          className={`${inputClass} pr-9`}
           onChange={(event) => onChange(event.target.value)}
         />
         <button
           type="button"
-          className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           onClick={onTogglePassword}
           aria-label={showPassword ? "Hide password" : "Show password"}
           title={showPassword ? "Hide password" : "Show password"}
         >
-          {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+          {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       </div>
     );
   }
   return (
-    <Input
+    <input
       disabled={disabled}
       type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"}
       value={disabled && !value ? "" : String(value ?? "")}
       placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
+      className={inputClass}
       onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)}
     />
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Helpers (unchanged)                                                */
+/* ------------------------------------------------------------------ */
 
 function getFieldOptions(fieldName: string, form: Record<string, unknown>, rows: Record<string, unknown>[], isModuleData: boolean) {
   if (!isModuleData) return [];

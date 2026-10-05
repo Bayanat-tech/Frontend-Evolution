@@ -2,7 +2,6 @@ import { Edit2, Trash2, Plus } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { FormikProps } from 'formik';
 import { useEffect, useMemo, useState } from 'react';
-import { TPayUnitDetail, TPayUnitFormValues, TCountryOption } from './AddPayUnitDependentForm';
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup, executeDynamicDelete } from '../../../api/lookups';
 import { Button } from '../../../components/ui/Button';
@@ -10,6 +9,37 @@ import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
+
+// ===================== TYPES (defined locally) =====================
+type TPayUnitDetail = {
+  id: string;
+  pay_comp_id_depend: string;
+  percent: number;
+  pay_comp_desc: string;
+  remarks: string;
+  country_code: string;
+  country_name: string;
+  nationality: string;
+  status: string;
+  status_desc?: string;
+  limit: number;
+  age: number;
+  amount: number;
+  sort_order?: number;
+  isEditMode: boolean;
+};
+
+type TCountryOption = {
+  country_code: string;
+  country_name: string;
+  nationality: string;
+};
+
+type TPayUnitFormValues = {
+  detail: TPayUnitDetail[];
+  [key: string]: any; // other fields owned by the parent form (div_code, pay_comp_id, headerDetail, ...)
+};
+
 function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
@@ -111,7 +141,7 @@ const PayUnitDependDetailForm = ({ formik, disabled = false }: TProps) => {
         code2: nationality ?? ''
       } as any);
 
-      const updated = details.filter((row) => row.id !== id).map((row, i) => ({ ...row, sort_order: i + 1 }));
+      const updated = details.filter((row : any) => row.id !== id).map((row, i) => ({ ...row, sort_order: i + 1 }));
       formik.setFieldValue('detail', updated);
     } catch (e) {
       console.error(e);
