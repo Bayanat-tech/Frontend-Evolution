@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -15,6 +15,8 @@ import {
 } from "../../../api/transactions";
 import { openPurchaseReport } from "./PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "./Purchasereportpreview";
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
+import { toInputDate } from "../../../hooks/apiDate";
 
 interface PoOrderRegisterParams {
     loginid: string;
@@ -298,6 +300,8 @@ export default function PoOrderRegisterPage() {
     const [toDateIso, setToDateIso] = useState("");
     const [acCode, setAcCode] = useState("");
     const [acName, setAcName] = useState("");
+     const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
     const [poNumber, setPoNumber] = useState("");
     const [prodCodeFrom, setProdCodeFrom] = useState("");
     const [reportCriteria, setReportCriteria] = useState<"SO_REF_ONLY" | "ALL">("ALL");
@@ -423,13 +427,24 @@ useEffect(() => {
                 <ReportFilterHeader onClear={resetFilters} />
 
                 <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    <Field label="Date From">
+                    {/* <Field label="Date From">
                         <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
                     </Field>
 
                     <Field label="Date To">
                         <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
-                    </Field>
+                    </Field> */}
+
+                    <Field label="From">
+                                            <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
+                                                <BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} />
+                                            </ClearableDate>
+                                        </Field>
+                                        <Field label="To">
+                                            <ClearableDate value={toDate} onClear={() => setToDate("")}>
+                                                <BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} />
+                                            </ClearableDate>
+                                        </Field>
 
                     <Field label="Supplier">
                         <LookupField
@@ -559,5 +574,36 @@ useEffect(() => {
 
             <PurchaseReportPreview />
         </section>
+    );
+}
+
+function ClearableDate({
+    value,
+    onClear,
+    children,
+}: {
+    value: string;
+    onClear: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="relative">
+            {children}
+            {value && (
+                <button
+                    type="button"
+                    aria-label="Clear date"
+                    title="Clear"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClear();
+                    }}
+                    className="absolute right-9 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-black transition-colors hover:bg-slate-200"
+                >
+                    <X size={14} strokeWidth={2.5} />
+                </button>
+            )}
+        </div>
     );
 }

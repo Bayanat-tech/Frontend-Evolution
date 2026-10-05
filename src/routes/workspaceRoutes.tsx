@@ -210,6 +210,7 @@ import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcess
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
+import StockReportPage from "../pages/purchase_sales/Reports/StockReportPage";
 
 
  type WorkspaceRouteContext = {
@@ -1447,7 +1448,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Purchase Request Register(old) Report",
   match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
   element: () => <PrRegisterOldPage />,
-}
+},
+
+ {
+  name: "PurchaseSales Stock Reports",
+  match: ({ pathname }) => isStockReportsRoute(pathname),
+  element: () => <StockReportPage />,
+},
 
 
 ];
@@ -1553,6 +1560,13 @@ function isPurchaseRequestRegisterOldRoute(pathname: string) {
   );
 }
 
+
+function isStockReportsRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/workspace/purchase_sales/purchase_sales/reports/stock_report")
+  );
+}
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
