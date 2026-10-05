@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, FileText, Plus, Save, Trash2, X } from "lucide-react";
+import { Edit2, Eye, Plus, Save, Trash2, X, FileText, Settings } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   executeDynamicDelete,
@@ -12,8 +12,10 @@ import {
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
+import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { Select } from "../../components/ui/Select";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
@@ -126,7 +128,6 @@ export const financeUtilityConfigs = {
         val1s8: String(form.asset_type || ""),
         val1n1: Number(form.dprc_percentage || 0),
       };
-
       return values;
     },
   },
@@ -208,10 +209,6 @@ export const financeUtilityConfigs = {
   },
 } satisfies Record<string, FinanceUtilityMasterConfig>;
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
-
 export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMasterConfig }) {
   const { user } = useAuth();
   const companyCode = user?.company_code || "";
@@ -266,51 +263,21 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
       accessorKey: column.key,
       header: column.label,
       size: column.width,
-      cell: ({ row, getValue }) =>
-        column.key === config.keyField ? (
-          <button
-            type="button"
-            onClick={() => setEditor({ mode: "edit", row: row.original })}
-            className="font-semibold text-[#00378C] hover:underline cursor-pointer text-left bg-transparent border-none p-0"
-            title="Click to edit"
-          >
-            {String(getValue() ?? "")}
-          </button>
-        ) : (
-          <span>{String(getValue() ?? "")}</span>
-        ),
+      cell: ({ getValue }) => <span className={column.key === config.keyField ? "font-semibold" : ""}>{String(getValue() ?? "")}</span>,
     })),
     {
       id: "actions",
-      header: () => <div className="text-center">Actions</div>,
+      header: "Actions",
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
-            title="View"
-            onClick={() => setEditor({ mode: "view", row: row.original })}
-          >
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "view", row: row.original })}>
             <Eye size={15} />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
-            title="Edit"
-            onClick={() => setEditor({ mode: "edit", row: row.original })}
-          >
+          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}>
             <Edit2 size={15} />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
-            title="Delete"
-            onClick={() => setDeleteTarget(row.original)}
-          >
+          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)}>
             <Trash2 size={15} />
           </Button>
         </div>
@@ -336,9 +303,20 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
   };
 
   return (
-    <section className="grid gap-2 p-1">
+    <section className="finance-utility-page finance-list-page grid gap-4">
+      {!editor && (
+        <div className="finance-list-heading flex items-center justify-between gap-3">
+          <div className="finance-list-title flex items-center gap-2.5">
+            <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">{config.title}</h1>
+          </div>
+        </div>
+      )}
+
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
       {editor ? (
         <UtilityEditor
+          key={`${editor.mode}_${String(editor.row?.[config.keyField] || "new")}`}
           config={config}
           editor={editor}
           companyCode={companyCode}
@@ -351,57 +329,37 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
           }}
         />
       ) : (
-        <>
-          {/* ---------- Top Header (compact) ---------- */}
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
-                <FileText size={14} />
-              </div>
-              <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
-                {config.title}
-              </h1>
-            </div>
-          </div>
-
-          <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-          {/* ---------- LIST ---------- */}
+        <div className="min-h-[650px]">
           <DataTable
             columns={columns}
             data={filteredRows}
-            title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
+            title={loading ? "Loading" : `${filteredRows.length} Records`}
+            subtitle={config.title}
             searchValue={query}
             onSearchChange={setQuery}
             searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
             loading={loading}
             emptyText={`No ${config.title.toLowerCase()} records found`}
-            height="calc(100dvh - 150px)"
+            height={650}
             minWidth={Math.max(760, config.columns.reduce((total, column) => total + (column.width || 210), 120))}
             density="grid"
-            enablePagination={false}
             enableExport={false}
             actionButton={
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  onClick={() => {
-                    setNotice(null);
-                    setEditor({ mode: "create" });
-                  }}
-                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+                  className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                  title={config.createLabel}
+                  onClick={() => { setNotice(null); setEditor({ mode: "create" }); }}
                 >
-                  <Plus size={14} strokeWidth={2.5} /> Add
+                  <Plus size={14} /> Add
                 </Button>
                 <FinanceListActionsMenu
-                  fyPeriod=""
-                  fyPeriods={[]}
-                  onFyPeriodChange={() => {}}
                   onExport={() =>
                     exportToCsv(
                       filteredRows,
-                      columns,
-                      `${config.title.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`,
+                      columns.filter((column) => column.id !== "actions"),
+                      `${config.title.toLowerCase().replace(/\s+/g, "-")}.csv`,
                     )
                   }
                   onRefresh={() => void loadRows(false)}
@@ -410,39 +368,40 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
             }
             getRowId={(row, index) => `${String(row[config.keyField] || index)}_${index}`}
           />
-        </>
+        </div>
       )}
 
-      {/* ---------- DELETE CONFIRM ---------- */}
-      <Dialog
-        open={Boolean(deleteTarget)}
-        compact
-        tone="danger"
-        title={`Delete ${config.title}`}
-        description="This action cannot be undone."
-        onClose={() => setDeleteTarget(null)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Close
-            </Button>
-            <Button variant="destructive" onClick={() => void deleteRow()}>
-              Delete
-            </Button>
-          </>
-        }
-      >
-        <p className="m-0 text-sm text-muted-foreground">
-          Delete <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>?
-        </p>
-      </Dialog>
+      {deleteTarget && (
+        <Dialog
+          open
+          compact
+          tone="danger"
+          title={`Delete ${config.title}`}
+          description="This action cannot be undone."
+          onClose={() => setDeleteTarget(null)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => void deleteRow()}>
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p className="modal-copy">
+            Delete <strong>{String(deleteTarget[config.keyField] || "")}</strong>?
+          </p>
+        </Dialog>
+      )}
     </section>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Editor (in-page, same layout as Budget Version)                    */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// REFACTORED EDITOR TO MATCH AIRLINE TARIFF UI
+// ---------------------------------------------------------------------------
 
 function UtilityEditor({
   config,
@@ -468,7 +427,6 @@ function UtilityEditor({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const formId = `${config.keyField}-form`;
 
   const setField = (key: string, value: string | number) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -499,40 +457,35 @@ function UtilityEditor({
     }
   };
 
-  const pageTitle =
-    editor.mode === "create"
-      ? `New ${config.title}`
-      : editor.mode === "edit"
-        ? `Edit ${config.title}`
-        : `View ${config.title}`;
-
-  const gridClass =
-    config.formColumns === 1
-      ? "grid grid-cols-1 gap-x-3 gap-y-2.5 max-w-md"
-      : "grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5";
+  const title = editor.mode === "create" ? `New ${config.title}` : editor.mode === "edit" ? `Edit ${config.title}` : `View ${config.title}`;
 
   return (
-    <>
-      {/* ---------- Top Header (compact) ---------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
-            <FileText size={14} />
+    <section className="freight-airline-tariff-screen grid gap-2 freight-ui-standard freight-dense-form">
+      {/* Top Header Card - Matching Airline Tariff */}
+      <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tariff-page-icon">
+            <Settings size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">{title}</h1>
+            {config.autoGeneratedKeyLabel && (
+              <p className="m-0 text-xs text-slate-500">
+                {config.autoGeneratedKeyLabel}: {String(form[config.keyField] || "Autogenerated")}
+              </p>
+            )}
           </div>
-          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">
-            {pageTitle}
-          </h1>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {!readOnly && (
             <Button
               type="submit"
-              form={formId}
+              form={`${config.keyField}-form`}
               disabled={saving}
-              className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
+              className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
             >
-              <Save size={13} /> Save
+              {saving ? <span className="spinner small" /> : <Save size={14} />} Save
             </Button>
           )}
           <Button
@@ -541,53 +494,32 @@ function UtilityEditor({
             size="icon"
             onClick={onClose}
             disabled={saving}
-            aria-label="Close"
-            title="Close"
-            className="h-7 w-7 rounded-md"
+            aria-label="Close editor"
+            title="Close editor"
+            className="h-8 w-8 rounded-lg"
           >
-            <X size={14} />
+            <X size={16} />
           </Button>
         </div>
       </div>
 
-      {/* ---------- EDITOR – fits on one screen ---------- */}
-      <form id={formId} className="flex flex-col gap-2" onSubmit={handleSubmit}>
-        {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-            {error}
+      <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+
+      <form className="flex flex-col gap-2" id={`${config.keyField}-form`} onSubmit={handleSubmit}>
+        {/* Main Form Card */}
+        <div className="freight-master-form-card">
+          <div className="freight-master-form-header">
+            <h3><span className="freight-section-icon"><FileText size={16} /></span>Details</h3>
           </div>
-        )}
-
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-          {/* Section Header – very compact */}
-          <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
-              <FileText size={12} />
-            </div>
-            <h3 className="m-0 text-xs font-semibold text-slate-800">{config.title} Details</h3>
-          </div>
-
-          {/* Form Body – single tight block */}
-          <div className="p-3">
-            {config.autoGeneratedKeyLabel && (
-              <div className="mb-2.5 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1.5">
-                <div className="text-left">
-                  <p className="m-0 text-[11px] font-medium text-slate-600">{config.autoGeneratedKeyLabel}</p>
-                  <p className="m-0 text-sm font-semibold text-slate-900">
-                    {String(form[config.keyField] || "Autogenerated")}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className={gridClass}>
+          <div className="freight-master-form-body">
+            <div className={`grid gap-2 ${config.formColumns === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
               {config.fields.map((field) => (
                 <UtilityField
-                  companyCode={companyCode}
-                  disabled={readOnly || (isEdit && field.key === config.keyField)}
-                  field={field}
                   key={field.key}
+                  field={field}
                   value={form[field.key]}
+                  disabled={readOnly || (isEdit && field.key === config.keyField)}
+                  companyCode={companyCode}
                   onChange={(value) => setField(field.key, value)}
                 />
               ))}
@@ -595,16 +527,13 @@ function UtilityEditor({
           </div>
         </div>
       </form>
-    </>
+    </section>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Field – ultra compact (same look as Budget Version FormField)      */
-/* ------------------------------------------------------------------ */
-
-const inputClass =
-  "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500";
+// ---------------------------------------------------------------------------
+// NEW FIELD COMPONENT TO MATCH AIRLINE TARIFF
+// ---------------------------------------------------------------------------
 
 function UtilityField({
   field,
@@ -619,82 +548,83 @@ function UtilityField({
   companyCode: string;
   onChange: (value: string | number) => void;
 }) {
-  const label = (
-    <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
-      {field.label}
-      {field.required && <span className="ml-0.5 text-red-500">*</span>}
-    </label>
-  );
-
   if (field.type === "select") {
     return (
-      <div className="flex flex-col">
-        {label}
-        <select
+      <div className="freight-master-field">
+        <label className="freight-master-label">
+          <span>{field.label}</span>
+          {field.required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        </label>
+        <Select
+          className="freight-master-select"
           value={String(value || "")}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
-          className={inputClass}
         >
           <option value="">Select</option>
           {(field.options || []).map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </select>
+        </Select>
       </div>
     );
   }
 
   if (field.type === "lookup" && field.lookup) {
     return (
-      <LookupField
-        label={`${field.label}${field.required ? " *" : ""}`}
-        value={String(value || "")}
-        displayValue={String(value || "")}
-        columns={field.lookup.columns}
-        valueField={field.lookup.valueField}
-        displayFields={field.lookup.displayFields}
-        disabled={disabled}
-        loadOptions={() =>
-          getDynamicLookup({
-            parameter: field.lookup!.parameter,
-            code1: companyCode,
-            code2: "",
-            code3: "",
-            code4: "",
-            number1: 0,
-            number2: 0,
-            number3: 0,
-            number4: 0,
-            date1: null,
-            date2: null,
-            date3: null,
-            date4: null,
-          })
-        }
-        onChange={(nextValue, row) => onChange(nextValue || (row ? getLookupText(row, field.lookup!.displayFields) : ""))}
-      />
+      <div className="freight-master-field">
+        <label className="freight-master-label">
+          <span>{field.label}</span>
+          {field.required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        </label>
+        <LookupField
+          compact
+          value={String(value || "")}
+          displayValue={String(value || "")}
+          columns={field.lookup.columns}
+          valueField={field.lookup.valueField}
+          displayFields={field.lookup.displayFields}
+          disabled={disabled}
+          loadOptions={() =>
+            getDynamicLookup({
+              parameter: field.lookup!.parameter,
+              code1: companyCode,
+              code2: "",
+              code3: "",
+              code4: "",
+              number1: 0,
+              number2: 0,
+              number3: 0,
+              number4: 0,
+              date1: null,
+              date2: null,
+              date3: null,
+              date4: null,
+            })
+          }
+          onChange={(nextValue, row) => onChange(nextValue || (row ? getLookupText(row, field.lookup!.displayFields) : ""))}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col">
-      {label}
+    <div className="freight-master-field">
+      <label className="freight-master-label">
+        <span>{field.label}</span>
+        {field.required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+      </label>
       <input
+        className="freight-master-input"
         type={field.type === "number" ? "number" : "text"}
         value={String(value ?? "")}
         maxLength={field.maxLength}
         onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)}
         disabled={disabled}
-        className={inputClass}
       />
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
 
 function normalizeRow(row: LookupRow, fields: FieldConfig[], companyCode: string, keyField?: string): MasterRow {
   return {
