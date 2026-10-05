@@ -70,7 +70,7 @@ export function FinanceDocumentIdentity({
         )}
 
         {/* Highlighted Division Badge */}
-        {(divCode || divName) && (
+        {/* {(divCode || divName) && (
           <div
             className="rounded-md bg-white/10 border border-white/20 text-white px-2.5 py-0.5 shadow-xs flex items-center gap-1.5"
             title={divName ? `${divCode || ""} - ${divName}` : divCode}
@@ -80,7 +80,7 @@ export function FinanceDocumentIdentity({
               {divCode ? (divName ? `${divCode} - ${divName}` : divCode) : divName}
             </strong>
           </div>
-        )}
+        )} */}
       </div>
       {onToggleHeader && (
         <button type="button" className="finance-header-toggle" aria-expanded={headerExpanded}
