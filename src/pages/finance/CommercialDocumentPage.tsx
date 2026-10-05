@@ -915,12 +915,34 @@ function CommercialEditor({
   )}
 
   {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
-  {!isPO && (
+  {/* {!isPO && (
     <Field label="INV Date" required error={fieldErrors.inv_date}>
       <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
     </Field>
-  )}
+  )} */}
 
+  {/* {!isPO && (
+  <Field label="INV Date" required error={fieldErrors.inv_date}>
+    <BiscDatePicker required disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+  </Field>
+)} */}
+  {!isPO && (
+  <Field label="INV Date" required error={fieldErrors.inv_date}>
+    <div className="relative">
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+      <input
+        tabIndex={-1}
+        aria-hidden="true"
+        required
+        disabled={isCancelled}
+        value={dateInput(form.inv_date)}
+        onChange={() => {}}
+        ref={(el) => el?.setCustomValidity(form.inv_date ? "" : "INV Date is required")}
+        style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 1, opacity: 0, pointerEvents: "none" }}
+      />
+    </div>
+  </Field>
+)}
 
 
   {!isPO && (
@@ -945,8 +967,13 @@ function CommercialEditor({
           number1: form.div_code ? Number(form.div_code) : undefined,
         })
       }
+      // onChange={async (value, row) => {
+      //   if (!value || !row) return;
       onChange={async (value, row) => {
-        if (!value || !row) return;
+         if (!value || !row) {
+          setForm((c) => ({ ...c, ref_doc_no: "" }));
+         return;
+        }
         const r = row as Record<string, unknown>;
         const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
         const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
@@ -971,7 +998,8 @@ function CommercialEditor({
             } catch {}
           }
 
-          const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          // const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          const targetDocType: CommercialType = docType;
           const mapped = mapForm(targetDocType, header, rawDetail);
           setForm((c) => ({
             ...c,
@@ -983,6 +1011,7 @@ function CommercialEditor({
             ref_doc_no: docNo,
             detail: mapped.detail,
           }));
+
         } catch (err) {
           console.error("Failed to load ref doc", err);
           setError(err instanceof Error ? err.message : "Unable to load reference document");
@@ -1020,7 +1049,7 @@ function CommercialEditor({
       </Select>
     </Field>
   )}
-  {isPO && (
+  {/* {isPO && (
     <Field label="Order Type (LPO/CPO)">
       <Select value={form.cash_ind || "N"}
         onChange={(e) => update("cash_ind", e.target.value)}>
@@ -1028,7 +1057,7 @@ function CommercialEditor({
         <option value="Y">CPO - Cash Purchase</option>
       </Select>
     </Field>
-  )}
+  )} */}
           </div>
         </section>
 
@@ -1040,10 +1069,17 @@ function CommercialEditor({
             <span>{isSales ? "Customer Details" : "Supplier Details"}</span>
           </div>
           <div className="commercial-header-block-fields">
+          {/* <div className="commercial-party-primary"> */}
+          {/* <div className="commercial-header-block-fields party-fields"> */}
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
-  <div className="col-span-1">
+  {/* <div className="col-span-1"> */}
+  <div className="commercial-party-primary">
+  {/* <div style={{ gridColumn: "span 2" }}> */}
+  {/* <div style={{ gridColumn: "span 2 / span 2", minWidth: 0 }}> */}
+   {/* <div style={{ gridColumn: "span 2" }}>
+    <div className="party-main"> */}
     <LookupField
       label={isSales ? "Customer" : "Supplier"} required enforceRequired
       value={form.ac_code}
@@ -1106,7 +1142,12 @@ function CommercialEditor({
   
 
   {/* Currency + Exchange Rate */}
-  <div className="col-span-1">
+  {/* <div className="col-span-1"> */}
+  {/* <div style={{ gridColumn: "span 1" }}> */}
+    {/* <div style={{ gridColumn: "span 1 / span 1", minWidth: 0 }}> */}
+  <div className="commercial-party-primary">
+  {/* <div className="col-span-1  grid grid-cols-2 "> */}
+  {/* <div style={{ gridColumn: "span 1" }}> */}
     <LookupField
       label="Currency"
       required
@@ -1137,15 +1178,17 @@ function CommercialEditor({
     )}
   </div>
 
-  <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
-    <ExchangeRateInput
-      disabled={isCancelled}
-      required
-      value={form.ex_rate}
-      onChange={(rate) => update("ex_rate", rate)}
-      className={fieldErrors.ex_rate ? "border-destructive" : ""}
-    />
-  </Field>
+  {/* <div  style={{ gridColumn: "span 1" }}> */}
+    <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
+      <ExchangeRateInput
+        disabled={isCancelled}
+        required
+        value={form.ex_rate}
+        onChange={(rate) => update("ex_rate", rate)}
+        className={fieldErrors.ex_rate ? "border-destructive" : ""}
+      />
+    </Field>
+  {/* </div> */}
 
   <Field label="Address" className="col-span-2">
     <Input disabled={isCancelled} value={form.party_address || ""} onChange={(e) => update("party_address", e.target.value)} />
@@ -1427,7 +1470,7 @@ function CommercialEditor({
                       {isPO && <th className="px-2 py-2 text-left">Qty Rcv</th>}
                       <th className="px-2 py-2 text-left">Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
-                      {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>}
+                      {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
@@ -1494,6 +1537,7 @@ function CommercialEditor({
       value={line.prod_code || ""}
       onChange={(e) => updateLine(line.id, { prod_code: e.target.value })}
     />
+    
   </td>
 )}
                         <td className="w-[200px] max-w-[240px] px-1 py-1">
@@ -1519,7 +1563,7 @@ function CommercialEditor({
     const taxperc   = Number(line.tx_compnt_perc_1 || 0);
     updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
   }} /></td>
-                        {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>}
+                        {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-14 max-w-[60px] px-1 py-1">
                           <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
