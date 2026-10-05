@@ -232,6 +232,7 @@ export function AccountTreePage() {
   const [notice, setNotice] = useState<Notice>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsNode, setDetailsNode] = useState<AccountTreeNode | null>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
 
   const loadTree = async (clearNotice = true) => {
     setLoading(true);
@@ -261,11 +262,32 @@ export function AccountTreePage() {
   const allNodes = useMemo(() => flattenTree(tree), [tree]);
   const selectedNode = allNodes.find((node) => node.id === selectedId) || allNodes[0];
   const filteredTree = useMemo(() => filterTree(tree, query), [tree, query]);
+  const selectedPath = useMemo(
+    () => (selectedNode ? findNodePath(tree, selectedNode.id) : []),
+    [tree, selectedNode?.id],
+  );
+
+  const handleNodeSelect = (node: AccountTreeNode) => {
+    if (dialog && editorDirty && !window.confirm("Discard unsaved account changes?")) return;
+    setSelectedId(node.id);
+    setDialog(null);
+    setEditorDirty(false);
+    setDetailsOpen(false);
+    setDetailsNode(null);
+    setAttachmentOpen(false);
+  };
 
   const handleDialogSaved = async (message?: string) => {
     setDialog(null);
+    setEditorDirty(false);
     setNotice({ type: "success", message: message || "Account tree updated" });
     await loadTree(false);
+  };
+
+  const closeEditor = () => {
+    if (editorDirty && !window.confirm("Discard unsaved account changes?")) return;
+    setEditorDirty(false);
+    setDialog(null);
   };
 
   const handleDelete = async () => {
@@ -333,7 +355,8 @@ export function AccountTreePage() {
                   selectedId={selectedNode?.id || ""}
                   expanded={expanded}
                   setExpanded={setExpanded}
-                  setSelectedId={setSelectedId}
+                  onSelect={handleNodeSelect}
+                  forceExpanded={Boolean(query.trim())}
                 />
               ))
             )}
@@ -342,7 +365,7 @@ export function AccountTreePage() {
 
         <Card className="account-detail-panel overflow-hidden">
           {dialog ? (
-            <AccountNodeEditor dialog={dialog} onClose={() => setDialog(null)} onSaved={handleDialogSaved} onDetails={(node) => {       
+            <AccountNodeEditor dialog={dialog} onClose={closeEditor} onSaved={handleDialogSaved} onDirtyChange={setEditorDirty} onDetails={(node) => {
               setDetailsNode(node);
                setDetailsOpen(true);
              }}/>
@@ -358,6 +381,16 @@ export function AccountTreePage() {
                   <span className="font-mono text-xs text-muted-foreground">{selectedNode.id}</span>
                 </div>
               </CardHeader>
+
+              <div className="account-path" aria-label="Selected account path">
+                {selectedPath.map((pathNode, index) => (
+                  <span className="account-path-item" key={`${pathNode.level}-${pathNode.id}`}>
+                    {index > 0 && <ChevronRight size={13} aria-hidden="true" />}
+                    <span className={`tree-level-badge level-${pathNode.level}`}>L{pathNode.level}</span>
+                    <span title={pathNode.label}>{pathNode.label}</span>
+                  </span>
+                ))}
+              </div>
 
               <CardContent>
                 <div className="detail-grid grid grid-cols-2 gap-3 max-md:grid-cols-1">
@@ -453,18 +486,20 @@ function TreeNodeView({
   selectedId,
   expanded,
   setExpanded,
-  setSelectedId,
+  onSelect,
+  forceExpanded = false,
   depth = 0,
 }: {
   node: AccountTreeNode;
   selectedId: string;
   expanded: Record<string, boolean>;
   setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
-  setSelectedId: (id: string) => void;
+  onSelect: (node: AccountTreeNode) => void;
+  forceExpanded?: boolean;
   depth?: number;
 }) {
   const hasChildren = node.children.length > 0;
-  const isExpanded = expanded[node.id] ?? node.level <= 2;
+  const isExpanded = forceExpanded || (expanded[node.id] ?? node.level <= 2);
   const selected = selectedId === node.id;
 
   return (
@@ -480,19 +515,21 @@ function TreeNodeView({
           className="tree-caret grid h-7 w-6 place-items-center rounded border-0 bg-transparent text-muted-foreground disabled:cursor-default"
           onClick={() => setExpanded((prev) => ({ ...prev, [node.id]: !isExpanded }))}
           disabled={!hasChildren}
+          aria-label={`${isExpanded ? "Collapse" : "Expand"} ${node.label}`}
+          aria-expanded={hasChildren ? isExpanded : undefined}
         >
           {hasChildren ? isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span />}
         </button>
         <button
           className="tree-label flex h-8 min-w-0 flex-1 items-center gap-2 border-0 bg-transparent text-left text-foreground"
-          // onClick={() => setSelectedId(node.id)}
-          onClick={() => {
-           setSelectedId(node.id);
-           if (hasChildren) setExpanded((prev) => ({ ...prev, [node.id]: !isExpanded }));
-      }}
+          onClick={() => onSelect(node)}
+          title={`${node.label} (${node.id})`}
+          aria-current={selected ? "true" : undefined}
         >
           {hasChildren ? <Folder size={15} /> : <FileText size={15} />}
+          <span className={`tree-level-badge level-${node.level}`}>L{node.level}</span>
           <span className="min-w-0 flex-1 truncate">{node.label}</span>
+          {hasChildren && <span className="tree-child-count" title={`${node.children.length} child accounts`}>{node.children.length}</span>}
           {node.level >= 3 && <code className="ml-auto rounded border bg-card px-1.5 py-0.5 text-[11px] text-primary">{node.id}</code>}
         </button>
       </div>
@@ -505,7 +542,8 @@ function TreeNodeView({
               selectedId={selectedId}
               expanded={expanded}
               setExpanded={setExpanded}
-              setSelectedId={setSelectedId}
+              onSelect={onSelect}
+              forceExpanded={forceExpanded}
               depth={depth + 1}
             />
           ))}
@@ -515,7 +553,7 @@ function TreeNodeView({
   );
 }
 
-function AccountNodeEditor({ dialog, onClose, onSaved, onDetails }: { dialog: DialogState; onClose: () => void; onSaved: (message?: string) => Promise<void>; onDetails: (node: AccountTreeNode) => void }) {
+function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange }: { dialog: DialogState; onClose: () => void; onSaved: (message?: string) => Promise<void>; onDetails: (node: AccountTreeNode) => void; onDirtyChange: (dirty: boolean) => void }) {
   const isEdit = dialog?.mode === "edit";
   const level = isEdit ? dialog.node.level : dialog?.level || 2;
   const parent = dialog?.mode === "create" ? dialog.parent : null;
@@ -672,7 +710,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails }: { dialog: Di
             <Skeleton />
           </div>
         ) : level === 5 ? (
-          <AccountLevelFiveForm value={accountForm} onChange={setAccountForm} />
+          <AccountLevelFiveForm value={accountForm} onChange={(next) => { setAccountForm(next); onDirtyChange(true); }} />
         ) : (
           <>
             {isEdit && node && (
@@ -683,14 +721,14 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails }: { dialog: Di
             )}
             <label className="field">
               <span>Description</span>
-              <Input value={description} onChange={(event) => setDescription(event.target.value)} />
+              <Input value={description} onChange={(event) => { setDescription(event.target.value); onDirtyChange(true); }} />
             </label>
 
             {level === 4 && (
               <div className="toggle-grid">
-                <FlagSelect label="Type" value={l4Type} onChange={setL4Type} />
-                <FlagSelect label="Invoice Splitting" value={l4Bill} onChange={setL4Bill} />
-                <FlagSelect label="Job" value={l4Job} onChange={setL4Job} />
+                <FlagSelect label="Type" value={l4Type} onChange={(value) => { setL4Type(value); onDirtyChange(true); }} />
+                <FlagSelect label="Invoice Splitting" value={l4Bill} onChange={(value) => { setL4Bill(value); onDirtyChange(true); }} />
+                <FlagSelect label="Job" value={l4Job} onChange={(value) => { setL4Job(value); onDirtyChange(true); }} />
               </div>
             )}
           </>
@@ -870,10 +908,11 @@ function AccountLevelFiveForm({
   return (
     <div className="level-five-form">
       {ACCOUNT_FORM_SECTIONS.map((section) => (
-        <section className="form-section" key={section.title}>
-          <div className="form-section-title">
+        <details className="form-section account-form-section" key={section.title} open>
+          <summary className="form-section-title">
             <h3>{section.title}</h3>
-          </div>
+            <ChevronDown size={15} />
+          </summary>
           <div className="form-grid">
             {section.fields.map((field) => (
               lookupFields[field.name] ? (
@@ -909,7 +948,7 @@ function AccountLevelFiveForm({
               )
             ))}
           </div>
-        </section>
+        </details>
       ))}
     </div>
   );
@@ -1099,6 +1138,16 @@ function TreeSkeleton() {
 
 function flattenTree(nodes: AccountTreeNode[]): AccountTreeNode[] {
   return nodes.flatMap((node) => [node, ...flattenTree(node.children || [])]);
+}
+
+function findNodePath(nodes: AccountTreeNode[], targetId: string, path: AccountTreeNode[] = []): AccountTreeNode[] {
+  for (const node of nodes) {
+    const nextPath = [...path, node];
+    if (node.id === targetId) return nextPath;
+    const childPath = findNodePath(node.children || [], targetId, nextPath);
+    if (childPath.length > 0) return childPath;
+  }
+  return [];
 }
 
 function seedExpansion(nodes: AccountTreeNode[]) {

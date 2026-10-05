@@ -1,10 +1,10 @@
-import { CloudUpload, Edit2, Plus, RefreshCw, Save, Trash2, X, ArrowLeft } from "lucide-react";
+import { CloudUpload, Edit2, Plus, RefreshCw, Save, Trash2, X, ArrowLeft, FileText, Download } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useToast } from "../../components/ui/AlertToast";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
-import { WmsDataTable } from "../../components/ui/WmsDataTable";
+import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -82,8 +82,7 @@ export type WmsSimpleMasterConfig = {
   };
 };
 
-// If a master config has >= 8 fields, we use a full page. Otherwise, we use a modal.
-const FIELD_THRESHOLD = 8;
+// const FIELD_THRESHOLD = 8;
 
 function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConfig, index: number): string {
   const separator = config.rowIdSeparator || "_";
@@ -135,9 +134,7 @@ function clearDependentFields(
   config: WmsSimpleMasterConfig
 ): Record<string, unknown> {
   const isFieldBeingCleared = newValue === "" || newValue === null || newValue === undefined;
-  if (!isFieldBeingCleared) {
-    return form;
-  }
+  if (!isFieldBeingCleared) return form;
 
   const updatedForm = { ...form };
   config.fields.forEach((field) => {
@@ -148,7 +145,6 @@ function clearDependentFields(
       }
     }
   });
-
   return updatedForm;
 }
 
@@ -165,7 +161,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [totalRows, setTotalRows] = useState(0);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // Unified view state
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
@@ -173,13 +168,12 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
   const [ediUploadOpen, setEdiUploadOpen] = useState(false);
 
-  // Determine layout based on field count
-  const useFullPage = config.fields.length >= FIELD_THRESHOLD;
+  // const useFullPage = config.fields.length >= FIELD_THRESHOLD;
+  const useFullPage = true;
+
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 400);
+    const timer = setTimeout(() => setDebouncedQuery(query), 400);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -237,13 +231,9 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
           const value = formatValue(row.original[field.name]);
           const alignmentClass = field.align
-            ? field.align === "right"
-              ? "text-right"
-              : field.align === "center"
-              ? "text-center"
-              : "text-left"
+            ? field.align === "right" ? "text-right" : field.align === "center" ? "text-center" : "text-left"
             : "text-left";
-          return <div className={alignmentClass}>{value}</div>;
+          return <div className={`text-[11.5px] text-foreground ${alignmentClass}`}>{value}</div>;
         },
       })),
       {
@@ -251,22 +241,23 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         header: "Actions",
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title={`Edit ${config.title}`}>
-              <Edit2 size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEdit(row.original)}
+              title={`Edit ${config.title}`}
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
               disabled={!config.customDelete && config.deleteConfig?.mode === "disabled"}
               onClick={() => setDeleteTarget(row.original)}
-              title={
-                !config.customDelete && config.deleteConfig?.mode === "disabled"
-                  ? config.deleteConfig.reason || "Delete endpoint is not registered"
-                  : `Delete ${config.title}`
-              }
+              title={!config.customDelete && config.deleteConfig?.mode === "disabled" ? config.deleteConfig.reason || "Delete endpoint is not registered" : `Delete ${config.title}`}
             >
-              <Trash2 size={14} />
-            </Button>
+              <Trash2 size={13} />
+            </button>
           </div>
         ),
         size: 90,
@@ -297,6 +288,14 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setForm({});
   };
 
+  const handleReset = () => {
+    if (editMode && original) {
+      openEdit(original);
+    } else {
+      setForm(makeEmpty());
+    }
+  };
+
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
     const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
@@ -308,9 +307,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     try {
       const transformedForm = editableFields.reduce((acc, field) => {
         let value = form[field.name];
-        if (field.type === "checkbox") {
-          value = value === true || value === "Y" ? "Y" : "N";
-        }
+        if (field.type === "checkbox") value = value === true || value === "Y" ? "Y" : "N";
         if (value === "") value = null;
         acc[field.name] = value;
         return acc;
@@ -361,7 +358,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     }
   };
 
-  // Reusable form content renderer
   const renderFormContent = () => (
     <WmsMasterForm
       fields={editableFields}
@@ -383,88 +379,69 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     />
   );
 
-  // ── RENDER EDITOR (FULL PAGE) ──
-  if (view === "editor" && useFullPage) {
-    return (
-      <section className="grid gap-2">
-        {/* Page Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={handleCloseForm}
-              className="grid h-8 w-8 place-items-center rounded-md border bg-card text-muted-foreground hover:bg-secondary transition-colors cursor-pointer"
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <div>
-               <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                {editMode ? `Edit ${config.title}` : `Add ${config.title}`}
+// ── RENDER EDITOR (FULL PAGE - FREIGHT STYLE) ──
+if (view === "editor" && useFullPage) {
+  return (
+    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+      {/* Freight-style transaction header */}
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <FileText size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                {editMode ? `Edit ${config.title}` : `New ${config.title}`}
               </h1>
-              <p className="m-0 text-[10px] font-bold tracking-[0.16em] text-primary">
-                {config.subtitle || "Master Data"}
-              </p>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {editMode ? "Editing" : "Draft"}
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCloseForm}
-              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            >
-              <X size={14} /> Cancel
-            </button>
-            <button
-              type="button"
-              onClick={(e) => saveRecord(e as unknown as FormEvent)}
-              disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <Save size={14} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
-            </button>
-          </div>
         </div>
-
-        {/* Form Content */}
-        <div className="rounded-md border bg-card shadow-sm p-3">
-          {renderFormContent()}
-        </div>
-      </section>
-    );
-  }
-
-  // ── RENDER LIST (and Modal if small form) ──
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{config.title}</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => loadRows()}>
-            <RefreshCw size={15} />
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={handleCloseForm}>
+            <ArrowLeft size={14} /> List
           </Button>
-          <Button title={`Add ${config.title}`} onClick={openAdd}>
-            <Plus size={15} /> Add
+          <Button type="button" size="sm" variant="outline" onClick={handleReset} disabled={saving}>
+            <RefreshCw size={14} /> Reset
           </Button>
-          {config.ediUploadConfig?.open && (
-            <Button title={`Upload ${config.title} via EDI`} onClick={() => setEdiUploadOpen(true)}>
-              <CloudUpload size={15} /> EDI Upload
-            </Button>
-          )}
+          <Button type="button" size="sm" variant="outline" onClick={handleCloseForm} disabled={saving}>
+            <X size={14} /> Close
+          </Button>
+          <Button type="submit" size="sm" disabled={saving} form="wms-master-form">
+            <Save size={14} /> {saving ? "Saving" : "Save Draft"}
+          </Button>
         </div>
       </div>
 
-      <WmsDataTable
+      {/* Form content — Freight form has its own internal structure */}
+      <div className="mt-2">
+        {renderFormContent()}
+      </div>
+    </section>
+  );
+}
+
+  // ── RENDER LIST (FREIGHT STYLE) ──
+  return (
+    <section className="grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-foreground m-0" style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}>
+            {config.title}
+          </h2>
+        </div>
+      </div>
+
+      <DataTable
         columns={columns}
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
         subtitle={`${config.title} List`}
         searchValue={query}
-        onSearchChange={(value) => {
-          setQuery(value);
-          setPageIndex(0);
-        }}
+        onSearchChange={(value:any) => { setQuery(value); setPageIndex(0); }}
         searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
         loading={loading}
         emptyText={`No ${config.title.toLowerCase()} records found`}
@@ -478,42 +455,45 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         pageSize={pageSize}
         totalRows={totalRows}
         columnFilters={columnFilters}
-        onColumnFiltersChange={(filters) => {
-          setColumnFilters(filters);
-          setPageIndex(0);
-        }}
+        onColumnFiltersChange={(filters:any) => { setColumnFilters(filters); setPageIndex(0); }}
         onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPageIndex(0);
-        }}
-        getRowId={(row, index) => generateRowId(row, config, index)}
+        onPageSizeChange={(nextPageSize:any) => { setPageSize(nextPageSize); setPageIndex(0); }}
+        getRowId={(row:any, index:any) => generateRowId(row, config, index)}
+                toolbar={
+          <div className="flex items-center gap-2">
+            {config.ediUploadConfig?.open && (
+              <button 
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+               onClick={() => setEdiUploadOpen(true)}>
+                <CloudUpload size={14} /> EDI Upload
+              </button>
+            )}
+            <button                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+ onClick={openAdd}>
+              <Plus size={14} /> Add {config.title}
+            </button>
+          </div>
+        }
+        enableExport
+        exportFilename={`${config.title.toLowerCase().replace(/\s+/g, '-')}-list.csv`}
+
       />
 
       {/* ── MODAL FOR SMALL FORMS (< 8 fields) ── */}
-      {!useFullPage && (
-        <Dialog
-          open={view === "editor"}
-          title={editMode ? `Edit ${config.title}` : `Add ${config.title}`}
-          description="Master details"
-          compact
-          wide
-          onClose={handleCloseForm}
-        >
+      {/* {!useFullPage && (
+        <Dialog open={view === "editor"} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact wide onClose={handleCloseForm}>
           <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
             {renderFormContent()}
           </div>
         </Dialog>
-      )}
+      )} */}
 
       {/* ── DELETE DIALOG ── */}
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
         description={deleteTarget ? `Delete ${formatValue(getRowDisplayKey(deleteTarget, config))}?` : undefined}
-        compact
-        tone="danger"
-        onClose={() => setDeleteTarget(null)}
+        compact tone="danger" onClose={() => setDeleteTarget(null)}
         footer={
           <>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
@@ -526,84 +506,27 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
 
       {/* ── EDI UPLOAD DIALOGS ── */}
       {config.ediUploadConfig?.name === "location" && ediUploadOpen && (
-        <Dialog
-          open={ediUploadOpen}
-          title={`${config.title} EDI Upload`}
-          description="Import records via Excel/EDI"
-          compact
-          wide
-          onClose={() => setEdiUploadOpen(false)}
-        >
+        <Dialog open={ediUploadOpen} title={`${config.title} EDI Upload`} description="Import records via Excel/EDI" compact wide onClose={() => setEdiUploadOpen(false)}>
           <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
             <ImportLocationEdi onSuccess={() => setEdiUploadOpen(false)} onClose={() => setEdiUploadOpen(false)} />
           </div>
         </Dialog>
       )}
       {config.ediUploadConfig?.name === "product" && ediUploadOpen && (
-        <Dialog
-          open={ediUploadOpen}
-          title={`${config.title} EDI Upload`}
-          description="Import records via Excel/EDI"
-          compact
-          wide
-          onClose={() => setEdiUploadOpen(false)}
-        >
+        <Dialog open={ediUploadOpen} title={`${config.title} EDI Upload`} description="Import records via Excel/EDI" compact wide onClose={() => setEdiUploadOpen(false)}>
           <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
             <ImportProductEdi onSuccess={() => setEdiUploadOpen(false)} onClose={() => setEdiUploadOpen(false)} />
           </div>
         </Dialog>
       )}
       {config.ediUploadConfig?.name === "site" && ediUploadOpen && (
-        <Dialog
-          open={ediUploadOpen}
-          title={`${config.title} EDI Upload`}
-          description="Import records via Excel/EDI"
-          compact
-          wide
-          onClose={() => setEdiUploadOpen(false)}
-        >
+        <Dialog open={ediUploadOpen} title={`${config.title} EDI Upload`} description="Import records via Excel/EDI" compact wide onClose={() => setEdiUploadOpen(false)}>
           <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
             <ImportSiteEdi onSuccess={() => setEdiUploadOpen(false)} onClose={() => setEdiUploadOpen(false)} />
           </div>
         </Dialog>
       )}
     </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// Helper Components & Functions
-// ─────────────────────────────────────────────
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
-  return (
-    <label className="field">
-      <span>
-        {label}
-        {required && <strong className="text-destructive"> *</strong>}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function renderInput(field: WmsMasterField, value: unknown, disabled: boolean, onChange: (value: unknown) => void) {
-  if (field.type === "select") {
-    return (
-      <Select disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
-        {(field.options || []).map((option) => (
-          <option value={option.value} key={option.value}>{option.label}</option>
-        ))}
-      </Select>
-    );
-  }
-  return (
-    <Input
-      disabled={disabled}
-      type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"}
-      value={String(value ?? "")}
-      onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)}
-    />
   );
 }
 

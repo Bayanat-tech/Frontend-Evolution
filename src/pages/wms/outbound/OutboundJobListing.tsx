@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, Eye, Pencil, Plus, RefreshCw } from "lucide-react";
+import { Ban, Eye, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import { FormEvent, useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, putWmsInbound, postWmsInbound } from "../../../api/wms";
@@ -42,7 +42,6 @@ export function OutboundJobListing() {
   const [activeTab, setActiveTab] = useState("in_progress");
   const [loading, setLoading] = useState(true);
   
-  // Changed from formOpen boolean to view state
   const [view, setView] = useState<"list" | "editor">("list");
   const [editingJobNo, setEditingJobNo] = useState("");
   const [form, setForm] = useState<WmsRow>(makeEmptyJob(user?.company_code));
@@ -102,6 +101,11 @@ export function OutboundJobListing() {
     [rows, activeTab]
   );
 
+  // Count for tabs
+  const getTabCount = (tabValue: string) => {
+    return rows.filter((row) => filterJobByTab(row, tabValue)).length;
+  };
+
   const columns = useMemo<ColumnDef<WmsRow>[]>(
     () => [
       {
@@ -110,20 +114,17 @@ export function OutboundJobListing() {
         size: 130,
         cell: ({ row }) => (
           <button
-            className="font-semibold text-primary hover:underline"
-            onClick={() => navigate(outboundJobDetailPath(row.original))}
+            className="font-semibold text-primary hover:underline text-[11.5px] text-left cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(outboundJobDetailPath(row.original));
+            }}
           >
             {value(row.original, "job_no")}
           </button>
         ),
       },
-      {
-        accessorKey: "prin_name",
-        header: "Principal Name",
-        size: 260,
-        cell: ({ row }) => value(row.original, "prin_name"),
-      },
-      {
+            {
         accessorKey: "job_class",
         header: "Job Class",
         size: 180,
@@ -132,10 +133,16 @@ export function OutboundJobListing() {
         ),
       },
       {
+        accessorKey: "prin_name",
+        header: "Principal Name",
+        size: 260,
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{value(row.original, "prin_name")}</span>,
+      },
+      {
         accessorKey: "job_date",
         header: "Job Date",
         size: 120,
-        cell: ({ row }) => formatDate(value(row.original, "job_date")),
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDate(value(row.original, "job_date"))}</span>,
       },
       ...(activeTab === "confirmed"
         ? [
@@ -144,66 +151,75 @@ export function OutboundJobListing() {
               header: "Confirm Date",
               size: 130,
               cell: ({ row }: { row: { original: WmsRow } }) =>
-                formatDate(value(row.original, "confirm_date")),
+                <span className="text-[11.5px] text-foreground">{formatDate(value(row.original, "confirm_date"))}</span>,
             },
           ]
         : []),
-      {
-        accessorKey: "doc_ref",
-        header: "Doc Ref",
-        size: 130,
-        cell: ({ row }) => value(row.original, "doc_ref"),
-      },
-      {
-        accessorKey: "canceled",
-        header: "Canceled",
-        size: 105,
-        cell: ({ row }) => flagBadge(value(row.original, "canceled")),
-      },
+      // {
+      //   accessorKey: "doc_ref",
+      //   header: "Doc Ref",
+      //   size: 130,
+      //   cell: ({ row }) => <span className="text-[11.5px] text-foreground">{value(row.original, "doc_ref")}</span>,
+      // },
+      // {
+      //   accessorKey: "canceled",
+      //   header: "Canceled",
+      //   size: 105,
+      //   cell: ({ row }) => <span className="text-[11.5px] text-foreground">{flagBadge(value(row.original, "canceled"))}</span>,
+      // },
       {
         accessorKey: "invoiced",
         header: "Invoiced",
         size: 105,
-        cell: ({ row }) => flagBadge(value(row.original, "invoiced")),
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{flagBadge(value(row.original, "invoiced"))}</span>,
       },
       {
         accessorKey: "invoice_date",
         header: "Invoice Date",
         size: 130,
-        cell: ({ row }) => formatDate(value(row.original, "invoice_date")),
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDate(value(row.original, "invoice_date"))}</span>,
       },
       {
         id: "actions",
-        header: "Actions",
+        header: "ACTIONS",
         size: 125,
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
               title="Open job"
-              onClick={() => navigate(outboundJobDetailPath(row.original))}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(outboundJobDetailPath(row.original));
+              }}
             >
-              <Eye size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
+              <Eye size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
               title="Edit job"
-              onClick={() => void openEditJob(row.original)}
+              onClick={(e) => {
+                e.stopPropagation();
+                void openEditJob(row.original);
+              }}
             >
-              <Pencil size={14} />
-            </Button>
+              <Pencil size={13} />
+            </button>
             {canCancelOutboundJob(row.original, activeTab) && (
-              <Button
-                size="icon"
-                variant="ghost"
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                 title="Cancel job"
-                onClick={() => setCancelTarget(row.original)}
+                onClick={(e) => {
+                  e.stopPropagation(); // ✅ Fix: Stop row click so modal can open
+                  setCancelTarget(row.original);
+                }}
               >
-                <Ban size={14} />
-              </Button>
+                <Ban size={13} />
+              </button>
             )}
           </div>
         ),
@@ -347,19 +363,19 @@ export function OutboundJobListing() {
 
   // ── RENDER LIST ──
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
             Outbound Job Listing
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manage export jobs, customer orders, stock picking, cancellation,
-            confirmation, and billing.
-          </p>
+          </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => loadRows()}>
+          {/* <Button variant="outline" onClick={() => loadRows()}>
             <RefreshCw size={15} /> Refresh
           </Button>
           <Button
@@ -370,48 +386,77 @@ export function OutboundJobListing() {
             }}
           >
             <Plus size={15} /> Add Job
-          </Button>
+          </Button> */}
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2">
-        {listingTabs.map((tab) => (
-          <Button
-            key={tab.value}
-            size="sm"
-            variant={activeTab === tab.value ? "default" : "outline"}
-            onClick={() => setActiveTab(tab.value)}
-          >
-            {tab.label}
-          </Button>
-        ))}
+      {/* Tabs with counts - exactly like Freight */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {listingTabs.map((tab) => {
+          const count = getTabCount(tab.value);
+          const active = activeTab === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setActiveTab(tab.value)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                active
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
+      {/* Table - exactly like Freight */}
       <DataTable
         columns={columns}
         data={filteredRows}
-        subtitle="Outbound Jobs"
+        toolbar={
+          <button
+            type="button"
+            onClick={() => {
+              setEditingJobNo("");
+              setForm(makeEmptyJob(user?.company_code));
+              setView("editor");
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Add Job
+          </button>
+        }
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search job, principal, reference..."
         loading={loading}
-        height="calc(100vh - 310px)"
-        minWidth={1420}
+        height="calc(100vh - 180px)"
+        // minWidth={1420}
         density="grid"
         enablePagination
-        pageSize={50}
+        pageSize={25}
+        enableExport
+        exportFilename="outbound-jobs-list.csv"
         getRowId={(row, index) => String(value(row, "job_no") || index)}
-        rowClassName={(row) =>
-          isCanceled(row)
-            ? "bg-red-50/70"
-            : hasDate(value(row, "confirm_date"))
-              ? "bg-emerald-50/70"
-              : "bg-blue-50/50"
-        }
+        rowClassName={(row) => {
+          // Apply row colors based on status, forcing onto cells to override DataTable defaults
+          if (isCanceled(row)) return "[&>td]:bg-red-50/70"; // Cancelled -> Light Red
+          if (hasDate(value(row, "confirm_date"))) return "[&>td]:bg-emerald-50/70"; // Confirmed -> Light Green
+          return "[&>td]:bg-amber-50/70"; // In Progress -> Light Yellow
+        }}
+        onRowClick={(row) => navigate(outboundJobDetailPath(row))}
       />
 
+      {/* Cancel Job Dialog */}
       <Dialog
         open={Boolean(cancelTarget)}
         title={`Cancel Job ${cancelTarget ? value(cancelTarget, "job_no") : ""}`}
