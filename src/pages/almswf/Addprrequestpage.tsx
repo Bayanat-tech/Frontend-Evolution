@@ -379,15 +379,16 @@ const AddPRRequestPage = ({
   onClose,
 }: AddPRRequestPageProps) => {
   const { user } = useAuth();
-  const companyCode = user?.company_code ?? "";
-  const loginid = user?.loginid ?? "";
+  // ✅ FIX: Trim company_code and loginid so trailing/leading spaces (e.g. "BSG ") do not break API lookups
+  const companyCode = String(user?.company_code ?? "").trim();
+  const loginid = String(user?.loginid ?? "").trim();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [requestNumber, setRequestNumber] = useState<string | undefined>(existingData?.request_number);
-  
+
   // 🔥 DEFAULT HEADER VALUES ADDED HERE
   const [header, setHeader] = useState<Partial<TPRHeader>>({
     CURR_CODE: "OMR",
@@ -1989,7 +1990,7 @@ const AddPRRequestPage = ({
                                 <option value="Std.">Std.</option>
                                 <option value="Zero">Zero</option>
                                 <option value="Exempt">Exempt</option>
-                                <option value="No VAT">No VAT</option>
+                                {/* <option value="No VAT">No VAT</option> */}
                               </Select>
                             </label>
                           </div>

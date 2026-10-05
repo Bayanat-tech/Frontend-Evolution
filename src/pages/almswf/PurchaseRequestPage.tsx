@@ -58,8 +58,11 @@ type TaskPopupData = {
 
 const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
-  const loginid = user?.loginid || user?.username || "";
-  const companyCode = user?.company_code || "";
+
+  // ✅ FIX: Trim companyCode aur loginid — trailing space hatane ke liye
+  const loginid = (user?.loginid || user?.username || "").trim();
+  const companyCode = (user?.company_code || "").trim();
+
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [query, setQuery] = useState("");
@@ -494,24 +497,24 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       <div className="min-h-[650px]">
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
-  data={filteredRows}
-  title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
-  subtitle={
-    isPoGeneratedTab ? (
-      <span className="text-sm text-muted-foreground">Generated PO List</span>
-    ) : (
-      <button
-        type="button"
-        onClick={() => void openAddPopup()}
-        className="inline-flex items-center gap-1.5 rounded-md px-0.5 py-0.5 text-sm font-semibold text-white cursor-pointer transition-colors hover:opacity-90"
-        style={{ background: "#082A89" }}
-        title="Add Purchase Request"
-      >
-        <Plus size={10} />
-        Add PR
-      </button>
-    )
-  }
+          data={filteredRows}
+          title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
+          subtitle={
+            isPoGeneratedTab ? (
+              <span className="text-sm text-muted-foreground">Generated PO List</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void openAddPopup()}
+                className="inline-flex items-center gap-1.5 rounded-md px-0.5 py-0.5 text-sm font-semibold text-white cursor-pointer transition-colors hover:opacity-90"
+                style={{ background: "#082A89" }}
+                title="Add Purchase Request"
+              >
+                <Plus size={10} />
+                Add PR
+              </button>
+            )
+          }
           searchValue={query}
           onSearchChange={(value) => { setQuery(value); setPageIndex(0); }}
           searchPlaceholder={isPoGeneratedTab ? "Search PO number, PR number, supplier..." : "Search request no, description, user..."}
