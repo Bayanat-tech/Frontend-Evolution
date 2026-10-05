@@ -1,47 +1,53 @@
-import { MdAddCircleOutline } from "react-icons/md";
-import { RefreshCw, Save } from "lucide-react";
+// src/pages/hr/HrEmpEducationPage.tsx
+//
+// Employee Educational Qualifications — new UI (modelled on ProductWmsPage):
+//  • Freight-style transaction header with Refresh / Save buttons
+//  • Filters in a SectionPanel (Division → Department → Section → Employee)
+//  • Education grid in a DataTable with "Add Row" inside the toolbar
+//  • toast feedback instead of NoticeToast
+//
+// All data logic (cascade resets, skip-hydrate guard, soft-delete via
+// status_flag "D", upsert payload) is unchanged.
+
+import { GraduationCap, Plus, RefreshCw, Save, UserSearch, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { getDynamicLookup } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { LookupField } from "../../components/ui/LookupField";
-import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import hrEmpEducationServiceInstance from "./upsertHrEmpEducation";
-import type { ColumnDef } from "@tanstack/react-table";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DivisionOption = { div_code: string;     div_name: string };
-type DeptOption     = { dept_code: string;    dept_name: string };
-type SectionOption  = { section_code: string; section_name: string };
-type EmployeeOption = { employee_id: string;  employee_name: string };
+type DivisionOption = { div_code: string; div_name: string };
+type DeptOption = { dept_code: string; dept_name: string };
+type SectionOption = { section_code: string; section_name: string };
+type EmployeeOption = { employee_id: string; employee_name: string };
 type EduLevelOption = { edu_level_code: string; edu_level_desc: string };
-type EduDiscOption  = { edu_disc_code: string;  edu_disc_desc: string };
+type EduDiscOption = { edu_disc_code: string; edu_disc_desc: string };
 
 type EduRow = {
-  _rowId:          string;
-  // FIX: track whether this row already exists on the server. Rows loaded
-  // from the API are "persisted" — if the user removes one of these from
-  // the grid, we can't just drop it from local state, because the next
-  // save's payload would simply omit it and the backend (an upsert API)
-  // would never know to delete/deactivate it. So persisted rows that get
-  // "removed" are kept in state with status_flag flipped to "D" and sent
-  // to the server on save, then truly dropped from the grid afterwards.
-  _isPersisted:    boolean;
-  edu_desc_code:   string;
-  edu_disc_desc:   string;
-  edu_level_code:  string;
-  edu_level_desc:  string;
-  start_date:      string;
-  end_date:        string;
+  _rowId: string;
+  // Rows loaded from the API are "persisted". Removing one flips status_flag
+  // to "D" (kept in state so the upsert payload tells the backend to remove
+  // it); never-saved rows are simply dropped.
+  _isPersisted: boolean;
+  edu_desc_code: string;
+  edu_disc_desc: string;
+  edu_level_code: string;
+  edu_level_desc: string;
+  start_date: string;
+  end_date: string;
   year_of_passing: string;
-  studied_at:      string;
-  status_flag:     string;
+  studied_at: string;
+  status_flag: string;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,17 +64,17 @@ function toIsoDate(value: string): string {
 
 function makeRow(): EduRow {
   return {
-    _rowId:          `row_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    _isPersisted:    false,
-    edu_desc_code:   "",
-    edu_disc_desc:   "",
-    edu_level_code:  "",
-    edu_level_desc:  "",
-    start_date:      "",
-    end_date:        "",
+    _rowId: `row_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    _isPersisted: false,
+    edu_desc_code: "",
+    edu_disc_desc: "",
+    edu_level_code: "",
+    edu_level_desc: "",
+    start_date: "",
+    end_date: "",
     year_of_passing: "",
-    studied_at:      "",
-    status_flag:     "A",
+    studied_at: "",
+    status_flag: "A",
   };
 }
 
@@ -83,13 +89,64 @@ function buildParams(
   return {
     parameter,
     loginid,
-    code1:   companyCode,
+    code1: companyCode,
     code2,
     code3,
     code4,
     number1: 0, number2: 0, number3: 0, number4: 0,
     date1: null, date2: null, date3: null, date4: null,
   };
+}
+
+// ── Freight building blocks ───────────────────────────────────────────────────
+// (Same as in the Grade / Product forms — worth moving to components/ui later.)
+
+function SectionPanel({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="freight-section-icon">
+            <Icon size={16} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
+          </div>
+        </div>
+      </div>
+      <div className="freight-panel-body p-3">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+  className,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
+      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+        {label}
+        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
+      </span>
+      {children}
+    </label>
+  );
 }
 
 // ── Inline editable text cell ─────────────────────────────────────────────────
@@ -127,17 +184,13 @@ function EditableSelectCell({
   disabled = false,
   onChange,
 }: {
-  value:    string;
-  options:  { code: string; label: string }[];
+  value: string;
+  options: { code: string; label: string }[];
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
-    <Select
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-    >
+    <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
       <option value="">Select...</option>
       {options.map((o) => (
         <option key={o.code} value={o.code}>
@@ -151,40 +204,27 @@ function EditableSelectCell({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function HrEmpEducationPage() {
-  const { user }    = useAuth();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const loginid     = user?.loginid      ?? "";
+  const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
 
   // ── Filter state ───────────────────────────────────────────────────────────
-  const [division,   setDivision]   = useState<DivisionOption | null>(null);
-  const [department, setDepartment] = useState<DeptOption     | null>(null);
-  const [section,    setSection]    = useState<SectionOption  | null>(null);
-  const [employee,   setEmployee]   = useState<EmployeeOption | null>(null);
+  const [division, setDivision] = useState<DivisionOption | null>(null);
+  const [department, setDepartment] = useState<DeptOption | null>(null);
+  const [section, setSection] = useState<SectionOption | null>(null);
+  const [employee, setEmployee] = useState<EmployeeOption | null>(null);
 
-  // FIX: bumping this remounts every LookupField below (via `key`), forcing
-  // each one to re-run its loadOptions from scratch — this is what makes
-  // "Refresh" restore the page to its just-opened state rather than just
-  // re-fetching the currently selected employee's grid data.
+  // Bumping this remounts every LookupField (via `key`) so Refresh restores
+  // the page to its just-opened state.
   const [resetKey, setResetKey] = useState(0);
 
-  // ── Grid / notice state ────────────────────────────────────────────────────
-  const [rows,   setRows]   = useState<EduRow[]>([]);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  // ── Grid state ─────────────────────────────────────────────────────────────
+  const [rows, setRows] = useState<EduRow[]>([]);
 
-  // FIX: guards against the post-save refetch clobbering rows the user just
-  // edited/deleted locally. We only want the query's setRows(data) to run
-  // for a genuine "employee changed / first load" fetch, not for the
-  // invalidate-on-success refetch (where we already know the authoritative
-  // state because we just sent it).
-  //
-  // FIX #2: this now stores the employee_id the skip applies to (not just a
-  // bare boolean). A bare boolean was a bug — if the user saved for Employee
-  // A and then switched to Employee B (or reselected A after a Refresh)
-  // before the post-save refetch for A had fired, the skip flag would still
-  // be `true` and would incorrectly swallow the hydration for whichever
-  // employee's fetch ran next, making the grid look like it "didn't fetch"
-  // even though the network request went through fine.
+  // Scoped skip-hydrate guard: the post-save refetch must not clobber local
+  // rows, but it must only apply to the employee we just saved for.
   const skipHydrateForEmployeeRef = useRef<string | null>(null);
 
   // ── Master data — edu level + discipline ───────────────────────────────────
@@ -213,13 +253,11 @@ export function HrEmpEducationPage() {
   // ── Employee education data ────────────────────────────────────────────────
   const eduQuery = useQuery({
     queryKey: ["education-data", employee?.employee_id],
-    enabled:  !!employee?.employee_id,
-    // FIX: always treat cached data as stale on (re)enable, so re-selecting
-    // the same employee after a Refresh (which resets local filter state
-    // but doesn't touch this query's cache) reliably triggers a real network
-    // fetch instead of silently reusing a previous result.
+    enabled: !!employee?.employee_id,
+    // Always refetch on (re)mount so re-selecting an employee after Refresh
+    // never silently reuses a cached result.
     refetchOnMount: "always",
-    queryFn:  async () => {
+    queryFn: async () => {
       const currentEmployeeId = employee?.employee_id ?? "";
       const res = await getDynamicLookup(
         buildParams(
@@ -231,22 +269,20 @@ export function HrEmpEducationPage() {
       );
       const data: EduRow[] = (Array.isArray(res) ? res : []).map(
         (r: Record<string, unknown>, i: number) => ({
-          _rowId:          `row_${i}`,
-          _isPersisted:    true,
-          edu_desc_code:   String(r.edu_desc_code   ?? ""),
-          edu_disc_desc:   String(r.edu_disc_desc   ?? ""),
-          edu_level_code:  String(r.edu_level_code  ?? ""),
-          edu_level_desc:  String(r.edu_level_desc  ?? ""),
-          start_date:      toIsoDate(String(r.start_date      ?? "")),
-          end_date:        toIsoDate(String(r.end_date        ?? "")),
+          _rowId: `row_${i}`,
+          _isPersisted: true,
+          edu_desc_code: String(r.edu_desc_code ?? ""),
+          edu_disc_desc: String(r.edu_disc_desc ?? ""),
+          edu_level_code: String(r.edu_level_code ?? ""),
+          edu_level_desc: String(r.edu_level_desc ?? ""),
+          start_date: toIsoDate(String(r.start_date ?? "")),
+          end_date: toIsoDate(String(r.end_date ?? "")),
           year_of_passing: String(r.year_of_passing ?? ""),
-          studied_at:      String(r.studied_at      ?? ""),
-          status_flag:     String(r.status_flag     ?? "A"),
+          studied_at: String(r.studied_at ?? ""),
+          status_flag: String(r.status_flag ?? "A"),
         }),
       );
 
-      // FIX: only skip hydration if this fetch is for the SAME employee the
-      // skip was set for. Any other employee's fetch always hydrates normally.
       if (
         skipHydrateForEmployeeRef.current !== null &&
         skipHydrateForEmployeeRef.current === currentEmployeeId
@@ -259,11 +295,17 @@ export function HrEmpEducationPage() {
     },
   });
 
-  // ── Cascade resets ─────────────────────────────────────────────────────────
-  // NOTE: this is the OTHER half of the cascade (clearing children when a
-  // parent changes). It already worked correctly before — the missing piece
-  // was only the `disabled` gating below, which is what actually stops the
-  // user from opening Section/Employee before their parent is chosen.
+  // Surface fetch errors as a toast (previously silent)
+  useEffect(() => {
+    if (eduQuery.isError) {
+      toast.error(
+        eduQuery.error instanceof Error ? eduQuery.error.message : "Unable to load education records",
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eduQuery.isError]);
+
+  // ── Cascade resets (clear children when a parent changes) ──────────────────
   useEffect(() => {
     setDepartment(null);
     setSection(null);
@@ -307,88 +349,61 @@ export function HrEmpEducationPage() {
     [eduDiscOpts, eduLevelOpts],
   );
 
-  const updateRowText = useCallback(
-    (rowId: string, field: keyof EduRow, value: string) => {
-      setRows((prev) =>
-        prev.map((r) => (r._rowId === rowId ? { ...r, [field]: value } : r)),
-      );
-    },
-    [],
-  );
+  const updateRowText = useCallback((rowId: string, field: keyof EduRow, value: string) => {
+    setRows((prev) => prev.map((r) => (r._rowId === rowId ? { ...r, [field]: value } : r)));
+  }, []);
 
-  // FIX: deleteRow no longer just filters the row out of state.
-  // - If the row was never saved (new/unpersisted), it's safe to drop it
-  //   entirely, same as before.
-  // - If the row came from the server (_isPersisted), we mark it as
-  //   status_flag "D" (deleted) but KEEP it in state so it's included in
-  //   the next save payload — the backend needs to know it was removed,
-  //   otherwise it stays in the DB and reappears on the post-save refetch.
-  //   We hide it from the visible grid via the `visibleRows` filter below.
+  // Persisted rows → soft-delete (status_flag "D", still sent on save).
+  // Unsaved rows → dropped outright.
   const deleteRow = useCallback((rowId: string) => {
     setRows((prev) =>
       prev
-        .map((r) =>
-          r._rowId === rowId && r._isPersisted
-            ? { ...r, status_flag: "D" }
-            : r,
-        )
+        .map((r) => (r._rowId === rowId && r._isPersisted ? { ...r, status_flag: "D" } : r))
         .filter((r) => !(r._rowId === rowId && !r._isPersisted)),
     );
   }, []);
 
-  // FIX: rows marked for deletion are kept in `rows` (so save can send
-  // them) but hidden from the visible grid the user interacts with.
-  const visibleRows = useMemo(
-    () => rows.filter((r) => r.status_flag !== "D"),
-    [rows],
-  );
+  // Rows pending deletion stay in `rows` (for save) but are hidden from the grid.
+  const visibleRows = useMemo(() => rows.filter((r) => r.status_flag !== "D"), [rows]);
 
   // ── Columns ────────────────────────────────────────────────────────────────
   const columns = useMemo<ColumnDef<EduRow>[]>(
     () => [
       {
-        id:     "index",
+        id: "index",
         header: "#",
-        size:   50,
-        cell:   ({ row }) => (
-          <span className="text-muted-foreground text-xs">{row.index + 1}</span>
-        ),
+        size: 50,
+        cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.index + 1}</span>,
       },
       {
         accessorKey: "edu_desc_code",
-        header:      "Educational Discipline *",
-        size:        240,
-        cell:        ({ row }) => (
+        header: "Educational Discipline *",
+        size: 240,
+        cell: ({ row }) => (
           <EditableSelectCell
             value={row.original.edu_desc_code}
-            options={eduDiscOpts.map((o) => ({
-              code:  o.edu_disc_code,
-              label: o.edu_disc_desc,
-            }))}
+            options={eduDiscOpts.map((o) => ({ code: o.edu_disc_code, label: o.edu_disc_desc }))}
             onChange={(v) => updateRowSelect(row.original._rowId, "edu_desc_code", v)}
           />
         ),
       },
       {
         accessorKey: "edu_level_code",
-        header:      "Educational Level *",
-        size:        200,
-        cell:        ({ row }) => (
+        header: "Educational Level *",
+        size: 200,
+        cell: ({ row }) => (
           <EditableSelectCell
             value={row.original.edu_level_code}
-            options={eduLevelOpts.map((o) => ({
-              code:  o.edu_level_code,
-              label: o.edu_level_desc,
-            }))}
+            options={eduLevelOpts.map((o) => ({ code: o.edu_level_code, label: o.edu_level_desc }))}
             onChange={(v) => updateRowSelect(row.original._rowId, "edu_level_code", v)}
           />
         ),
       },
       {
         accessorKey: "start_date",
-        header:      "Start Date *",
-        size:        160,
-        cell:        ({ row }) => (
+        header: "Start Date *",
+        size: 160,
+        cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.start_date}
             type="date"
@@ -398,9 +413,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "end_date",
-        header:      "End Date",
-        size:        160,
-        cell:        ({ row }) => (
+        header: "End Date",
+        size: 160,
+        cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.end_date}
             type="date"
@@ -410,9 +425,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "year_of_passing",
-        header:      "Year Passed *",
-        size:        120,
-        cell:        ({ row }) => (
+        header: "Year Passed *",
+        size: 120,
+        cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.year_of_passing}
             onBlur={(v) => {
@@ -424,9 +439,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "studied_at",
-        header:      "University / Institution *",
-        size:        220,
-        cell:        ({ row }) => (
+        header: "University / Institution *",
+        size: 220,
+        cell: ({ row }) => (
           <EditableTextCell
             initialValue={row.original.studied_at}
             onBlur={(v) => updateRowText(row.original._rowId, "studied_at", v)}
@@ -435,13 +450,13 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "status_flag",
-        header:      "Status *",
-        size:        130,
-        cell:        ({ row }) => (
+        header: "Status *",
+        size: 130,
+        cell: ({ row }) => (
           <EditableSelectCell
             value={row.original.status_flag}
             options={[
-              { code: "A", label: "Active"   },
+              { code: "A", label: "Active" },
               { code: "I", label: "Inactive" },
             ]}
             onChange={(v) => updateRowSelect(row.original._rowId, "status_flag", v)}
@@ -449,19 +464,21 @@ export function HrEmpEducationPage() {
         ),
       },
       {
-        id:                 "remove",
-        header:             "",
-        size:               60,
+        id: "remove",
+        header: "",
+        size: 60,
         enableColumnFilter: false,
-        cell:               ({ row }) => (
-          <Button
-            size="icon"
-            variant="ghost"
-            title="Remove row"
-            onClick={() => deleteRow(row.original._rowId)}
-          >
-            ✕
-          </Button>
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              title="Remove row"
+              onClick={() => deleteRow(row.original._rowId)}
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+            >
+              <X size={13} />
+            </button>
+          </div>
         ),
       },
     ],
@@ -472,30 +489,26 @@ export function HrEmpEducationPage() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!employee?.employee_id) throw new Error("Please select an employee");
-      // FIX: validate against the visible (non-deleted) rows, not the raw
-      // `rows` array, since `rows` may now contain status_flag "D" entries
-      // pending deletion that shouldn't block saving an otherwise-empty grid.
       if (visibleRows.length === 0 && rows.every((r) => r.status_flag === "D")) {
         throw new Error("Add at least one education record");
       }
 
-      // FIX: send ALL rows, including ones marked status_flag "D", so the
-      // backend can actually remove/deactivate the records the user deleted.
+      // Send ALL rows, including status_flag "D", so the backend can remove them.
       const education_details = rows.map((r) => ({
-        employee_id:     employee.employee_id,
-        edu_desc_code:   r.edu_desc_code,
-        edu_level_code:  r.edu_level_code,
-        start_date:      toIsoDate(r.start_date),
-        end_date:        r.end_date ? toIsoDate(r.end_date) : null,
+        employee_id: employee.employee_id,
+        edu_desc_code: r.edu_desc_code,
+        edu_level_code: r.edu_level_code,
+        start_date: toIsoDate(r.start_date),
+        end_date: r.end_date ? toIsoDate(r.end_date) : null,
         year_of_passing: Number(r.year_of_passing) || 0,
-        studied_at:      r.studied_at,
-        status_flag:     r.status_flag,
-        company_code:    companyCode,
-        user_id:         loginid,
+        studied_at: r.studied_at,
+        status_flag: r.status_flag,
+        company_code: companyCode,
+        user_id: loginid,
       }));
 
       const success = await hrEmpEducationServiceInstance.upsertHrEmpEducationApi({
-        company_code:      companyCode,
+        company_code: companyCode,
         education_details,
         loginid,
       });
@@ -503,42 +516,45 @@ export function HrEmpEducationPage() {
       if (!success) throw new Error("Save failed. Please try again.");
     },
     onSuccess: () => {
-      setNotice({ type: "success", message: "Education details saved successfully." });
+      toast.success("Education details saved successfully");
 
-      // FIX: drop rows we just told the server to delete, and mark the
-      // remaining rows as persisted (they now exist server-side too).
+      // Drop rows we just told the server to delete; mark the rest persisted.
       setRows((prev) =>
-        prev
-          .filter((r) => r.status_flag !== "D")
-          .map((r) => ({ ...r, _isPersisted: true })),
+        prev.filter((r) => r.status_flag !== "D").map((r) => ({ ...r, _isPersisted: true })),
       );
 
-      // FIX: tell the next education-data fetch FOR THIS SPECIFIC EMPLOYEE
-      // to skip re-hydrating `rows` from the server response — we already
-      // have the correct local state and don't want a race/shape mismatch
-      // to bring back a row the user just deleted. Scoping this to the
-      // employee id (instead of a bare boolean) prevents it from
-      // accidentally swallowing a different employee's legitimate fetch.
+      // Skip re-hydration for THIS employee's post-save refetch only.
       skipHydrateForEmployeeRef.current = employee?.employee_id ?? null;
       queryClient.invalidateQueries({ queryKey: ["education-data", employee?.employee_id] });
     },
     onError: (err: Error) => {
-      setNotice({ type: "error", message: err.message ?? "Failed to save education details." });
+      toast.error(err.message ?? "Failed to save education details");
     },
   });
 
+  // ── Refresh: restore page to its just-opened state ─────────────────────────
+  const handleRefresh = () => {
+    setDivision(null);
+    setDepartment(null);
+    setSection(null);
+    setEmployee(null);
+    setRows([]);
+    setResetKey((k) => k + 1); // remount LookupFields → fresh option lists
+    void queryClient.invalidateQueries({ queryKey: ["edu-level", companyCode] });
+    void queryClient.invalidateQueries({ queryKey: ["edu-discipline", companyCode] });
+    // Remove cached education data for every employee so re-selecting always
+    // triggers a genuine fetch.
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === "education-data" });
+    skipHydrateForEmployeeRef.current = null;
+  };
+
   // ── Lookup loaders ─────────────────────────────────────────────────────────
   const loadDivisions = useCallback(
-    () =>
-      getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_DIVISION_LIST", loginid, companyCode),
-      ),
+    () => getDynamicLookup(buildParams("EDUCATION_QUALIFICATION_DIVISION_LIST", loginid, companyCode)),
     [loginid, companyCode],
   );
 
-  // Department: scoped by Division when one is picked (procedure branch
-  // EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE — P_CODE2 = DIV_CODE,
-  // optional: empty => all departments for the company).
+  // Department: P_CODE2 = DIV_CODE (optional; empty ⇒ all departments)
   const loadDepartments = useCallback(
     () =>
       getDynamicLookup(
@@ -552,11 +568,7 @@ export function HrEmpEducationPage() {
     [loginid, companyCode, division?.div_code],
   );
 
-  // Section: HARD-depends on Department (see `disabled={!department}` on
-  // the field below). Uses EDUCATION_QUALIFICATION_MS_HR_SECTION —
-  // P_CODE2 = DIV_CODE (optional extra narrowing), P_CODE3 = DEPT_CODE
-  // (the field is disabled until this is set, so it's effectively always
-  // present once the call fires).
+  // Section: P_CODE2 = DIV_CODE (optional), P_CODE3 = DEPT_CODE (required, field disabled until set)
   const loadSections = useCallback(
     () =>
       getDynamicLookup(
@@ -564,18 +576,14 @@ export function HrEmpEducationPage() {
           "EDUCATION_QUALIFICATION_MS_HR_SECTION",
           loginid,
           companyCode,
-          division?.div_code   ?? "",  // code2 — DIV_CODE (optional)
-          department?.dept_code ?? "", // code3 — DEPT_CODE (drives the fetch)
+          division?.div_code ?? "",
+          department?.dept_code ?? "",
         ),
       ),
     [loginid, companyCode, division?.div_code, department?.dept_code],
   );
 
-  // Employee: HARD-depends on Section (see `disabled={!section}` on the
-  // field below). Uses EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER
-  // — P_CODE2 = DIV_CODE, P_CODE3 = DEPT_CODE, P_CODE4 = SECTION_CODE (the
-  // field is disabled until Section is set, so all three are present by
-  // the time this call fires).
+  // Employee: P_CODE2 = DIV_CODE, P_CODE3 = DEPT_CODE, P_CODE4 = SECTION_CODE
   const loadEmployees = useCallback(
     () =>
       getDynamicLookup(
@@ -583,164 +591,116 @@ export function HrEmpEducationPage() {
           "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
           loginid,
           companyCode,
-          division?.div_code    ?? "", // code2 — DIV_CODE
-          department?.dept_code ?? "", // code3 — DEPT_CODE
-          section?.section_code ?? "", // code4 — SECTION_CODE (drives the fetch)
+          division?.div_code ?? "",
+          department?.dept_code ?? "",
+          section?.section_code ?? "",
         ),
       ),
-    [
-      loginid,
-      companyCode,
-      division?.div_code,
-      department?.dept_code,
-      section?.section_code,
-    ],
+    [loginid, companyCode, division?.div_code, department?.dept_code, section?.section_code],
   );
+
+  const canSave = !mutation.isPending && visibleRows.length > 0 && !!employee?.employee_id;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <section className="grid gap-4">
-
-      {/* ── Page Header ──────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">
-            Employee Educational Qualifications
-          </h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Maintain education history for employees across divisions and departments.
-          </p>
+    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+      {/* Freight-style transaction header */}
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <GraduationCap size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                Employee Educational Qualifications
+              </h1>
+              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                {employee ? `${employee.employee_id} - ${employee.employee_name}` : "No employee selected"}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              // Reset all filters and grid state back to how the page
-              // looked when it was first opened.
-              setDivision(null);
-              setDepartment(null);
-              setSection(null);
-              setEmployee(null);
-              setRows([]);
-              setNotice(null);
-              // Force every LookupField to remount so it reloads its
-              // option list fresh instead of showing a stale cached list.
-              setResetKey((k) => k + 1);
-              // Also refresh the master dropdown data (edu level / discipline).
-              void queryClient.invalidateQueries({ queryKey: ["edu-level", companyCode] });
-              void queryClient.invalidateQueries({ queryKey: ["edu-discipline", companyCode] });
-              // FIX: fully remove any cached education-data results (for
-              // every employee, not just the currently selected one) so
-              // re-selecting an employee after Refresh always triggers a
-              // genuine fresh fetch instead of potentially reusing a
-              // previous result from the query cache.
-              queryClient.removeQueries({
-                predicate: (query) => query.queryKey[0] === "education-data",
-              });
-              skipHydrateForEmployeeRef.current = null;
-            }}
-          >
-            <RefreshCw size={15} /> Refresh
+
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={handleRefresh}>
+            <RefreshCw size={14} /> Refresh
+          </Button>
+          <Button type="button" size="sm" disabled={!canSave} onClick={() => mutation.mutate()}>
+            <Save size={14} /> {mutation.isPending ? "Saving" : "Save"}
           </Button>
         </div>
       </div>
 
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-
-      {/* ── Filter Bar ───────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div>
-            <p className="eyebrow">Filters</p>
-            <h2 className="m-0 text-sm font-semibold">Select Employee</h2>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-
-          {/* <label className="field">
-            <span>Company</span>
-            <Input disabled value={companyCode} />
-          </label> */}
-
-          {/* Division — top of the chain, always enabled */}
-          <label className="field">
-            <span>Division</span>
+      {/* Filters */}
+      <SectionPanel title="Select Employee" icon={UserSearch}>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {/* Division — top of the chain */}
+          <Field label="Division">
             <LookupField
               key={`division-${resetKey}`}
               compact
-              label="Division"
+              label=""
               value={division?.div_code ?? ""}
               displayValue={division ? `${division.div_code} - ${division.div_name}` : ""}
               columns={[
-                { field: "div_code", header: "Code"     },
+                { field: "div_code", header: "Code" },
                 { field: "div_name", header: "Division" },
               ]}
               valueField="div_code"
               displayFields={["div_code", "div_name"]}
               loadOptions={loadDivisions}
-              onChange={(_, row) => {
+              onChange={(_, row) =>
                 setDivision(
                   row
                     ? { div_code: String(row.div_code ?? ""), div_name: String(row.div_name ?? "") }
                     : null,
-                );
-              }}
+                )
+              }
             />
-          </label>
+          </Field>
 
-          {/* Department — optional (works with or without Division), but
-              its `key` includes division.div_code so picking a Division
-              forces a remount and re-fetches departments scoped to it. */}
-          <label className="field">
-            <span>Department</span>
+          {/* Department — optional; key includes division so it re-fetches when Division changes */}
+          <Field label="Department">
             <LookupField
               key={`department-${resetKey}-${division?.div_code ?? ""}`}
               compact
-              label="Department"
+              label=""
               value={department?.dept_code ?? ""}
               displayValue={department ? `${department.dept_code} - ${department.dept_name}` : ""}
               columns={[
-                { field: "dept_code", header: "Code"       },
+                { field: "dept_code", header: "Code" },
                 { field: "dept_name", header: "Department" },
               ]}
               valueField="dept_code"
               displayFields={["dept_code", "dept_name"]}
               loadOptions={loadDepartments}
-              onChange={(_, row) => {
+              onChange={(_, row) =>
                 setDepartment(
                   row
                     ? { dept_code: String(row.dept_code ?? ""), dept_name: String(row.dept_name ?? "") }
                     : null,
-                );
-              }}
+                )
+              }
             />
-          </label>
+          </Field>
 
-          {/* Section — HARD depends on Department.
-              - disabled={!department}: field can't be opened until a
-                Department is selected.
-              - key includes division.div_code + department.dept_code:
-                any change up the chain forces a remount, so loadSections()
-                always runs fresh and scoped correctly. */}
-          <label className="field">
-            <span>
-              Section <strong className="text-destructive">*</strong>
-            </span>
+          {/* Section — keyed on Division + Department so it always re-fetches scoped */}
+          <Field label="Section" required>
             <LookupField
               key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
               compact
-              label="Section"
+              label=""
               value={section?.section_code ?? ""}
               displayValue={section ? `${section.section_code} - ${section.section_name}` : ""}
               columns={[
-                { field: "section_code", header: "Code"    },
+                { field: "section_code", header: "Code" },
                 { field: "section_name", header: "Section" },
               ]}
               valueField="section_code"
               displayFields={["section_code", "section_name"]}
               loadOptions={loadSections}
-            
-              onChange={(_, row) => {
+              onChange={(_, row) =>
                 setSection(
                   row
                     ? {
@@ -748,99 +708,68 @@ export function HrEmpEducationPage() {
                         section_name: String(row.section_name ?? ""),
                       }
                     : null,
-                );
-              }}
+                )
+              }
             />
-          </label>
+          </Field>
 
-          {/* Employee — HARD depends on Section.
-              - disabled={!section}: field can't be opened until a Section
-                is selected.
-              - key includes department.dept_code + division.div_code +
-                section.section_code: any change up the chain forces a
-                remount, so loadEmployees() always runs fresh and scoped
-                correctly. */}
-          <label className="field">
-            <span>
-              Employee <strong className="text-destructive">*</strong>
-            </span>
+          {/* Employee — keyed on the whole chain */}
+          <Field label="Employee" required>
             <LookupField
               key={`employee-${resetKey}-${department?.dept_code ?? ""}-${division?.div_code ?? ""}-${section?.section_code ?? ""}`}
               compact
-              label="Employee"
+              label=""
               value={employee?.employee_id ?? ""}
-              displayValue={
-                employee
-                  ? `${employee.employee_id} - ${employee.employee_name}`
-                  : ""
-              }
+              displayValue={employee ? `${employee.employee_id} - ${employee.employee_name}` : ""}
               columns={[
-                { field: "employee_id",   header: "ID"       },
+                { field: "employee_id", header: "ID" },
                 { field: "employee_name", header: "Employee" },
               ]}
               valueField="employee_id"
               displayFields={["employee_id", "employee_name"]}
               loadOptions={loadEmployees}
-            
-              onChange={(_, row) => {
+              onChange={(_, row) =>
                 setEmployee(
                   row
                     ? {
-                        employee_id: String(
-                          row.employee_id ?? "",
-                        ),
-                        // guard both rpt_name and employee_name — API may
-                        // return either depending on the lookup
-                        employee_name: String(
-                          row.employee_name ?? row.rpt_name ?? "",
-                        ),
+                        employee_id: String(row.employee_id ?? ""),
+                        // API may return either rpt_name or employee_name
+                        employee_name: String(row.employee_name ?? row.rpt_name ?? ""),
                       }
                     : null,
-                );
-              }}
+                )
+              }
             />
-          </label>
+          </Field>
+        </div>
+      </SectionPanel>
 
-        </CardContent>
-      </Card>
-
-      {/* ── Education Grid ───────────────────────────────────────────────── */}
+      {/* Education grid — Add Row lives in the DataTable toolbar */}
       <DataTable
         columns={columns}
-        // FIX: render only visibleRows (excludes rows pending deletion)
-        // so a removed row stays gone from the UI, while the underlying
-        // `rows` state still carries it (status_flag "D") for the save call.
         data={visibleRows}
-        title={`${visibleRows.length} Record${visibleRows.length !== 1 ? "s" : ""}`}
+        title={eduQuery.isFetching ? "Loading" : `${visibleRows.length} Record${visibleRows.length !== 1 ? "s" : ""}`}
         subtitle="Education Records"
         searchPlaceholder="Search discipline, level, institution..."
+        loading={eduQuery.isFetching}
+        emptyText={employee ? "No education records" : "Select an employee to view records"}
         height={420}
         minWidth={1280}
         density="grid"
         enablePagination={false}
         getRowId={(row) => row._rowId}
         toolbar={
-          <Button
-            variant="outline"
+          <button
+            type="button"
             disabled={!employee?.employee_id}
             onClick={() => setRows((prev) => [...prev, makeRow()])}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <MdAddCircleOutline size={15} /> Add Row
-          </Button>
+            <Plus size={14} />
+            Add Row
+          </button>
         }
       />
-
-      {/* ── Footer Actions ───────────────────────────────────────────────── */}
-      <div className="flex justify-end gap-2">
-        <Button
-          disabled={mutation.isPending || visibleRows.length === 0 || !employee?.employee_id}
-          onClick={() => mutation.mutate()}
-        >
-          <Save size={15} />
-          {mutation.isPending ? "Saving..." : "Save"}
-        </Button>
-      </div>
-
     </section>
   );
 }
