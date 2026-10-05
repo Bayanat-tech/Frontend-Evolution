@@ -1,15 +1,15 @@
-import { CloudUpload, Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { CloudUpload, Edit2, FileText, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { useToast } from "../../components/ui/AlertToast";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
-import { WmsDataTable } from "../../components/ui/WmsDataTable";
+import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
-import { Select } from "../../components/ui/Select";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
-import {WmsMasterForm} from "../../components/WmsMasterForm";
+import { WmsMasterForm } from "../../components/WmsMasterForm";
 import ImportLocationEdi from "./edi/ImportLocationEdi";
 import ImportProductEdi from "./edi/ImportProductEdi";
 import ImportSiteEdi from "./edi/ImportSiteEdi";
@@ -62,31 +62,33 @@ export type WmsSimpleMasterConfig = {
   master: string;
   gmEndpoint: string;
   routeKeys?: string[];
-  keyField?: string;  // Single key field (fallback if keyFields not provided)
-  keyFields?: string[];  // Multiple fields to compose unique row ID
+  keyField?: string;
+  keyFields?: string[];
   fields: WmsMasterField[];
   defaults?: Record<string, unknown>;
-  fieldsPerRow?: number;  // Number of fields per row (default: 2)
+  fieldsPerRow?: number;
   deleteConfig?: WmsDeleteConfig;
   mapBeforeSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => Record<string, unknown>;
   mapAfterLoad?: (data: Record<string, unknown>) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
-    formTabs?: WmsMasterFormTab[];
-
+  /** OPTIONAL. Splits the form into steps with Back / Next (Next validates the current step's required entries). */
+  formTabs?: WmsMasterFormTab[];
   customLoad?: (user: unknown) => Promise<{ tableData: Record<string, unknown>[]; count?: number }>;
   customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: unknown }) => Promise<void>;
   customDelete?: (row: Record<string, unknown>, user: unknown) => Promise<void>;
-  rowIdSeparator?: string;  // Separator for composite row IDs (default: '_')
+  rowIdSeparator?: string;
   ediUploadConfig?: {
     open: boolean;
     name: "location" | "product" | "site";
-  }
+  };
 };
+
+type Notice = { type: "success" | "error"; message: string } | null;
+
+const FORM_ID = "wms-master-form";
 
 function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConfig, index: number): string {
   const separator = config.rowIdSeparator || "_";
-  
-  // Use multiple key fields if provided
   if (config.keyFields && config.keyFields.length > 0) {
     const composedId = config.keyFields
       .map((field) => String(row[field] ?? "").trim())
@@ -94,47 +96,35 @@ function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConf
       .join(separator);
     return composedId || `${config.master}${separator}${index}`;
   }
-  
-  // Fallback to single key field
   if (config.keyField) {
     return String(row[config.keyField] || `${config.master}${separator}${index}`);
   }
-  
-  // Final fallback
   return `${config.master}${separator}${index}`;
 }
 
 function getRowDisplayKey(row: Record<string, unknown>, config: WmsSimpleMasterConfig): string {
-  // Use multiple key fields if provided
   if (config.keyFields && config.keyFields.length > 0) {
     return config.keyFields
       .map((field) => String(row[field] ?? "").trim())
       .filter((val) => val.length > 0)
       .join(config.rowIdSeparator || "_");
   }
-  
-  // Fallback to single key field
   if (config.keyField) {
     return String(row[config.keyField] ?? "");
   }
-  
-  // Final fallback
   return "";
 }
 
 function getErrorMessage(error: unknown, defaultMessage: string): string {
   if (error instanceof Error) {
-    // Check if it's an axios error with response data
     const axiosError = error as any;
     if (axiosError.response?.data) {
       const responseData = axiosError.response.data;
-      // Try common error message fields in API responses
-      if (typeof responseData === 'string') return responseData;
+      if (typeof responseData === "string") return responseData;
       if (responseData.message) return responseData.message;
       if (responseData.error) return responseData.error;
       if (responseData.msg) return responseData.msg;
     }
-    // Fall back to error message
     return error.message;
   }
   return defaultMessage;
@@ -146,44 +136,39 @@ function clearDependentFields(
   form: Record<string, unknown>,
   config: WmsSimpleMasterConfig
 ): Record<string, unknown> {
-  // If a field is being cleared (empty/null/undefined), clear all dependent fields
   const isFieldBeingCleared = newValue === "" || newValue === null || newValue === undefined;
-  
-  if (!isFieldBeingCleared) {
-    return form;
-  }
+  if (!isFieldBeingCleared) return form;
 
-  // Find all fields that depend on the current field
   const updatedForm = { ...form };
-  
   config.fields.forEach((field) => {
-    // Check if this field depends on the field being cleared
     if (field.dropdownCodeMap) {
-      // Check if the cleared field is a dependency
       const dependsOnClearedField = Object.keys(field.dropdownCodeMap).includes(fieldName);
       if (dependsOnClearedField) {
-        // Clear this dependent field
         updatedForm[field.name] = field.type === "number" ? 0 : "";
       }
     }
   });
-
   return updatedForm;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState(""); 
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [formOpen, setFormOpen] = useState(false);
+
+  const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
   const [form, setForm] = useState<Record<string, unknown>>({});
@@ -191,14 +176,14 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [ediUploadOpen, setEdiUploadOpen] = useState(false);
 
   useEffect(() => {
-  const timer = setTimeout(() => {
-    setDebouncedQuery(query);
-  }, 400);
-  return () => clearTimeout(timer);
-}, [query]);
+    const timer = setTimeout(() => setDebouncedQuery(query), 400);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const editableFields = config.fields;
   const tableFields = config.fields.filter((field) => field.table !== false);
+  const hasTabs = Boolean(config.formTabs && config.formTabs.length > 0);
+  const deleteDisabled = !config.customDelete && config.deleteConfig?.mode === "disabled";
 
   const makeEmpty = () => ({
     ...Object.fromEntries(config.fields.map((field) => [field.name, field.type === "number" ? 0 : ""])),
@@ -206,16 +191,17 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     company_code: user?.company_code || "",
   });
 
-  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize, clearNotice = true) => {
     setLoading(true);
-    setRows([]); // Clear rows immediately when loading starts
+    setRows([]);
+    if (clearNotice) setNotice(null);
     try {
       if (config.customLoad) {
         const response = await config.customLoad(user);
         setRows(response.tableData.map(normalizeRow));
         setTotalRows(response.count || response.tableData.length);
       } else {
-        const hasSearch = Boolean(debouncedQuery.trim()); 
+        const hasSearch = Boolean(debouncedQuery.trim());
         const requestPageIndex = hasSearch ? 0 : nextPageIndex;
         const requestPageSize = hasSearch ? 100000 : nextPageSize;
         const activeFilters = columnFilters
@@ -231,51 +217,69 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         setTotalRows(response.count || response.tableData.length);
       }
     } catch (error) {
-      toast.error(getErrorMessage(error, `Unable to load ${config.title}`));
+      setNotice({ type: "error", message: getErrorMessage(error, `Unable to load ${config.title}`) });
       setRows([]);
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     void loadRows();
   }, [config.master, pageIndex, pageSize, debouncedQuery, columnFilters]);
 
-
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
-      ...tableFields.map((field) => ({
+      ...tableFields.map((field, index) => ({
         accessorKey: field.name,
         header: field.label,
         size: field.width || 160,
         cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
           const value = formatValue(row.original[field.name]);
-          const alignmentClass = field.align ? 
-            field.align === "right" ? "text-right" : field.align === "center" ? "text-center" : "text-left"
+          const alignmentClass = field.align
+            ? field.align === "right" ? "text-right" : field.align === "center" ? "text-center" : "text-left"
             : "text-left";
+          if (index === 0) {
+            return (
+              <div className={alignmentClass}>
+                <button
+                  type="button"
+                  onClick={() => openEdit(row.original)}
+                  className="font-semibold text-[#00378C] hover:underline cursor-pointer text-left bg-transparent border-none p-0"
+                  title="Click to edit"
+                >
+                  {value}
+                </button>
+              </div>
+            );
+          }
           return <div className={alignmentClass}>{value}</div>;
         },
       })),
       {
         id: "actions",
-        header: "Actions",
+        header: () => <div className="text-center">Actions</div>,
+        enableSorting: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title={`Edit ${config.title}`}>
-              <Edit2 size={14} />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
+              onClick={() => openEdit(row.original)}
+              title="Edit"
+            >
+              <Edit2 size={15} />
             </Button>
             <Button
               size="icon"
               variant="ghost"
-              disabled={!config.customDelete && config.deleteConfig?.mode === "disabled"}
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+              disabled={deleteDisabled}
               onClick={() => setDeleteTarget(row.original)}
-              title={
-                !config.customDelete && config.deleteConfig?.mode === "disabled"
-                  ? config.deleteConfig.reason || "Delete endpoint is not registered"
-                  : `Delete ${config.title}`
-              }
+              title={deleteDisabled ? config.deleteConfig?.reason || "Delete endpoint is not registered" : "Delete"}
             >
-              <Trash2 size={14} />
+              <Trash2 size={15} />
             </Button>
           </div>
         ),
@@ -289,7 +293,8 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setEditMode(false);
     setOriginal(null);
     setForm(makeEmpty());
-    setFormOpen(true);
+    setNotice(null);
+    setView("editor");
   };
 
   const openEdit = (row: Record<string, unknown>) => {
@@ -297,48 +302,64 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setOriginal(row);
     const mappedData = config.mapAfterLoad ? config.mapAfterLoad(row) : row;
     setForm({ ...makeEmpty(), ...mappedData });
-    setFormOpen(true);
+    setNotice(null);
+    setView("editor");
+  };
+
+  const handleCloseForm = () => {
+    setView("list");
+    setEditMode(false);
+    setOriginal(null);
+    setForm({});
+  };
+
+  const handleReset = () => {
+    if (editMode && original) {
+      openEdit(original);
+    } else {
+      setForm(makeEmpty());
+    }
   };
 
   const saveRecord = async (event: FormEvent) => {
-    let response;
     event.preventDefault();
-    const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+    const missing = editableFields.find(
+      (field) => field.required && field.type !== "checkbox" && !String(form[field.name] ?? "").trim(),
+    );
     if (missing) {
-      toast.error(`${missing.label} is required`);
+      setNotice({ type: "error", message: `${missing.label} is required` });
       return;
     }
     setSaving(true);
     try {
       const transformedForm = editableFields.reduce((acc, field) => {
         let value = form[field.name];
-        if (field.type === "checkbox") {
-          value = value === true || value === "Y" ? "Y" : "N";
-        }
+        if (field.type === "checkbox") value = value === true || value === "Y" ? "Y" : "N";
         if (value === "") value = null;
         acc[field.name] = value;
         return acc;
       }, {} as Record<string, unknown>);
 
       const finalForm = { ...transformedForm, company_code: transformedForm.company_code || user?.company_code || "" };
+
       if (config.customSave) {
-      response = await config.customSave(finalForm, { editMode, original, user });
+        await config.customSave(finalForm, { editMode, original, user });
       } else {
         const mapped = config.mapBeforeSave?.(finalForm, { editMode, original }) || finalForm;
         const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-        response = await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
+        await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
       }
-      console.log("Save response", response);
-      setFormOpen(false);
-      toast.success(editMode ? "Successfully updated" : "Successfully created");
-      await loadRows(pageIndex, pageSize);
+
+      handleCloseForm();
+      setNotice({ type: "success", message: editMode ? "Successfully updated" : "Successfully created" });
+      await loadRows(pageIndex, pageSize, false);
     } catch (error) {
-      console.log("Save response", response);
-      toast.error(getErrorMessage(error, `Unable to save ${config.title}`));
+      setNotice({ type: "error", message: getErrorMessage(error, `Unable to save ${config.title}`) });
     } finally {
       setSaving(false);
     }
   };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
@@ -355,220 +376,211 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         }
       }
       setDeleteTarget(null);
-      toast.success("Successfully deleted");
-      await loadRows(pageIndex, pageSize);
+      setNotice({ type: "success", message: "Successfully deleted" });
+      await loadRows(pageIndex, pageSize, false);
     } catch (error) {
-      toast.error(getErrorMessage(error, `Unable to delete ${config.title}`));
+      setNotice({ type: "error", message: getErrorMessage(error, `Unable to delete ${config.title}`) });
     } finally {
       setSaving(false);
     }
   };
+
+  const editorOpen = view === "editor";
+  const pageTitle = editorOpen ? (editMode ? `Edit ${config.title}` : `New ${config.title}`) : config.title;
+
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{config.title}</h1>
+    <section className="grid gap-2 p-1">
+      {/* ---------- Top Header (compact) ---------- */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+            <FileText size={14} />
+          </div>
+          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">{pageTitle}</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => loadRows()}>
-            <RefreshCw size={15} />
-          </Button>
-          <Button title={`Add ${config.title}`} onClick={openAdd}>
-            <Plus size={15} /> Add
-          </Button>
-          {
-            config.ediUploadConfig?.open && (
-              <Button title={`Upload ${config.title} via EDI`} onClick={() => setEdiUploadOpen(true)}>
-                <CloudUpload size={15} /> EDI Upload
+
+        {editorOpen && (
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReset}
+              disabled={saving}
+              title="Reset"
+              className="h-7 gap-1 text-xs font-semibold px-3 rounded-md"
+            >
+              <RefreshCw size={13} /> Reset
+            </Button>
+            {/* With steps, Save lives on the last step next to Back / Next. */}
+            
+              <Button
+                type="submit"
+                form={FORM_ID}
+                disabled={saving}
+                className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
+              >
+                <Save size={13} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
               </Button>
-            )
-          }
-        </div>
+            
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleCloseForm}
+              disabled={saving}
+              aria-label="Close"
+              title="Close"
+              className="h-7 w-7 rounded-md"
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        )}
       </div>
 
-      <WmsDataTable
-        columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
-        subtitle={`${config.title} List`}
-          searchValue={query}
-          onSearchChange={(value) => {
-            setQuery(value);   // fires only after delay, inside DebouncedSearchInput
-            setPageIndex(0);
-          }}
-        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-        loading={loading}
-        emptyText={`No ${config.title.toLowerCase()} records found`}
-        height={620}
-        minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
-        density="grid"
-        enablePagination
-        manualPagination={!(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()))}
-        manualFiltering={false}
-        pageIndex={pageIndex}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        columnFilters={columnFilters}
-        onColumnFiltersChange={(filters) => {
-          setColumnFilters(filters);
-          setPageIndex(0);
-        }}
-        onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPageIndex(0);
-        }}
-        getRowId={(row, index) => generateRowId(row, config, index)}
-      />
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact wide onClose={() => setFormOpen(false)} >
-      <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
-      <WmsMasterForm
+      {/* ---------- EDITOR ---------- */}
+      {editorOpen && (
+        <WmsMasterForm
+          key={editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add"}
+          formId={FORM_ID}
+          title={config.title}
           fields={editableFields}
-          key={formOpen ? (editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add") : "closed"}
           tabs={config.formTabs}
           fieldsPerRow={config.fieldsPerRow}
           form={form}
           editMode={editMode}
           saving={saving}
           user={user}
-          onChange={(name:any, value:any) => setForm((prev) => {
-            const updated = { ...prev, [name]: value };
-            // Clear dependent fields if a parent field is cleared
-            return clearDependentFields(name, value, updated, config);
-          })}
+          onChange={(name: any, value: any) =>
+            setForm((prev) => {
+              const updated = { ...prev, [name]: value };
+              return clearDependentFields(name, value, updated, config);
+            })
+          }
           onSave={saveRecord}
-          onCancel={() => setFormOpen(false)}
+          onCancel={handleCloseForm}
         />
-      </div>
-        {/* <form className="grid gap-4" onSubmit={saveRecord}>
-          <Card>
-            <CardHeader>
-              <div>
-                <p className="eyebrow">Details</p>
-                <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              {editableFields.map((field) => (
-                <Field label={field.label} required={field.required} key={field.name}>
-                  {renderInput(field, form[field.name], Boolean(editMode && field.disabledOnEdit), (value) => setForm((current) => ({ ...current, [field.name]: value })))}
-                </Field>
-              ))}
-            </CardContent>
-          </Card>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button disabled={saving} type="submit">
-              <Save size={15} /> {saving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </form> */}
-      </Dialog>
+      )}
 
+      {/* ---------- LIST ---------- */}
+      {!editorOpen && (
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+          searchValue={query}
+          onSearchChange={(value: any) => {
+            setQuery(value);
+            setPageIndex(0);
+          }}
+          searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+          loading={loading}
+          emptyText={`No ${config.title.toLowerCase()} records found`}
+          height="calc(100dvh - 150px)"
+          minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
+          density="grid"
+          enablePagination
+          enableExport={false}
+          manualPagination={!(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()))}
+          manualFiltering={false}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters: any) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize: any) => {
+            setPageSize(nextPageSize);
+            setPageIndex(0);
+          }}
+          actionButton={
+            <div className="flex items-center gap-2">
+              {config.ediUploadConfig?.open && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  title={`Upload ${config.title} via EDI`}
+                  onClick={() => setEdiUploadOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-semibold px-3.5 rounded-lg"
+                >
+                  <CloudUpload size={14} /> EDI Upload
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={openAdd}
+                disabled={saving}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                fyPeriod=""
+                fyPeriods={[]}
+                onFyPeriodChange={() => {}}
+                onExport={() =>
+                  exportToCsv(
+                    rows,
+                    columns,
+                    `${config.title.toLowerCase().replace(/\s+/g, "-")}-list-${new Date().toISOString().slice(0, 10)}.csv`,
+                  )
+                }
+                onRefresh={() => void loadRows(pageIndex, pageSize, false)}
+              />
+            </div>
+          }
+          getRowId={(row: any, index: any) => generateRowId(row, config, index)}
+        />
+      )}
+
+      {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
-        description={deleteTarget ? `Delete ${formatValue(getRowDisplayKey(deleteTarget, config))}?` : undefined}
+        description="This action cannot be undone."
         compact
         tone="danger"
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
             <Button disabled={saving} variant="destructive" onClick={confirmDelete}>Delete</Button>
           </>
         }
       >
-        <p className="m-0 text-sm text-muted-foreground">This action cannot be undone.</p>
+        <p className="m-0 text-sm text-muted-foreground">
+          Delete <strong>{deleteTarget ? formatValue(getRowDisplayKey(deleteTarget, config)) : ""}</strong>?
+        </p>
       </Dialog>
 
+      {/* ---------- EDI UPLOAD DIALOGS ---------- */}
       {config.ediUploadConfig?.name === "location" && ediUploadOpen && (
-        <Dialog
-          open={ediUploadOpen}
-          title={`${config.title} EDI Upload`}
-          description="Import records via Excel/EDI"
-          compact
-          wide
-          onClose={() => setEdiUploadOpen(false)}
-        >
-          <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
-            <ImportLocationEdi
-              onSuccess={() => setEdiUploadOpen(false)}
-              onClose={() => setEdiUploadOpen(false)}
-            />
+        <Dialog open={ediUploadOpen} title={`${config.title} EDI Upload`} description="Import records via Excel/EDI" compact wide onClose={() => setEdiUploadOpen(false)}>
+          <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
+            <ImportLocationEdi onSuccess={() => setEdiUploadOpen(false)} onClose={() => setEdiUploadOpen(false)} />
           </div>
         </Dialog>
       )}
       {config.ediUploadConfig?.name === "product" && ediUploadOpen && (
-        <Dialog
-          open={ediUploadOpen}
-          title={`${config.title} EDI Upload`}
-          description="Import records via Excel/EDI"
-          compact
-          wide
-          onClose={() => setEdiUploadOpen(false)}
-        >
-          <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
-            <ImportProductEdi
-              onSuccess={() => setEdiUploadOpen(false)}
-              onClose={() => setEdiUploadOpen(false)}
-            />
+        <Dialog open={ediUploadOpen} title={`${config.title} EDI Upload`} description="Import records via Excel/EDI" compact wide onClose={() => setEdiUploadOpen(false)}>
+          <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
+            <ImportProductEdi onSuccess={() => setEdiUploadOpen(false)} onClose={() => setEdiUploadOpen(false)} />
           </div>
         </Dialog>
       )}
       {config.ediUploadConfig?.name === "site" && ediUploadOpen && (
-        <Dialog
-          open={ediUploadOpen}
-          title={`${config.title} EDI Upload`}
-          description="Import records via Excel/EDI"
-          compact
-          wide
-          onClose={() => setEdiUploadOpen(false)}
-        >
-          <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
-            <ImportSiteEdi
-              onSuccess={() => setEdiUploadOpen(false)}
-              onClose={() => setEdiUploadOpen(false)}
-            />
+        <Dialog open={ediUploadOpen} title={`${config.title} EDI Upload`} description="Import records via Excel/EDI" compact wide onClose={() => setEdiUploadOpen(false)}>
+          <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
+            <ImportSiteEdi onSuccess={() => setEdiUploadOpen(false)} onClose={() => setEdiUploadOpen(false)} />
           </div>
         </Dialog>
       )}
     </section>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
-  return (
-    <label className="field">
-      <span>
-        {label}
-        {required && <strong className="text-destructive"> *</strong>}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function renderInput(field: WmsMasterField, value: unknown, disabled: boolean, onChange: (value: unknown) => void) {
-  if (field.type === "select") {
-    return (
-      <Select disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
-        {(field.options || []).map((option) => (
-          <option value={option.value} key={option.value}>{option.label}</option>
-        ))}
-      </Select>
-    );
-  }
-  return (
-    <Input
-      disabled={disabled}
-      type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"}
-      value={String(value ?? "")}
-      onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)}
-    />
   );
 }
 

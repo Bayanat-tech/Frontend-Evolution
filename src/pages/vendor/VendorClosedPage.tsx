@@ -33,8 +33,11 @@ export function VendorClosedPage() {
   const columns = useMemo(() => makeVendorColumns([{ accessorKey: "ERP_DOC_NO", header: "ERP Doc" }]), []);
 
   return (
-    <section className="grid gap-4">
-      <VendorPageHeader title="Closed Vendor Documents" description="Closed and approved vendor documents have their own read-only page." actions={<RefreshButton loading={loading} onClick={() => void loadRows()} />} />
+    // <section className="grid gap-4">
+    <section className="vendor-list-screen grid gap-4">
+      <VendorPageHeader title="Closed Vendor Documents" description="Closed and approved vendor documents have their own read-only page."
+      //  actions={<RefreshButton loading={loading} onClick={() => void loadRows()} />} 
+       />
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
       <DataTable columns={columns} data={rows} searchValue={query} onSearchChange={setQuery} loading={loading} searchPlaceholder="Search closed documents..." emptyText="No closed documents found" density="grid" height={470} minWidth={1060} enableExport exportFilename="vendor-closed.csv" />
     </section>

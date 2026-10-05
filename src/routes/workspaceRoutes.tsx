@@ -13,6 +13,7 @@ import { BankReconciliationPage } from "../pages/finance/BankReconciliationPage"
 import { BudgetVersionPage } from "../pages/finance/BudgetVersionPage";
 import { ChequeDepositSlipPage } from "../pages/finance/ChequeDepositSlipPage";
 import { CommercialDocumentPage } from "../pages/finance/CommercialDocumentPage";
+import { FinanceDashboardPanel } from "../pages/finance/FinanceDashboardPanel";
 import { DocumentSetupPage } from "../pages/finance/DocumentSetupPage";
 import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
@@ -20,7 +21,8 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
-import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
+import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage"
+import WmsDashboard from "../pages/wms/dashboard/WmsDashboard";;
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
@@ -47,7 +49,7 @@ import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSumma
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
-import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
+import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
@@ -208,6 +210,11 @@ import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
+import { PamsBulkAppraisalPage } from "../pages/pams/PamsBulkAppraisalPage";
+import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
+import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
+import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
+import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 
 
  type WorkspaceRouteContext = {
@@ -229,10 +236,20 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+    {
+    name: "WMS Dashboard",
+    match: ({ pathname }) => isWmsDashboardRoute(pathname),
+    element: () => <WmsDashboard />,
+  },
   {
     name : 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
     element: () => <ConsolidatePayUnitPage />,
+  },
+  {
+    name: "Salary Advance Recovery",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/advance/deduction_letter"),
+    element: () => <SalaryAdvanceRecoveryPage />,
   },
 
   // {
@@ -508,8 +525,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 },
 {
   name: "Pams Dashboard",
-  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/masters/kpi%20masters/pms_dashboard"),
+  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
   element: () => <PamsDashboard />
+},
+
+{
+  name: "Quotation Comparison",
+  match: ({ pathname }) => pathname.toLowerCase().includes("purchase_sales/purchase/quotation_comparison"),
+  element: () => <QuotationComparisonPage />
 },
   
   {
@@ -607,7 +630,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Commercial Documents",
     match: ({ pathname }) => Boolean(getCommercialDocType(pathname)),
-    element: ({ pathname }) => <CommercialDocumentPage docType={getCommercialDocType(pathname)!} />,
+    element: ({ pathname, activeMenu }) => (
+      <CommercialDocumentPage
+        docType={getCommercialDocType(pathname)!}
+        menuTitle={activeMenu?.title ? activeMenu.title.replace(/[_]+/g, " ").trim() : undefined}
+      />
+    ),
   },
   {
     name: "Finance Journal Voucher",
@@ -627,12 +655,22 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Credit/Debit Notes",
     match: ({ pathname }) => Boolean(getCreditDebitNoteDocType(pathname)),
-    element: ({ pathname }) => <CreditDebiteNotePage docType={getCreditDebitNoteDocType(pathname)!} />,
+    element: ({ pathname, activeMenu }) => (
+      <CreditDebiteNotePage
+        docType={getCreditDebitNoteDocType(pathname)!}
+        menuTitle={activeMenu?.title ? activeMenu.title.replace(/[_]+/g, " ").trim() : undefined}
+      />
+    ),
   },
   {
     name: "Finance Payment Documents",
     match: ({ pathname }) => Boolean(getTransactionDocType(pathname)),
-    element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
+    element: ({ pathname, activeMenu }) => (
+      <PaymentDocumentPage
+        docType={getTransactionDocType(pathname)!}
+        menuTitle={activeMenu?.title ? activeMenu.title.replace(/[_]+/g, " ").trim() : undefined}
+      />
+    ),
   },
   {
     name: "Finance Utility Master",
@@ -833,7 +871,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isFreightWorkspaceRoute(context),
     element: (context) => <FreightWorkspacePage target={getFreightWorkspaceTarget(context)} />,
   },
-    {
+  {
+    name: "Finance Dashboard",
+    match: (context) => isFinanceDashboardRoute(context),
+    element: () => <FinanceDashboardPanel />,
+  },
+  {
     name: "ALMS Simple Master",
     match: ({ pathname }) => Boolean(getAlmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <AlmsSimpleMasterPage config={getAlmsSimpleMasterConfig(pathname)!} />,
@@ -1157,6 +1200,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <KpiActivityPage />,
   },
 
+  {
+    name: "PAMS KPI Acceptance",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+             (normalized.includes("/kpi_item") || 
+              normalized.includes("/kpi-item"));
+    },
+    element: () => <KpiAcceptancePage />,
+  },
+
   // workspaceRoutes array mein, PAMS Master route se PEHLE add karo:
 {
   name: "PAMS Period Setup",
@@ -1420,7 +1474,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Purchase Request Register(old) Report",
   match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
   element: () => <PrRegisterOldPage />,
-}
+},
+
+  {
+  name: "Purchase & Sales Dashboard",
+  match: ({ pathname }) => isPnSRoute(pathname),
+  element: () => <PurchaseSalesDashboard />},
 
 
 ];
@@ -1830,12 +1889,25 @@ function getCreditDebitNoteDocType(pathname: string) {
 
 function getTransactionDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
-  if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
-  if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
-  if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/cheque-payment") ||
+    normalized.includes("/finance/accounts/transactions/bank-payment") ||
+    normalized.includes("/finance/accounts/transactions/bank_payment")
+  ) return "BP" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/cheque-receipt") ||
+    normalized.includes("/finance/accounts/transactions/bank-receipt") ||
+    normalized.includes("/finance/accounts/transactions/bank_receipt")
+  ) return "BR" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/cash-receipt") ||
+    normalized.includes("/finance/accounts/transactions/cash_receipt")
+  ) return "CR" as const;
   if (
     normalized.includes("/finance/accounts/transactions/petty_cash_payment") ||
-    normalized.includes("/finance/accounts/transactions/petty-cash-payment")
+    normalized.includes("/finance/accounts/transactions/petty-cash-payment") ||
+    normalized.includes("/finance/accounts/transactions/cash-payment") ||
+    normalized.includes("/finance/accounts/transactions/cash_payment")
   ) return "CP" as const;
   return null;
 }
@@ -1852,10 +1924,12 @@ function getCommercialDocType(pathname: string) {
 
 function isJournalVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
+  const isReverse = normalized.includes("rjv") || normalized.includes("reverse");
   return (
-    normalized.includes("/finance/accounts/transactions/jv") ||
-    normalized.includes("/finance/accounts/transactions/provisional") ||
-    normalized.includes("/finance/accounts/transactions/journal")
+    !isReverse &&
+    (normalized.includes("/finance/accounts/transactions/jv") ||
+      normalized.includes("/finance/accounts/transactions/provisional") ||
+      normalized.includes("/finance/accounts/transactions/journal"))
   );
 }
 
@@ -1864,8 +1938,9 @@ function isRVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
     normalized.includes("/finance/accounts/transactions/rjv") ||
-    normalized.includes("/finance/accounts/transactions/provisional") ||
-    normalized.includes("/finance/accounts/transactions/journal")
+    normalized.includes("/finance/accounts/transactions/reverse_jv") ||
+    normalized.includes("/finance/accounts/transactions/reverse-jv") ||
+    normalized.includes("/finance/accounts/transactions/reverse")
   );
 }
 
@@ -2051,6 +2126,10 @@ function isWmsBillingActRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
 }
+function isWmsDashboardRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/wms/wms";
+}
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;
@@ -2132,6 +2211,25 @@ function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
     compact.includes("freight") ||
     compact.includes("frieght") ||
     compact.includes("freightenquirymainpage")
+  );
+}
+
+function isFinanceDashboardRoute(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase().trim().replace(/\/+$/, "");
+  if (
+    pathname === "/workspace/finance" ||
+    pathname === "/workspace/finance/finance" ||
+    pathname === "/workspace/finance/dashboard" ||
+    pathname === "/workspace/finance/finance/dashboard"
+  ) {
+    return true;
+  }
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    compact === "financedashboard" ||
+    compact === "finance" ||
+    matchText.includes("finance/dashboard")
   );
 }
 
@@ -2813,6 +2911,14 @@ function isProductBomRoute(pathname: string) {
   );
 }
 
+function isPnSRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales") 
+   
+  );
+}
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
 

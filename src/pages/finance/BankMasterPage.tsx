@@ -119,7 +119,7 @@ export function BankMasterPage() {
   };
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="eyebrow">Finance Master</p>
@@ -133,7 +133,7 @@ export function BankMasterPage() {
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[620px] grid-cols-[minmax(0,1fr)_410px] gap-4 max-xl:grid-cols-1">
+      <div className="grid min-h-[240px] grid-cols-[minmax(0,1fr)_410px] gap-4 max-xl:grid-cols-1">
         <DataTable
           columns={columns}
           data={filteredRows}
@@ -154,7 +154,7 @@ export function BankMasterPage() {
           {editor ? (
             <BankEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Bank updated successfully" : "Bank added successfully" }); await loadRows(false); }} />
           ) : (
-            <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
+            <div className="grid min-h-[240px] place-items-center p-8 text-center text-muted-foreground">
               <div>
                 <p className="eyebrow">No Form Open</p>
                 <h2 className="m-0 text-lg font-semibold text-foreground">Select a bank or add one</h2>
@@ -222,7 +222,7 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
   };
 
   return (
-    <div className="flex min-h-[620px] flex-col">
+    <div className="finance-utility-editor flex min-h-0 flex-col">
       <div className="border-b p-4">
         <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank</h2>

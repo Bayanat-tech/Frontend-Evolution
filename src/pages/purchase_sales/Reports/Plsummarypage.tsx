@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Eye, FileText, Filter, RotateCcw, UserRound } from "lucide-react";
+import { CalendarDays, Eye, FileText, Filter, UserRound } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount, LookupRow } from "../../../api/lookups";
 import { getPLSummaryReportExcel, getPLSummaryReportHtml } from "../../../api/transactions";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import { Button } from "../../../components/ui/Button";
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
-import { Input } from "../../../components/ui/Input";
 import { MultiSelectField, type MultiSelectOption } from "../../../components/ui/MultiSelectField";
+import { PurchaseReportPreview } from "./Purchasereportpreview";
+import { openPurchaseReport } from "./PurchaseReportPreviewState";
+
 
 export type ReportMode =
   | "invoicewise"
@@ -92,10 +93,6 @@ function firstValue(values: string[]) {
   return values[0] || "";
 }
 
-function setFilter<T extends Record<string, any>>(setter: React.Dispatch<React.SetStateAction<T>>, key: keyof T, value: string) {
-  setter((current) => ({ ...current, [key]: value }));
-}
-
 function optionLabel(options: { label: string; value: string }[], value: string) {
   return options.find((x) => x.value === value)?.label || "All";
 }
@@ -122,10 +119,6 @@ function firstExisting(row: LookupRow, key: string) {
   return row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
 }
 
-function formatText(value: unknown) {
-  return value === null || value === undefined ? "" : String(value);
-}
-
 function buildTotals(rows: LookupRow[]) {
   const fields = ["REVENUE", "EXPENSE", "PROFIT"];
   return fields
@@ -134,18 +127,6 @@ function buildTotals(rows: LookupRow[]) {
       value: rows.reduce((sum, row) => sum + Number(firstExisting(row, field) || 0), 0),
     }))
     .filter((x) => x.value !== 0);
-}
-
-async function loadLookup(parameter: string, companyCode: string) {
-  const rows = await getDynamicLookupaccount({
-    parameter,
-    loginid: "ADMIN",
-    code1: companyCode,
-    code2: "", code3: "", code4: "",
-    number1: 0, number2: 0, number3: 0, number4: 0,
-    date1: null, date2: null, date3: null, date4: null,
-  });
-  return Array.isArray(rows) ? rows : [];
 }
 
 function usePLLookup(parameter: string, companyCode: string, valueField: string, nameField: string, loginId: string) {
@@ -184,7 +165,6 @@ export default function PLSummaryPage() {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginId = user?.loginid ?? user?.username ?? "ADMIN";
-
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("");
@@ -192,27 +172,49 @@ export default function PLSummaryPage() {
   const [mode, setMode] = useState<ReportMode>("invoicewise");
   const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Select filters and run the report.");
   const [rows, setRows] = useState<LookupRow[]>([]);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewError, setPreviewError] = useState("");
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
-
   const invoiceLookup = usePLLookup(LOOKUP_PARAMS.docno, companyCode, "doc_no", "inv_no", loginId);
   const salesmanLookup = usePLLookup(LOOKUP_PARAMS.salesman, companyCode, "salesman_code", "salesman_name", loginId);
+
+
+  const companyName: string =
+    (user as any)?.company_name || (user as any)?.COMPANY_NAME || companyCode;
+
+  const [companyInfo, setCompanyInfo] = useState<{ logo: string; address: string[] }>({
+    logo: "",
+    address: [],
+  });
+
+  useEffect(() => {
+    let alive = true;
+    getDynamicLookupaccount({
+      parameter: "PENDING_PURCHASE_ORDER_LOGO",
+      loginid: loginId,
+      code1: companyCode,
+      code2: "", code3: "", code4: "",
+      number1: 0, number2: 0, number3: 0, number4: 0,
+      date1: null, date2: null, date3: null, date4: null,
+    })
+      .then((rows) => {
+        if (!alive) return;
+        const row = (Array.isArray(rows) ? rows[0] : null) as LookupRow | null;
+        setCompanyInfo({
+          logo: String(row ? firstExisting(row, "COMP_LOGO") ?? "" : ""),
+          address: [],
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [companyCode, loginId]);
 
   const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
   const totals = useMemo(() => buildTotals(rows), [rows]);
   const invoiceDisplay = invoiceLookup.options.find((x) => x.value === invoiceNo)?.label || "All invoices";
   const salesmanDisplay = salesmanLookup.options.find((x) => x.value === salesman)?.label || "All sales persons";
-
-  useEffect(() => () => {
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
 
   const buildRequestParams = useCallback((): PLSummaryReportParams => ({
     parameter: "PL_SUMMARY_REPORT",
@@ -231,32 +233,51 @@ export default function PLSummaryPage() {
     cust: toApiCodeString(selections.customer),
   }), [companyCode, fromDate, invoiceNo, loginId, mode, salesman, selections, toDate]);
 
-  const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
-    setLoading(true);
-    setError("");
-    setMessage("");
-    lastRequestRef.current = params;
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-    setPreviewUrl("");
-    setPreviewError("");
-    setPreviewOpen(true);
+  // ── Fetch report HTML → fed straight into NewReportDialog ───────────────
+ const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
+  setLoading(true);
+  setError("");
+  setMessage("");
+  lastRequestRef.current = params;
 
-    try {
-      const html = await getPLSummaryReportHtml(params);
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      setPreviewUrl(window.URL.createObjectURL(blob));
-      setRows([]);
-      setHasGeneratedReport(true);
-      setMessage("Report generated successfully.");
-    } catch (err: any) {
-      const msg = err?.message || "Failed to load report. Please try again.";
-      setError(msg);
-      setPreviewError(msg);
-      setMessage(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [previewUrl]);
+  const preview = openPurchaseReport("P&L Summary Report");
+
+  try {
+    const html = await getPLSummaryReportHtml(params);
+
+    // Backend HTML madhla logo (lookup rikama asel tar hach vapra)
+    const htmlLogo =
+      new DOMParser().parseFromString(html, "text/html").querySelector("img")?.getAttribute("src") || "";
+
+    preview.ready({
+      html,
+      filename: `pl_summary_${params.mode}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "landscape",
+      stripChrome: true,
+      company: {
+        name: companyName,
+        address: companyInfo.address,
+        logo: htmlLogo,
+      },
+      onExcel: async () => {
+        await getPLSummaryReportExcel(params);
+      },
+    });
+
+
+    console.log("address--------->:", companyInfo.address, "| htmlLogo------->:", htmlLogo);
+    setRows([]);
+    setHasGeneratedReport(true);
+    setMessage("Report generated successfully.");
+  } catch (err: any) {
+    const msg = err?.message || "Failed to load report. Please try again.";
+    preview.fail(new Error(msg));
+    setError(msg);
+    setMessage(msg);
+  } finally {
+    setLoading(false);
+  }
+}, [companyInfo, companyName]);
 
   function handleGenerate() {
     if (!dateRangeValid) return;
@@ -276,27 +297,7 @@ export default function PLSummaryPage() {
     setHasGeneratedReport(false);
   }
 
-  function closePreview() {
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-    setPreviewOpen(false);
-    setPreviewUrl("");
-    setPreviewError("");
-  }
 
-  async function handleExcel() {
-    if (!lastRequestRef.current) {
-      setError("Generate the report at least once before exporting to Excel.");
-      return;
-    }
-    setExporting(true);
-    try {
-      await getPLSummaryReportExcel(lastRequestRef.current);
-    } catch {
-      setPreviewError("Excel export failed. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  }
 
   return (
     <section className="freight-ui-standard freight-report-screen">
@@ -312,8 +313,12 @@ export default function PLSummaryPage() {
 
         <ReportFilterHeader onClear={handleReset} />
 
-        {error && <div className="mx-3 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠️ {error}</div>}
-        {!dateRangeValid && <div className="mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">From date must be on or before To date.</div>}
+        {error &&  (
+          <div className="mx-3 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠️ {error}</div>
+        )}
+        {!dateRangeValid && (
+          <div className="mx-3 mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">From date must be on or before To date.</div>
+        )}
 
         <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(fromDate) || "Start"} – ${toDisplayDate(toDate) || "Today"}`} />
@@ -377,18 +382,8 @@ export default function PLSummaryPage() {
         {hasGeneratedReport && <p className="px-3 pb-3 text-sm text-muted-foreground">{message}</p>}
       </div>
 
-      {previewOpen && (
-        <ReportPreviewDialog
-          title="P&L Summary Report"
-          pdfUrl={previewUrl}
-          error={previewError}
-          exporting={exporting}
-          onExcel={handleExcel}
-          onClose={closePreview}
-          onDownload={() => {}}
-          downloadName="PL_Summary_Report.html"
-        />
-      )}
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+           <PurchaseReportPreview />
     </section>
   );
 }

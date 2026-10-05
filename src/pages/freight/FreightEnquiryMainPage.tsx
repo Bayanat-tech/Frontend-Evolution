@@ -159,6 +159,7 @@ const transportModes = [
 const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
+const shipmentStatusOptions = ["FCL/FCL", "FCL/LCL", "LCL/LCL", "LCL/FCL"];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: PackageCheck },
@@ -490,6 +491,10 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     return next;
   });
 
+  if (field === "origin_port" || field === "destination_port") {
+    setDetails((current) => current.map((row) => ({ ...row, [field]: value })));
+  }
+
   setHeaderNames((current) => {
     const next = { ...current };
     if (field === "prin_code") {
@@ -613,20 +618,20 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
       const lookupRow = row || {};
       const activityCode = value || lookupFirstText(lookupRow, "activity_code", "ACTIVITY_CODE", "act_code", "ACT_CODE");
       const activityName = lookupFirstText(lookupRow, "activity", "ACTIVITY", "other_services", "OTHER_SERVICES", "act_name", "ACT_NAME");
-      const quantity = lookupFirstText(lookupRow, "quantity", "QUANTITY") || line.quantity || "1";
-      const billRate = lookupFirstText(lookupRow, "bill", "BILL", "bill_rate", "BILL_RATE") || line.bill_rate || "0";
-      const costRate = lookupFirstText(lookupRow, "cost", "COST", "cost_rate", "COST_RATE") || line.cost_rate || "0";
+      // const quantity = lookupFirstText(lookupRow, "quantity", "QUANTITY") || line.quantity || "1";
+      // const billRate = lookupFirstText(lookupRow, "bill", "BILL", "bill_rate", "BILL_RATE") || line.bill_rate || "0";
+      // const costRate = lookupFirstText(lookupRow, "cost", "COST", "cost_rate", "COST_RATE") || line.cost_rate || "0";
       return {
         ...line,
         act_code: activityCode || line.act_code,
         activity: activityName || line.activity,
         transport_mode: header.transport_mode || line.transport_mode,
-        quantity,
+        // quantity,
         uom: lookupFirstText(lookupRow, "uom", "UOM") || line.uom,
-        bill_rate: billRate,
-        cost_rate: costRate,
-        bill: multiplyText(quantity, billRate),
-        cost: multiplyText(quantity, costRate),
+        // bill_rate: billRate,
+        // cost_rate: costRate,
+        // bill: multiplyText(quantity, billRate),
+        // cost: multiplyText(quantity, costRate),
         curr_code: line.curr_code || header.curr_code || "OMR",
       };
     }),
@@ -1466,12 +1471,12 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     onChange={(value, row) => applyHeaderLookup("commodity", value, row)}
     className="sm:col-span-2 lg:col-span-1"
   />
-  <FormTextarea
+  <FormInput
     label="Cargo Detail"
     value={header.cargo_detail}
     onChange={(value) => setHeaderField("cargo_detail", value)}
-    compact
     className="sm:col-span-2"
+    inputClassName="truncate"
   />
 
   {header.transport_mode === "S" && (
@@ -1522,9 +1527,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 // meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}
                   >     
                   <div className="grid gap-1 sm:grid-cols-1 sm:grid-cols-1">
-                    <FormTextarea label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
+                    {/* <FormTextarea label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact /> */}
+                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" />
                     <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact />
-                    <FormTextarea label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact />
+                    {/* <FormTextarea label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact /> */}
+                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" />
                     <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact />
                   </div>
                 </SectionPanel>
@@ -1559,7 +1566,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
                     {header.transport_mode === "S" && (
                     <>
-                    <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
+                    <FormSelect label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} options={["", ...shipmentStatusOptions].map((value) => ({ value, label: value }))} />
                     </>)}
                   </div>
                 </SectionPanel>
@@ -1642,175 +1649,216 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             </section>
           )}
 
-          {activeTab === "activities" && (
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="grid gap-1">
-                  {/* <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Activities</h2> */}
-                  {/* <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p> */}
-                </div>
-                <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isReadOnly}>
-                  <Plus size={14} />
-                  Add Line
-                </Button>
-              </div>
+{activeTab === "activities" && (
+  <section>
+    <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="grid gap-1">
+        {/* <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Activities</h2> */}
+        {/* <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p> */}
+      </div>
+      <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isReadOnly}>
+        <Plus size={14} />
+        Add Line
+      </Button>
+    </div>
 
-              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner" style={{ maxWidth: "100%", overflowY: "hidden" }}>
-                <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
-                  <thead>
-                    <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Activity Code</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Activity Name</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>UOC</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>MOC</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Origin</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Dest</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th>
-                      {/* <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Rate</th> */}
-                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
-                      {/* <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th> */}
-                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Bill Rate</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
-                      {/* <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th> */}
-                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost Rate</th>
-                      {/* <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th> */}
-                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Remarks</th>
-                      <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {details.map((row, index) => (
-                      <tr key={`${row.srno}-main`} className="border-b border-slate-200 bg-white transition hover:bg-slate-50/80 last:border-0">
-                        <td className="px-1.5 py-1.5 align-middle">
-                          <LookupField
-                            compact
-                            label="Activity Code"
-                            value={row.act_code}
-                            displayValue={row.act_code || ""}
-                            valueField="activity_code"
-                            displayFields={["activity_code"]}
-                            columns={[
-                              { field: "activity_code", header: "Code" },
-                              { field: "activity", header: "Activity" },
-                            ]}
-                            loadOptions={() => loadActivityLookup(header.company_code)}
-                            onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
-                            placeholder="Activity code"
-                          />
-                        </td>
-                        <td className="px-1.5 py-1.5 align-middle">
-                          <div className="flex h-8 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700">
-                            {row.activity || "-"}
-                          </div>
-                        </td>
- {/* <td className="px-1.5 py-1.5 align-middle">
-  <LookupField
-    compact
-    label="UOC"
-    value={row.uoc}
-    displayValue={row.uoc || ""}
-    valueField="uoc_code"
-    displayFields={["description"]}
-    columns={[
-      { field: "description", header: "" },
-    ]}
-    loadOptions={() => loadUocLookup(header.company_code)}
-    onChange={(value) => setDetailField(index, "uoc", value)}
-  />
-</td> */}
+    {/* Replaced table with a CSS Grid to match Freight UI and remove horizontal scroll */}
+    <div className="rounded-md border border-slate-200 bg-white shadow-inner">
+      {/* Header */}
+      <div className="grid grid-cols-12 gap-1 border-b border-slate-200 bg-slate-100 p-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+        <div className="col-span-2">Activity Code</div>
+        <div className="col-span-3">Activity Name</div>
+        <div className="col-span-1">UOC</div>
+        <div className="col-span-1">MOC</div>
+        <div className="col-span-1">Mode</div>
+        <div className="col-span-2">Origin</div>
+        <div className="col-span-2">Dest</div>
+        <div className="col-span-1 text-right">Qty</div>
+        <div className="col-span-1 text-right">Bill Rate</div>
+        <div className="col-span-1 text-right">Bill</div>
+        <div className="col-span-1 text-right">Cost Rate</div>
+        <div className="col-span-1 text-right">Cost</div>
+        <div className="col-span-2">Remarks</div>
+        <div className="col-span-1 text-right" />
+      </div>
 
-<td className="px-1.5 py-1.5 align-middle">
-  <select
-    className={fieldClassName}
-    value={row.uoc}
-    onChange={(e) => setDetailField(index, "uoc", e.target.value)}
-  >
-    <option value="">Select</option>
-    {uocOptions.map((option) => (
-      <option key={option.value} value={option.value}>
-        {option.label}
-      </option>
-    ))}
-  </select>
-</td>
-<td className="px-1.5 py-1.5 align-middle">
-  <LookupField
-    compact
-    label="MOC 1"
-    value={row.moc1}
-    displayValue={row.moc1 || ""}
-    valueField="moc_code"
-    displayFields={["moc_name"]}
-    columns={[
-      { field: "moc_code", header: "Code" },
-      { field: "moc_name", header: "MOC" },
-    ]}
-    loadOptions={() => loadMocLookup(header.company_code)}
-    onChange={(value) => setDetailField(index, "moc1", value)}
-  />
-</td>
-                        <td className="px-1.5 py-1.5 align-middle">
-                          <div className="flex h-8 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1 text-[10px] font-bold text-primary">
-                            {modeLabel(header.transport_mode || row.transport_mode)}
-                          </div>
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="text" value={row.origin_port} onChange={(e) => setDetailField(index, "origin_port", e.target.value)} className={fieldClassName} />
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="text" value={row.destination_port} onChange={(e) => setDetailField(index, "destination_port", e.target.value)} className={fieldClassName} />
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
-                        </td>
-                         <td className="px-1 py-1.5 align-middle">
-                          <input value={row.uom} onChange={(e) => setDetailField(index, "uom", e.target.value)} className={fieldClassName} />
-                        </td>
-                        {/* <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
-                        </td> */}
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.bill_rate} onChange={(e) => setDetailField(index, "bill_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.bill} onChange={(e) => setDetailField(index, "bill", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td>
-                         <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td>
-                        {/* <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td> */}
-                        {/* <td className="px-1 py-1.5 align-middle">
-                          <input type="text" value={row.curr_code} onChange={(e) => setDetailField(index, "curr_code", e.target.value)} className={fieldClassName} />
-                        </td> */}
-                        {/* <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td> */}
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td>
-                        <td className="px-1.5 py-1.5 align-middle">
-                          <input type="text" value={row.remarks} onChange={(e) => setDetailField(index, "remarks", e.target.value)} className={fieldClassName} />
-                        </td>
-                        <td className="px-1.5 py-1.5 text-right align-middle">
-                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isReadOnly || details.length === 1} onClick={() => removeDetail(index)}>
-                            <Trash2 size={14} />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+      {/* Body */}
+      <div className="grid gap-1 p-1.5">
+        {details.map((row, index) => (
+          <div
+            key={`${row.srno}-main`}
+            className="grid grid-cols-12 gap-1 items-center rounded-md border border-slate-200 bg-white p-1 transition hover:bg-slate-50/80"
+          >
+            {/* Activity Code */}
+            <div className="col-span-2">
+              <LookupField
+                compact
+                label="Activity Code"
+                value={row.act_code}
+                displayValue={row.act_code || ""}
+                valueField="activity_code"
+                displayFields={["activity_code"]}
+                columns={[
+                  { field: "activity_code", header: "Code" },
+                  { field: "activity", header: "Activity" },
+                ]}
+                loadOptions={() => loadActivityLookup(header.company_code)}
+                onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                placeholder="Code"
+              />
+            </div>
 
-              <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                <span>Showing {details.length} activity line{details.length === 1 ? "" : "s"}</span>
+            {/* Activity Name (Readonly display) */}
+            <div className="col-span-3">
+              <div className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700">
+                {row.activity || "-"}
               </div>
-            </section>
-          )}
+            </div>
+
+            {/* UOC */}
+            <div className="col-span-1">
+              <select
+                className={fieldClassName}
+                value={row.uoc}
+                onChange={(e) => setDetailField(index, "uoc", e.target.value)}
+              >
+                <option value="">Select</option>
+                {uocOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* MOC */}
+            <div className="col-span-1">
+              <LookupField
+                compact
+                label="MOC 1"
+                value={row.moc1}
+                displayValue={row.moc1 || ""}
+                valueField="moc_code"
+                displayFields={["moc_name"]}
+                columns={[
+                  { field: "moc_code", header: "Code" },
+                  { field: "moc_name", header: "MOC" },
+                ]}
+                loadOptions={() => loadMocLookup(header.company_code)}
+                onChange={(value) => setDetailField(index, "moc1", value)}
+              />
+            </div>
+
+            {/* Mode */}
+            <div className="col-span-1">
+              <div className="flex h-7 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1 text-[10px] font-bold text-primary">
+                {modeLabel(header.transport_mode || row.transport_mode)}
+              </div>
+            </div>
+
+            {/* Origin */}
+            <div className="col-span-2">
+              <input
+                type="text"
+                value={row.origin_port}
+                onChange={(e) => setDetailField(index, "origin_port", e.target.value)}
+                className={fieldClassName}
+              />
+            </div>
+
+            {/* Destination */}
+            <div className="col-span-2">
+              <input
+                type="text"
+                value={row.destination_port}
+                onChange={(e) => setDetailField(index, "destination_port", e.target.value)}
+                className={fieldClassName}
+              />
+            </div>
+
+            {/* Qty */}
+            <div className="col-span-1">
+              <input
+                type="number"
+                value={row.quantity}
+                onChange={(e) => setDetailField(index, "quantity", e.target.value)}
+                className={`${fieldClassName} text-right`}
+              />
+            </div>
+
+            {/* Bill Rate */}
+            <div className="col-span-1">
+              <input
+                type="number"
+                value={row.bill_rate}
+                onChange={(e) => setDetailField(index, "bill_rate", e.target.value)}
+                className={`${fieldClassName} text-right`}
+              />
+            </div>
+
+            {/* Bill */}
+            <div className="col-span-1">
+              <input
+                type="number"
+                value={row.bill}
+                onChange={(e) => setDetailField(index, "bill", e.target.value)}
+                className={`${fieldClassName} text-right`}
+              />
+            </div>
+
+            {/* Cost Rate */}
+            <div className="col-span-1">
+              <input
+                type="number"
+                value={row.cost_rate}
+                onChange={(e) => setDetailField(index, "cost_rate", e.target.value)}
+                className={`${fieldClassName} text-right`}
+              />
+            </div>
+
+            {/* Cost */}
+            <div className="col-span-1">
+              <input
+                type="number"
+                value={row.cost}
+                onChange={(e) => setDetailField(index, "cost", e.target.value)}
+                className={`${fieldClassName} text-right`}
+              />
+            </div>
+
+            {/* Remarks */}
+            <div className="col-span-2">
+              <input
+                type="text"
+                value={row.remarks}
+                onChange={(e) => setDetailField(index, "remarks", e.target.value)}
+                className={fieldClassName}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="col-span-1 flex justify-end">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                title="Remove line"
+                disabled={isReadOnly || details.length === 1}
+                onClick={() => removeDetail(index)}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+        <span>Showing {details.length} activity line{details.length === 1 ? "" : "s"}</span>
+      </div>
+    </div>
+  </section>
+)}
         </div>
         </fieldset>
       </div>
@@ -2442,10 +2490,10 @@ function FormTextarea({
   className?: string;
 }) {
   return (
-    // <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
        {label}
-      <textarea className={`${fieldClassName} ${compact ? "min-h-8" : "min-h-10"} resize-y py-1`} value={value} onChange={(event) => onChange(event.target.value)} />
+      {/* <textarea className={`${fieldClassName} ${compact ? "min-h-8" : "min-h-10"} resize-y py-1`} value={value} onChange={(event) => onChange(event.target.value)} /> */}
+            <input type="text" className={`${fieldClassName} truncate`} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }

@@ -1,0 +1,83 @@
+export const API_TIME_ZONE =
+  (import.meta as any).env?.VITE_API_TIME_ZONE ?? "Asia/Kolkata";
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}/;
+
+
+export function isApiDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    DATE_ONLY.test(value) &&
+    !Number.isNaN(new Date(value).getTime())
+  );
+}
+
+export function formatApiDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-GB", { timeZone: API_TIME_ZONE });
+}
+
+export function toApiDateInput(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  // en-CA formats as yyyy-mm-dd
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: API_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export const toBackendDate = (isoDate?: string | null): string => {
+  if (!isoDate) return "";
+  const [y, m, d] = isoDate.split("-");
+  if (!y || !m || !d) return "";
+  return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+};
+
+export const toInputDate = (backendDate?: string | null): string => {
+  if (!backendDate) return "";
+  const [d, m, y] = backendDate.split("-");
+  if (!d || !m || !y) return "";
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+};
+
+// YYYY-MM-DD  ->  DD/MM/YYYY   (safe: passes through existing DD/MM/YYYY)
+export const toDisplayDate =(value: string): string => {
+  if (!value) return "";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+  if (dmy) return `${dmy[1].padStart(2, "0")}/${dmy[2].padStart(2, "0")}/${dmy[3]}`;
+  return value;
+}
+
+// DD/MM/YYYY  ->  YYYY-MM-DD   (safe: accepts ISO too, returns "" on garbage)
+export const toIsoDate =(value: string): string => {
+  if (!value) return "";
+  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  return "";
+}
+
+export const toInputDatenull = (value: Date | string | null | undefined) => {
+  if (!value) return "";
+  const d = new Date(value);
+  // epoch (new Date(0)) is the mapper's "empty" placeholder
+  if (isNaN(d.getTime()) || d.getTime() === 0) return "";
+  return d.toISOString().slice(0, 10);
+};
+
+export const fromInputDate = (value: string): Date | null => (value ? new Date(value) : null);
+
+export const formatDate = (value: unknown) => {
+  if (!value) return "";
+  const d = new Date(value as string | Date);
+  if (isNaN(d.getTime()) || d.getTime() === 0) return "";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+};

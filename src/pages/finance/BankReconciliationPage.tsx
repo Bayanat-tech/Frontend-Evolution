@@ -149,7 +149,7 @@ export function BankReconciliationPage() {
   ], []);
 
   return (
-    <section className="grid gap-4">
+    <section className="finance-utility-page finance-list-page grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Bank Reconciliation</h1>

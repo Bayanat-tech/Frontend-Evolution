@@ -1,12 +1,24 @@
-import { Plus, Search, Edit2, Eye, Trash2 } from 'lucide-react';
+// src/pages/hr/payunits/PayUnitsPage.tsx
+//
+// Pay Units — new UI (modelled on ProductWmsPage):
+//  • List view  : DataTable with Refresh / Create Pay Unit inside the toolbar
+//  • Editor view: full-page Freight-style header (List / Close / Attach / Save)
+//                 hosting AddPayUnitsForm (Save + Attach triggered via ref)
+//  • Create flow: "Create Pay Unit" → DivisionPickerDialog → editor
+//  • Feedback   : toast; delete uses a confirm Dialog (no window.confirm)
+
+import {
+  ArrowLeft, Edit2, Eye, FileText, Paperclip, Plus, RefreshCw, Save, Trash2, X,
+} from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { executeDynamicDelete, getDynamicLookup } from '../../../api/lookups';
-import AddPayUnitsForm from './AddPayUnitsForm';
+import AddPayUnitsForm, { type PayUnitFormHandle } from './AddPayUnitsForm';
+import { useToast } from '../../../components/ui/AlertToast';
 import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
+import { DivisionPickerDialog } from '../../../components/ui/DivisionPickerDialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { useAuth } from '../../../state/AuthContext';
 
@@ -27,40 +39,45 @@ export type TPayUnitsHeader = {
   DIV_NAME?: string;
 };
 
+type EditorMode = 'add' | 'edit' | 'view';
 
-type TPayUnitsPopup = {
-  open: boolean;
-  title: string;
-  wide: boolean;
-  data: {
-    existingData: Partial<TPayUnitsHeader>;
-    isEditMode: boolean;
-    isViewMode: boolean;
-  };
+type EditorState = {
+  mode: EditorMode;
+  data: Partial<TPayUnitsHeader>;
 };
 
 const PayUnitsPage = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const companyCode = user?.company_code ?? '';
   const loginid = user?.loginid ?? '';
   const queryClient = useQueryClient();
+
+  const [query, setQuery] = useState('');
   const [openDivision, setOpenDivision] = useState(false);
 
-  const [globalFilter, setGlobalFilter] = useState('');
+  // view state
+  const [view, setView] = useState<'list' | 'editor'>('list');
+  const [editor, setEditor] = useState<EditorState>({ mode: 'add', data: {} });
+  const [saving, setSaving] = useState(false);
 
-  const [payUnitsPopup, setPayUnitsPopup] = useState<TPayUnitsPopup>({
-    open: false,
-    title: 'Add Pay Unit',
-    wide: true,
-    data: { existingData: {}, isEditMode: false, isViewMode: false }
-  });
+  // delete state
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TPayUnitsHeader | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const handleDivisionChange = (divCode: string) => {
-    setGlobalFilter(divCode);
-  };
+  // Ref to the form so the header Save / Attach buttons can trigger it
+  const formRef = useRef<PayUnitFormHandle>(null);
 
   // ===================== FETCH DATA =====================
-  const { data: payUnitsData } = useQuery({
+  const {
+    data: payUnitsData,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch
+  } = useQuery({
     queryKey: ['pay-units-header', companyCode],
     queryFn: async () => {
       const response = await getDynamicLookup({
@@ -70,7 +87,7 @@ const PayUnitsPage = () => {
       });
 
       const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
-      const tableData = rawRows.map(uppercaseKeys).map((row: any) => ({
+      const tableData: TPayUnitsHeader[] = rawRows.map(uppercaseKeys).map((row: any) => ({
         PAY_COMP_ID: row.PAY_COMP_ID,
         PAY_COMP_DESC: row.PAY_COMP_DESC,
         PAY_COMP_SHORT_DESC: row.PAY_COMP_SHORT_DESC,
@@ -84,10 +101,15 @@ const PayUnitsPage = () => {
     enabled: !!companyCode
   });
 
+  useEffect(() => {
+    if (isError) toast.error(error instanceof Error ? error.message : 'Unable to load pay units');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isError]);
+
   // ===================== FILTER DATA =====================
   const filteredData = useMemo(() => {
     const rows = payUnitsData?.tableData ?? [];
-    const trimmed = globalFilter.trim().toLowerCase();
+    const trimmed = query.trim().toLowerCase();
     if (!trimmed) return rows;
     return rows.filter((row) =>
       [row.PAY_COMP_ID, row.PAY_COMP_DESC, row.PAY_COMP_SHORT_DESC].some((val) =>
@@ -96,10 +118,10 @@ const PayUnitsPage = () => {
           .includes(trimmed)
       )
     );
-  }, [payUnitsData?.tableData, globalFilter]);
+  }, [payUnitsData?.tableData, query]);
 
   // ==========fetch Division==================
-  const { data: divisionData } = useQuery({
+  const { data: divisionData, isLoading: isLoadingDivision } = useQuery({
     queryKey: ['division', companyCode],
     queryFn: async () => {
       const response = await getDynamicLookup({
@@ -115,73 +137,62 @@ const PayUnitsPage = () => {
     enabled: !!companyCode
   });
 
-  // ===================== DELETE =====================
-  const handleDelete = async (row: TPayUnitsHeader) => {
-    if (!window.confirm('Are you sure you want to delete this record?')) return;
-
-    queryClient.setQueryData(['pay-units-header', companyCode], (oldData: any) => {
-      if (!oldData) return { tableData: [], count: 0 };
-      return {
-        ...oldData,
-        tableData: oldData.tableData.filter((item: any) => item.PAY_COMP_ID !== row.PAY_COMP_ID),
-        count: oldData.count - 1
-      };
-    });
-
-    await executeDynamicDelete({
-      parameter: 'PAY_COMP_UNITS_delete',
-      loginid,
-      code1: row.COMPANY_CODE,
-      code2: row.PAY_COMP_ID
-    });
+  // ===================== NAVIGATION =====================
+  const openEditor = (mode: EditorMode, data: Partial<TPayUnitsHeader> = {}) => {
+    setEditor({ mode, data });
+    setView('editor');
   };
 
-  // ===================== ACTIONS =====================
-  const handleActions = (actionType: 'edit' | 'view' | 'delete', row: TPayUnitsHeader) => {
-    if (actionType === 'edit') {
-      setPayUnitsPopup({
-        open: true,
-        title: 'Edit Pay Unit',
-        wide: true,
-        data: { existingData: row, isEditMode: true, isViewMode: false }
-      });
-    }
-    if (actionType === 'view') {
-      setPayUnitsPopup({
-        open: true,
-        title: 'View Pay Unit',
-        wide: true,
-        data: { existingData: row, isEditMode: true, isViewMode: true }
-      });
-    }
-    if (actionType === 'delete') {
-      handleDelete(row);
-    }
+  const handleCloseEditor = () => {
+    setView('list');
+    setEditor({ mode: 'add', data: {} });
   };
 
-  const togglePopup = (refetch?: boolean) => {
-    setPayUnitsPopup((prev) => ({
-      ...prev,
-      open: false,
-      data: { existingData: {}, isEditMode: false, isViewMode: false }
-    }));
-    if (refetch) {
-      queryClient.invalidateQueries({ queryKey: ['pay-units-header', companyCode] });
-    }
+  const handleSaved = () => {
+    handleCloseEditor();
+    void queryClient.invalidateQueries({ queryKey: ['pay-units-header', companyCode] });
   };
 
   const handleSelectDivision = (divCode: string, divName: string) => {
     setOpenDivision(false);
-    setPayUnitsPopup({
-      open: true,
-      title: 'Add Unit Pay',
-      wide: true,
-      data: {
-        existingData: { DIV_CODE: divCode, DIV_NAME: divName },
-        isEditMode: false,
-        isViewMode: false
-      }
-    });
+    openEditor('add', { DIV_CODE: divCode, DIV_NAME: divName });
+  };
+
+  // ===================== HEADER ACTIONS =====================
+  const handleHeaderSave = async () => {
+    setSaving(true);
+    try {
+      await formRef.current?.save();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ===================== DELETE =====================
+  const requestDelete = (row: TPayUnitsHeader) => {
+    setDeleteTarget(row);
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await executeDynamicDelete({
+        parameter: 'PAY_COMP_UNITS_delete',
+        loginid,
+        code1: deleteTarget.COMPANY_CODE,
+        code2: deleteTarget.PAY_COMP_ID
+      });
+      toast.success('Pay unit deleted successfully');
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+      await queryClient.invalidateQueries({ queryKey: ['pay-units-header', companyCode] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to delete pay unit');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // ===================== COLUMNS =====================
@@ -194,104 +205,210 @@ const PayUnitsPage = () => {
         id: 'actions',
         header: 'Actions',
         size: 120,
+        enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" type="button" title="View" onClick={() => handleActions('view', row.original)}>
-              <Eye size={14} />
-            </Button>
-            <Button size="icon" variant="ghost" type="button" title="Edit" onClick={() => handleActions('edit', row.original)}>
-              <Edit2 size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
+          <div className="flex items-center justify-center gap-1">
+            <button
               type="button"
-              title="Delete"
-              className="text-destructive hover:text-destructive"
-              onClick={() => handleActions('delete', row.original)}
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor('view', row.original)}
+              title="View pay unit"
             >
-              <Trash2 size={14} />
-            </Button>
+              <Eye size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor('edit', row.original)}
+              title="Edit pay unit"
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => requestDelete(row.original)}
+              title="Delete pay unit"
+            >
+              <Trash2 size={13} />
+            </button>
           </div>
         )
       }
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
-  // ===================== RENDER =====================
-  return (
-    <div className="flex flex-col space-y-2">
-      <nav className="mb-2 mt-1 flex items-center gap-1 text-sm text-muted-foreground">
-        <a href="/dashboard" className="hover:underline hover:text-foreground">
-          Home
-        </a>
-        <span>/</span>
-        <span className="text-foreground">Pay Units</span>
-      </nav>
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header
+     ───────────────────────────────────────────────────────── */
+  if (view === 'editor') {
+    const isView = editor.mode === 'view';
+    const title =
+      editor.mode === 'add' ? 'New Pay Unit' : editor.mode === 'edit' ? 'Edit Pay Unit' : 'View Pay Unit';
+    const badge = editor.mode === 'add' ? 'Draft' : editor.mode === 'edit' ? 'Editing' : 'View only';
 
-      <div className="flex justify-end space-x-2">
-        <div className="relative flex-grow">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder="Search..."
-            className="pl-9"
-          />
-        </div>
-
-        <Button type="button" variant="default" onClick={() => setOpenDivision(true)}>
-          <Plus size={15} /> Create Pay Unit
-        </Button>
-      </div>
-
-      <Dialog open={openDivision} title="Select Division" onClose={() => setOpenDivision(false)}>
-        <div className="max-h-[60vh] w-full overflow-y-auto">
-          {(divisionData?.tableData ?? []).map((item: any, index: number) => (
-            <div
-              key={index}
-              className="mb-0.5 flex items-center justify-between rounded-lg border border-gray-200 p-2 hover:bg-blue-50 cursor-pointer"
-            >
-              <h5 className="text-base font-medium text-[#082a89]">{item.DIV_NAME}</h5>
-              <Button type="button" onClick={() => handleSelectDivision(item.DIV_CODE, item.DIV_NAME)} variant="outline">
-                Select
-              </Button>
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
             </div>
-          ))}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{title}</h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {badge}
+                </span>
+                {editor.data.PAY_COMP_ID && (
+                  <span className="text-xs text-muted-foreground">{editor.data.PAY_COMP_ID}</span>
+                )}
+                {editor.data.DIV_CODE && (
+                  <span className="text-xs text-muted-foreground">
+                    Division: {editor.data.DIV_CODE}
+                    {editor.data.DIV_NAME ? ` - ${editor.data.DIV_NAME}` : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions: List / Close / Attach / Save (Save hidden in view mode) */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <ArrowLeft size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => formRef.current?.attach()}
+              disabled={saving}
+            >
+              <Paperclip size={14} /> Attach
+            </Button>
+            {!isView && (
+              <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
+                <Save size={14} /> {saving ? 'Saving' : 'Save'}
+              </Button>
+            )}
+          </div>
         </div>
-      </Dialog>
+
+        {/* Form content — ref lets the header Save / Attach trigger the form */}
+        <AddPayUnitsForm
+          ref={formRef}
+          key={editor.data.PAY_COMP_ID || 'new'}
+          onClose={(refetch) => (refetch ? handleSaved() : handleCloseEditor())}
+          isEdit={editor.mode !== 'add'}
+          isViewMode={isView}
+          pay_comp_id={editor.data.PAY_COMP_ID || undefined}
+          div_code={editor.data.DIV_CODE || undefined}
+          div_name={editor.data.DIV_NAME || undefined}
+        />
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: '18px', letterSpacing: '-0.01em', fontWeight: 600 }}
+          >
+            Pay Units
+          </h2>
+        </div>
+      </div>
 
       <DataTable
         columns={columns}
         data={filteredData}
-        title={`${filteredData.length.toLocaleString()} Records`}
-        height={500}
-        density="compact"
+        title={isLoading ? 'Loading' : `${filteredData.length.toLocaleString()} Records`}
+        subtitle="Pay Unit List"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search pay component ID, description..."
+        loading={isLoading || isFetching}
+        emptyText="No pay units found"
+        height={560}
+        minWidth={800}
+        density="grid"
         enablePagination
         pageSize={100}
         getRowId={(row, index) => row.PAY_COMP_ID || `temp-${index}`}
+        enableExport
+        exportFilename="hr-pay-units-list.csv"
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOpenDivision(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Create Pay Unit
+            </button>
+          </div>
+        }
       />
 
-      {payUnitsPopup.open && (
-        <Dialog open={payUnitsPopup.open}
-          wide={payUnitsPopup.wide}
-          title={payUnitsPopup.title}
-          onClose={() => togglePopup(true)}>
+      <DivisionPickerDialog
+        open={openDivision}
+        divisions={divisionData?.tableData ?? []}
+        loading={isLoadingDivision}
+        description="Choose a division to continue."
+        onSelect={(item, code, name) =>
+          handleSelectDivision(code || item.DIV_CODE || item.div_code, name || item.DIV_NAME || item.div_name)
+        }
+        onClose={() => setOpenDivision(false)}
+      />
 
-          <AddPayUnitsForm
-            key={payUnitsPopup.data.existingData?.PAY_COMP_ID || 'new'}
-            onClose={() => togglePopup(true)}
-            isEdit={payUnitsPopup.data.isEditMode}
-            isViewMode={payUnitsPopup.data.isViewMode}
-            pay_comp_id={payUnitsPopup.data.existingData?.PAY_COMP_ID || undefined}
-            div_code={payUnitsPopup.data.existingData?.DIV_CODE || undefined}
-            div_name={payUnitsPopup.data.existingData?.DIV_NAME || undefined}
-            onDivisionChange={handleDivisionChange}
-          />
-        </Dialog>
-      )}
-    </div>
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={deleteOpen}
+        title="Delete Pay Unit"
+        description={
+          deleteTarget ? `Delete ${deleteTarget.PAY_COMP_ID} - ${deleteTarget.PAY_COMP_DESC}?` : undefined
+        }
+        compact
+        tone="danger"
+        onClose={() => setDeleteOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={deleting} variant="destructive" onClick={confirmDelete}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p className="m-0 text-sm text-muted-foreground">Are you sure you want to delete this record?</p>
+      </Dialog>
+    </section>
   );
 };
 

@@ -1,5 +1,5 @@
-import { Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, Download, Loader2, Paperclip, Printer, Save, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
@@ -8,7 +8,6 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { exportGrnPrintReportExcel, getGrnPrintReportPreviewUrl } from "../../../api/transactions";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
-
 
 import {
   ActionKey,
@@ -21,6 +20,7 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  computeQuantity,
   emptyForm,
   emptyLineRow,
   fetchPurchaseOrderDetail,
@@ -43,10 +43,31 @@ import { RejectDialog } from "./Rejectdialog";
 import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
 import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { ReportPreviewDialog } from "../../../components/reports/ReportPreviewDialog";
+import { NewReportDialog } from "../../../components/new_report_format";
+import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
+import { createPortal } from "react-dom";
+import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 
 
 export type { PurchaseOrderEditorState };
+
+/**
+ * getGrnPrintReportPreviewUrl returns a blob: URL. NewReportDialog needs the
+ * raw HTML string, so read the blob back as text and release the URL at once.
+ */
+async function fetchHtmlFromPreviewUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url);
+    return await res.text();
+  } finally {
+    try {
+      window.URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 export function PurchaseGRNEditor({
   config,
@@ -75,9 +96,9 @@ export function PurchaseGRNEditor({
   const [printing, setPrinting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
-  // ── Report preview dialog state ──────────────────────────────────────────
+  // ── Report preview dialog state (HTML fed straight into NewReportDialog) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState("");
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
 
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
@@ -93,6 +114,9 @@ export function PurchaseGRNEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
+  const submitBtnRef = useRef<HTMLDivElement>(null);
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     if (!editor) return;
@@ -154,7 +178,7 @@ export function PurchaseGRNEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
-          // --- PO-reference fields, missing until now ---
+          // --- PO-reference fields ---
           po_doc_no: text(headerRaw.po_doc_no || current.po_doc_no),
           po_doc_date: toDateInputValue(headerRaw.po_doc_date) || current.po_doc_date,
           po_div_code: text(headerRaw.po_div_code || current.po_div_code),
@@ -197,19 +221,12 @@ export function PurchaseGRNEditor({
     return () => { mounted = false; };
   }, [user?.company_code, user?.loginid, user?.username]);
 
-  // Revoke the blob URL whenever it changes or the component unmounts, so we
-  // don't leak memory across repeated print actions.
-  useEffect(() => {
-    return () => {
-      if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    };
-  }, [reportPreviewUrl]);
-
   const disabled = form.canceled === "Y" || saving || loading;
   const actionDisabled = disabled || !isPendingTab;
   const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
   const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
-  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  // const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne || !isPendingTab;
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
@@ -248,71 +265,91 @@ export function PurchaseGRNEditor({
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
 
-const handleSaveAsDraft = () => {
-  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
-  return runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Purchase Quotation saved as draft");
-};
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Purchase Quotation saved as draft");
+  };
 
-const handleSubmitClick = () => {
-  if (!form.div_code) return setError("Division is required");
-  if (!form.ac_code) return setError("A/c Code is required");
-  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
-  setShowSubmitConfirm(true);
-};
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  //   setShowSubmitConfirm(true);
+  // };
 
-const confirmSubmit = () => {
-  setShowSubmitConfirm(false);
-  return runAction("submit", async () => {
-    await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
-};
+  const handleSubmitClick = () => {
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+    const invalidRow = rows.find((row) => computeQuantity(row) <= 0);
+    if (invalidRow) {
+      return setError("Received Quantity must be greater than 0 for all line items");
+    }
+
+    const rect = submitBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setSubmitConfirmPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmit = () => {
+    setShowSubmitConfirm(false);
+    return runAction("submit", async () => {
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
+  };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase GRN cancelled");
 
-  // ── Print now opens the in-app preview dialog instead of a new window ────
+  // ── Print opens the in-app NewReportDialog preview ───────────────────────
+  
+
+
+
   const handlePrintGrn = async () => {
-    if (!form.doc_no) {
-      setError("Save the GRN before printing");
-      return;
-    }
+  if (!form.doc_no) {
+    setError("Save the GRN before printing");
+    return;
+  }
+  const params = {
+    parameter: "GRN_Print",
+    loginid: user?.loginid || user?.username || "ADMIN",
+    company_code: user?.company_code,
+    doc_type: PO_DOC_TYPE.GRN,
+    doc_no: form.doc_no,
+  } as any;
+  setPrinting(true);
+  setError("");
+  const preview = openPurchaseReport(`Purchase GRN ${form.doc_no}`.trim());
+  try {
+    const url = await getGrnPrintReportPreviewUrl(params);
+    const html = await fetchHtmlFromPreviewUrl(url);
+    preview.ready({
+      html,
+      filename: `purchase_grn_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      orientation: "portrait",
+      onExcel: async () => {
+        await exportGrnPrintReportExcel(params);
+      },
+    });
+  } catch (printError) {
+    preview.fail(printError instanceof Error ? printError : new Error("Error while generating report"));
+  } finally {
+    setPrinting(false);
+  }
+};
 
-    // Reset previous preview state and open the dialog immediately so the
-    // user sees the loading spinner inside ReportPreviewDialog right away.
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-    setReportPreviewOpen(true);
-
-    setPrinting(true);
-    setError("");
-    try {
-      const url = await getGrnPrintReportPreviewUrl({
-        parameter: "GRN_Print",
-        loginid: user?.loginid || user?.username || "ADMIN",
-        company_code: user?.company_code,
-        doc_type: PO_DOC_TYPE.GRN,
-        doc_no: form.doc_no,
-      } as any);
-      setReportPreviewUrl(url);
-    } catch (printError) {
-      setReportPreviewError(printError instanceof Error ? printError.message : "Error while generating report");
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  const closeReportPreview = () => {
-    if (actionLoading) return; // don't close mid-action, mirrors other dialogs
-    if (reportPreviewUrl) window.URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewOpen(false);
-    setReportPreviewUrl("");
-    setReportPreviewError("");
-  };
+ 
 
   const handleExportGrnExcel = async () => {
     if (!form.doc_no) {
@@ -418,186 +455,253 @@ const confirmSubmit = () => {
 
   return (
     <>
-      <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
-      >
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <div>
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase GRN" : "New Purchase GRN"}
-                </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase GRN</h2>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal)}</strong>
-              </div>
-              {form.ac_code && (
-                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">A/c Code</span>
-                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-              {form.doc_no && (
-                <>
-                  <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
+
+      <div className="finance-document-ui finance-document-editor commercial-editor payment-workbench flex h-screen flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm px-4 py-2">
+        <form
+          data-header-expanded={showHeaderDetails} className={` finance-document-ui payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+          onSubmit={(event) => { event.preventDefault(); void handleSubmitClick(); }}
+        >
+          <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+            <div className="flex min-h-10 items-center justify-between gap-3">
+              <FinanceDocumentIdentity
+                title="Purchase GRN"
+                documentNo={form.doc_no}
+                documentDate={form.doc_date}
+                total={formatAmount(finalTotal)}
+                divCode={form.div_code}
+                divName={form.div_name}
+                onBack={onClose}
+                headerExpanded={showHeaderDetails}
+                onToggleHeader={() => setShowHeaderDetails(value => !value)}
+              />
+              <div className="flex items-center gap-2">
+                {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+                {form.doc_no && (
+                  <>
+                    {/* <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
                     {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
-                  </Button>
-                  <Button
-                    aria-label="Excel"
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    onClick={handleExportGrnExcel}
-                    disabled={exportingExcel}
-                    title="Download Excel"
-                  >
-                    {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                  </Button>
-                </>
-              )}
-              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                <Paperclip size={15} /> Files
-              </Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+                  </Button> */}
+                    <Button
+                      aria-label="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={handleExportGrnExcel}
+                      disabled={exportingExcel}
+                      title="Download Excel"
+                    >
+                      {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
+                <div className="flex items-center gap-2">
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                      {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                    </Button>
+                  )}
+                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
+                    {showSubmitConfirm &&
+                      createPortal(
+                        <div
+                          style={{ position: "fixed", top: submitConfirmPos.top, right: submitConfirmPos.right }}
+                          className="z-[9999] w-56 rounded-lg border border-slate-200 bg-white p-3 text-black shadow-xl"
+                        >
+                          <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>
+                              No
+                            </Button>
+                            <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>
+                              Yes
+                            </Button>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
+                  </div>
+
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                    </Button>
+                  )}
+
+                  {isPendingTab && canSendBackOrReject && (
+                    <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                      {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </Button>
+                  )}
+                  {isPendingTab && (
+                    <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                      {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                    </Button>
+                  )}
+
+                </div>
+                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+              </div>
             </div>
-          </div>
-        </CardHeader>
+          </CardHeader>
 
-        {isCancelled && (
-          <div className="cancelled-document-banner" role="status">
-            <div>
-              <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase GRN"}</strong>
-            </div>
-            <p>This Purchase GRN is cancelled and opened in read-only mode.</p>
-          </div>
-        )}
-
-        <CardContent className="min-h-0 overflow-auto p-3">
-          {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase GRN...</div>
-          ) : (
-            <div className="grid gap-3">
-              <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
-
-              <PurchaseGrnHeaderForm
-                form={form}
-                docType={PO_DOC_TYPE.GRN}
-                setForm={setForm}
-                updateField={updateField}
-                disabled={disabled}
-                headerAndLineDisabled={headerAndLineDisabled}
-                editMode={editMode}
-                companyCode={user?.company_code}
-                loginid={user?.loginid || user?.username}
-                setdetails={setRows}
-              />
-
-              <PurchaseGrnDetailsTable
-                rows={rows}
-                form={form}
-                setdetails={setRows}
-                docType={PO_DOC_TYPE.GRN}
-                updateRow={updateRow}
-                addRow={addRow}
-                removeRow={removeRow}
-                headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_price}
-                ex_rate={form.ex_rate}
-                companyCode={user?.company_code}
-                loginid={user?.loginid || user?.username}
-              />
+          {isCancelled && (
+            <div className="cancelled-document-banner" role="status">
+              <div>
+                <span className="cancelled-document-kicker">Cancelled Document</span>
+                <strong>{form.doc_no || "Purchase GRN"}</strong>
+              </div>
+              <p>This Purchase GRN is cancelled and opened in read-only mode.</p>
             </div>
           )}
-        </CardContent>
 
+          <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
+            {loading ? (
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+            ) : (
+              <div className="commercial-editor-sections grid gap-3 min-w-0">
+                <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            {isPendingTab && (
-              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-              </Button>
+                {!showHeaderDetails ? (
+                  <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                    <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Doc Date:</span>
+                        <span className="font-medium">{form.doc_date}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Division:</span>
+                        <span className="font-medium">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 truncate">
+                        <span className="font-semibold text-[#00378C]">A/c Code:</span>
+                        <span className="font-medium truncate">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "Not selected"}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-semibold text-[#00378C]">Currency:</span>
+                        <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer"
+                      onClick={() => setShowHeaderDetails(true)}
+                    >
+                      Show Header Fields <ChevronDown size={13} className="ml-1" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div style={{ height: "auto", maxHeight: "none", overflow: "visible" }}>
+                    <PurchaseGrnHeaderForm
+                      form={form}
+                      docType={PO_DOC_TYPE.GRN}
+                      setForm={setForm}
+                      updateField={updateField}
+                      disabled={disabled}
+                      headerAndLineDisabled={headerAndLineDisabled}
+                      editMode={editMode}
+                      companyCode={user?.company_code}
+                      loginid={user?.loginid || user?.username}
+                      setdetails={setRows}
+                    />
+                  </div>
+                )}
+                <PurchaseGrnDetailsTable
+                  rows={rows}
+                  form={form}
+                  setdetails={setRows}
+                  docType={PO_DOC_TYPE.GRN}
+                  updateRow={updateRow}
+                  addRow={addRow}
+                  removeRow={removeRow}
+                  headerAndLineDisabled={headerAndLineDisabled}
+                  discAmt={form.disc_price}
+                  ex_rate={form.ex_rate}
+                  companyCode={user?.company_code}
+                  loginid={user?.loginid || user?.username}
+                />
+              </div>
             )}
-          {isPendingTab && (
-  <div className="relative">
-    <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-      {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-      {actionLoading === "submit" ? "Submitting..." : "Submit"}
-    </Button>
-    {showSubmitConfirm && (
-      <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-        <p className="mb-2 text-sm text-gray-700">Submit this Purchase Grn?</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
-          <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
-        </div>
+          </CardContent>
+          {/* <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
+                <span className="text-[11px] font-medium text-slate-500">Total Amount</span>
+                <strong className="font-mono text-xs text-slate-900">{formatAmount(finalTotal)}</strong>
+              </div>
+
+
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isPendingTab && (
+                <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                  {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <div className="relative">
+                  <Button type="button" onClick={handleSubmitClick} disabled={actionDisabled || actionBarBusy}>
+                    {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                  </Button>
+                  {showSubmitConfirm && (
+                    <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
+                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
+                        <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
+                </Button>
+              )}
+
+              {isPendingTab && canSendBackOrReject && (
+                <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                  {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                </Button>
+              )}
+              {isPendingTab && (
+                <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                  {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+                </Button>
+              )}
+
+            </div>
+          </div> */}
+        </form>
       </div>
-    )}
-  </div>
-)}
 
-            {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
-                {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
-              </Button>
-            )}
-
-            {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
-                {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-              </Button>
-            )}
-            {isPendingTab &&
-              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-              </Button>}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrintGrn} disabled={actionDisabled || printing}>
-              {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
-            </Button>
-            <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button
-              aria-label="Download"
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleExportGrnExcel}
-              disabled={actionDisabled || exportingExcel}
-              title="Download Excel"
-            >
-              {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>Close</Button>
-          </div>
-        </div>
-      </form>
-
-      {reportPreviewOpen && (
-        <ReportPreviewDialog
-          title={`Purchase GRN ${form.doc_no || ""}`.trim()}
-          pdfUrl={reportPreviewUrl}
-          error={reportPreviewError}
-          exporting={exportingExcel}
-          onExcel={handleExportGrnExcel}
-          onClose={closeReportPreview}
-          onDownload={() => {}}
-          downloadName={`GRN_${form.doc_no || "report"}.html`}
-        />
-      )}
+      {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
+       <PurchaseReportPreview />
 
       <SendBackDialog
         open={sendBackDialogOpen}

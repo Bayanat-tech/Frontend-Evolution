@@ -707,11 +707,32 @@ saveEndpoint: (form, { editMode, original }) => {
     routeKeys: ["customer"],
     keyField: "cust_code",
     fields: [
-      { name: "prin_code", label: "Principal Code", required: true, width: 150 },
+    { name: "prin_name", label: "Principal Name", required: true, width: 280, tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2,
+            dropdownParam: "DROP_DOWN_PRINCIPAL", // <-- THIS IS THE PROBLEM
+      dropdownDisplayFields: ["prin_code", "prin_name"], 
+      dropdownValueKey: "prin_code", 
+      dropdownDisplaySeparator: " - " 
+     },
       { name: "cust_code", label: "Customer Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "cust_name", label: "Customer Name", required: true, width: 280 },
-      { name: "curr_code", label: "Currency", width: 130 },
-      { name: "country_code", label: "Country Code", width: 140 },
+{ 
+  name: "curr_code", 
+  label: "Currency", 
+  width: 130,
+  dropdownParam: "DROP_DOWN_CURRENCY",
+  dropdownDisplayFields: ["curr_code", "curr_name"],
+  dropdownDisplaySeparator: " - ",
+  dropdownValueKey: "curr_code"
+},  
+{ 
+  name: "country_code", 
+  label: "Country Code", 
+  width: 140,
+  dropdownParam: "DROP_DOWN_COUNTRY",
+  dropdownDisplayFields: ["country_code", "country_name"],
+  dropdownDisplaySeparator: " - ",
+  dropdownValueKey: "country_code"
+},
       { name: "cust_city", label: "City", width: 150 },
       { name: "cust_contact1", label: "Contact", width: 180 },
       { name: "cust_telno1", label: "Telephone", width: 150 },
