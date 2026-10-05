@@ -1,15 +1,15 @@
-import { CloudUpload, Edit2, Plus, RefreshCw, Save, Trash2, X, ArrowLeft, FileText, Download } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { CloudUpload, Edit2, Plus, Save, Trash2, X, ArrowLeft, FileText, RefreshCw } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useToast } from "../../components/ui/AlertToast";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Input";
-import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { WmsMasterForm } from "../../components/WmsMasterForm";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import ImportLocationEdi from "./edi/ImportLocationEdi";
 import ImportProductEdi from "./edi/ImportProductEdi";
 import ImportSiteEdi from "./edi/ImportSiteEdi";
@@ -81,8 +81,6 @@ export type WmsSimpleMasterConfig = {
     name: "location" | "product" | "site";
   };
 };
-
-// const FIELD_THRESHOLD = 8;
 
 function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConfig, index: number): string {
   const separator = config.rowIdSeparator || "_";
@@ -168,9 +166,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
   const [ediUploadOpen, setEdiUploadOpen] = useState(false);
 
-  // const useFullPage = config.fields.length >= FIELD_THRESHOLD;
   const useFullPage = true;
-
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 400);
@@ -379,114 +375,132 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     />
   );
 
-// ── RENDER EDITOR (FULL PAGE - FREIGHT STYLE) ──
-if (view === "editor" && useFullPage) {
-  return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <FileText size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+  // ── RENDER EDITOR (FULL PAGE - PREPAID REGISTER STYLE) ──
+  if (view === "editor" && useFullPage) {
+    return (
+      <section className="freight-airline-tariff-screen grid gap-2 freight-ui-standard freight-dense-form">
+        {/* Top Header Card - Prepaid Register Style */}
+        <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="tariff-page-icon">
+              <FileText size={20} />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold leading-tight text-slate-900">
                 {editMode ? `Edit ${config.title}` : `New ${config.title}`}
               </h1>
-              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                {editMode ? "Editing" : "Draft"}
-              </span>
+              <p className="m-0 text-xs text-slate-500">{config.subtitle}</p>
             </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={handleCloseForm}>
-            <ArrowLeft size={14} /> List
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={handleReset} disabled={saving}>
-            <RefreshCw size={14} /> Reset
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={handleCloseForm} disabled={saving}>
-            <X size={14} /> Close
-          </Button>
-          <Button type="submit" size="sm" disabled={saving} form="wms-master-form">
-            <Save size={14} /> {saving ? "Saving" : "Save Draft"}
-          </Button>
-        </div>
-      </div>
 
-      {/* Form content — Freight form has its own internal structure */}
-      <div className="mt-2">
-        {renderFormContent()}
-      </div>
-    </section>
-  );
-}
-
-  // ── RENDER LIST (FREIGHT STYLE) ──
-  return (
-    <section className="grid gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-foreground m-0" style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}>
-            {config.title}
-          </h2>
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
-        subtitle={`${config.title} List`}
-        searchValue={query}
-        onSearchChange={(value:any) => { setQuery(value); setPageIndex(0); }}
-        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-        loading={loading}
-        emptyText={`No ${config.title.toLowerCase()} records found`}
-        height={620}
-        minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
-        density="grid"
-        enablePagination
-        manualPagination={!(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()))}
-        manualFiltering={false}
-        pageIndex={pageIndex}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        columnFilters={columnFilters}
-        onColumnFiltersChange={(filters:any) => { setColumnFilters(filters); setPageIndex(0); }}
-        onPageChange={setPageIndex}
-        onPageSizeChange={(nextPageSize:any) => { setPageSize(nextPageSize); setPageIndex(0); }}
-        getRowId={(row:any, index:any) => generateRowId(row, config, index)}
-                toolbar={
           <div className="flex items-center gap-2">
-            {config.ediUploadConfig?.open && (
-              <button 
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-               onClick={() => setEdiUploadOpen(true)}>
-                <CloudUpload size={14} /> EDI Upload
-              </button>
-            )}
-            <button                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
- onClick={openAdd}>
-              <Plus size={14} /> Add {config.title}
-            </button>
+            <Button
+              type="submit"
+              form="wms-master-form"
+              disabled={saving}
+              className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-4 rounded-lg cursor-pointer transition-colors"
+            >
+              {saving ? <span className="spinner small" /> : <Save size={14} />} Save
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleCloseForm}
+              disabled={saving}
+              aria-label="Close"
+              title="Close"
+              className="h-8 w-8 rounded-lg"
+            >
+              <X size={16} />
+            </Button>
           </div>
-        }
-        enableExport
-        exportFilename={`${config.title.toLowerCase().replace(/\s+/g, '-')}-list.csv`}
+        </div>
 
-      />
+        {/* Form content */}
+        <div className="flex flex-col gap-2">
+          {renderFormContent()}
+        </div>
+      </section>
+    );
+  }
 
-      {/* ── MODAL FOR SMALL FORMS (< 8 fields) ── */}
-      {/* {!useFullPage && (
-        <Dialog open={view === "editor"} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact wide onClose={handleCloseForm}>
-          <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
-            {renderFormContent()}
+  // ── RENDER LIST (PREPAID REGISTER STYLE) ──
+  return (
+    <section className="finance-utility-page finance-list-page grid gap-4">
+      {/* Page Header */}
+      <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tariff-page-icon">
+            <FileText size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">{config.title}</h1>
+            <p className="m-0 text-xs text-slate-500">{config.subtitle}</p>
           </div>
-        </Dialog>
-      )} */}
+        </div>
+      </div>
+
+      <div className="min-h-[650px]">
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+          subtitle={`${config.title} List`}
+          searchValue={query}
+          onSearchChange={(value: any) => { setQuery(value); setPageIndex(0); }}
+          searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+          loading={loading}
+          emptyText={`No ${config.title.toLowerCase()} records found`}
+          height={620}
+          minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
+          density="grid"
+          enablePagination
+          enableExport={false}
+          manualPagination={!(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()))}
+          manualFiltering={false}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters: any) => { setColumnFilters(filters); setPageIndex(0); }}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize: any) => { setPageSize(nextPageSize); setPageIndex(0); }}
+          getRowId={(row: any, index: any) => generateRowId(row, config, index)}
+          actionButton={
+            <div className="flex items-center gap-2">
+              {config.ediUploadConfig?.open && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEdiUploadOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer"
+                >
+                  <CloudUpload size={14} /> EDI Upload
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={openAdd}
+                disabled={saving}
+                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg cursor-pointer transition-colors"
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() =>
+                  exportToCsv(
+                    rows,
+                    columns.filter((column) => column.id !== "actions"),
+                    `${config.title.toLowerCase().replace(/\s+/g, "-")}-list.csv`,
+                  )
+                }
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
+        />
+      </div>
 
       {/* ── DELETE DIALOG ── */}
       <Dialog
