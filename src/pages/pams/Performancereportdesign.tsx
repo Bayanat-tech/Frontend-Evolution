@@ -1,6 +1,6 @@
 // PerformanceReportDesign.tsx
 import React, { useMemo, useEffect, useState, useRef } from "react";
-import { pamsSelect, pamsCommonSelect } from "../../api/pams";
+import { pamsSelect } from "../../api/pams";
 import { useAuth } from "../../state/AuthContext";
 
 const COMPANY_CODE = "BSG";
@@ -621,13 +621,13 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
 
         // Remove the redundant appraisal_comments calls and add get_appraisal_comments_log
         Promise.all([
-            pamsCommonSelect({
+            pamsSelect({
                 parameter: "PERFORMANCE_REPORT_EMP_APPRAISAL_PART1_SELECT_BY_DOC_EMP",
                 loginid,
                 code1: doc_no,
                 code2: employee_code,
-            }),
-            pamsCommonSelect({
+            }), 
+            pamsSelect({
                 parameter: "PERFORMANCE_REPORT_EAM_RATING_SELECT",
                 loginid,
                 code1: company_code,

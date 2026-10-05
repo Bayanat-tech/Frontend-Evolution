@@ -81,12 +81,13 @@ export function StockTransferPage() {
   useEffect(() => { void loadRows(); }, []);
 
   // ── Build absolute detail URL ──
-function detailUrl(row: WmsRow) {
-  const stn = val(row, "stn_no");
-  const prin = val(row, "prin_code");
-  const co = val(row, "company_code");
-  return `${STN_BASE}/view/${stn}?principal_code=${prin}&company_code=${co}`;
-}
+  function detailUrl(row: WmsRow) {
+    const stn = val(row, "stn_no");
+    const prin = val(row, "prin_code");
+    const co = val(row, "company_code");
+    return `${STN_BASE}/view/${stn}?principal_code=${prin}&company_code=${co}`;
+  }
+
   const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     {
       accessorKey: "stn_no",
@@ -94,8 +95,11 @@ function detailUrl(row: WmsRow) {
       size: 130,
       cell: ({ row }) => (
         <button
-          className="font-semibold text-primary hover:underline"
-          onClick={() => navigate(detailUrl(row.original))}
+          className="font-semibold text-primary hover:underline text-[11.5px] text-left cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(detailUrl(row.original));
+          }}
         >
           {val(row.original, "stn_no")}
         </button>
@@ -108,14 +112,14 @@ function detailUrl(row: WmsRow) {
       cell: ({ row }) => {
         const code = val(row.original, "prin_code");
         const name = val(row.original, "prin_name");
-        return [code, name].filter(Boolean).join(" - ") || "-";
+        return <span className="text-[11.5px] text-foreground">{[code, name].filter(Boolean).join(" - ") || "-"}</span>;
       },
     },
     {
       accessorKey: "user_dt",
       header: "Date",
       size: 120,
-      cell: ({ row }) => formatDate(val(row.original, "user_dt") || val(row.original, "stn_date")),
+      cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDate(val(row.original, "user_dt") || val(row.original, "stn_date"))}</span>,
     },
     {
       accessorKey: "description",
@@ -127,65 +131,85 @@ function detailUrl(row: WmsRow) {
       accessorKey: "count_no",
       header: "Count No",
       size: 110,
-      cell: ({ row }) => val(row.original, "count_no") || "-",
+      cell: ({ row }) => <span className="text-[11.5px] text-foreground">{val(row.original, "count_no") || "-"}</span>,
     },
     {
       id: "actions",
-      header: "Actions",
+      header: "ACTIONS",
       size: 80,
       enableColumnFilter: false,
       cell: ({ row }) => (
-        <Button
-          size="icon"
-          variant="ghost"
+        <button
+          type="button"
+          className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
           title="View transfer"
-          onClick={() => navigate(detailUrl(row.original))}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent row click from firing twice
+            navigate(detailUrl(row.original));
+          }}
         >
-          <Eye size={14} />
-        </Button>
+          <Eye size={13} />
+        </button>
       ),
     },
   ], [navigate]);
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Stock Transfer Listing</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            View and manage stock transfer records across principals and warehouses.
-          </p>
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Stock Transfer Listing
+          </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setFormOpen(true)}><Plus size={15} /> Add Transfer</Button>
+          {/* <Button variant="outline" onClick={() => loadRows()}><RefreshCw size={15} /> Refresh</Button> */}
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
+      {/* Table - exactly like Freight */}
       <DataTable
         columns={columns}
         data={rows}
-        subtitle="Stock Transfers"
+        toolbar={
+          <button
+            type="button"
+            onClick={() => setFormOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Add Transfer
+          </button>
+        }
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search transfer no, principal..."
         loading={loading}
-        height="calc(100vh - 260px)"
+        height="calc(100vh - 180px)"
         minWidth={960}
         density="grid"
         enablePagination
-        pageSize={50}
+        pageSize={25}
+        enableExport
+        exportFilename="stock-transfers-list.csv"
         getRowId={(row, index) => {
           const stn = val(row, "stn_no");
           const prin = val(row, "prin_code");
           const co = val(row, "company_code");
           return stn ? `${co}-${prin}-${stn}` : String(index);
         }}
-        rowClassName={(row) =>
-          val(row, "confirmed") === "Y" ? "bg-emerald-50/70" : "bg-blue-50/50"
-        }
+        rowClassName={(row) => {
+          // Apply row colors based on status, forcing onto cells to override DataTable defaults
+          if (val(row, "confirmed") === "Y") return "[&>td]:bg-emerald-50/70"; // Confirmed -> Light Green
+          return "[&>td]:bg-amber-50/70"; // Default -> Light Yellow (matching Freight's In Progress)
+        }}
+        onRowClick={(row) => navigate(detailUrl(row))}
       />
 
       {formOpen && (

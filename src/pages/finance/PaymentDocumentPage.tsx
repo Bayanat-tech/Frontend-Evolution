@@ -437,7 +437,6 @@ function PaymentDocumentEditor({
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
-  const [showPartyDetails, setShowPartyDetails] = useState(false);
 
   const toggleRowExpanded = (id: string) => {
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -1047,7 +1046,7 @@ function PaymentDocumentEditor({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-2.5 max-xl:grid-cols-1">
+                <div className="grid grid-cols-3 gap-2.5 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1055,7 +1054,6 @@ function PaymentDocumentEditor({
                       <span>Document & Payment Instrument</span>
                     </div>
                     <div className="finance-payment-header-fields">
-
                       <Field label="Doc Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
                       {docType !== "CR" && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
@@ -1176,43 +1174,34 @@ function PaymentDocumentEditor({
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Section 3: Party & Order Details (Optional / PB Parity) */}
-                <div className="finance-payment-header-block border-t border-slate-200/80 pt-2 mt-1">
-                  <div className="flex items-center justify-between cursor-pointer py-1 select-none" onClick={() => setShowPartyDetails(!showPartyDetails)}>
-                    <div className="finance-section-title mb-0">
+                  {/* Section 3: Party & Order Details (Compact Block) */}
+                  <div className="finance-payment-header-block">
+                    <div className="finance-section-title">
                       <span className="finance-section-icon"><Building2 size={11} /></span>
-                      <span>Party & Order Details (Optional)</span>
+                      <span>Party & Order Details</span>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground p-0 hover:bg-transparent">
-                      {showPartyDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </Button>
-                  </div>
-                  {showPartyDetails && (
-                    <div className="finance-payment-header-fields grid-cols-4 max-lg:grid-cols-2 max-sm:grid-cols-1 mt-2 pt-2 border-t border-slate-100">
+                    <div className="finance-payment-header-fields">
                       <Field label="Payment Terms">
-                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="e.g. 30 Days" />
+                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="30 Days" />
                       </Field>
                       <Field label="LPO No">
-                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO / PO Reference" />
+                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO Reference" />
                       </Field>
                       <Field label="LPO Date">
                         <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
                       </Field>
-                      <Field label="Party Phone">
+                      <Field label="Phone">
                         <Input disabled={disabled} value={form.party_phone || ""} onChange={(e) => updateField("party_phone", e.target.value)} placeholder="Phone" />
                       </Field>
-                      <Field label="Party Fax">
+                      <Field label="Fax">
                         <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
                       </Field>
-                      <div className="col-span-3 max-lg:col-span-2 max-sm:col-span-1">
-                        <Field label="Party Address">
-                          <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Full Party Address" />
-                        </Field>
-                      </div>
+                      <Field label="Party Address">
+                        <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Address" />
+                      </Field>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             )}
