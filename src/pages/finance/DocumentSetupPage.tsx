@@ -230,6 +230,8 @@ export function DocumentSetupPage() {
         rows: [stripAccountForSave(row, companyCode)],
         loginId,
       });
+      if (type === "header") setHeaderRows((prev) => prev.filter((item) => item.id !== row.id && item.ac_code !== row.ac_code));
+      if (type === "detail") setDetailRows((prev) => prev.filter((item) => item.id !== row.id && item.ac_code !== row.ac_code));
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Document account deleted" });
       if (selected) await loadDetails(selected, false);
