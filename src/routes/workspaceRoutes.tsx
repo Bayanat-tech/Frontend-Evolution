@@ -21,7 +21,8 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
-import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
+import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage"
+import WmsDashboard from "../pages/wms/dashboard/WmsDashboard";;
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
@@ -48,7 +49,7 @@ import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSumma
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
-import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
+import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
@@ -209,7 +210,11 @@ import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
+import { PamsBulkAppraisalPage } from "../pages/pams/PamsBulkAppraisalPage";
+import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
+import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
+import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 
 
  type WorkspaceRouteContext = {
@@ -231,6 +236,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+    {
+    name: "WMS Dashboard",
+    match: ({ pathname }) => isWmsDashboardRoute(pathname),
+    element: () => <WmsDashboard />,
+  },
   {
     name : 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
@@ -515,8 +525,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 },
 {
   name: "Pams Dashboard",
-  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/masters/kpi%20masters/pms_dashboard"),
+  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
   element: () => <PamsDashboard />
+},
+
+{
+  name: "Quotation Comparison",
+  match: ({ pathname }) => pathname.toLowerCase().includes("purchase_sales/purchase/quotation_comparison"),
+  element: () => <QuotationComparisonPage />
 },
   
   {
@@ -1184,6 +1200,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <KpiActivityPage />,
   },
 
+  {
+    name: "PAMS KPI Acceptance",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+             (normalized.includes("/kpi_item") || 
+              normalized.includes("/kpi-item"));
+    },
+    element: () => <KpiAcceptancePage />,
+  },
+
   // workspaceRoutes array mein, PAMS Master route se PEHLE add karo:
 {
   name: "PAMS Period Setup",
@@ -1447,7 +1474,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Purchase Request Register(old) Report",
   match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
   element: () => <PrRegisterOldPage />,
-}
+},
+
+  {
+  name: "Purchase & Sales Dashboard",
+  match: ({ pathname }) => isPnSRoute(pathname),
+  element: () => <PurchaseSalesDashboard />},
 
 
 ];
@@ -2093,6 +2125,10 @@ function isWmsCountryRoute(pathname: string) {
 function isWmsBillingActRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
+function isWmsDashboardRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/wms/wms";
 }
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2875,6 +2911,14 @@ function isProductBomRoute(pathname: string) {
   );
 }
 
+function isPnSRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales") 
+   
+  );
+}
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
 

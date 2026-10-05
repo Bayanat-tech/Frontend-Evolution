@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, Eye, Plus, RefreshCw } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { Ban, Eye, Pencil, Plus, RefreshCw } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, patchWmsInbound, postWmsInbound } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
@@ -11,13 +11,19 @@ import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
 import { InboundJobForm } from "./InboundJobForm";
 import { useRawSqlDropdown } from "../../../hooks/useRawSqlDropdown";
-import { listingTabs, inboundJobsPath } from "../../../config/staticData";
 import {
   type WmsRow,
   value, normalizeRow, formatDate, flagBadge, filterJobByTab,
   makeEmptyJob, isCanceled, hasDate, sqlEscape, inboundJobDetailPath,
   JobClassPill,
 } from "../../../utils/inboundHelpers";
+
+// Define the tabs exactly like Freight
+const listTabs = [
+  { key: "in_progress", label: "In Progress" },
+  { key: "confirmed", label: "Confirmed" },
+  { key: "cancel", label: "Cancelled" },
+];
 
 export function InboundJobListing() {
   const { user }      = useAuth();
@@ -34,8 +40,9 @@ export function InboundJobListing() {
   const [saving, setSaving]             = useState(false);
   const [cancelTarget, setCancelTarget] = useState<WmsRow | null>(null);
   const [cancelRemarks, setCancelRemarks] = useState("");
+  const [editingJobNo, setEditingJobNo] = useState("");
 
-  // Dropdown options (used by dropdownMap — kept for future field usage)
+  // Dropdown options
   useRawSqlDropdown({
     sql: `SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRIN_NAME`,
     valueKey: "PRIN_CODE", labelKeys: ["PRIN_CODE", "PRIN_NAME"], enabled: !!companyCode,
@@ -59,20 +66,33 @@ export function InboundJobListing() {
     }
   };
 
-  useState(() => { void loadRows(); });
+  useEffect(() => {
+    void loadRows();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredRows = useMemo(
     () => rows.filter((row) => filterJobByTab(row, activeTab)),
     [rows, activeTab],
   );
 
+  // Count for tabs
+  const getTabCount = (tabKey: string) => {
+    return rows.filter((row) => filterJobByTab(row, tabKey)).length;
+  };
+
+  const openEditJob = (row: WmsRow) => {
+    setEditingJobNo(value(row, "job_no"));
+    setForm(row); 
+    setFormOpen(true);
+  };
+
   const columns = useMemo<ColumnDef<WmsRow>[]>(
     () => [
       {
-        accessorKey: "job_no", header: "Job No", size: 130,
+        accessorKey: "job_no", header: "Job No", size: 50,
         cell: ({ row }) => (
           <button
-            className="font-semibold text-primary hover:underline"
+            className="font-semibold text-primary hover:underline text-[11.5px] text-left cursor-pointer"
             onClick={() => navigate(inboundJobDetailPath(row.original))}
           >
             {value(row.original, "job_no")}
@@ -80,47 +100,75 @@ export function InboundJobListing() {
         ),
       },
       {
-        accessorKey: "job_class", header: "Job Class", size: 180,
+        accessorKey: "job_class", header: "Job Class", size: 50,
         cell: ({ row }) => <JobClassPill code={value(row.original, "job_class")} />,
       },
       {
-        accessorKey: "prin_name", header: "Principal Name", size: 240,
-        cell: ({ row }) => value(row.original, "prin_name"),
+        accessorKey: "prin_name", header: "Principal Name", size: 100,
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{value(row.original, "prin_name")}</span>,
       },
       {
         accessorKey: "job_date", header: "Job Date", size: 120,
-        cell: ({ row }) => formatDate(value(row.original, "job_date")),
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDate(value(row.original, "job_date"))}</span>,
       },
       ...(activeTab === "confirmed" ? [{
         accessorKey: "confirm_date", header: "Confirm Date", size: 130,
-        cell: ({ row }: { row: { original: WmsRow } }) => formatDate(value(row.original, "confirm_date")),
+        cell: ({ row }: { row: { original: WmsRow } }) => <span className="text-[11.5px] text-foreground">{formatDate(value(row.original, "confirm_date"))}</span>,
       }] : []),
       ...(activeTab === "cancel" ? [{
         accessorKey: "cancel_date", header: "Cancel Date", size: 130,
-        cell: ({ row }: { row: { original: WmsRow } }) => formatDate(value(row.original, "cancel_date")),
+        cell: ({ row }: { row: { original: WmsRow } }) => <span className="text-[11.5px] text-foreground">{formatDate(value(row.original, "cancel_date"))}</span>,
       }] : []),
-      { accessorKey: "doc_ref",      header: "Doc Ref",      size: 130, cell: ({ row }) => value(row.original, "doc_ref") },
-      { accessorKey: "canceled",     header: "Canceled",     size: 100, cell: ({ row }) => flagBadge(value(row.original, "canceled")) },
-      { accessorKey: "invoiced",     header: "Invoiced",     size: 100, cell: ({ row }) => flagBadge(value(row.original, "invoiced")) },
-      { accessorKey: "invoice_date", header: "Invoice Date", size: 130, cell: ({ row }) => formatDate(value(row.original, "invoice_date")) },
+      { 
+        accessorKey: "invoiced", 
+        header: "Invoiced", 
+        size: 100, 
+        cell: ({ row }) => <span className="text-[11.5px] text-foreground">{flagBadge(value(row.original, "invoiced"))}</span> 
+      },
       {
-        id: "actions", header: "Actions", size: 120, enableColumnFilter: false,
+        id: "actions", header: "ACTIONS", size: 125, enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" title="Open job"
-              onClick={() => navigate(`view/${value(row.original, "job_no")}/job_details?principal_code=${value(row.original, "prin_code")}`)}>
-              <Eye size={14} />
-            </Button>
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              title="Open job"
+              onClick={(event) => {
+                event.stopPropagation(); // Prevent row click
+                navigate(`view/${value(row.original, "job_no")}/job_details?principal_code=${value(row.original, "prin_code")}`);
+              }}
+            >
+              <Eye size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              title="Edit job"
+              onClick={(event) => {
+                event.stopPropagation(); // Prevent row click
+                openEditJob(row.original);
+              }}
+            >
+              <Pencil size={13} />
+            </button>
             {activeTab !== "cancel" && (
-              <Button size="icon" variant="ghost" title="Cancel job" onClick={() => setCancelTarget(row.original)}>
-                <Ban size={14} />
-              </Button>
+              <button
+                type="button"
+                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                title="Cancel job"
+                onClick={(event) => {
+                  event.stopPropagation(); // ✅ Fix: Stop row click so modal can open
+                  setCancelTarget(row.original);
+                }}
+              >
+                <Ban size={13} />
+              </button>
             )}
           </div>
         ),
       },
     ],
-    [activeTab, navigate],
+    [activeTab, navigate, openEditJob],
   );
 
   const saveJob = async (event: FormEvent) => {
@@ -176,6 +224,7 @@ export function InboundJobListing() {
         schedule_date: String(form.schedule_date || today),
       });
       setFormOpen(false);
+      setEditingJobNo("");
       toast.success("Inbound job saved successfully");
       await loadRows();
     } catch (error) {
@@ -204,7 +253,7 @@ export function InboundJobListing() {
     } finally { setSaving(false); }
   };
 
-  // Page-style form replaces the listing entirely while adding a job — no more Dialog.
+  // Page-style form replaces the listing entirely while adding a job
   if (formOpen) {
     return (
       <InboundJobForm
@@ -213,55 +262,90 @@ export function InboundJobListing() {
         companyCode={companyCode}
         saving={saving}
         onSubmit={saveJob}
-        onClose={() => setFormOpen(false)}
+        onClose={() => { setFormOpen(false); setEditingJobNo(""); }}
       />
     );
   }
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="eyebrow">WMS Inbound</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Inbound Job Listing</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manage import jobs, shipment progress, receiving, putaway, confirmation, and activity billing.
-          </p>
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Inbound Job Listing
+          </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => { setForm(makeEmptyJob(companyCode)); setFormOpen(true); }}>
-            <Plus size={15} /> Add Job
-          </Button>
+          {/* <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button> */}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2">
-        {listingTabs.map((tab:any) => (
-          <Button key={tab.value} size="sm" variant={activeTab === tab.value ? "default" : "outline"}
-            onClick={() => setActiveTab(tab.value)}>
-            {tab.label}
-          </Button>
-        ))}
+      {/* Tabs with counts - exactly like Freight */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {listTabs.map((tab) => {
+          const count = getTabCount(tab.key);
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                active
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
+      {/* Table - exactly like Freight */}
       <DataTable
         key={sortKey}
-        columns={columns} data={filteredRows}
-        title={loading ? "Loading" : `${filteredRows.length} Jobs`}
-        subtitle="Inbound Jobs" searchValue={query} onSearchChange={setQuery}
-        searchPlaceholder="Search job, principal, reference..."
-        loading={loading} height="calc(100vh - 310px)" minWidth={1380} density="grid"
-        enablePagination pageSize={50}
-        getRowId={(row, index) => String(value(row, "job_no") || index)}
-        rowClassName={(row) =>
-          isCanceled(row)                        ? "bg-red-50/70"
-          : hasDate(value(row, "confirm_date"))  ? "bg-emerald-50/70"
-          : "bg-blue-50/50"
+        columns={columns} 
+        data={filteredRows}
+        toolbar={
+          <button
+            type="button"
+            onClick={() => { setEditingJobNo(""); setForm(makeEmptyJob(companyCode)); setFormOpen(true); }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            Add Job
+          </button>
         }
+        searchValue={query} 
+        onSearchChange={setQuery}
+        searchPlaceholder="Search job, principal, reference..."
+        loading={loading} 
+        height="calc(100vh - 180px)" 
+        // minWidth={1380} 
+        density="grid"
+        enablePagination 
+        pageSize={25}
+        enableExport
+        exportFilename="inbound-jobs-list.csv"
+        getRowId={(row, index) => String(value(row, "job_no") || index)}
+        rowClassName={(row) => {
+          // Apply row colors based on status, forcing onto cells to override DataTable defaults
+          if (isCanceled(row)) return "[&>td]:bg-red-50/70"; // Cancelled -> Light Red
+          if (hasDate(value(row, "confirm_date"))) return "[&>td]:bg-emerald-50/70"; // Confirmed -> Light Green
+          return "[&>td]:bg-amber-50/70"; // In Progress -> Light Yellow
+        }}
+        onRowClick={(row) => navigate(inboundJobDetailPath(row))}
       />
 
-      {/* Cancel Job Dialog — stays a lightweight confirmation dialog, not part of this change */}
+      {/* Cancel Job Dialog */}
       <Dialog
         open={Boolean(cancelTarget)}
         title={`Cancel Job ${cancelTarget ? value(cancelTarget, "job_no") : ""}`}

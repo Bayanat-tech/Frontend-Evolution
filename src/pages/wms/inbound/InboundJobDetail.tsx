@@ -1,4 +1,4 @@
-import { ArrowLeft, Printer, RefreshCw } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Truck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -26,7 +26,7 @@ import {
   isCanceled, hasDate, locationSearchPrincipal, JobClassPill,
 } from "../../../utils/inboundHelpers";
 import { Dialog } from "../../../components/ui/Dialog";
-import { NewReportDialog } from "../../../components/new_report_format";
+import NewReportDialog from "../../../components/new_report_format/NewReportDialog";
 
 type Props = { jobNo: string; tab: string };
 
@@ -203,9 +203,26 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
     setLoading(true);
     try {
       const data = await getWmsInbound<WmsRow>(`job/${encodeURIComponent(jobNo)}`);
+            let jobData:any = normalizeRow(data || {});
+
       setJob(normalizeRow(data || {}));
+            if (jobData.prin_code && !jobData.prin_name) {
+        try {
+          const prinResult = await executeWmsInboundSql(
+            `SELECT PRIN_NAME FROM MS_PRINCIPAL WHERE PRIN_CODE = '${sqlEscape(jobData.prin_code)}'`
+          );
+          if (prinResult && prinResult[0]) {
+            jobData.prin_name = value(prinResult[0], "prin_name") || value(prinResult[0], "PRIN_NAME") || "";
+          }
+        } catch (e) {
+          console.warn("Could not fetch principal name", e);
+        }
+      }
+      
+      setJob(jobData);
     } catch {
       try {
+        
         const fallback = await executeWmsInboundSql(
           `SELECT * FROM VW_TI_JOB WHERE JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`,
         );
@@ -236,92 +253,142 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
     <section className="grid gap-3">
 
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button size="icon" variant="outline"
+      <div 
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          backgroundColor: "#ffffff",
+          padding: "12px 16px",
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)"
+        }}
+      >
+        
+        {/* LEFT SIDE: Identity */}
+        <div style={{ display: "flex", minWidth: 0, alignItems: "center", gap: "12px" }}>
+          
+          {/* Back Button */}
+          <Button 
+            size="icon" 
+            variant="outline" 
+            style={{ height: "32px", width: "32px", flexShrink: 0, borderRadius: "8px" }}
             onClick={() => navigate("/workspace/wms/wms/transactions/inbound/jobs")}
             title="Back to jobs"
           >
             <ArrowLeft size={16} />
           </Button>
 
-          <div className="min-w-0">
-            <p className="eyebrow mb-0.5">Inbound Job</p>
-            <h1 className="m-0 truncate text-xl font-semibold leading-tight">{jobNo}</h1>
+          {/* Icon Box */}
+          <div 
+            style={{ 
+              display: "grid", 
+              placeItems: "center", 
+              width: "32px", 
+              height: "32px", 
+              borderRadius: "8px", 
+              backgroundColor: "rgba(0, 55, 140, 0.08)", 
+              color: "#00378C",
+              flexShrink: 0
+            }}
+          >
+            <Truck size={16} />
           </div>
 
-          <div className="hidden h-8 w-px bg-border sm:block" />
+          {/* Title, Status, and Job Class */}
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+            <h1 style={{ margin: 0, fontSize: "18px", fontWeight: 700, lineHeight: 1.2, color: "#0f172a" }}>
+              Job No: {jobNo}
+            </h1>
+            
+            {/* Added padding to the status badge */}
+            <span className={cn(
+              "inline-flex items-center rounded-md border px-2.5 py-1 text-[10.5px] leading-tight font-semibold",
+              statusColor,
+            )}>
+              {jobStatus}
+            </span>
+            
+            {/* Assuming JobClassPill is a component, we leave it as is */}
+            {job && <JobClassPill code={value(job, "job_class")} />}
+          </div>
+        </div>
 
-          {job && value(job, "prin_code") && (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Principal</span>
-              <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
+        {/* RIGHT SIDE: Metadata Pill & Actions */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "16px" }}>
+          
+          {/* Combined Metadata Pill */}
+          {job && (
+            <div 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "9999px", // Perfect pill shape
+                padding: "5px 14px",
+              }}
+            >
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#1e293b" }}>
                 {value(job, "prin_code")}
-                {value(job, "prin_name") ? ` · ${value(job, "prin_name")}` : ""}
+                {value(job, "prin_name") ? ` - ${value(job, "prin_name")}` : ""}
               </span>
-            </div>
-          )}
-
-          {job && value(job, "job_date") && (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Job Date</span>
-              <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
+              
+              <span style={{ width: "1px", height: "12px", backgroundColor: "#cbd5e1" }} />
+              
+              <span style={{ fontSize: "12px", fontWeight: 500, color: "#475569" }}>
                 {formatDate(value(job, "job_date"))}
               </span>
             </div>
           )}
 
-          <div className="hidden h-8 w-px bg-border sm:block" />
-
-          {job && <JobClassPill code={value(job, "job_class")} />}
-
-          <span className={cn(
-            "inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-semibold",
-            statusColor,
-          )}>
-            {jobStatus}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={loadJob}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-          <Button size="sm" variant="outline" onClick={openListDialog}>
-            <Printer size={14} /> Print
+          {/* Action */}
+          <Button 
+            size="sm" 
+            variant="outline" 
+            style={{ height: "32px", borderRadius: "8px", padding: "0 14px", fontSize: "13px", fontWeight: 500 }}
+            onClick={openListDialog}
+          >
+            <Printer size={15} /> Print
           </Button>
         </div>
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
         {loading ? (
-          // simple skeleton — same height/spacing as real tab buttons, no flash of content
           <div className="flex gap-2">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-8 w-28 animate-pulse rounded-md bg-muted" />
+              <div key={i} className="h-8 w-28 animate-pulse rounded-xl bg-muted" />
             ))}
           </div>
         ) : (
-          availableTabs.map((item: any) => (
-            <Link
-              key={item.value}
-              className={
-                item.value === activeTab
-                  ? "ui-button ui-button-default ui-button-sm whitespace-nowrap"
-                  : "ui-button ui-button-outline ui-button-sm whitespace-nowrap"
-              }
-              to={`${basePath}/${item.value}${locationSearchPrincipal(job)}`}
-              onClick={(e) => {
-                if (item.value === activeTab) return;
-                if (!tabRef.current?.validateBeforeLeave()) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              {item.label}
-            </Link>
-          ))
+          availableTabs.map((item: any) => {
+            const active = item.value === activeTab;
+            return (
+              <Link
+                key={item.value}
+                to={`${basePath}/${item.value}${locationSearchPrincipal(job)}`}
+                onClick={(e) => {
+                  if (item.value === activeTab) return;
+                  if (!tabRef.current?.validateBeforeLeave()) {
+                    e.preventDefault();
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary font-medium"
+                }`}
+              >
+                <span>{item.label}</span>
+              </Link>
+            );
+          })
         )}
       </div>
 
