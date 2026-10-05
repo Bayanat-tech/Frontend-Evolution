@@ -48,6 +48,9 @@ export interface NewReportPageProps {
   /** Page / dialog title */
   title: string;
   /** Optional subtitle under the title */
+  filterLabel?: string;
+  /** Optional subtitle under the title */
+
   subtitle?: string;
   /** Filter field definitions – rendered in order */
   fields: ReportFieldConfig[];

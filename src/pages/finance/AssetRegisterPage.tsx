@@ -1,12 +1,14 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Trash2, Building2 } from "lucide-react";
+import { Edit2, Eye, Plus, Trash2, Boxes } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { DivisionPickerDialog } from "../../components/ui/DivisionPickerDialog";
-import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
 import { AddAssetRegisterForm } from "./AddAssetRegisterForm";
 
@@ -127,7 +129,6 @@ export function AssetRegisterPage() {
 
   // Division popup
   const [divisionOpen, setDivisionOpen] = useState(false);
-  const [divisionSearch, setDivisionSearch] = useState("");
   const [divisions, setDivisions] = useState<TDivisionOption[]>([]);
   const [loadingDivisions, setLoadingDivisions] = useState(false);
 
@@ -138,9 +139,9 @@ export function AssetRegisterPage() {
   const [deleteTarget, setDeleteTarget] = useState<TAssetRow | null>(null);
 
   // ===================== LOAD ASSETS =====================
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "AC_ASSETS_register",
@@ -188,7 +189,7 @@ export function AssetRegisterPage() {
   };
 
   const handleOpenDivisionPopup = () => {
-    setDivisionSearch("");
+    setNotice(null);
     setDivisionOpen(true);
     void loadDivisions();
   };
@@ -197,14 +198,6 @@ export function AssetRegisterPage() {
     setDivisionOpen(false);
     setPopup({ open: true, mode: "create", div_code: div.div_code, div_name: div.div_name });
   };
-
-  const filteredDivisions = useMemo(() => {
-    const term = divisionSearch.trim().toLowerCase();
-    if (!term) return divisions;
-    return divisions.filter(
-      (d) => d.div_code.toLowerCase().includes(term) || d.div_name.toLowerCase().includes(term)
-    );
-  }, [divisions, divisionSearch]);
 
   // ===================== TABLE FILTER =====================
   const filteredRows = useMemo(() => {
@@ -236,11 +229,11 @@ export function AssetRegisterPage() {
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             <Button size="icon" variant="ghost"
-              onClick={() => setPopup({ open: true, mode: "view", asset_id: row.original.asset_id, div_code: row.original.div_code, div_name: row.original.div_name })}>
+              onClick={() => { setNotice(null); setPopup({ open: true, mode: "view", asset_id: row.original.asset_id, div_code: row.original.div_code, div_name: row.original.div_name }); }}>
               <Eye size={15} />
             </Button>
             <Button size="icon" variant="ghost"
-              onClick={() => setPopup({ open: true, mode: "edit", asset_id: row.original.asset_id, div_code: row.original.div_code, div_name: row.original.div_name })}>
+              onClick={() => { setNotice(null); setPopup({ open: true, mode: "edit", asset_id: row.original.asset_id, div_code: row.original.div_code, div_name: row.original.div_name }); }}>
               <Edit2 size={15} />
             </Button>
             <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)}>
@@ -265,55 +258,98 @@ export function AssetRegisterPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Asset deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete asset" });
     }
   };
 
+  const closeForm = () => {
+    setNotice(null);
+    setPopup({ open: false });
+  };
+
   const handleFormSaved = async () => {
     setPopup({ open: false });
     setNotice({ type: "success", message: "Asset saved successfully" });
-    await loadRows();
+    await loadRows(false);
   };
 
-  // ===================== RENDER =====================
+  // ===================== INLINE EDITOR VIEW =====================
+  if (popup.open) {
+    return (
+      <AddAssetRegisterForm
+        key={`${popup.mode}_${popup.asset_id || "new"}`}
+        mode={popup.mode}
+        asset_id={popup.mode !== "create" ? popup.asset_id : undefined}
+        div_code={popup.div_code}
+        div_name={popup.div_name}
+        companyCode={companyCode}
+        loginId={loginId}
+        onClose={closeForm}
+        onSaved={handleFormSaved}
+      />
+    );
+  }
+
+  // ===================== LIST VIEW =====================
   return (
     <section className="finance-utility-page finance-list-page grid gap-4">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="eyebrow">Asset Utility</p>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Asset Register</h1>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" onClick={() => void loadRows()}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
-          <Button onClick={handleOpenDivisionPopup}>
-            <Plus size={15} /> Create Asset
-          </Button>
+      {/* Page Header - Matching Prepaid Register */}
+      <div className="tariff-page-header flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tariff-page-icon">
+            <Boxes size={20} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">Asset Register</h1>
+            <p className="m-0 text-xs text-slate-500">Asset Utility</p>
+          </div>
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Table */}
-      <DataTable
-        columns={columns}
-        data={filteredRows}
-        title={loading ? "Loading" : `${filteredRows.length} Records`}
-        subtitle="Assets"
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search asset id, name, account..."
-        loading={loading}
-        emptyText="No assets found"
-        height={650}
-        minWidth={1450}
-        density="grid"
-        getRowId={(row, index) => `${row.asset_id || "new"}_${index}`}
-      />
+      <div className="min-h-[650px]">
+        <DataTable
+          columns={columns}
+          data={filteredRows}
+          title={loading ? "Loading" : `${filteredRows.length} Records`}
+          subtitle="Assets"
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search asset id, name, account..."
+          loading={loading}
+          emptyText="No assets found"
+          height={650}
+          minWidth={1450}
+          density="grid"
+          enableExport={false}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold cursor-pointer transition-colors"
+                title="Create Asset"
+                onClick={handleOpenDivisionPopup}
+              >
+                <Plus size={14} strokeWidth={2.5} /> Add
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() =>
+                  exportToCsv(
+                    filteredRows,
+                    columns.filter((column) => column.id !== "actions"),
+                    "asset-register.csv",
+                  )
+                }
+                onRefresh={() => void loadRows(false)}
+              />
+            </div>
+          }
+          getRowId={(row, index) => `${row.asset_id || "new"}_${index}`}
+        />
+      </div>
 
       <DivisionPickerDialog
         open={divisionOpen}
@@ -324,44 +360,6 @@ export function AssetRegisterPage() {
         onClose={() => setDivisionOpen(false)}
       />
 
-      {/* ===================== ADD / EDIT / VIEW FORM DIALOG ===================== */}
-      {popup.open && (
-        <>
-          <style>{`
-            .asset-register-dialog [class*="rounded-lg"][class*="border"][class*="bg-card"] {
-              width: min(96vw, 1000px) !important;
-              max-width: min(96vw, 1200px) !important;
-            }
-          `}</style>
-          <div className="asset-register-dialog">
-          <Dialog
-            open
-            title={
-              popup.mode === "create"
-                ? "Create Asset"
-                : popup.mode === "edit"
-                ? "Edit Asset"
-                : "View Asset"
-            }
-            onClose={() => setPopup({ open: false })}
-            footer={null}
-          >
-            <AddAssetRegisterForm
-              mode={popup.mode}
-              asset_id={popup.mode !== "create" ? popup.asset_id : undefined}
-              div_code={popup.div_code}
-              div_name={popup.div_name}
-              companyCode={companyCode}
-              loginId={loginId}
-              onClose={() => setPopup({ open: false })}
-              onSaved={handleFormSaved}
-            />
-          </Dialog>
-          </div>
-        </>
-      )}
-
-      {/* ===================== DELETE CONFIRM ===================== */}
       {deleteTarget && (
         <Dialog
           open

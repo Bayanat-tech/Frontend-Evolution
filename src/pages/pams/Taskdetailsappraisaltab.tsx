@@ -32,6 +32,18 @@ function num(val: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
+function splitItems(value: unknown): string[] {
+  const seen = new Set<string>();
+  return text(value)
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (!s || seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    });
+}
+
 function getClosestAllowedRating(value: number): number {
   let closest = ALLOWED_RATINGS[0];
   let minDiff = Math.abs(value - closest);
@@ -83,6 +95,15 @@ const S = {
   },
   totalGreen: { color: "#2e7d32", fontWeight: 600 },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
+  activityLine: { display: "flex", gap: "6px", padding: "2px 0", lineHeight: 1.4, alignItems: "flex-start" as const },
+
+  activityBullet: {
+    color: "#3b82f6", // Blue color
+    flexShrink: 0,
+    fontWeight: "bold",
+    fontSize: "12px",
+    lineHeight: "1.4",
+  },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -202,7 +223,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
           ) : rows.map((row, idx) => {
             const key = text(row.KPI_CODE);
             const isOpen = !!expanded[key];
-            const items = text(row.KPI_ITEM_DESC).split(",").map((s) => s.trim()).filter(Boolean);
+            const items = splitItems(row.KPI_ITEM_DESC);
             const state = rowStates[key];
             const rating = state?.RATING ?? "";
             const weightage = state?.STANDARD_WEIGHTAGE ?? "";
@@ -257,8 +278,13 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
                 {isOpen && (
                   <tr key={`child-${key}`}>
                     <td style={{ ...S.tdChild, textAlign: "center" }} />
-                    <td style={{ ...S.tdChild, paddingLeft: "38px", whiteSpace: "pre-wrap" }}>
-                      ◾ {text(row.KPI_ITEM_DESC)}
+                    <td style={{ ...S.tdChild, paddingLeft: "38px" }}>
+                      {items.map((item, i) => (
+                        <div key={`${key}_item_${i}`} style={S.activityLine}>
+                          <span style={S.activityBullet}> ▪️ </span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
                     </td>
                     <td style={S.tdChild} /><td style={S.tdChild} /><td style={S.tdChild} />
                   </tr>

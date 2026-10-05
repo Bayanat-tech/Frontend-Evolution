@@ -1,5 +1,5 @@
 import { ChevronDown, Search, X } from "lucide-react";
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
 
@@ -22,9 +22,11 @@ type LookupFieldProps = {
   compact?: boolean;
   dense?: boolean;
   placeholder?: string;
+  placeholderClassName?: string;
   required?: boolean;
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
+  renderRowActions?: (row: LookupRow) => ReactNode;
   className?: string;
 };
 
@@ -42,9 +44,11 @@ export function LookupField({
   dense = false,
   showLabelInCompact = false,
   placeholder,
+  placeholderClassName,
   required,
   enforceRequired,
   multiSelect,
+  renderRowActions,      
   className,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
@@ -77,7 +81,6 @@ export function LookupField({
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
-      // Adapt width to the field: match trigger width or min needed for columns
       const minIdealWidth = columns.length >= 3 ? 340 : 280;
       const width = Math.min(
         Math.max(rect.width, minIdealWidth),
@@ -90,7 +93,6 @@ export function LookupField({
       const maxHeight = Math.max(280, Math.min(520, preferredSpace));
       const opensAbove = belowSpace < 200 && aboveSpace > belowSpace;
 
-      // Horizontal alignment: if trigger is on right side of screen or overflows, align flush with trigger's right edge
       let left = rect.left;
       if (left + width > viewportWidth - 12) {
         left = Math.max(12, rect.right - width);
@@ -218,6 +220,8 @@ export function LookupField({
         ) || String(value)
         : "");
 
+  const totalCols = columns.length + (renderRowActions ? 1 : 0);
+
   return (
     <>
       <label className={`${compact ? "block w-full min-w-0" : "field"} ${className || ""}`}>
@@ -251,14 +255,18 @@ export function LookupField({
             className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate ${
               disabled ? "cursor-not-allowed text-slate-700 font-medium" : "cursor-pointer"
             } ${
-              dense || compact ? "px-2 text-xs" : "px-2.5 text-xs"
-            } ${!disabled && currentText ? "text-slate-800 font-medium" : !disabled ? "text-slate-400" : ""}`}
+              dense || compact ? "px-2" : "px-2.5"
+            } ${!disabled && currentText ? "text-slate-800 font-medium text-[11px]" : !disabled ? "text-slate-400 text-[10px]" : "text-[11px]"}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
           >
-            <span className="block truncate">
-              {currentText || placeholder || `Select ${label || ""}`}
+            {/* Added 'italic font-normal' when showing placeholder */}
+            <span className={`block truncate ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
+{currentText ||
+  (placeholder
+    ? `${placeholder.replace(/\.*$/, "")}...`
+    : `${label || ""}...`)}
             </span>
           </button>
           {value && !disabled && (
@@ -295,7 +303,6 @@ export function LookupField({
             className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
             style={popoverStyle}
           >
-            {/* Search header */}
             <div className="flex-none p-2 border-b border-slate-200 bg-slate-50/80">
               <div className="relative flex items-center">
                 <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
@@ -320,7 +327,6 @@ export function LookupField({
 
             {error && <div className="m-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">{error}</div>}
 
-            {/* Table */}
             <div className="min-h-0 flex-1 overflow-auto">
               <table className="lookup-results-table w-full border-collapse text-left">
                 <thead className="sticky top-0 z-10 bg-[#00378C] text-white">
@@ -335,18 +341,24 @@ export function LookupField({
                         {column.header}
                       </th>
                     ))}
+                    {/* ⭐ Actions column */}
+                    {renderRowActions && (
+                      <th className="w-16 px-2 py-1.5 text-center text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loading ? (
                     <tr>
-                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={columns.length}>
+                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={totalCols}>
                         Loading...
                       </td>
                     </tr>
                   ) : pagedRows.length === 0 ? (
                     <tr>
-                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={columns.length}>
+                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={totalCols}>
                         No records found
                       </td>
                     </tr>
@@ -380,6 +392,18 @@ export function LookupField({
                               </td>
                             );
                           })}
+
+                          {/* ⭐ Actions cell */}
+                          {renderRowActions && (
+                            <td
+                              className="px-2 py-1 text-center"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {renderRowActions(row)}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })
@@ -388,7 +412,6 @@ export function LookupField({
               </table>
             </div>
 
-            {/* Footer */}
             <div className="lookup-footer flex-none px-2.5 py-1.5 border-t border-slate-200 bg-slate-50/90 flex items-center justify-between text-xs text-slate-600">
               <span className="text-[11px] font-medium text-slate-500">
                 {filteredRows.length} item{filteredRows.length === 1 ? "" : "s"}
