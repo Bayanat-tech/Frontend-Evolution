@@ -25,7 +25,7 @@ export function DivisionPickerDialog({
   onSelect,
   onClose,
   title = "Select Division",
-  description = "Choose the operating division to proceed",
+  // description = "Choose the operating division to proceed",
 }: DivisionPickerDialogProps) {
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -81,9 +81,9 @@ export function DivisionPickerDialog({
               <h3 className="m-0 text-base font-semibold leading-tight tracking-tight text-white">
                 {title}
               </h3>
-              <p className="m-0 mt-0.5 text-xs text-blue-100/80">
+              {/* <p className="m-0 mt-0.5 text-xs text-blue-100/80">
                 {description}
-              </p>
+              </p> */}
             </div>
           </div>
           <button

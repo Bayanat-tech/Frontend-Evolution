@@ -1,8 +1,8 @@
-import { FileText, MapPin, Ship, ArrowLeft, Save, X } from "lucide-react";
+import { FileText, MapPin, Ship, PackageCheck } from "lucide-react";
 import { type FormEvent } from "react";
 import { Input } from "../../../components/ui/Input";
-import { Select } from "../../../components/ui/Select";
 import { LookupField } from "../../../components/ui/LookupField";
+import { type LookupRow } from "../../../api/lookups";
 import { jobClassLabels } from "../../../config/staticData";
 import {
   loadInboundPrincipalLookup,
@@ -12,75 +12,96 @@ import {
   loadInboundPortLookup,
 } from "../../../utils/lookupLoaders";
 import { type WmsRow } from "../../../utils/inboundHelpers";
-import { LookupFieldInfinite } from "../../../components/ui/LookupFieldInfinite";
 
 type Props = {
-  form:        WmsRow;
+  form:        any;
   setForm:     (updater: (cur: WmsRow) => WmsRow) => void;
   companyCode: string;
   onSubmit:    (e: FormEvent) => void;
-  // onClose:     () => void; // Added to handle the back/cancel action
 };
+
+const fieldClassName =
+  "flex h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 text-[11px] text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
 
 export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: Props) {
   const set = (name: string, val: unknown) =>
     setForm((cur) => ({ ...cur, [name]: val }));
 
-  // Shared class for compact labels
-  const labelCls = "text-[10.5px] font-medium leading-none text-muted-foreground";
+  const applyPrincipal = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      prin_code: value,
+      prin_name: row ? String(row["prin_name"] ?? row["PRIN_NAME"] ?? cur.prin_name ?? "") : cur.prin_name,
+      dept_code: row ? String(row["prin_dept_code"] ?? row["PRIN_DEPT_CODE"] ?? cur.dept_code ?? "") : cur.dept_code,
+      dept_name: row ? String(row["dept_name"] ?? row["DEPT_NAME"] ?? cur.dept_name ?? "") : cur.dept_name,
+      div_code:  row ? String(row["div_code"] ?? row["DIV_CODE"] ?? cur.div_code ?? "") : cur.div_code,
+      div_name:  row ? String(row["div_name"] ?? row["DIV_NAME"] ?? cur.div_name ?? "") : cur.div_name,
+    }));
+
+  const applyDepartment = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      dept_code: value,
+      dept_name: row ? String(row["dept_name"] ?? row["DEPT_NAME"] ?? "") : cur.dept_name,
+      div_code:  row ? String(row["div_code"]  ?? row["DIV_CODE"]  ?? cur.div_code ?? "") : cur.div_code,
+      div_name:  row ? String(row["div_name"]  ?? row["DIV_NAME"]  ?? cur.div_name ?? "") : cur.div_name,
+    }));
+
+  const applyDivision = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      div_code: value,
+      div_name: row ? String(row["div_name"] ?? row["DIV_NAME"] ?? "") : cur.div_name,
+    }));
+
+  const applyOriginCountry = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      country_origin: value,
+      country_origin_name: row ? String(row["country_name"] ?? row["COUNTRY_NAME"] ?? "") : "",
+      port_code: "",
+      port_name: "",
+    }));
+
+  const applyDestinationCountry = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      country_destination: value,
+      country_destination_name: row ? String(row["country_name"] ?? row["COUNTRY_NAME"] ?? "") : "",
+      destination_port: "",
+      destination_port_name: "",
+    }));
+
+  const applyPortOfLoading = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      port_code: value,
+      port_name: row ? String(row["port_name"] ?? row["PORT_NAME"] ?? "") : "",
+    }));
+
+  const applyPortOfDestination = (value: string, row: LookupRow | null) =>
+    setForm((cur) => ({
+      ...cur,
+      destination_port: value,
+      destination_port_name: row ? String(row["port_name"] ?? row["PORT_NAME"] ?? "") : "",
+    }));
 
   return (
-    <section className="grid gap-2">
-      {/* ── Page Header ── */}
-      {/* <div className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-md border bg-card text-muted-foreground hover:bg-secondary transition-colors cursor-pointer"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div>
-            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">WMS Inbound</p>
-            <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Add Inbound Job</h1>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary transition-colors cursor-pointer"
-          >
-            <X size={14} /> Cancel
-          </button>
-          <button
-            type="submit"
-            form="inbound-job-form"
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 transition-colors cursor-pointer"
-          >
-            <Save size={14} /> Save Job
-          </button>
-        </div>
-      </div> */}
-
-      <form id="inbound-job-form" className="grid gap-2.5" onSubmit={onSubmit}>
-        {/* ── Section 1: Job Information ── */}
-        <section className="rounded-md border bg-card shadow-sm">
-          <div className="flex items-center gap-2.5 border-b px-3 py-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
-              <Ship size={16} />
-            </div>
-            <div>
-              <p className="eyebrow m-0">Job Information</p>
-              <h3 className="m-0 text-sm font-semibold">Inbound Job Creation</h3>
-            </div>
-          </div>
-
-          <div className="grid gap-2 p-3 md:grid-cols-4 items-end">
-            <LookupFieldInfinite
+    <form
+      id="inbound-job-form"
+      className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5"
+      onSubmit={onSubmit}
+    >
+      {/* ── Section 1: Job Information ── */}
+      <SectionPanel icon={Ship} title="Job Information" meta="Inbound Job Creation">
+        {/* Replaced 'enquiry-header-fields' with a structured grid to match Freight UI */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2">
+          
+          <div className="grid gap-0.5 text-[11.5px] font-semibold text-slate-700 freight-field-label">
+            <span>Principal <span style={{ color: "#E24B4A" }}>*</span></span>
+            <LookupField
+              compact
               label="Principal"
-              batchSize={10}
               value={String(form.prin_code || "")}
               displayValue={[form.prin_code, form.prin_name].filter(Boolean).join(" - ")}
               valueField="prin_code"
@@ -93,267 +114,372 @@ export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: P
               ]}
               placeholder="Select principal"
               loadOptions={() => loadInboundPrincipalLookup(companyCode)}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  prin_code: val,
-                  prin_name: row ? String(row["prin_name"]      ?? row["PRIN_NAME"]      ?? "") : cur.prin_name,
-                  dept_code: row ? String(row["prin_dept_code"] ?? row["PRIN_DEPT_CODE"] ?? cur.dept_code ?? "") : cur.dept_code,
-                  dept_name: row ? String(row["dept_name"]      ?? row["DEPT_NAME"]      ?? cur.dept_name ?? "") : cur.dept_name,
-                  div_code:  row ? String(row["div_code"]       ?? row["DIV_CODE"]       ?? cur.div_code  ?? "") : cur.div_code,
-                  div_name:  row ? String(row["div_name"]       ?? row["DIV_NAME"]       ?? cur.div_name  ?? "") : cur.div_name,
-                }))
-              }
-            />
-
-            <LookupField
-              label="Department"
-              value={String(form.dept_code || "")}
-              displayValue={[form.dept_code, form.dept_name].filter(Boolean).join(" - ")}
-              valueField="dept_code"
-              displayFields={["dept_code", "dept_name"]}
-              columns={[
-                { field: "dept_code", header: "Code" },
-                { field: "dept_name", header: "Department Name" },
-                { field: "div_code",  header: "Division" },
-              ]}
-              placeholder="Select department"
-              loadOptions={() => loadInboundDepartmentLookup(companyCode, String(form.div_code || ""))}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  dept_code: val,
-                  dept_name: row ? String(row["dept_name"] ?? row["DEPT_NAME"] ?? "") : cur.dept_name,
-                  div_code:  row ? String(row["div_code"]  ?? row["DIV_CODE"]  ?? cur.div_code ?? "") : cur.div_code,
-                  div_name:  row ? String(row["div_name"]  ?? row["DIV_NAME"]  ?? cur.div_name ?? "") : cur.div_name,
-                }))
-              }
-            />
-
-            <LookupField
-              label="Division"
-              value={String(form.div_code || "")}
-              displayValue={[form.div_code, form.div_name].filter(Boolean).join(" - ")}
-              valueField="div_code"
-              displayFields={["div_code", "div_name"]}
-              columns={[
-                { field: "div_code", header: "Code" },
-                { field: "div_name", header: "Division Name" },
-              ]}
-              placeholder="Select division"
-              loadOptions={() => loadInboundDivisionLookup(companyCode)}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  div_code: val,
-                  div_name: row ? String(row["div_name"] ?? row["DIV_NAME"] ?? "") : cur.div_name,
-                }))
-              }
-            />
-
-            <label className="grid gap-1">
-              <span className={labelCls}>
-                Job Classification <strong className="text-destructive">*</strong>
-              </span>
-              <Select
-                className="h-8 text-xs"
-                value={String(form.job_class || "")}
-                onChange={(e) => set("job_class", e.target.value)}
-              >
-                <option value="">Select Job Classification</option>
-                {Object.entries(jobClassLabels).map(([code, label]) => (
-                  <option key={code} value={code}>{code} - {String(label)}</option>
-                ))}
-              </Select>
-            </label>
-
-            <label className="grid gap-1">
-              <span className={labelCls}>
-                Job Type <strong className="text-destructive">*</strong>
-              </span>
-              <Select
-                className="h-8 text-xs"
-                value={String(form.job_type || "IMP")}
-                onChange={(e) => set("job_type", e.target.value)}
-              >
-                <option value="IMP">IMP - Inbound</option>
-              </Select>
-            </label>
-
-            <label className="grid gap-1">
-              <span className={labelCls}>Transport Mode</span>
-              <Select
-                className="h-8 text-xs"
-                value={String(form.transport_mode || "S")}
-                onChange={(e) => set("transport_mode", e.target.value)}
-              >
-                <option value="S">S - Sea</option>
-                <option value="A">A - Air</option>
-                <option value="R">R - Road\Land</option>
-                <option value="C">C - Courier</option>
-              </Select>
-            </label>
-
-            <label className="grid gap-1">
-              <span className={labelCls}>Schedule Date</span>
-              <Input
-                className="h-8 text-xs"
-                type="date"
-                value={String(form.schedule_date || "")}
-                onChange={(e) => set("schedule_date", e.target.value)}
-              />
-            </label>
-          </div>
-        </section>
-
-        {/* ── Section 2: Routing ── */}
-        <section className="rounded-md border bg-card shadow-sm">
-          <div className="flex items-center gap-2.5 border-b px-3 py-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
-              <MapPin size={16} />
-            </div>
-            <div>
-              <p className="eyebrow m-0">Routing</p>
-              <h3 className="m-0 text-sm font-semibold">Origin, Destination And Ports</h3>
-            </div>
-          </div>
-
-          <div className="grid gap-2 p-3 md:grid-cols-4 items-end">
-            <LookupField
-              label="Origin Country"
-              value={String(form.country_origin || "")}
-              displayValue={[form.country_origin, form.country_origin_name].filter(Boolean).join(" - ")}
-              valueField="country_code"
-              displayFields={["country_code", "country_name"]}
-              columns={[
-                { field: "country_code", header: "Code" },
-                { field: "country_name", header: "Country" },
-              ]}
-              placeholder="Select origin country"
-              loadOptions={loadInboundCountryLookup}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  country_origin:      val,
-                  country_origin_name: row ? String(row["country_name"] ?? row["COUNTRY_NAME"] ?? "") : "",
-                  port_code:           "",
-                  port_name:           "",
-                }))
-              }
-            />
-
-            <LookupField
-              label="Destination Country"
-              value={String(form.country_destination || "")}
-              displayValue={[form.country_destination, form.country_destination_name].filter(Boolean).join(" - ")}
-              valueField="country_code"
-              displayFields={["country_code", "country_name"]}
-              columns={[
-                { field: "country_code", header: "Code" },
-                { field: "country_name", header: "Country" },
-              ]}
-              placeholder="Select destination country"
-              loadOptions={loadInboundCountryLookup}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  country_destination:      val,
-                  country_destination_name: row ? String(row["country_name"] ?? row["COUNTRY_NAME"] ?? "") : "",
-                  destination_port:         "",
-                  destination_port_name:    "",
-                }))
-              }
-            />
-
-            <LookupField
-              label="Port Of Loading"
-              value={String(form.port_code || "")}
-              displayValue={[form.port_code, form.port_name].filter(Boolean).join(" - ")}
-              valueField="port_code"
-              displayFields={["port_code", "port_name"]}
-              columns={[
-                { field: "port_code",    header: "Port Code" },
-                { field: "port_name",    header: "Port Name" },
-                { field: "country_code", header: "Country" },
-              ]}
-              placeholder="Select port of loading"
-              loadOptions={() => loadInboundPortLookup(String(form.country_origin || ""))}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  port_code: val,
-                  port_name: row ? String(row["port_name"] ?? row["PORT_NAME"] ?? "") : "",
-                }))
-              }
-            />
-
-            <LookupField
-              label="Port Of Destination"
-              value={String(form.destination_port || "")}
-              displayValue={[form.destination_port, form.destination_port_name].filter(Boolean).join(" - ")}
-              valueField="port_code"
-              displayFields={["port_code", "port_name"]}
-              columns={[
-                { field: "port_code",    header: "Port Code" },
-                { field: "port_name",    header: "Port Name" },
-                { field: "country_code", header: "Country" },
-              ]}
-              placeholder="Select port of destination"
-              loadOptions={() => loadInboundPortLookup(String(form.country_destination || ""))}
-              onChange={(val, row) =>
-                setForm((cur) => ({
-                  ...cur,
-                  destination_port:      val,
-                  destination_port_name: row ? String(row["port_name"] ?? row["PORT_NAME"] ?? "") : "",
-                }))
-              }
+              onChange={applyPrincipal}
+              required
+              enforceRequired
             />
           </div>
-        </section>
 
-        {/* ── Section 3: References ── */}
-        <section className="rounded-md border bg-card shadow-sm">
-          <div className="flex items-center gap-2.5 border-b px-3 py-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={16} />
-            </div>
-            <div>
-              <p className="eyebrow m-0">References</p>
-              <h3 className="m-0 text-sm font-semibold">Description And Remarks</h3>
-            </div>
-          </div>
+          <FormLookup
+            label="Department"
+            value={String(form.dept_code || "")}
+            displayValue={[form.dept_code, form.dept_name].filter(Boolean).join(" - ")}
+            valueField="dept_code"
+            displayFields={["dept_code", "dept_name"]}
+            columns={[
+              { field: "dept_code", header: "Code" },
+              { field: "dept_name", header: "Department Name" },
+              { field: "div_code",  header: "Division" },
+            ]}
+            loadOptions={() => loadInboundDepartmentLookup(companyCode, String(form.div_code || ""))}
+            onChange={applyDepartment}
+          />
 
-          <div className="grid gap-2 p-3 md:grid-cols-3 items-end">
-            <label className="grid gap-1">
-              <span className={labelCls}>Job Description</span>
-              <textarea
-                className="min-h-[72px] w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={String(form.description1 || "")}
-                onChange={(e) => set("description1", e.target.value)}
-                placeholder="Job description"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className={labelCls}>Job Remarks</span>
-              <textarea
-                className="min-h-[72px] w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={String(form.remarks || "")}
-                onChange={(e) => set("remarks", e.target.value)}
-                placeholder="Job remarks"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className={labelCls}>GRN Remarks</span>
-              <textarea
-                className="min-h-[72px] w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={String(form.grn_remarks || "")}
-                onChange={(e) => set("grn_remarks", e.target.value)}
-                placeholder="GRN remarks"
-              />
-            </label>
+          <FormLookup
+            label="Division"
+            value={String(form.div_code || "")}
+            displayValue={[form.div_code, form.div_name].filter(Boolean).join(" - ")}
+            valueField="div_code"
+            displayFields={["div_code", "div_name"]}
+            columns={[
+              { field: "div_code",  header: "Code" },
+              { field: "div_name",  header: "Division Name" },
+            ]}
+            loadOptions={() => loadInboundDivisionLookup(companyCode)}
+            onChange={applyDivision}
+          />
+
+          <FormSelect
+            label="Job Classification"
+            value={String(form.job_class || "")}
+            onChange={(v) => set("job_class", v)}
+            options={[
+              { value: "", label: "Select Job Classification" },
+              ...Object.entries(jobClassLabels).map(([code, label]) => ({
+                value: code,
+                label: `${code} - ${String(label)}`,
+              })),
+            ]}
+            required
+          />
+
+          <FormSelect
+            label="Job Type"
+            value={String(form.job_type || "IMP")}
+            onChange={(v) => set("job_type", v)}
+            options={[{ value: "IMP", label: "IMP - Inbound" }]}
+            required
+          />
+
+          <FormSelect
+            label="Transport Mode"
+            value={String(form.transport_mode || "S")}
+            onChange={(v) => set("transport_mode", v)}
+            options={[
+              { value: "S", label: "S - Sea" },
+              { value: "A", label: "A - Air" },
+              { value: "R", label: "R - Road\\Land" },
+              { value: "C", label: "C - Courier" },
+            ]}
+          />
+
+          <FormInput
+            label="Schedule Date"
+            type="date"
+            value={String(form.schedule_date || "")}
+            onChange={(v) => set("schedule_date", v)}
+          />
+        </div>
+      </SectionPanel>
+
+      {/* ── Section 2: Routing ── */}
+      <SectionPanel
+        icon={MapPin}
+        title="Routing"
+        meta={`${form.country_origin || "Origin"} -> ${form.country_destination || "Destination"}`}
+      >
+        {/* Standardized grid for routing fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
+          <FormLookup
+            label="Origin Country"
+            value={String(form.country_origin || "")}
+            displayValue={[form.country_origin, form.country_origin_name].filter(Boolean).join(" - ")}
+            valueField="country_code"
+            displayFields={["country_code", "country_name"]}
+            columns={[
+              { field: "country_code", header: "Code" },
+              { field: "country_name", header: "Country" },
+            ]}
+            loadOptions={() => loadInboundCountryLookup()}
+            onChange={applyOriginCountry}
+          />
+
+          <FormLookup
+            label="Destination Country"
+            value={String(form.country_destination || "")}
+            displayValue={[form.country_destination, form.country_destination_name].filter(Boolean).join(" - ")}
+            valueField="country_code"
+            displayFields={["country_code", "country_name"]}
+            columns={[
+              { field: "country_code", header: "Code" },
+              { field: "country_name", header: "Country" },
+            ]}
+            loadOptions={() => loadInboundCountryLookup()}
+            onChange={applyDestinationCountry}
+          />
+
+          <FormLookup
+            label="Port Of Loading"
+            value={String(form.port_code || "")}
+            displayValue={[form.port_code, form.port_name].filter(Boolean).join(" - ")}
+            valueField="port_code"
+            displayFields={["port_code", "port_name"]}
+            columns={[
+              { field: "port_code",    header: "Port Code" },
+              { field: "port_name",    header: "Port Name" },
+              { field: "country_code", header: "Country" },
+            ]}
+            loadOptions={() => loadInboundPortLookup(String(form.country_origin || ""))}
+            onChange={applyPortOfLoading}
+          />
+
+          <FormLookup
+            label="Port Of Destination"
+            value={String(form.destination_port || "")}
+            displayValue={[form.destination_port, form.destination_port_name].filter(Boolean).join(" - ")}
+            valueField="port_code"
+            displayFields={["port_code", "port_name"]}
+            columns={[
+              { field: "port_code",    header: "Port Code" },
+              { field: "port_name",    header: "Port Name" },
+              { field: "country_code", header: "Country" },
+            ]}
+            loadOptions={() => loadInboundPortLookup(String(form.country_destination || ""))}
+            onChange={applyPortOfDestination}
+          />
+        </div>
+      </SectionPanel>
+
+      {/* ── Section 3: References ── */}
+      <SectionPanel icon={FileText} title="References" meta="Description And Remarks">
+        <div className="grid gap-1.5 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <FormTextarea
+              label="Job Description"
+              value={String(form.description1 || "")}
+              onChange={(v) => set("description1", v)}
+              placeholder="Job description"
+            />
           </div>
-        </section>
-      </form>
+          <div className="lg:col-span-4">
+            <FormTextarea
+              label="Job Remarks"
+              value={String(form.remarks || "")}
+              onChange={(v) => set("remarks", v)}
+              placeholder="Job remarks"
+            />
+          </div>
+          <div className="lg:col-span-4">
+            <FormTextarea
+              label="GRN Remarks"
+              value={String(form.grn_remarks || "")}
+              onChange={(v) => set("grn_remarks", v)}
+              placeholder="GRN remarks"
+            />
+          </div>
+        </div>
+      </SectionPanel>
+    </form>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Shared UI primitives (mirrors FreightEnquiryMainPage)
+ * ───────────────────────────────────────────────────────────── */
+
+function SectionPanel({
+  title,
+  meta,
+  icon: Icon,
+  children,
+  className = "",
+}: {
+  title: string;
+  meta?: string;
+  icon: typeof PackageCheck;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <Icon size={15} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-sm font-semibold text-foreground">{title}</h3>
+          </div>
+        </div>
+        {meta && ( 
+          <span className="truncate text-[10.5px] font-medium text-muted-foreground">{meta}</span>
+        )}
+      </div>
+      <div className="freight-panel-body p-3">{children}</div>
     </section>
+  );
+}
+
+function FormInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  step,
+  required,
+  placeholder,
+  className = "",
+  disabled,
+  inputClassName = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  step?: string;
+  required?: boolean;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+  inputClassName?: string;
+}) {
+  return (
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
+      {label}
+      <Input
+        className={`h-7 text-[11px] ${type === "number" ? "text-right tabular-nums" : ""} ${inputClassName}`}
+        value={value}
+        type={type}
+        step={step}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+      />
+    </label>
+  );
+}
+
+function FormLookup({
+  label,
+  value,
+  displayValue,
+  valueField,
+  displayFields,
+  columns,
+  loadOptions,
+  onChange,
+  required,
+  disabled,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  displayValue?: string;
+  valueField: string;
+  displayFields: string[];
+  columns: Array<{ field: string; header: string }>;
+  loadOptions: () => Promise<LookupRow[]>;
+  onChange: (value: string, row: LookupRow | null) => void;
+  required?: boolean;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`grid gap-0.5 text-[11.5px] font-semibold text-slate-700 freight-field-label ${className}`}>
+      <span>
+        {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      <LookupField
+        compact
+        label={label}
+        value={value}
+        displayValue={displayValue}
+        columns={columns}
+        valueField={valueField}
+        displayFields={displayFields}
+        loadOptions={loadOptions}
+        onChange={onChange}
+        required={required}
+        disabled={disabled}
+        enforceRequired={required}
+        placeholder={`Select ${label}`}
+      />
+    </div>
+  );
+}
+
+function FormSelect({
+  label,
+  value,
+  onChange,
+  options,
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  required?: boolean;
+}) {
+  return (
+    <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label">
+      <span>
+        {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      <select
+        className={fieldClassName}
+        value={value}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLSelectElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLSelectElement).setCustomValidity("")}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function FormTextarea({
+  label,
+  value,
+  onChange,
+  className = "",
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  return (
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
+      {label}
+      <textarea
+        rows={5}
+        className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-[11px] text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 resize-y min-h-[120px]"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }

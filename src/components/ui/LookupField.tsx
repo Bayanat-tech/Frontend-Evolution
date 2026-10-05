@@ -22,6 +22,7 @@ type LookupFieldProps = {
   compact?: boolean;
   dense?: boolean;
   placeholder?: string;
+  placeholderClassName?: string;
   required?: boolean;
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
@@ -43,6 +44,7 @@ export function LookupField({
   dense = false,
   showLabelInCompact = false,
   placeholder,
+  placeholderClassName,
   required,
   enforceRequired,
   multiSelect,
@@ -253,14 +255,18 @@ export function LookupField({
             className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate ${
               disabled ? "cursor-not-allowed text-slate-700 font-medium" : "cursor-pointer"
             } ${
-              dense || compact ? "px-2 text-xs" : "px-2.5 text-xs"
-            } ${!disabled && currentText ? "text-slate-800 font-medium" : !disabled ? "text-slate-400" : ""}`}
+              dense || compact ? "px-2" : "px-2.5"
+            } ${!disabled && currentText ? "text-slate-800 font-medium text-[11px]" : !disabled ? "text-slate-400 text-[10px]" : "text-[11px]"}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
           >
-            <span className="block truncate">
-              {currentText || placeholder || `Select ${label || ""}`}
+            {/* Added 'italic font-normal' when showing placeholder */}
+            <span className={`block truncate ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
+{currentText ||
+  (placeholder
+    ? `${placeholder.replace(/\.*$/, "")}...`
+    : `${label || ""}...`)}
             </span>
           </button>
           {value && !disabled && (
@@ -297,7 +303,6 @@ export function LookupField({
             className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
             style={popoverStyle}
           >
-            {/* Search header */}
             <div className="flex-none p-2 border-b border-slate-200 bg-slate-50/80">
               <div className="relative flex items-center">
                 <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
@@ -322,7 +327,6 @@ export function LookupField({
 
             {error && <div className="m-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">{error}</div>}
 
-            {/* Table */}
             <div className="min-h-0 flex-1 overflow-auto">
               <table className="lookup-results-table w-full border-collapse text-left">
                 <thead className="sticky top-0 z-10 bg-[#00378C] text-white">
@@ -408,7 +412,6 @@ export function LookupField({
               </table>
             </div>
 
-            {/* Footer */}
             <div className="lookup-footer flex-none px-2.5 py-1.5 border-t border-slate-200 bg-slate-50/90 flex items-center justify-between text-xs text-slate-600">
               <span className="text-[11px] font-medium text-slate-500">
                 {filteredRows.length} item{filteredRows.length === 1 ? "" : "s"}

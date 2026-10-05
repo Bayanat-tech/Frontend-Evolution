@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { X, Shield, Activity, Upload, Plus, Loader2, FileText, Download, Trash2 } from "lucide-react";
+import { X, Shield, Activity, Upload, Plus, Loader2, FileText, Download, Trash2, Hash } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -65,46 +65,47 @@ export function AccountDetails({
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "approval",   label: "Approval",         icon: <Shield size={14} /> },
     { id: "activities", label: "Activities",        icon: <Activity size={14} /> },
-    { id: "documents",  label: "Documents Upload",  icon: <Upload size={14} /> },
+    { id: "documents",  label: "Documents",  icon: <Upload size={14} /> },
   ];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="account-details-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       {/* Dialog panel */}
-      <div className="relative flex w-full max-w-4xl flex-col rounded-xl border bg-card shadow-2xl"
-           style={{ maxHeight: "90vh" }}>
+      <div className="account-details-dialog relative flex w-full flex-col overflow-hidden border bg-card shadow-2xl">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
-          <div>
-            <p className="eyebrow">Account Details</p>
-            <h2 className="m-0 text-lg font-semibold tracking-tight leading-snug">
-              {acName}
-            </h2>
-            <code className="text-xs text-muted-foreground font-mono">{acCode}</code>
+        <div className="account-details-header flex items-center justify-between gap-4 border-b px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="account-details-icon"><Shield size={20} /></div>
+            <div className="min-w-0">
+              <p className="eyebrow">Level 5 Account</p>
+              <h2 className="m-0 truncate text-lg font-semibold tracking-tight leading-snug">{acName}</h2>
+              <div className="account-details-code"><Hash size={12} />{acCode}</div>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="mt-0.5 grid h-8 w-8 place-items-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="account-details-close grid h-8 w-8 place-items-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            aria-label="Close account details"
           >
             <X size={15} />
           </button>
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-0 border-b bg-muted/30 px-5">
+        <div className="account-details-tabs flex gap-1 border-b px-5">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setNotice(null); }}
               className={cn(
-                "flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
+                "account-details-tab flex items-center gap-1.5 border-0 px-3 text-sm font-medium transition-colors",
                 activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "active text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
               {tab.icon}
@@ -121,7 +122,7 @@ export function AccountDetails({
         )}
 
         {/* Tab content */}
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="account-details-content min-h-0 flex-1 overflow-auto">
           {activeTab === "approval" && (
             <ApprovalTab acCode={acCode} setNotice={setNotice} />
           )}
@@ -217,9 +218,9 @@ function ApprovalTab({
   }
 
   return (
-    <div className="p-5">
+    <div className="account-approval-tab p-4">
       {/* Read-only header block */}
-      <div className="mb-5 grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-4">
+      <div className="account-summary-grid">
         <ReadOnlyField label="Ac Code"     value={data?.AC_CODE   || ""} />
         <ReadOnlyField label="Ac Name"     value={data?.AC_NAME   || ""} wide />
         <ReadOnlyField label="Create User" value={data?.APPROVED_BY || ""} />
@@ -231,9 +232,9 @@ function ApprovalTab({
       </div>
 
       {/* Editable fields */}
-      <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+      <div className="account-approval-section grid grid-cols-3 gap-3 max-md:grid-cols-1">
         <label className="field">
-          <span>CR No</span>
+          <span>CR Number</span>
           <Input
             value={form.cr_no}
             onChange={(e) => setForm((f) => ({ ...f, cr_no: e.target.value }))}
@@ -242,7 +243,7 @@ function ApprovalTab({
         </label>
 
         <label className="field">
-          <span>Ac Approve</span>
+          <span>Approval</span>
           <Select
             value={form.ac_active}
             onChange={(e) => setForm((f) => ({ ...f, ac_active: e.target.value }))}
@@ -254,7 +255,7 @@ function ApprovalTab({
         </label>
 
         <label className="field">
-          <span>Ac Status</span>
+          <span>Account Status</span>
           <Select
             value={form.ac_status}
             onChange={(e) => setForm((f) => ({ ...f, ac_status: e.target.value }))}
@@ -277,7 +278,8 @@ function ApprovalTab({
       </div>
 
       {/* Footer */}
-      <div className="mt-6 flex justify-end border-t pt-4">
+      <div className="account-details-footer mt-4 flex items-center justify-between border-t pt-3">
+        <span className="text-xs text-muted-foreground">Changes apply to account {acCode}</span>
         <Button disabled={saving} onClick={handleSave}>
           {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save"}
         </Button>

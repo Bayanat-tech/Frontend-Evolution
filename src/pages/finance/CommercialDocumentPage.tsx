@@ -132,7 +132,8 @@ const META: Record<CommercialType, { title: string;  addLabel: string }> = {
   SV: { title: "Service Invoice", addLabel: "Add Service" },
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localYmd(new Date());
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 => {
   if (typeof value === "string") {
@@ -794,17 +795,17 @@ function CommercialEditor({
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
                   <Download size={15} />
                 </Button>
-                {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
               </>
             )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
+            {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
             <Button
               disabled={saving}
               aria-label="Close"
@@ -900,26 +901,48 @@ function CommercialEditor({
   {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input disabled={isCancelled} value={form.ref_no || ""}
+      <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
   {isSales && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
+      <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
 
   {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
-  {!isPO && (
+  {/* {!isPO && (
     <Field label="INV Date" required error={fieldErrors.inv_date}>
       <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
     </Field>
-  )}
+  )} */}
 
+  {/* {!isPO && (
+  <Field label="INV Date" required error={fieldErrors.inv_date}>
+    <BiscDatePicker required disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+  </Field>
+)} */}
+  {!isPO && (
+  <Field label="INV Date" required error={fieldErrors.inv_date}>
+    <div className="relative">
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+      <input
+        tabIndex={-1}
+        aria-hidden="true"
+        required
+        disabled={isCancelled}
+        value={dateInput(form.inv_date)}
+        onChange={() => {}}
+        ref={(el) => el?.setCustomValidity(form.inv_date ? "" : "INV Date is required")}
+        style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 1, opacity: 0, pointerEvents: "none" }}
+      />
+    </div>
+  </Field>
+)}
 
 
   {!isPO && (
@@ -944,8 +967,13 @@ function CommercialEditor({
           number1: form.div_code ? Number(form.div_code) : undefined,
         })
       }
+      // onChange={async (value, row) => {
+      //   if (!value || !row) return;
       onChange={async (value, row) => {
-        if (!value || !row) return;
+         if (!value || !row) {
+          setForm((c) => ({ ...c, ref_doc_no: "" }));
+         return;
+        }
         const r = row as Record<string, unknown>;
         const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
         const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
@@ -970,7 +998,8 @@ function CommercialEditor({
             } catch {}
           }
 
-          const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          // const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          const targetDocType: CommercialType = docType;
           const mapped = mapForm(targetDocType, header, rawDetail);
           setForm((c) => ({
             ...c,
@@ -982,6 +1011,7 @@ function CommercialEditor({
             ref_doc_no: docNo,
             detail: mapped.detail,
           }));
+
         } catch (err) {
           console.error("Failed to load ref doc", err);
           setError(err instanceof Error ? err.message : "Unable to load reference document");
@@ -1019,7 +1049,7 @@ function CommercialEditor({
       </Select>
     </Field>
   )}
-  {isPO && (
+  {/* {isPO && (
     <Field label="Order Type (LPO/CPO)">
       <Select value={form.cash_ind || "N"}
         onChange={(e) => update("cash_ind", e.target.value)}>
@@ -1027,7 +1057,7 @@ function CommercialEditor({
         <option value="Y">CPO - Cash Purchase</option>
       </Select>
     </Field>
-  )}
+  )} */}
           </div>
         </section>
 
@@ -1039,12 +1069,19 @@ function CommercialEditor({
             <span>{isSales ? "Customer Details" : "Supplier Details"}</span>
           </div>
           <div className="commercial-header-block-fields">
+          {/* <div className="commercial-party-primary"> */}
+          {/* <div className="commercial-header-block-fields party-fields"> */}
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
-  <div className="col-span-1">
+  {/* <div className="col-span-1"> */}
+  <div className="commercial-party-primary">
+  {/* <div style={{ gridColumn: "span 2" }}> */}
+  {/* <div style={{ gridColumn: "span 2 / span 2", minWidth: 0 }}> */}
+   {/* <div style={{ gridColumn: "span 2" }}>
+    <div className="party-main"> */}
     <LookupField
-      label={isSales ? "Customer" : "Supplier"} required
+      label={isSales ? "Customer" : "Supplier"} required enforceRequired
       value={form.ac_code}
       displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
       columns={[
@@ -1105,10 +1142,16 @@ function CommercialEditor({
   
 
   {/* Currency + Exchange Rate */}
-  <div className="col-span-1">
+  {/* <div className="col-span-1"> */}
+  {/* <div style={{ gridColumn: "span 1" }}> */}
+    {/* <div style={{ gridColumn: "span 1 / span 1", minWidth: 0 }}> */}
+  <div className="commercial-party-primary">
+  {/* <div className="col-span-1  grid grid-cols-2 "> */}
+  {/* <div style={{ gridColumn: "span 1" }}> */}
     <LookupField
       label="Currency"
       required
+      enforceRequired
       disabled={isCancelled}
       value={form.curr_code ?? ""}
       displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
@@ -1135,15 +1178,17 @@ function CommercialEditor({
     )}
   </div>
 
-  <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
-    <ExchangeRateInput
-      disabled={isCancelled}
-      required
-      value={form.ex_rate}
-      onChange={(rate) => update("ex_rate", rate)}
-      className={fieldErrors.ex_rate ? "border-destructive" : ""}
-    />
-  </Field>
+  {/* <div  style={{ gridColumn: "span 1" }}> */}
+    <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
+      <ExchangeRateInput
+        disabled={isCancelled}
+        required
+        value={form.ex_rate}
+        onChange={(rate) => update("ex_rate", rate)}
+        className={fieldErrors.ex_rate ? "border-destructive" : ""}
+      />
+    </Field>
+  {/* </div> */}
 
   <Field label="Address" className="col-span-2">
     <Input disabled={isCancelled} value={form.party_address || ""} onChange={(e) => update("party_address", e.target.value)} />
@@ -1425,7 +1470,7 @@ function CommercialEditor({
                       {isPO && <th className="px-2 py-2 text-left">Qty Rcv</th>}
                       <th className="px-2 py-2 text-left">Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
-                      {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>}
+                      {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
@@ -1467,6 +1512,7 @@ function CommercialEditor({
                           <LookupField
                             label="Line Account"
                             required
+                            enforceRequired
                             compact
                             placeholder="A/c code"
                             value={line.ac_code}
@@ -1491,6 +1537,7 @@ function CommercialEditor({
       value={line.prod_code || ""}
       onChange={(e) => updateLine(line.id, { prod_code: e.target.value })}
     />
+    
   </td>
 )}
                         <td className="w-[200px] max-w-[240px] px-1 py-1">
@@ -1516,7 +1563,7 @@ function CommercialEditor({
     const taxperc   = Number(line.tx_compnt_perc_1 || 0);
     updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
   }} /></td>
-                        {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>}
+                        {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-14 max-w-[60px] px-1 py-1">
                           <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
@@ -1686,6 +1733,12 @@ function CommercialEditor({
     </form>
   );
 }
+
+const reqProps = (label: string) => ({
+  required: true,
+  onInvalid: (e: React.FormEvent<HTMLInputElement>) => e.currentTarget.setCustomValidity(`${label} is required`),
+  onInput: (e: React.FormEvent<HTMLInputElement>) => e.currentTarget.setCustomValidity(""),
+});
 
 function Field({ label, children, error, required, className }: { label: string; children: React.ReactNode; error?: string; required?: boolean; className?: string }) {
   return (
@@ -2032,12 +2085,25 @@ function hasRecordData(record: Record<string, unknown> | null | undefined) {
   return Boolean(record && Object.keys(record).length > 0);
 }
 
+// function dateInput(value: unknown) {
+//   if (!value) return "";
+//   const date = new Date(String(value));
+//   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+//   return date.toISOString().slice(0, 10);
+// }
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const localYmd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 function dateInput(value: unknown) {
   if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const date = new Date(s);
+  if (Number.isNaN(date.getTime())) return s.slice(0, 10);
+  return localYmd(date);
 }
+// const today = () => localYmd(new Date());
 
 function formatAmount(value: number) {
   const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
