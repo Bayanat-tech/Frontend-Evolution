@@ -30,7 +30,7 @@ type Props = {
 
 type FieldError = { [key: string]: string };
 
-/* Section panel — EXACT Freight structure. CSS does the styling. */
+/* Section panel — EXACT structure. CSS does the styling. */
 function SectionPanel({
   title,
   icon: Icon,
