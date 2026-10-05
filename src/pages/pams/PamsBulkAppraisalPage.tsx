@@ -1,7 +1,7 @@
 import {
   CheckCircle2, ChevronDown, Edit2, Plus, Save, Trash2, Users, X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";   // ⭐ useRef added
 import {
   pamsCommonProcedure, pamsDelete, pamsSave, pamsSelect,
 } from "../../api/pams";
@@ -52,6 +52,9 @@ export function PamsBulkAppraisalPage() {
   const [kpiEditorOpen, setKpiEditorOpen] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+
+  // ⭐ In-flight guard — React StrictMode double-fire rokne ke liye
+  const loadInFlightRef = useRef(false);
 
   const itemTypes = [
     { value: "KPI", label: "Task" },
@@ -118,8 +121,14 @@ export function PamsBulkAppraisalPage() {
     return () => { cancelled = true; };
   }, [loginid, companyCode, selectedPeriod, toast]);
 
+  // ⭐ FIXED — in-flight guard lagaya
   const loadAssignments = async () => {
     if (!selectedEmployee || !selectedType || !selectedPeriod) return;
+
+    // ⭐ Agar pichla call chal raha hai to skip karo (StrictMode double-fire rok)
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
+
     setLoading(true);
     try {
       await pamsSelect({
@@ -147,6 +156,7 @@ export function PamsBulkAppraisalPage() {
       );
       setRows([]);
     } finally {
+      loadInFlightRef.current = false;
       setLoading(false);
     }
   };

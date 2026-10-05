@@ -1,6 +1,15 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, Save, Trash2, Upload, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  ChevronDown,
+  Edit2,
+  Eye,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { pamsDelete, pamsSave, pamsSelect } from "../../api/pams";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -10,10 +19,18 @@ import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 import ImportKpiEdi from "./Importkpiedi";
-import { DataTable } from "../../components/ui/DataTable";
 import { useToast } from "../../components/ui/AlertToast";
 
 type Row = Record<string, unknown>;
+
+// ⭐ Type codes: 00001 = KPI / Task, 00002 = Characteristic
+const KPI_ACTIVITY_TYPE_CODE = "00001";
+const KPI_CHARACTERISTIC_TYPE_CODE = "00002";
+
+// ⭐ Tabs
+type TabKey = "groups" | "activities" | "characteristic";
+
+type AddMode = "manual" | "import";
 
 type KpiForm = {
   KPI_CODE: string;
@@ -28,9 +45,24 @@ type KpiForm = {
 
 type Activity = { srno: number; desc: string };
 
+type DesignationGroup = {
+  key: string;
+  designationLabel: string;
+  rows: Row[];
+  totalWeightage: number;
+};
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value);
+}
+
+function number(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function normalizeRow(row: Row): Row {
@@ -56,18 +88,52 @@ function orgLabel(row: Row, codeKey: string, nameKey: string): string {
   return code || name || "-";
 }
 
-// 🔹 display helper — code + name (duplicate code prefix avoid karta hai)
 function displayLookup(list: Row[], codeKey: string, nameKey: string, code: string): string {
   if (!code) return "";
   const found = list.find((r) => text(r[codeKey]) === code);
   if (!found) return code;
   const name = text(found[nameKey]);
   if (!name) return code;
-  if (name.startsWith(code)) return name; // already contains "code - name"
+  if (name.startsWith(code)) return name;
   return `${code} - ${name}`;
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function splitActivities(value: unknown): string[] {
+  const raw = text(value);
+  if (!raw) return [];
+  return raw
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function findDuplicateActivityIndices(activities: Activity[]): number[] {
+  const seen = new Map<string, number>();
+  const dupIdx = new Set<number>();
+
+  activities.forEach((act, idx) => {
+    const key = act.desc.trim().toLowerCase();
+    if (!key) return;
+    if (seen.has(key)) {
+      dupIdx.add(seen.get(key)!);
+      dupIdx.add(idx);
+    } else {
+      seen.set(key, idx);
+    }
+  });
+
+  return Array.from(dupIdx).sort((a, b) => a - b);
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="field">
       <span>
@@ -79,6 +145,69 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Async fetchers
+// ─────────────────────────────────────────────────────────────
+async function fetchKpiTypes(loginid: string, companyCode: string): Promise<Row[]> {
+  try {
+    const data = await pamsSelect({ parameter: "kpi_type", loginid, code1: companyCode });
+    return data.map(normalizeRow);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchDivisions(loginid: string, companyCode: string): Promise<Row[]> {
+  try {
+    const data = await pamsSelect({ parameter: "employee_division", loginid, code1: companyCode });
+    return data.map(normalizeRow).filter((r) => text(r.DIV_CODE).toUpperCase() !== "ALL");
+  } catch {
+    return [];
+  }
+}
+
+async function fetchDepartments(
+  loginid: string,
+  companyCode: string,
+  divCode: string
+): Promise<Row[]> {
+  if (!divCode) return [];
+  try {
+    const data = await pamsSelect({
+      parameter: "employee_department",
+      loginid,
+      code1: companyCode,
+      code2: divCode,
+    });
+    return data.map(normalizeRow).filter((r) => text(r.DEPT_CODE).toUpperCase() !== "ALL");
+  } catch {
+    return [];
+  }
+}
+
+async function fetchDesignations(
+  loginid: string,
+  companyCode: string,
+  divCode: string,
+  deptCode: string
+): Promise<Row[]> {
+  if (!divCode || !deptCode) return [];
+  try {
+    const data = await pamsSelect({
+      parameter: "employee_designation",
+      loginid,
+      code1: companyCode,
+      code2: divCode,
+      code3: deptCode,
+      code4: "All",
+    });
+    return data.map(normalizeRow).filter((r) => text(r.DESG_CODE).toUpperCase() !== "ALL");
+  } catch {
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 export function KpiGroupPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -87,13 +216,31 @@ export function KpiGroupPage() {
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+
+  // ⭐ Tabs — default is "groups"
+  const [activeTab, setActiveTab] = useState<TabKey>("groups");
+  const isGroupsTab = activeTab === "groups";
+  const isActivitiesTab = activeTab === "activities";
+  const isCharacteristicTab = activeTab === "characteristic";
+
+  // Add dialog mode
+  const [addMode, setAddMode] = useState<AddMode>("manual");
+
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  // ══ Top filter: Division / Department ══
+  const [selectedDivision, setSelectedDivision] = useState("");
+  const [selectedDivisionLabel, setSelectedDivisionLabel] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [selectedDepartmentLabel, setSelectedDepartmentLabel] = useState("");
+
+  const [duplicateIndices, setDuplicateIndices] = useState<number[]>([]);
 
   const [form, setForm] = useState<KpiForm>({
     KPI_CODE: "",
@@ -106,17 +253,19 @@ export function KpiGroupPage() {
     STANDARD_WEIGHTAGE: 0,
   });
 
-  // ── Lookups ──────────────────────────────────────────────
   const [kpiTypeList, setKpiTypeList] = useState<Row[]>([]);
   const [divisionList, setDivisionList] = useState<Row[]>([]);
   const [departmentList, setDepartmentList] = useState<Row[]>([]);
   const [designationList, setDesignationList] = useState<Row[]>([]);
-
-  // ── Activities ───────────────────────────────────────────
   const [activities, setActivities] = useState<Activity[]>([]);
 
+  // ⭐ Type code depends on active tab
+  const tabTypeCode = isCharacteristicTab
+    ? KPI_CHARACTERISTIC_TYPE_CODE
+    : KPI_ACTIVITY_TYPE_CODE;
+
   // ═════════════════════════════════════════════════════════
-  // DATA LOADERS
+  // LOAD ROWS
   // ═════════════════════════════════════════════════════════
   const loadRows = async () => {
     setLoading(true);
@@ -132,59 +281,112 @@ export function KpiGroupPage() {
 
   useEffect(() => {
     void loadRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginid, companyCode]);
 
-  const loadStaticLookups = async () => {
-  try {
-    const [kpiTypes, divisions] = await Promise.all([
-      pamsSelect({ parameter: "kpi_type", loginid, code1: companyCode }),
-      pamsSelect({ parameter: "employee_division", loginid, code1: companyCode }),  
-    ]);
-    setKpiTypeList(kpiTypes.map(normalizeRow));
-    setDivisionList(                                                  
-      divisions.map(normalizeRow).filter((r) => text(r.DIV_CODE).toUpperCase() !== "ALL")
-    );
-  } catch {
-    setKpiTypeList([]);
-    setDivisionList([]);                                            
-  }
-};
+  useEffect(() => {
+    void (async () => {
+      const divs = await fetchDivisions(loginid, companyCode);
+      setDivisionList(divs);
+    })();
+  }, [loginid, companyCode]);
 
-  const loadDepartments = async (divCode: string) => {
-  if (!divCode) { setDepartmentList([]); return; }
-  try {
-    const data = await pamsSelect({
-      parameter: "employee_department",   
-      loginid,
-      code1: companyCode,
-      code2: divCode,
-    });
-    setDepartmentList(
-      data.map(normalizeRow).filter((r) => text(r.DEPT_CODE).toUpperCase() !== "ALL")
-    );
-  } catch {
-    setDepartmentList([]);
-  }
-};
+  useEffect(() => {
+    if (divisionList.length > 0 && !selectedDivision) {
+      const first = divisionList[0];
+      const code = text(first.DIV_CODE);
+      setSelectedDivision(code);
+      setSelectedDivisionLabel(`${code} - ${text(first.DIV_NAME)}`);
+    }
+  }, [divisionList, selectedDivision]);
 
-  const loadDesignations = async (divCode: string, deptCode: string) => {
-  if (!divCode || !deptCode) { setDesignationList([]); return; }
-  try {
-    const data = await pamsSelect({
-      parameter: "employee_designation",  
-      loginid,
-      code1: companyCode,
-      code2: divCode,
-      code3: deptCode,
-      code4: "All",                     
+  useEffect(() => {
+    if (!selectedDivision) {
+      setDepartmentList([]);
+      setSelectedDepartment("");
+      setSelectedDepartmentLabel("");
+      return;
+    }
+    void (async () => {
+      const depts = await fetchDepartments(loginid, companyCode, selectedDivision);
+      setDepartmentList(depts);
+      if (depts.length > 0) {
+        const first = depts[0];
+        const code = text(first.DEPT_CODE);
+        setSelectedDepartment(code);
+        setSelectedDepartmentLabel(`${code} - ${text(first.DEPT_NAME)}`);
+      } else {
+        setSelectedDepartment("");
+        setSelectedDepartmentLabel("");
+      }
+    })();
+  }, [selectedDivision, loginid, companyCode]);
+
+  // Filter: Division + Department + tab type code
+  const filteredRows = useMemo(() => {
+    if (!selectedDivision || !selectedDepartment) return [];
+    return rows.filter((r) => {
+      const div = text(r.DIVISION_CODE ?? r.DIV_CODE);
+      const dept = text(r.DEPARTMENT_CODE ?? r.DEPT_CODE);
+      const typeCode = text(r.KPI_TYPE_CODE);
+      return div === selectedDivision && dept === selectedDepartment && typeCode === tabTypeCode;
     });
-    setDesignationList(
-      data.map(normalizeRow).filter((r) => text(r.DESG_CODE).toUpperCase() !== "ALL")
+  }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
+
+  // Group by Designation
+  const designationGroups = useMemo<DesignationGroup[]>(() => {
+    const map = new Map<string, DesignationGroup>();
+    filteredRows.forEach((r) => {
+      const code = text(r.DESG_CODE);
+      const name = text(r.DESG_NAME);
+      if (!code && !name) return;
+      const key = `${code}__${name}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          designationLabel: orgLabel(r, "DESG_CODE", "DESG_NAME"),
+          rows: [],
+          totalWeightage: 0,
+        });
+      }
+      const g = map.get(key)!;
+      g.rows.push(r);
+      g.totalWeightage += number(r.STANDARD_WEIGHTAGE);
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      a.designationLabel.localeCompare(b.designationLabel)
     );
-  } catch {
-    setDesignationList([]);
-  }
-};
+  }, [filteredRows]);
+
+  const isExpanded = (key: string) => expandedGroups[key] !== false;
+  const toggleGroup = (key: string) => {
+    const current = expandedGroups[key] !== false;
+    setExpandedGroups((prev) => ({ ...prev, [key]: !current }));
+  };
+
+  const grandTotal = useMemo(
+    () => filteredRows.reduce((s, r) => s + number(r.STANDARD_WEIGHTAGE), 0),
+    [filteredRows]
+  );
+
+  // ═════════════════════════════════════════════════════════
+  // ACTIVITY HANDLERS
+  // ═════════════════════════════════════════════════════════
+  const addActivity = () => setActivities((p) => [...p, { srno: 0, desc: "" }]);
+
+  const updateActivity = (idx: number, desc: string) =>
+    setActivities((prev) => {
+      const next = prev.map((a, i) => (i === idx ? { ...a, desc } : a));
+      setDuplicateIndices(findDuplicateActivityIndices(next));
+      return next;
+    });
+
+  const removeActivity = (idx: number) =>
+    setActivities((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      setDuplicateIndices(findDuplicateActivityIndices(next));
+      return next;
+    });
 
   const loadActivities = async (kpiCode: string) => {
     if (!kpiCode) {
@@ -210,100 +412,143 @@ export function KpiGroupPage() {
   };
 
   // ═════════════════════════════════════════════════════════
-  // CASCADING HANDLERS — Division → Dept → Desg
+  // CASCADING HANDLERS
   // ═════════════════════════════════════════════════════════
   const onDivisionChange = async (divCode: string) => {
     setForm((prev) => ({ ...prev, DIVISION_CODE: divCode, DEPARTMENT_CODE: "", DESG_CODE: "" }));
     setDepartmentList([]);
     setDesignationList([]);
-    if (divCode) await loadDepartments(divCode);
+    if (divCode) {
+      const depts = await fetchDepartments(loginid, companyCode, divCode);
+      setDepartmentList(depts);
+    }
   };
 
   const onDepartmentChange = async (deptCode: string) => {
     setForm((prev) => ({ ...prev, DEPARTMENT_CODE: deptCode, DESG_CODE: "" }));
     setDesignationList([]);
     if (deptCode && form.DIVISION_CODE) {
-      await loadDesignations(form.DIVISION_CODE, deptCode);
+      const desgs = await fetchDesignations(loginid, companyCode, form.DIVISION_CODE, deptCode);
+      setDesignationList(desgs);
     }
   };
 
   // ═════════════════════════════════════════════════════════
-  // ACTIVITY HANDLERS
-  // ═════════════════════════════════════════════════════════
-  const addActivity = () => setActivities((p) => [...p, { srno: 0, desc: "" }]);
-  const updateActivity = (idx: number, desc: string) =>
-    setActivities((p) => p.map((a, i) => (i === idx ? { ...a, desc } : a)));
-  const removeActivity = (idx: number) => setActivities((p) => p.filter((_, i) => i !== idx));
-
-  // ═════════════════════════════════════════════════════════
-  // OPEN ADD / EDIT / VIEW
+  // OPEN ADD
   // ═════════════════════════════════════════════════════════
   const openAdd = async () => {
     setEditMode(false);
     setViewMode(false);
-    setDepartmentList([]);
-    setDesignationList([]);
+    setAddMode("manual");
+    setDuplicateIndices([]);
     setActivities([]);
+
+    const kpis = await fetchKpiTypes(loginid, companyCode);
+    setKpiTypeList(kpis);
+
+    let divCode = selectedDivision;
+    if (!divCode && divisionList.length > 0) divCode = text(divisionList[0].DIV_CODE);
+
+    const depts = divCode ? await fetchDepartments(loginid, companyCode, divCode) : [];
+    setDepartmentList(depts);
+
+    let deptCode = selectedDepartment;
+    if (!deptCode && depts.length > 0) deptCode = text(depts[0].DEPT_CODE);
+
+    const desgs =
+      divCode && deptCode
+        ? await fetchDesignations(loginid, companyCode, divCode, deptCode)
+        : [];
+    setDesignationList(desgs);
+
     setForm({
       KPI_CODE: "",
-      KPI_TYPE_CODE: "",
+      KPI_TYPE_CODE: tabTypeCode,
       KPI_DESC: "",
-      DIVISION_CODE: "",
-      DEPARTMENT_CODE: "",
+      DIVISION_CODE: divCode,
+      DEPARTMENT_CODE: deptCode,
       SECTION_CODE: "",
       DESG_CODE: "",
       STANDARD_WEIGHTAGE: 0,
     });
+
     setFormOpen(true);
-    await loadStaticLookups();
   };
 
   const openEdit = async (row: Row) => {
-    const divCode = text(row.DIVISION_CODE);
-    const deptCode = text(row.DEPARTMENT_CODE);
+    const divCode = text(row.DIVISION_CODE ?? row.DIV_CODE);
+    const deptCode = text(row.DEPARTMENT_CODE ?? row.DEPT_CODE);
 
     setEditMode(true);
     setViewMode(false);
+    setAddMode("manual");
+    setDuplicateIndices([]);
+
+    const kpis = await fetchKpiTypes(loginid, companyCode);
+    setKpiTypeList(kpis);
+
+    const depts = divCode ? await fetchDepartments(loginid, companyCode, divCode) : [];
+    setDepartmentList(depts);
+
+    const desgs =
+      divCode && deptCode
+        ? await fetchDesignations(loginid, companyCode, divCode, deptCode)
+        : [];
+    setDesignationList(desgs);
+
     setForm({
       KPI_CODE: text(row.KPI_CODE),
-      KPI_TYPE_CODE: text(row.KPI_TYPE_CODE),
+      KPI_TYPE_CODE: text(row.KPI_TYPE_CODE) || tabTypeCode,
       KPI_DESC: text(row.KPI_DESC),
       DIVISION_CODE: divCode,
       DEPARTMENT_CODE: deptCode,
       SECTION_CODE: text(row.SECTION_CODE),
       DESG_CODE: text(row.DESG_CODE),
-      STANDARD_WEIGHTAGE: Number(row.STANDARD_WEIGHTAGE ?? 0),
+      STANDARD_WEIGHTAGE: number(row.STANDARD_WEIGHTAGE),
     });
 
     setFormOpen(true);
-    await loadStaticLookups();
-    await loadDepartments(divCode);
-    await loadDesignations(divCode, deptCode);
-    await loadActivities(text(row.KPI_CODE));
+    if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
+      await loadActivities(text(row.KPI_CODE));
+    }
   };
 
   const openView = async (row: Row) => {
-    const divCode = text(row.DIVISION_CODE);
-    const deptCode = text(row.DEPARTMENT_CODE);
+    const divCode = text(row.DIVISION_CODE ?? row.DIV_CODE);
+    const deptCode = text(row.DEPARTMENT_CODE ?? row.DEPT_CODE);
 
     setEditMode(false);
     setViewMode(true);
+    setAddMode("manual");
+    setDuplicateIndices([]);
+
+    const kpis = await fetchKpiTypes(loginid, companyCode);
+    setKpiTypeList(kpis);
+
+    const depts = divCode ? await fetchDepartments(loginid, companyCode, divCode) : [];
+    setDepartmentList(depts);
+
+    const desgs =
+      divCode && deptCode
+        ? await fetchDesignations(loginid, companyCode, divCode, deptCode)
+        : [];
+    setDesignationList(desgs);
+
     setForm({
       KPI_CODE: text(row.KPI_CODE),
-      KPI_TYPE_CODE: text(row.KPI_TYPE_CODE),
+      KPI_TYPE_CODE: text(row.KPI_TYPE_CODE) || tabTypeCode,
       KPI_DESC: text(row.KPI_DESC),
       DIVISION_CODE: divCode,
       DEPARTMENT_CODE: deptCode,
       SECTION_CODE: text(row.SECTION_CODE),
       DESG_CODE: text(row.DESG_CODE),
-      STANDARD_WEIGHTAGE: Number(row.STANDARD_WEIGHTAGE ?? 0),
+      STANDARD_WEIGHTAGE: number(row.STANDARD_WEIGHTAGE),
     });
 
     setFormOpen(true);
-    await loadStaticLookups();
-    await loadDepartments(divCode);
-    await loadDesignations(divCode, deptCode);
-    await loadActivities(text(row.KPI_CODE));
+    if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
+      await loadActivities(text(row.KPI_CODE));
+    }
   };
 
   const updateField = (name: keyof KpiForm, value: string | number) => {
@@ -316,42 +561,41 @@ export function KpiGroupPage() {
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
 
-    // 🔹 New validations (no employee)
-    if (!form.KPI_TYPE_CODE.trim()) {
-      toast.warning("KPI Type Code is required");
-      return;
-    }
-    if (!form.DIVISION_CODE.trim()) {
-      toast.warning("Division is required");
-      return;
-    }
-    if (!form.DEPARTMENT_CODE.trim()) {
-      toast.warning("Department is required");
-      return;
-    }
-    if (!form.DESG_CODE.trim()) {
-      toast.warning("Designation is required");
-      return;
-    }
-    if (!form.KPI_DESC.trim()) {
-      toast.warning("KPI Description is required");
-      return;
+    if (!form.KPI_TYPE_CODE.trim()) { toast.warning("KPI Type Code is required"); return; }
+    if (!form.DIVISION_CODE.trim()) { toast.warning("Division is required"); return; }
+    if (!form.DEPARTMENT_CODE.trim()) { toast.warning("Department is required"); return; }
+    if (!form.DESG_CODE.trim()) { toast.warning("Designation is required"); return; }
+    if (!form.KPI_DESC.trim()) { toast.warning("KPI Description is required"); return; }
+
+    // Activities required only for KPI Activity type
+    if (form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
+      const validActivities = activities.filter((a) => a.desc.trim());
+      if (validActivities.length < 3) {
+        toast.warning(`Minimum 3 KPI Items (Activities) required. Currently: ${validActivities.length}`);
+        return;
+      }
+      if (validActivities.length > 6) {
+        toast.warning(`Maximum 6 KPI Items (Activities) allowed. Currently: ${validActivities.length}`);
+        return;
+      }
+
+      const dupIndices = findDuplicateActivityIndices(activities);
+      if (dupIndices.length > 0) {
+        setDuplicateIndices(dupIndices);
+        const dupNames = Array.from(
+          new Set(dupIndices.map((i) => activities[i]?.desc.trim()).filter(Boolean))
+        );
+        toast.warning(
+          `Duplicate activities not allowed. Please remove duplicate(s): ${dupNames.join(", ")}`
+        );
+        return;
+      }
     }
 
-    const validActivities = activities.filter((a) => a.desc.trim());
-    if (validActivities.length < 3) {
-      toast.warning(`Minimum 3 KPI Items (Activities) required. Currently: ${validActivities.length}`);
-      return;
-    }
-    if (validActivities.length > 6) {
-      toast.warning(`Maximum 6 KPI Items (Activities) allowed. Currently: ${validActivities.length}`);
-      return;
-    }
-
+    setDuplicateIndices([]);
     setSaving(true);
 
     try {
-      // 1. KPI master save
       await pamsSave({
         parameter: "kpi_ins_upd",
         loginid,
@@ -366,7 +610,6 @@ export function KpiGroupPage() {
         val1n1: form.STANDARD_WEIGHTAGE,
       });
 
-      // 2. KPI_CODE resolve
       let kpiCode = form.KPI_CODE;
       if (!kpiCode) {
         const refreshed = await pamsSelect({ parameter: "kpi", loginid, code1: companyCode });
@@ -384,8 +627,7 @@ export function KpiGroupPage() {
         kpiCode = matches.length > 0 ? text(matches[0].KPI_CODE) : "";
       }
 
-      // 3. Activities save
-      if (kpiCode) {
+      if (kpiCode && form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
         if (editMode) {
           await pamsSave({
             parameter: "kpi_item_delete_all",
@@ -410,10 +652,10 @@ export function KpiGroupPage() {
       }
 
       setFormOpen(false);
-      toast.success(editMode ? "KPI updated successfully" : "KPI added successfully");
+      toast.success(editMode ? "Record updated successfully" : "Record added successfully");
       await loadRows();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save KPI");
+      toast.error(error instanceof Error ? error.message : "Unable to save");
     } finally {
       setSaving(false);
     }
@@ -434,120 +676,392 @@ export function KpiGroupPage() {
         code3: companyCode,
       });
       setDeleteTarget(null);
-      toast.success("KPI deleted successfully");
+      toast.success("Record deleted successfully");
       await loadRows();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to delete KPI");
+      toast.error(error instanceof Error ? error.message : "Unable to delete");
     } finally {
       setSaving(false);
     }
   };
-
-  // ═════════════════════════════════════════════════════════
-  // COLUMNS
-  // ═════════════════════════════════════════════════════════
-  const columns = useMemo<ColumnDef<Row>[]>(
-    () => [
-      { accessorKey: "KPI_TYPE_CODE", header: "KPI Type Code", size: 140, enableColumnFilter: true, filterFn: "includesString" },
-      { accessorKey: "KPI_CODE", header: "KPI Code", size: 120, enableColumnFilter: true, filterFn: "includesString" },
-      { accessorKey: "KPI_DESC", header: "KPI Desc", size: 260, enableColumnFilter: true, filterFn: "includesString" },
-      {
-        id: "kpiItems",
-        header: "KPI Items (Activities)",
-        size: 500,
-        enableColumnFilter: true,
-        filterFn: (row, _c, filterValue) => {
-          const items = text(row.original.KPI_ITEMS ?? row.original.kpi_items).toLowerCase();
-          return items.includes(String(filterValue ?? "").toLowerCase());
-        },
-        cell: ({ row }) => {
-          const items = text(row.original.KPI_ITEMS ?? row.original.kpi_items);
-          if (!items) return <span className="text-xs text-muted-foreground">—</span>;
-          return (
-            <div className="grid gap-1 py-1 text-xs leading-relaxed">
-              {items.split(" | ").map((it, i) => (
-                <div key={i} className="whitespace-normal break-words" title={it}>• {it}</div>
-              ))}
-            </div>
-          );
-        },
-      },
-      { id: "division", accessorFn: (r) => orgLabel(r, "DIVISION_CODE", "DIVISION_NAME"), header: "Division", size: 230, enableColumnFilter: true, filterFn: "includesString" },
-      { id: "department", accessorFn: (r) => orgLabel(r, "DEPARTMENT_CODE", "DEPARTMENT_NAME"), header: "Department", size: 180, enableColumnFilter: true, filterFn: "includesString" },
-      { id: "designation", accessorFn: (r) => orgLabel(r, "DESG_CODE", "DESG_NAME"), header: "Designation", size: 200, enableColumnFilter: true, filterFn: "includesString" },
-      { accessorKey: "STANDARD_WEIGHTAGE", header: "Weightage", size: 110, enableColumnFilter: true, filterFn: "includesString" },
-      {
-        id: "actions",
-        header: "Actions",
-        size: 110,
-        enableColumnFilter: false,
-        meta: { sticky: "right" },
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" title="View" onClick={() => void openView(row.original)}><Eye size={14} /></Button>
-            <Button size="icon" variant="ghost" title="Edit" onClick={() => void openEdit(row.original)}><Edit2 size={14} /></Button>
-            <Button size="icon" variant="ghost" title="Delete" onClick={() => setDeleteTarget(row.original)}><Trash2 size={14} /></Button>
-          </div>
-        ),
-      },
-    ],
-    []
-  );
 
   const kpiTypeOptions = kpiTypeList.map(normalizeRow);
   const divisionOptions = divisionList.map(normalizeRow);
   const deptOptions = departmentList.map(normalizeRow);
   const desgOptions = designationList.map(normalizeRow);
 
+  const addButtonLabel = isCharacteristicTab ? "Add Characteristic" : "Add KPI";
+  const tableTitle = isGroupsTab
+    ? "KPI Groups"
+    : isActivitiesTab
+      ? "KPI Activity"
+      : "Characteristic";
+
   // ═════════════════════════════════════════════════════════
   // RENDER
   // ═════════════════════════════════════════════════════════
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="flex h-full min-h-0 flex-col gap-4">
+      {/* ═══════ Page header ═══════ */}
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Groups</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Maintain KPI groups, activities, weightage, and organization scope.
+            Select division, department, and manage items group-wise by designation.
           </p>
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        searchValue={query}
-        onSearchChange={setQuery}
-        searchPlaceholder="Search KPI groups..."
-        loading={loading}
-        height={620}
-        minWidth={1850}
-        density="grid"
-        enablePagination
-        pageSize={100}
-        getRowId={(row, index) => `${text(row.KPI_CODE)}_${text(row.KPI_TYPE_CODE)}_${index}`}
-        enableExport={false}
-        toolbar={
-          <>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload size={15} /> Import from Excel
-            </Button>
-            <Button onClick={openAdd}>
-              <Plus size={15} /> Add KPI
-            </Button>
-          </>
-        }
-      />
+      {/* ═══════ Filter card: Division | Department | Tabs ═══════ */}
+      <Card className="shrink-0">
+        <CardContent className="mt-2 grid gap-3 pt-4 md:grid-cols-3">
+          <Field label="Division" required>
+            <LookupField
+              compact
+              label="Division"
+              value={selectedDivision}
+              displayValue={selectedDivisionLabel}
+              placeholder="Select Division"
+              columns={[
+                { field: "DIV_CODE", header: "Code" },
+                { field: "DIV_NAME", header: "Name" },
+              ]}
+              valueField="DIV_CODE"
+              displayFields={["DIV_CODE", "DIV_NAME"]}
+              loadOptions={async () => divisionOptions as LookupRow[]}
+              onChange={(val, row) => {
+                setSelectedDivision(val);
+                setSelectedDivisionLabel(row ? `${val} - ${text(row.DIV_NAME)}` : val);
+              }}
+            />
+          </Field>
 
-      {/* ════════ IMPORT DIALOG (unchanged) ════════ */}
-      <Dialog open={importOpen} wide title="Import KPI from Excel"
-        description="Upload an Excel file to bulk import KPI records into MS_EAM_KPI."
-        onClose={() => setImportOpen(false)}>
+          <Field label="Department" required>
+            <LookupField
+              compact
+              label="Department"
+              value={selectedDepartment}
+              displayValue={selectedDepartmentLabel}
+              placeholder={!selectedDivision ? "Select Division first" : "Select Department"}
+              disabled={!selectedDivision}
+              columns={[
+                { field: "DEPT_CODE", header: "Code" },
+                { field: "DEPT_NAME", header: "Name" },
+              ]}
+              valueField="DEPT_CODE"
+              displayFields={["DEPT_CODE", "DEPT_NAME"]}
+              loadOptions={async () => deptOptions as LookupRow[]}
+              onChange={(val, row) => {
+                setSelectedDepartment(val);
+                setSelectedDepartmentLabel(row ? `${val} - ${text(row.DEPT_NAME)}` : val);
+              }}
+            />
+          </Field>
+
+          {/* ⭐ Tabs: KPI Groups (default) | KPI Activities | Characteristic */}
+          <Field label="View" required>
+            <div className="flex flex-wrap gap-1 rounded-md border bg-muted/40 p-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab("groups")}
+                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === "groups"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                KPI Groups
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("activities")}
+                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === "activities"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                KPI Activities
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("characteristic")}
+                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === "characteristic"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Characteristic
+              </button>
+            </div>
+          </Field>
+        </CardContent>
+      </Card>
+
+      {/* ═══════ Table card ═══════ */}
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardHeader className="shrink-0 border-b border-slate-200/70 px-4 py-2.5 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-col">
+              <h2 className="m-0 text-sm font-semibold text-foreground">{tableTitle}</h2>
+              <p className="m-0 truncate text-[11px] text-muted-foreground">
+                {selectedDivision && selectedDepartment
+                  ? `${selectedDivisionLabel} · ${selectedDepartmentLabel}`
+                  : "Select division and department to load items"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload size={15} /> Import from Excel
+              </Button>
+              <Button onClick={openAdd}>
+                <Plus size={15} /> {addButtonLabel}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="min-h-0 flex-1 p-0">
+          <div className="h-full overflow-auto">
+            {/*
+              ⭐ Both tabs now use the SAME grouped view.
+              KPI Groups tab shows: Designation · KPI Description · Weightage · Actions
+              KPI Activities tab shows the same + a "KPI Activities" column.
+            */}
+            <table className="w-full min-w-[900px] border-collapse text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
+                <tr className="border-b border-slate-200 dark:border-slate-800">
+                  <th className="w-14 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    S.No
+                  </th>
+                  <th className="w-12 px-2 py-2.5" />
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    {isActivitiesTab
+                      ? "KPI Description"
+                      : isCharacteristicTab
+                        ? "Characteristic"
+                        : "Designation · KPI Description"}
+                  </th>
+                  {isActivitiesTab && (
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      KPI Activities
+                    </th>
+                  )}
+                  <th className="w-32 px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Weightage %
+                  </th>
+                  <th className="w-28 px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={isActivitiesTab ? 6 : 5}
+                      className="px-3 py-14 text-center text-muted-foreground"
+                    >
+                      Loading...
+                    </td>
+                  </tr>
+                ) : !selectedDivision || !selectedDepartment ? (
+                  <tr>
+                    <td
+                      colSpan={isActivitiesTab ? 6 : 5}
+                      className="px-3 py-14 text-center text-muted-foreground"
+                    >
+                      Select division and department to load rows.
+                    </td>
+                  </tr>
+                ) : designationGroups.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={isActivitiesTab ? 6 : 5}
+                      className="px-3 py-14 text-center text-muted-foreground"
+                    >
+                      No records found.
+                    </td>
+                  </tr>
+                ) : (
+                  designationGroups.map((group, gIdx) => {
+                    const expanded = isExpanded(group.key);
+                    return (
+                      <Fragment key={group.key}>
+                        {/* Designation header row */}
+                        <tr className="border-b border-slate-100 bg-slate-50/60 align-top dark:border-slate-800/70 dark:bg-slate-900/40">
+                          <td className="px-3 py-3 text-center text-xs font-medium text-muted-foreground">
+                            {gIdx + 1}
+                          </td>
+                          <td className="px-2 py-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(group.key)}
+                              className={`grid h-6 w-6 place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-background ${
+                                expanded ? "border-border bg-background text-primary" : ""
+                              }`}
+                              title={expanded ? "Collapse" : "Expand"}
+                            >
+                              <ChevronDown
+                                size={13}
+                                className={
+                                  expanded ? "rotate-180 transition-transform" : "transition-transform"
+                                }
+                              />
+                            </button>
+                          </td>
+                          <td
+                            className="cursor-pointer select-none px-3 py-3"
+                            colSpan={isActivitiesTab ? 2 : 1}
+                            onClick={() => toggleGroup(group.key)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-[13px] font-semibold text-foreground">
+                                {group.designationLabel}
+                              </span>
+                              <span className="rounded-full bg-slate-100 px-1.5 py-[1px] text-[9px] font-semibold text-slate-500 dark:bg-slate-800">
+                                {group.rows.length}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                              {group.totalWeightage}
+                            </span>
+                          </td>
+                          <td />
+                        </tr>
+
+                        {/* Child rows */}
+                        {expanded &&
+                          group.rows.map((row, rIdx) => {
+                            const items = splitActivities(row.KPI_ITEMS ?? row.kpi_items);
+                            return (
+                              <tr
+                                key={`${group.key}__${rIdx}`}
+                                className="group border-b border-slate-100 align-top transition-colors hover:bg-primary/[0.04] dark:border-slate-800/70"
+                              >
+                                <td />
+                                <td />
+                                <td className="px-3 py-2.5">
+                                  <div className="flex items-start gap-2 pl-6">
+                                    <span className="mt-[2px] grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">
+                                      {rIdx + 1}
+                                    </span>
+                                    <span className="text-[13px] text-foreground">
+                                      {text(row.KPI_DESC) || "—"}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {isActivitiesTab && (
+                                  <td className="px-3 py-2.5">
+                                    {items.length > 0 ? (
+                                      <div className="grid gap-0.5">
+                                        {items.map((it, i) => (
+                                          <div
+                                            key={i}
+                                            className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                                          >
+                                            <span className="mt-[1px] grid h-4 w-4 shrink-0 place-items-center rounded-full bg-slate-100 text-[9px] font-semibold text-slate-500 dark:bg-slate-800">
+                                              {i + 1}
+                                            </span>
+                                            <span className="whitespace-normal break-words leading-snug">
+                                              {it}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </td>
+                                )}
+
+                                <td className="px-3 py-2.5 text-right">
+                                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                                    {formatValue(row.STANDARD_WEIGHTAGE) || "—"}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <div className="flex justify-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                                    <button
+                                      type="button"
+                                      title="View"
+                                      onClick={() => void openView(row)}
+                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-500 transition-colors hover:border-border hover:bg-background hover:text-primary"
+                                    >
+                                      <Eye size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Edit"
+                                      onClick={() => void openEdit(row)}
+                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-500 transition-colors hover:border-border hover:bg-background hover:text-primary"
+                                    >
+                                      <Edit2 size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Delete"
+                                      onClick={() => setDeleteTarget(row)}
+                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+
+              {!loading && designationGroups.length > 0 && (
+                <tfoot className="sticky bottom-0 bg-slate-50 dark:bg-slate-900">
+                  <tr className="border-t border-slate-200 dark:border-slate-800">
+                    <td
+                      colSpan={isActivitiesTab ? 4 : 3}
+                      className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+                    >
+                      Total Weightage
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <span className="inline-flex items-center rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">
+                        {grandTotal}
+                      </span>
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ════════ IMPORT DIALOG (from header button) ════════ */}
+      <Dialog
+        open={importOpen}
+        wide
+        title="Import from Excel"
+        description="Upload an Excel file with columns DESG_CODE, DESG_NAME, KPI_GROUP, WEIGHTAGE, KPI_ACTIVITY."
+        onClose={() => setImportOpen(false)}
+      >
         <ImportKpiEdi
+          divisionCode={selectedDivision}
+          divisionName={selectedDivisionLabel}
+          departmentCode={selectedDepartment}
+          departmentName={selectedDepartmentLabel}
           onClose={() => setImportOpen(false)}
           onSuccess={async () => {
             setImportOpen(false);
-            toast.success("KPI records imported successfully.");
+            toast.success("Records imported successfully.");
             await loadRows();
           }}
         />
@@ -557,215 +1071,334 @@ export function KpiGroupPage() {
       <Dialog
         open={formOpen}
         wide
-        title={viewMode ? "View KPI" : editMode ? "Edit KPI" : "Add KPI"}
-        description="Maintain KPI group setup."
+        title={viewMode ? "View" : editMode ? "Edit" : addButtonLabel}
+        description={
+          editMode || viewMode
+            ? "Maintain item setup."
+            : "Add manually or import from Excel."
+        }
         onClose={() => setFormOpen(false)}
       >
-        <form className="grid gap-4" onSubmit={saveRecord}>
-          {/* ============ KPI INFORMATION ============ */}
-          <Card>
-            <CardHeader className="border-b bg-muted/30">
-              <div>
-                <p className="eyebrow">Details</p>
-                <h2 className="m-0 text-sm font-semibold">KPI Information</h2>
-              </div>
-            </CardHeader>
+        {/* Mode toggle — only for Add */}
+        {!editMode && !viewMode && (
+          <div className="mb-4 flex gap-1 rounded-md border bg-muted/40 p-0.5">
+            <button
+              type="button"
+              onClick={() => setAddMode("manual")}
+              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                addMode === "manual"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Manual Entry
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddMode("import")}
+              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                addMode === "import"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Import from Excel
+            </button>
+          </div>
+        )}
 
-            <CardContent className="grid gap-4 pt-4">
-              {/* Row 1: KPI Type + Division */}
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Field label="KPI Type Code" required>
-                  <LookupField
-                    compact
-                    disabled={viewMode || editMode}
-                    label="KPI Type Code"
-                    value={form.KPI_TYPE_CODE}
-                    displayValue={displayLookup(kpiTypeOptions, "KPI_TYPE_CODE", "KPI_TYPE_DESC", form.KPI_TYPE_CODE)}
-                    placeholder="Select KPI Type"
-                    columns={[
-                      { field: "KPI_TYPE_CODE", header: "Code" },
-                      { field: "KPI_TYPE_DESC", header: "Description" },
-                    ]}
-                    valueField="KPI_TYPE_CODE"
-                    displayFields={["KPI_TYPE_CODE", "KPI_TYPE_DESC"]}
-                    loadOptions={async () => kpiTypeOptions as LookupRow[]}
-                    onChange={(val) => updateField("KPI_TYPE_CODE", val)}
-                  />
-                </Field>
+        {/* Import mode */}
+        {addMode === "import" && !editMode && !viewMode ? (
+          <ImportKpiEdi
+            divisionCode={selectedDivision}
+            divisionName={selectedDivisionLabel}
+            departmentCode={selectedDepartment}
+            departmentName={selectedDepartmentLabel}
+            onClose={() => setFormOpen(false)}
+            onSuccess={async () => {
+              setFormOpen(false);
+              toast.success("Records imported successfully.");
+              await loadRows();
+            }}
+          />
+        ) : (
+          <form className="grid gap-4" onSubmit={saveRecord}>
+            <Card>
+              <CardHeader className="border-b bg-muted/30">
+                <div>
+                  <p className="eyebrow">Details</p>
+                  <h2 className="m-0 text-sm font-semibold">
+                    {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
+                      ? "KPI Information"
+                      : "Characteristic Information"}
+                  </h2>
+                </div>
+              </CardHeader>
 
-                <Field label="Division" required>
-                  <LookupField
-                    compact
-                    disabled={viewMode || editMode}
-                    label="Division"
-                    value={form.DIVISION_CODE}
-                    displayValue={displayLookup(divisionOptions, "DIV_CODE", "DIV_NAME", form.DIVISION_CODE)}
-                    placeholder="Select Division"
-                    columns={[
-                      { field: "DIV_CODE", header: "Code" },
-                      { field: "DIV_NAME", header: "Name" },
-                    ]}
-                    valueField="DIV_CODE"
-                    displayFields={["DIV_CODE", "DIV_NAME"]}
-                    loadOptions={async () => divisionOptions as LookupRow[]}
-                    onChange={(val) => void onDivisionChange(val)}
-                  />
-                </Field>
-              </div>
+              <CardContent className="grid gap-4 pt-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <Field label="Division" required>
+                    <LookupField
+                      compact
+                      disabled={viewMode || editMode}
+                      label="Division"
+                      value={form.DIVISION_CODE}
+                      displayValue={displayLookup(
+                        divisionOptions,
+                        "DIV_CODE",
+                        "DIV_NAME",
+                        form.DIVISION_CODE
+                      )}
+                      placeholder="Select Division"
+                      columns={[
+                        { field: "DIV_CODE", header: "Code" },
+                        { field: "DIV_NAME", header: "Name" },
+                      ]}
+                      valueField="DIV_CODE"
+                      displayFields={["DIV_CODE", "DIV_NAME"]}
+                      loadOptions={async () => divisionOptions as LookupRow[]}
+                      onChange={(val) => void onDivisionChange(val)}
+                    />
+                  </Field>
 
-              {/* Row 2: Department + Designation */}
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Field label="Department" required>
-                  <LookupField
-                    compact
-                    disabled={viewMode || editMode || !form.DIVISION_CODE}
-                    label="Department"
-                    value={form.DEPARTMENT_CODE}
-                    displayValue={displayLookup(deptOptions, "DEPT_CODE", "DEPT_NAME", form.DEPARTMENT_CODE)}
-                    placeholder={!form.DIVISION_CODE ? "Select Division first" : "Select Department"}
-                    columns={[
-                      { field: "DEPT_CODE", header: "Code" },
-                      { field: "DEPT_NAME", header: "Name" },
-                    ]}
-                    valueField="DEPT_CODE"
-                    displayFields={["DEPT_CODE", "DEPT_NAME"]}
-                    loadOptions={async () => deptOptions as LookupRow[]}
-                    onChange={(val) => void onDepartmentChange(val)}
-                  />
-                </Field>
-
-                <Field label="Designation" required>
-                  <LookupField
-                    compact
-                    disabled={viewMode || editMode || !form.DEPARTMENT_CODE}
-                    label="Designation"
-                    value={form.DESG_CODE}
-                    displayValue={displayLookup(desgOptions, "DESG_CODE", "DESG_NAME", form.DESG_CODE)}
-                    placeholder={
-                      !form.DIVISION_CODE
-                        ? "Select Division first"
-                        : !form.DEPARTMENT_CODE
-                          ? "Select Department first"
-                          : "Select Designation"
-                    }
-                    columns={[
-                      { field: "DESG_CODE", header: "Code" },
-                      { field: "DESG_NAME", header: "Name" },
-                    ]}
-                    valueField="DESG_CODE"
-                    displayFields={["DESG_CODE", "DESG_NAME"]}
-                    loadOptions={async () => desgOptions as LookupRow[]}
-                    onChange={(val) => updateField("DESG_CODE", val)}
-                  />
-                </Field>
-              </div>
-
-              {/* Row 3: Weightage + KPI Description */}
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <Field label="Standard Weightage">
-                  <Input
-                    disabled={viewMode}
-                    type="number"
-                    value={form.STANDARD_WEIGHTAGE}
-                    onChange={(e) => updateField("STANDARD_WEIGHTAGE", Number(e.target.value || 0))}
-                    min={0}
-                    max={100}
-                    placeholder="Enter weightage"
-                  />
-                </Field>
-
-                <div className="lg:col-span-2">
-                  <Field label="KPI Description (KPI Group)" required>
-                    <textarea
-                      disabled={viewMode}
-                      className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-                      value={form.KPI_DESC}
-                      onChange={(e) => updateField("KPI_DESC", e.target.value)}
-                      placeholder="Enter KPI description"
+                  <Field label="Department" required>
+                    <LookupField
+                      compact
+                      disabled={viewMode || editMode || !form.DIVISION_CODE}
+                      label="Department"
+                      value={form.DEPARTMENT_CODE}
+                      displayValue={displayLookup(
+                        deptOptions,
+                        "DEPT_CODE",
+                        "DEPT_NAME",
+                        form.DEPARTMENT_CODE
+                      )}
+                      placeholder={
+                        !form.DIVISION_CODE ? "Select Division first" : "Select Department"
+                      }
+                      columns={[
+                        { field: "DEPT_CODE", header: "Code" },
+                        { field: "DEPT_NAME", header: "Name" },
+                      ]}
+                      valueField="DEPT_CODE"
+                      displayFields={["DEPT_CODE", "DEPT_NAME"]}
+                      loadOptions={async () => deptOptions as LookupRow[]}
+                      onChange={(val) => void onDepartmentChange(val)}
                     />
                   </Field>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* ============ ACTIVITIES ============ */}
-          <Card>
-            <CardHeader className="border-b bg-muted/30">
-              <div className="flex items-center justify-between">
-                <p className="eyebrow">Activities / KPI Items</p>
-                {!viewMode && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={addActivity}
-                    disabled={activities.length >= 6}
-                    className="gap-1"
-                  >
-                    <Plus size={14} /> Add Activity
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <Field label="Designation" required>
+                    <LookupField
+                      compact
+                      disabled={viewMode || editMode || !form.DEPARTMENT_CODE}
+                      label="Designation"
+                      value={form.DESG_CODE}
+                      displayValue={displayLookup(
+                        desgOptions,
+                        "DESG_CODE",
+                        "DESG_NAME",
+                        form.DESG_CODE
+                      )}
+                      placeholder={
+                        !form.DIVISION_CODE
+                          ? "Select Division first"
+                          : !form.DEPARTMENT_CODE
+                            ? "Select Department first"
+                            : "Select Designation"
+                      }
+                      columns={[
+                        { field: "DESG_CODE", header: "Code" },
+                        { field: "DESG_NAME", header: "Name" },
+                      ]}
+                      valueField="DESG_CODE"
+                      displayFields={["DESG_CODE", "DESG_NAME"]}
+                      loadOptions={async () => desgOptions as LookupRow[]}
+                      onChange={(val) => updateField("DESG_CODE", val)}
+                    />
+                  </Field>
 
-            <CardContent className="pt-4">
-              {activities.length === 0 ? (
-                <p className="rounded-md bg-muted/30 py-4 text-center text-sm text-muted-foreground">
-                  No activities added. Click "Add Activity" to add.
-                </p>
-              ) : (
-                <div className="grid gap-2">
-                  {activities.map((act, idx) => (
-                    <div key={idx} className="flex items-center gap-2 rounded-md border bg-background p-2">
-                      <span className="w-6 text-right text-xs text-muted-foreground">{idx + 1}.</span>
-                      <Input
-                        value={act.desc}
+                  <Field label="KPI Type Code" required>
+                    <LookupField
+                      compact
+                      disabled={viewMode || editMode}
+                      label="KPI Type Code"
+                      value={form.KPI_TYPE_CODE}
+                      displayValue={displayLookup(
+                        kpiTypeOptions,
+                        "KPI_TYPE_CODE",
+                        "KPI_TYPE_DESC",
+                        form.KPI_TYPE_CODE
+                      )}
+                      placeholder="Select KPI Type"
+                      columns={[
+                        { field: "KPI_TYPE_CODE", header: "Code" },
+                        { field: "KPI_TYPE_DESC", header: "Description" },
+                      ]}
+                      valueField="KPI_TYPE_CODE"
+                      displayFields={["KPI_TYPE_CODE", "KPI_TYPE_DESC"]}
+                      loadOptions={async () =>
+                        kpiTypeOptions.filter(
+                          (o) => text(o.KPI_TYPE_CODE) === tabTypeCode
+                        ) as LookupRow[]
+                      }
+                      onChange={(val) => updateField("KPI_TYPE_CODE", val)}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Standard Weightage">
+                    <Input
+                      disabled={viewMode}
+                      type="number"
+                      value={form.STANDARD_WEIGHTAGE}
+                      onChange={(e) =>
+                        updateField("STANDARD_WEIGHTAGE", Number(e.target.value || 0))
+                      }
+                      min={0}
+                      max={100}
+                      placeholder="Enter weightage"
+                    />
+                  </Field>
+
+                  <div className="lg:col-span-2">
+                    <Field
+                      label={
+                        form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
+                          ? "KPI Description (KPI Group)"
+                          : "Characteristic Description"
+                      }
+                      required
+                    >
+                      <textarea
                         disabled={viewMode}
-                        onChange={(e) => updateActivity(idx, e.target.value)}
-                        placeholder="Enter activity description"
+                        className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                        value={form.KPI_DESC}
+                        onChange={(e) => updateField("KPI_DESC", e.target.value)}
+                        placeholder={
+                          form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
+                            ? "Enter KPI description"
+                            : "Enter characteristic description"
+                        }
                       />
-                      {!viewMode && (
-                        <Button type="button" size="icon" variant="ghost" onClick={() => removeActivity(idx)}>
-                          <Trash2 size={14} />
-                        </Button>
+                    </Field>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE && (
+              <Card>
+                <CardHeader className="border-b bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <p className="eyebrow">Activities / KPI Items</p>
+                    {!viewMode && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addActivity}
+                        disabled={activities.length >= 6}
+                        className="gap-1"
+                      >
+                        <Plus size={14} /> Add Activity
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="pt-4">
+                  {activities.length === 0 ? (
+                    <p className="rounded-md bg-muted/30 py-4 text-center text-sm text-muted-foreground">
+                      No activities added. Click "Add Activity" to add.
+                    </p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {activities.map((act, idx) => {
+                        const isDup = duplicateIndices.includes(idx);
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-center gap-2 rounded-md border p-2 ${
+                              isDup ? "border-red-400 bg-red-50" : "bg-background"
+                            }`}
+                          >
+                            <span className="w-6 text-right text-xs text-muted-foreground">
+                              {idx + 1}.
+                            </span>
+                            <Input
+                              value={act.desc}
+                              disabled={viewMode}
+                              onChange={(e) => updateActivity(idx, e.target.value)}
+                              placeholder="Enter activity description"
+                              className={isDup ? "border-red-400 focus:ring-red-400" : ""}
+                            />
+                            {!viewMode && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => removeActivity(idx)}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {duplicateIndices.length > 0 && !viewMode && (
+                        <div className="mt-1 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+                          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                          <span>
+                            Duplicate activities found. Please remove or edit the highlighted
+                            item(s) before saving.
+                          </span>
+                        </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="sticky bottom-0 -mx-4 -mb-4 flex justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            {!viewMode && (
-              <Button type="submit">
-                <Save size={15} /> {saving ? "Saving..." : "Save"}
-              </Button>
+                  )}
+                </CardContent>
+              </Card>
             )}
-          </div>
-        </form>
+
+            <div className="sticky bottom-0 -mx-4 -mb-4 flex justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+                <X size={15} /> Cancel
+              </Button>
+              {!viewMode && (
+                <Button type="submit">
+                  <Save size={15} /> {saving ? "Saving..." : "Save"}
+                </Button>
+              )}
+            </div>
+          </form>
+        )}
       </Dialog>
 
-      {/* ════════ DELETE DIALOG (unchanged) ════════ */}
+      {/* ════════ DELETE DIALOG ════════ */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact
         tone="danger"
-        title="Delete KPI"
+        title="Delete"
         onClose={() => setDeleteTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>
+              Delete
+            </Button>
           </>
         }
       >
         <p className="m-0 text-sm text-muted-foreground">
-          Please confirm to delete KPI <strong>{text(deleteTarget?.KPI_CODE)}</strong> — {text(deleteTarget?.KPI_DESC)}.
+          Please confirm to delete <strong>{text(deleteTarget?.KPI_CODE)}</strong> —{" "}
+          {text(deleteTarget?.KPI_DESC)}.
         </p>
       </Dialog>
     </section>
