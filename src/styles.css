@@ -6795,7 +6795,8 @@ freight-dense-form .freight-form-card {
 .commercial-command-header {
   position: relative;
   z-index: 12;
-  background: #334155;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #cbd5e1;
 }
 
 .commercial-summary-chip {
@@ -7510,10 +7511,9 @@ freight-dense-form .freight-form-card {
 .commercial-command-header {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #475569 0%, #334155 54%, #1e293b 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 12px 26px rgba(15, 23, 42, 0.2);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #cbd5e1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 .commercial-command-header::after {

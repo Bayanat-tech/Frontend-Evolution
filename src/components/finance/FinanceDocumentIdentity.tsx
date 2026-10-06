@@ -29,7 +29,7 @@ export function FinanceDocumentIdentity({
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center justify-center p-1.5 rounded-lg text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10 transition-colors"
+          className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors"
           title="Back"
         >
           <ArrowLeft size={16} />
@@ -37,8 +37,8 @@ export function FinanceDocumentIdentity({
       )}
       {title && (
         <div className="flex items-center gap-2 mr-1">
-          <FileText size={16} className="text-primary-foreground/80 shrink-0" />
-          <h2 className="m-0 text-sm font-semibold tracking-tight text-primary-foreground whitespace-nowrap">
+          <FileText size={16} className="text-[#00378C] shrink-0" />
+          <h2 className="m-0 text-sm font-bold tracking-tight text-slate-900 whitespace-nowrap">
             {title}
           </h2>
         </div>
@@ -56,16 +56,16 @@ export function FinanceDocumentIdentity({
         </div>
 
         {/* Highlighted Date */}
-        <div className="rounded-md bg-slate-900/40 border border-slate-400/30 text-slate-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
-          <span className="text-[10px] uppercase font-bold text-slate-300">Date</span>
-          <strong className="text-xs font-semibold text-white">{formatDate(documentDate) || "—"}</strong>
+        <div className="rounded-md bg-white border border-slate-300 text-slate-700 px-2.5 py-0.5 shadow-2xs flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-500">Date</span>
+          <strong className="text-xs font-semibold text-slate-900">{formatDate(documentDate) || "—"}</strong>
         </div>
 
         {/* Total Badge */}
         {total !== undefined && total !== null && total !== "" && (
-          <div className="rounded-md bg-emerald-950/40 border border-emerald-400/40 text-emerald-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5 max-sm:hidden">
-            <span className="text-[10px] uppercase font-bold text-emerald-300">Total</span>
-            <strong className="text-xs font-bold text-emerald-200">{total}</strong>
+          <div className="rounded-md bg-emerald-50 border border-emerald-300 text-emerald-800 px-2.5 py-0.5 shadow-2xs flex items-center gap-1.5 max-sm:hidden">
+            <span className="text-[10px] uppercase font-bold text-emerald-600">Total</span>
+            <strong className="text-xs font-bold text-emerald-900">{total}</strong>
           </div>
         )}
       </div>

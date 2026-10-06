@@ -44,21 +44,21 @@
   min-height: 0;
 }
 
-/* ── Command header: Executive Slate Grey ────────────────────────────── */
+/* ── Command header: Light Grey with BISC Royal Blue (#00378C) Buttons ────────────────────────────── */
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header {
-  background: linear-gradient(135deg, #475569 0%, #334155 52%, #1e293b 100%) !important;
-  color: #ffffff !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  color: #0f172a !important;
   padding: 6px 14px !important;
-  border-bottom: 1px solid #334155 !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.22) !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
 }
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header::after { display: none; }
 
-/* Header identity text colors on dark background */
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header :is(h2, strong, p, span) { color: #fff; }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header h2 { font-size: 14px; font-weight: 600; }
-:where(.finance-document-ui, .finance-document-editor) .finance-document-identity { color: rgba(255,255,255,0.9); }
-:where(.finance-document-ui, .finance-document-editor) .finance-document-identity strong { color: #fff; }
+/* Header identity text colors on light background */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header :is(h2, strong, p, span) { color: #0f172a; }
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header h2 { font-size: 14px; font-weight: 700; color: #0f172a !important; }
+:where(.finance-document-ui, .finance-document-editor) .finance-document-identity { color: #334155; }
+:where(.finance-document-ui, .finance-document-editor) .finance-document-identity strong { color: #0f172a; }
 
 /* Doc No badge inside header - vibrant yellow background with solid dark black text */
 .finance-identity-docno,
@@ -72,51 +72,58 @@
   font-weight: 800 !important;
 }
 
-/* Buttons inside dark header */
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button {
+/* Buttons inside header - Styled like the Add button in the listing screen (#00378C Royal Blue) */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button,
+.finance-document-editor .commercial-command-header .ui-button {
   height: 28px !important;
   min-height: 28px !important;
   border-radius: 8px !important;
   font-size: 11px !important;
-  font-weight: 500 !important;
-  box-shadow: none !important;
-  padding-block: 3px !important;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-}
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-secondary,
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-outline {
-  background: rgba(255,255,255,0.12) !important;
-  border-color: rgba(255,255,255,0.25) !important;
-  color: #fff !important;
-}
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-secondary:hover,
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-outline:hover {
-  background: rgba(255,255,255,0.24) !important;
-}
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-default {
-  background: #ffffff !important;
-  color: #1e293b !important;
   font-weight: 600 !important;
+  padding-block: 3px !important;
+  background: #00378C !important;
+  border: 1px solid #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.25) !important;
+  transition: all 0.15s ease !important;
 }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-default:hover {
-  background: #f1f5f9 !important;
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button :is(svg, span) {
+  color: #ffffff !important;
 }
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:hover,
+.finance-document-editor .commercial-command-header .ui-button:hover {
+  background: #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.35) !important;
+}
+
+/* Cancel Document Button (Lucide Ban) */
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:has(.lucide-ban) {
-  background: rgba(254,205,211,0.2) !important;
-  color: #fecdd3 !important;
-  border-color: rgba(254,205,211,0.4) !important;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border: 1px solid #b91c1c !important;
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.2) !important;
 }
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:has(.lucide-ban):hover {
-  background: rgba(254,205,211,0.35) !important;
+  background: #b91c1c !important;
 }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"] {
-  background: rgba(255,255,255,0.1) !important;
-  color: rgba(255,255,255,0.85) !important;
-  border-color: rgba(255,255,255,0.2) !important;
+
+/* Close Button (Clean crisp secondary button) */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"],
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn {
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
 }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"]:hover {
-  background: rgba(255,255,255,0.22) !important;
-  color: #ffffff !important;
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span) {
+  color: #334155 !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"]:hover,
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
 }
 
 /* ── Editor body layout ─────────────────────────────────────────────────────  */
@@ -773,11 +780,14 @@
 .finance-document-editor .commercial-command-header { padding:5px 10px !important; box-shadow:none !important; }
 .finance-document-editor .commercial-command-header > div { min-height:32px; flex-wrap:wrap; gap:5px; }
 .finance-document-editor .finance-document-identity { gap:10px; }
-.finance-document-editor .finance-document-identity strong { font-size:14px !important; line-height:20px; }
-.finance-header-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid #ffffff55; border-radius:6px; background:#ffffff18; color:white; }
-.finance-header-toggle:hover { background:#ffffff30; }
-.finance-document-editor .commercial-command-header .ui-button { background:#fff !important; border:1px solid #cbd5e1 !important; color:#1e293b !important; }
-.finance-document-editor .commercial-command-header .ui-button:hover { background:#f8fafc !important; }
+.finance-header-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid #cbd5e1; border-radius:6px; background:#ffffff; color:#334155; }
+.finance-header-toggle:hover { background:#e2e8f0; color:#0f172a; }
+.finance-document-editor .commercial-command-header .ui-button { background:#00378C !important; border:1px solid #002d72 !important; color:#ffffff !important; font-weight:600 !important; }
+.finance-document-editor .commercial-command-header .ui-button:hover { background:#002d72 !important; color:#ffffff !important; }
+.finance-document-editor .commercial-command-header .ui-button[aria-label="Close"],
+.finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn { background:#ffffff !important; border:1px solid #cbd5e1 !important; color:#334155 !important; }
+.finance-document-editor .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn:hover { background:#f1f5f9 !important; color:#0f172a !important; }
 .finance-document-editor .commercial-header-shell { flex:none !important; min-height:0 !important; max-height:none !important; overflow:visible !important; }
 .finance-document-editor .commercial-header-shell > .flex.items-center.justify-end { display:none; }
 .finance-document-editor .commercial-header-panel { display:flex !important; flex-direction:column !important; max-width:none !important; gap:5px !important; }
