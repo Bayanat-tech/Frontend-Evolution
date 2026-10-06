@@ -273,7 +273,7 @@ export function SmartInlineAllocationTable({
               {colConfigs.map((col, i) => (
                 <th
                   key={i}
-                  className={`border-r border-[#b7d9d1] bg-[#dff2ed] px-1.5 py-0 h-[22px] leading-[22px] text-[10px] font-bold text-[#14554e] uppercase tracking-wider last:border-r-0 ${
+                  className={`h-[18px] border-r border-[#b7d9d1] bg-[#dff2ed] px-1.5 py-0 text-[9px] font-bold uppercase leading-[18px] tracking-wide text-[#14554e] last:border-r-0 ${
                     col.align === "right"
                       ? "text-right"
                       : col.align === "center"
@@ -318,7 +318,7 @@ export function SmartInlineAllocationTable({
                       {/* Invoice No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-medium text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 font-mono text-xs font-semibold text-slate-900 focus:border-[#00378C] focus:outline-none"
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
