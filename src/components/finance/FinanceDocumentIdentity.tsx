@@ -56,8 +56,8 @@ export function FinanceDocumentIdentity({
         </div>
 
         {/* Highlighted Date */}
-        <div className="rounded-md bg-blue-950/40 border border-blue-300/40 text-blue-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
-          <span className="text-[10px] uppercase font-bold text-blue-200">Date</span>
+        <div className="rounded-md bg-slate-900/40 border border-slate-400/30 text-slate-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-300">Date</span>
           <strong className="text-xs font-semibold text-white">{formatDate(documentDate) || "—"}</strong>
         </div>
 

@@ -838,7 +838,7 @@ function PettyCashPaymentDocument({
 
   return (
     <form data-header-expanded={showHeaderDetails} className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)]" onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
+      <CardHeader className="commercial-command-header border-b bg-slate-700 px-5 py-2.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-12 items-center justify-between gap-4">
           <FinanceDocumentIdentity title={DOCUMENT_META[docType].title} documentNo={form.doc_no} documentDate={form.doc_date} total={formatAmount(total + totalTax)} onBack={onClose} headerExpanded={showHeaderDetails} onToggleHeader={() => setShowHeaderDetails(value => !value)} />
           <div className="flex items-center gap-2">
