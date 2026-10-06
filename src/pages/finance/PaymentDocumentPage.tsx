@@ -1009,6 +1009,7 @@ function PaymentDocumentEditor({
               aria-label="Close"
               type="button"
               variant="secondary"
+              className="payment-header-close-btn !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1305,23 +1306,23 @@ function PaymentDocumentEditor({
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
-                  <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
-                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
-                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-center text-white w-[120px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-center text-white w-14">Cr/Dr</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="finance-sticky-col-right px-2 py-2 text-center text-white">Action</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
+                      <th className="px-2 py-2 text-center w-[120px]">Allocations</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      <th className="px-2 py-2 text-left">Tax %</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>

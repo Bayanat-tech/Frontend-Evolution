@@ -54,6 +54,37 @@
 }
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header::after { display: none; }
 
+/* ── Option A: Refined Precision Toolbar ─────────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header,
+.payment-workbench .commercial-command-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Option A: Refined Executive Amber Doc No badge */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .finance-identity-docno,
+.payment-workbench .commercial-command-header .finance-identity-docno {
+  background: #fef3c7 !important;
+  border: 1px solid #f59e0b !important;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.12) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .finance-identity-docno :is(span, strong),
+.payment-workbench .commercial-command-header .finance-identity-docno :is(span, strong) {
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+
+/* Option A: Hero Save Button Elevation */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header button[type="submit"],
+.payment-workbench .commercial-command-header button[type="submit"] {
+  background: #00378C !important;
+  color: #ffffff !important;
+  border: 1px solid #002d72 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.3) !important;
+}
+
 /* Header identity text colors on light background */
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header :is(h2, strong, p, span) { color: #0f172a; }
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header h2 { font-size: 14px; font-weight: 700; color: #0f172a !important; }
@@ -124,6 +155,46 @@
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn:hover {
   background: #f1f5f9 !important;
   color: #0f172a !important;
+}
+
+/* ── Payment Screen Test: Close & Submit buttons same Royal Blue (#00378C) as Files ──── */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn {
+  background: #00378C !important;
+  color: #ffffff !important;
+  border: 1px solid #002d72 !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.25) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span) {
+  color: #ffffff !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover {
+  background: #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.35) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button:disabled,
+.payment-workbench .commercial-command-header .ui-button:disabled {
+  background: #00378C !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid #002d72 !important;
+  opacity: 0.82 !important;
+  cursor: not-allowed !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button:disabled :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button:disabled :is(svg, span) {
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 /* ── Editor body layout ─────────────────────────────────────────────────────  */
@@ -459,6 +530,37 @@
   color: #ffffff !important;
   z-index: 8 !important;
 }
+
+/* ── Option A: Modern Platinum Precision Detail Table thead ───────────────── */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench table thead th,
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .finance-lines-table thead th,
+.payment-workbench table thead th,
+.payment-workbench .finance-lines-table thead th {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .finance-lines-table thead .finance-sticky-col,
+.payment-workbench .finance-lines-table thead .finance-sticky-col,
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .finance-lines-table thead .finance-sticky-col-right,
+.payment-workbench .finance-lines-table thead .finance-sticky-col-right {
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+}
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr .finance-sticky-col {
   background: #ffffff !important;
   z-index: 4 !important;
@@ -788,6 +890,37 @@
 .finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn { background:#ffffff !important; border:1px solid #cbd5e1 !important; color:#334155 !important; }
 .finance-document-editor .commercial-command-header .ui-button[aria-label="Close"]:hover,
 .finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn:hover { background:#f1f5f9 !important; color:#0f172a !important; }
+
+/* In Payment Workbench: Close button has same Royal Blue (#00378C) as Files */
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn,
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.payment-header-close-btn,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn,
+.payment-workbench .commercial-command-header .ui-button.payment-header-close-btn {
+  background: #00378C !important;
+  border: 1px solid #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.25) !important;
+}
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span),
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.payment-header-close-btn :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button.payment-header-close-btn :is(svg, span) {
+  color: #ffffff !important;
+}
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover,
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.payment-header-close-btn:hover,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover,
+.payment-workbench .commercial-command-header .ui-button.payment-header-close-btn:hover {
+  background: #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.35) !important;
+}
 .finance-document-editor .commercial-header-shell { flex:none !important; min-height:0 !important; max-height:none !important; overflow:visible !important; }
 .finance-document-editor .commercial-header-shell > .flex.items-center.justify-end { display:none; }
 .finance-document-editor .commercial-header-panel { display:flex !important; flex-direction:column !important; max-width:none !important; gap:5px !important; }
