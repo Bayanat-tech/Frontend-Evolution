@@ -3,6 +3,8 @@ import {
   ChevronDown,
   Edit2,
   Eye,
+  FileSpreadsheet,
+  PenLine,
   Plus,
   Save,
   Trash2,
@@ -23,13 +25,10 @@ import { useToast } from "../../components/ui/AlertToast";
 
 type Row = Record<string, unknown>;
 
-// ⭐ Type codes: 00001 = KPI / Task, 00002 = Characteristic
 const KPI_ACTIVITY_TYPE_CODE = "00001";
 const KPI_CHARACTERISTIC_TYPE_CODE = "00002";
 
-// ⭐ Tabs
 type TabKey = "groups" | "activities" | "characteristic";
-
 type AddMode = "manual" | "import";
 
 type KpiForm = {
@@ -50,6 +49,14 @@ type DesignationGroup = {
   designationLabel: string;
   rows: Row[];
   totalWeightage: number;
+};
+
+
+export type DesignationInfo = {
+  divCode: string;
+  divName: string;
+  deptCode: string;
+  deptName: string;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -223,18 +230,15 @@ export function KpiGroupPage() {
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  // ⭐ Tabs — default is "groups"
   const [activeTab, setActiveTab] = useState<TabKey>("groups");
   const isGroupsTab = activeTab === "groups";
   const isActivitiesTab = activeTab === "activities";
   const isCharacteristicTab = activeTab === "characteristic";
 
-  // Add dialog mode
   const [addMode, setAddMode] = useState<AddMode>("manual");
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  // ══ Top filter: Division / Department ══
   const [selectedDivision, setSelectedDivision] = useState("");
   const [selectedDivisionLabel, setSelectedDivisionLabel] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("");
@@ -259,7 +263,11 @@ export function KpiGroupPage() {
   const [designationList, setDesignationList] = useState<Row[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
 
-  // ⭐ Type code depends on active tab
+
+  const [designationLookup, setDesignationLookup] = useState<
+    Record<string, DesignationInfo>
+  >({});
+
   const tabTypeCode = isCharacteristicTab
     ? KPI_CHARACTERISTIC_TYPE_CODE
     : KPI_ACTIVITY_TYPE_CODE;
@@ -288,6 +296,42 @@ export function KpiGroupPage() {
     void (async () => {
       const divs = await fetchDivisions(loginid, companyCode);
       setDivisionList(divs);
+    })();
+  }, [loginid, companyCode]);
+
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const map: Record<string, DesignationInfo> = {};
+        const divs = await fetchDivisions(loginid, companyCode);
+
+        for (const dv of divs) {
+          const divCode = text(dv.DIV_CODE);
+          const divName = text(dv.DIV_NAME);
+          if (!divCode) continue;
+
+          const depts = await fetchDepartments(loginid, companyCode, divCode);
+          for (const dp of depts) {
+            const deptCode = text(dp.DEPT_CODE);
+            const deptName = text(dp.DEPT_NAME);
+            if (!deptCode) continue;
+
+            const desgs = await fetchDesignations(loginid, companyCode, divCode, deptCode);
+            for (const dg of desgs) {
+              const desgCode = text(dg.DESG_CODE);
+              if (!desgCode) continue;
+              if (!map[desgCode]) {
+                map[desgCode] = { divCode, divName, deptCode, deptName };
+              }
+            }
+          }
+        }
+
+        setDesignationLookup(map);
+      } catch {
+        setDesignationLookup({});
+      }
     })();
   }, [loginid, companyCode]);
 
@@ -322,7 +366,6 @@ export function KpiGroupPage() {
     })();
   }, [selectedDivision, loginid, companyCode]);
 
-  // Filter: Division + Department + tab type code
   const filteredRows = useMemo(() => {
     if (!selectedDivision || !selectedDepartment) return [];
     return rows.filter((r) => {
@@ -333,7 +376,6 @@ export function KpiGroupPage() {
     });
   }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
 
-  // Group by Designation
   const designationGroups = useMemo<DesignationGroup[]>(() => {
     const map = new Map<string, DesignationGroup>();
     filteredRows.forEach((r) => {
@@ -567,7 +609,6 @@ export function KpiGroupPage() {
     if (!form.DESG_CODE.trim()) { toast.warning("Designation is required"); return; }
     if (!form.KPI_DESC.trim()) { toast.warning("KPI Description is required"); return; }
 
-    // Activities required only for KPI Activity type
     if (form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
       const validActivities = activities.filter((a) => a.desc.trim());
       if (validActivities.length < 3) {
@@ -702,7 +743,6 @@ export function KpiGroupPage() {
   // ═════════════════════════════════════════════════════════
   return (
     <section className="flex h-full min-h-0 flex-col gap-4">
-      {/* ═══════ Page header ═══════ */}
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Groups</h1>
@@ -712,7 +752,6 @@ export function KpiGroupPage() {
         </div>
       </div>
 
-      {/* ═══════ Filter card: Division | Department | Tabs ═══════ */}
       <Card className="shrink-0">
         <CardContent className="mt-2 grid gap-3 pt-4 md:grid-cols-3">
           <Field label="Division" required>
@@ -758,7 +797,6 @@ export function KpiGroupPage() {
             />
           </Field>
 
-          {/* ⭐ Tabs: KPI Groups (default) | KPI Activities | Characteristic */}
           <Field label="View" required>
             <div className="flex flex-wrap gap-1 rounded-md border bg-muted/40 p-0.5">
               <button
@@ -799,7 +837,6 @@ export function KpiGroupPage() {
         </CardContent>
       </Card>
 
-      {/* ═══════ Table card ═══════ */}
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0 border-b border-slate-200/70 px-4 py-2.5 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -824,11 +861,6 @@ export function KpiGroupPage() {
 
         <CardContent className="min-h-0 flex-1 p-0">
           <div className="h-full overflow-auto">
-            {/*
-              ⭐ Both tabs now use the SAME grouped view.
-              KPI Groups tab shows: Designation · KPI Description · Weightage · Actions
-              KPI Activities tab shows the same + a "KPI Activities" column.
-            */}
             <table className="w-full min-w-[900px] border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
                 <tr className="border-b border-slate-200 dark:border-slate-800">
@@ -890,7 +922,6 @@ export function KpiGroupPage() {
                     const expanded = isExpanded(group.key);
                     return (
                       <Fragment key={group.key}>
-                        {/* Designation header row */}
                         <tr className="border-b border-slate-100 bg-slate-50/60 align-top dark:border-slate-800/70 dark:bg-slate-900/40">
                           <td className="px-3 py-3 text-center text-xs font-medium text-muted-foreground">
                             {gIdx + 1}
@@ -934,7 +965,6 @@ export function KpiGroupPage() {
                           <td />
                         </tr>
 
-                        {/* Child rows */}
                         {expanded &&
                           group.rows.map((row, rIdx) => {
                             const items = splitActivities(row.KPI_ITEMS ?? row.kpi_items);
@@ -1045,7 +1075,6 @@ export function KpiGroupPage() {
         </CardContent>
       </Card>
 
-      {/* ════════ IMPORT DIALOG (from header button) ════════ */}
       <Dialog
         open={importOpen}
         wide
@@ -1054,6 +1083,7 @@ export function KpiGroupPage() {
         onClose={() => setImportOpen(false)}
       >
         <ImportKpiEdi
+          designationLookup={designationLookup}
           divisionCode={selectedDivision}
           divisionName={selectedDivisionLabel}
           departmentCode={selectedDepartment}
@@ -1067,7 +1097,6 @@ export function KpiGroupPage() {
         />
       </Dialog>
 
-      {/* ════════ ADD / EDIT / VIEW DIALOG ════════ */}
       <Dialog
         open={formOpen}
         wide
@@ -1075,310 +1104,357 @@ export function KpiGroupPage() {
         description={
           editMode || viewMode
             ? "Maintain item setup."
-            : "Add manually or import from Excel."
+            : "Choose Division & Department, then pick a mode below."
         }
         onClose={() => setFormOpen(false)}
       >
-        {/* Mode toggle — only for Add */}
-        {!editMode && !viewMode && (
-          <div className="mb-4 flex gap-1 rounded-md border bg-muted/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setAddMode("manual")}
-              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-                addMode === "manual"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Manual Entry
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddMode("import")}
-              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-                addMode === "import"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Import from Excel
-            </button>
-          </div>
-        )}
+        <div className="grid gap-4">
+          <Card>
+            <CardHeader className="border-b bg-muted/30">
+              <div>
+                <p className="eyebrow">Scope</p>
+                <h2 className="m-0 text-sm font-semibold">Division &amp; Department</h2>
+              </div>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-3 pt-4 md:grid-cols-2">
+              <Field label="Division" required>
+                <LookupField
+                  compact
+                  disabled={viewMode || editMode}
+                  label="Division"
+                  value={form.DIVISION_CODE}
+                  displayValue={displayLookup(
+                    divisionOptions,
+                    "DIV_CODE",
+                    "DIV_NAME",
+                    form.DIVISION_CODE
+                  )}
+                  placeholder="Select Division"
+                  columns={[
+                    { field: "DIV_CODE", header: "Code" },
+                    { field: "DIV_NAME", header: "Name" },
+                  ]}
+                  valueField="DIV_CODE"
+                  displayFields={["DIV_CODE", "DIV_NAME"]}
+                  loadOptions={async () => divisionOptions as LookupRow[]}
+                  onChange={(val) => void onDivisionChange(val)}
+                />
+              </Field>
 
-        {/* Import mode */}
-        {addMode === "import" && !editMode && !viewMode ? (
-          <ImportKpiEdi
-            divisionCode={selectedDivision}
-            divisionName={selectedDivisionLabel}
-            departmentCode={selectedDepartment}
-            departmentName={selectedDepartmentLabel}
-            onClose={() => setFormOpen(false)}
-            onSuccess={async () => {
-              setFormOpen(false);
-              toast.success("Records imported successfully.");
-              await loadRows();
-            }}
-          />
-        ) : (
-          <form className="grid gap-4" onSubmit={saveRecord}>
-            <Card>
-              <CardHeader className="border-b bg-muted/30">
-                <div>
-                  <p className="eyebrow">Details</p>
-                  <h2 className="m-0 text-sm font-semibold">
-                    {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
-                      ? "KPI Information"
-                      : "Characteristic Information"}
-                  </h2>
+              <Field label="Department" required>
+                <LookupField
+                  compact
+                  disabled={viewMode || editMode || !form.DIVISION_CODE}
+                  label="Department"
+                  value={form.DEPARTMENT_CODE}
+                  displayValue={displayLookup(
+                    deptOptions,
+                    "DEPT_CODE",
+                    "DEPT_NAME",
+                    form.DEPARTMENT_CODE
+                  )}
+                  placeholder={
+                    !form.DIVISION_CODE ? "Select Division first" : "Select Department"
+                  }
+                  columns={[
+                    { field: "DEPT_CODE", header: "Code" },
+                    { field: "DEPT_NAME", header: "Name" },
+                  ]}
+                  valueField="DEPT_CODE"
+                  displayFields={["DEPT_CODE", "DEPT_NAME"]}
+                  loadOptions={async () => deptOptions as LookupRow[]}
+                  onChange={(val) => void onDepartmentChange(val)}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          {!editMode && !viewMode && (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setAddMode("manual")}
+                className={`flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-all ${
+                  addMode === "manual"
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border bg-background hover:border-primary/40 hover:bg-muted/30"
+                }`}
+              >
+                <span
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg transition-colors ${
+                    addMode === "manual"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <PenLine size={18} />
+                </span>
+                <div className="min-w-0">
+                  <p className="m-0 text-sm font-semibold text-foreground">Manual Entry</p>
+                  <p className="m-0 mt-0.5 text-xs text-muted-foreground">
+                    Add designation, KPI details and activities manually
+                  </p>
                 </div>
-              </CardHeader>
+              </button>
 
-              <CardContent className="grid gap-4 pt-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Field label="Division" required>
-                    <LookupField
-                      compact
-                      disabled={viewMode || editMode}
-                      label="Division"
-                      value={form.DIVISION_CODE}
-                      displayValue={displayLookup(
-                        divisionOptions,
-                        "DIV_CODE",
-                        "DIV_NAME",
-                        form.DIVISION_CODE
-                      )}
-                      placeholder="Select Division"
-                      columns={[
-                        { field: "DIV_CODE", header: "Code" },
-                        { field: "DIV_NAME", header: "Name" },
-                      ]}
-                      valueField="DIV_CODE"
-                      displayFields={["DIV_CODE", "DIV_NAME"]}
-                      loadOptions={async () => divisionOptions as LookupRow[]}
-                      onChange={(val) => void onDivisionChange(val)}
-                    />
-                  </Field>
-
-                  <Field label="Department" required>
-                    <LookupField
-                      compact
-                      disabled={viewMode || editMode || !form.DIVISION_CODE}
-                      label="Department"
-                      value={form.DEPARTMENT_CODE}
-                      displayValue={displayLookup(
-                        deptOptions,
-                        "DEPT_CODE",
-                        "DEPT_NAME",
-                        form.DEPARTMENT_CODE
-                      )}
-                      placeholder={
-                        !form.DIVISION_CODE ? "Select Division first" : "Select Department"
-                      }
-                      columns={[
-                        { field: "DEPT_CODE", header: "Code" },
-                        { field: "DEPT_NAME", header: "Name" },
-                      ]}
-                      valueField="DEPT_CODE"
-                      displayFields={["DEPT_CODE", "DEPT_NAME"]}
-                      loadOptions={async () => deptOptions as LookupRow[]}
-                      onChange={(val) => void onDepartmentChange(val)}
-                    />
-                  </Field>
+              <button
+                type="button"
+                onClick={() => setAddMode("import")}
+                className={`flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-all ${
+                  addMode === "import"
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border bg-background hover:border-primary/40 hover:bg-muted/30"
+                }`}
+              >
+                <span
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg transition-colors ${
+                    addMode === "import"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <FileSpreadsheet size={18} />
+                </span>
+                <div className="min-w-0">
+                  <p className="m-0 text-sm font-semibold text-foreground">Import from Excel</p>
+                  <p className="m-0 mt-0.5 text-xs text-muted-foreground">
+                    Upload an Excel file and stage it in bulk
+                  </p>
                 </div>
+              </button>
+            </div>
+          )}
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Field label="Designation" required>
-                    <LookupField
-                      compact
-                      disabled={viewMode || editMode || !form.DEPARTMENT_CODE}
-                      label="Designation"
-                      value={form.DESG_CODE}
-                      displayValue={displayLookup(
-                        desgOptions,
-                        "DESG_CODE",
-                        "DESG_NAME",
-                        form.DESG_CODE
-                      )}
-                      placeholder={
-                        !form.DIVISION_CODE
-                          ? "Select Division first"
-                          : !form.DEPARTMENT_CODE
-                            ? "Select Department first"
-                            : "Select Designation"
-                      }
-                      columns={[
-                        { field: "DESG_CODE", header: "Code" },
-                        { field: "DESG_NAME", header: "Name" },
-                      ]}
-                      valueField="DESG_CODE"
-                      displayFields={["DESG_CODE", "DESG_NAME"]}
-                      loadOptions={async () => desgOptions as LookupRow[]}
-                      onChange={(val) => updateField("DESG_CODE", val)}
-                    />
-                  </Field>
-
-                  <Field label="KPI Type Code" required>
-                    <LookupField
-                      compact
-                      disabled={viewMode || editMode}
-                      label="KPI Type Code"
-                      value={form.KPI_TYPE_CODE}
-                      displayValue={displayLookup(
-                        kpiTypeOptions,
-                        "KPI_TYPE_CODE",
-                        "KPI_TYPE_DESC",
-                        form.KPI_TYPE_CODE
-                      )}
-                      placeholder="Select KPI Type"
-                      columns={[
-                        { field: "KPI_TYPE_CODE", header: "Code" },
-                        { field: "KPI_TYPE_DESC", header: "Description" },
-                      ]}
-                      valueField="KPI_TYPE_CODE"
-                      displayFields={["KPI_TYPE_CODE", "KPI_TYPE_DESC"]}
-                      loadOptions={async () =>
-                        kpiTypeOptions.filter(
-                          (o) => text(o.KPI_TYPE_CODE) === tabTypeCode
-                        ) as LookupRow[]
-                      }
-                      onChange={(val) => updateField("KPI_TYPE_CODE", val)}
-                    />
-                  </Field>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  <Field label="Standard Weightage">
-                    <Input
-                      disabled={viewMode}
-                      type="number"
-                      value={form.STANDARD_WEIGHTAGE}
-                      onChange={(e) =>
-                        updateField("STANDARD_WEIGHTAGE", Number(e.target.value || 0))
-                      }
-                      min={0}
-                      max={100}
-                      placeholder="Enter weightage"
-                    />
-                  </Field>
-
-                  <div className="lg:col-span-2">
-                    <Field
-                      label={
-                        form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
-                          ? "KPI Description (KPI Group)"
-                          : "Characteristic Description"
-                      }
-                      required
-                    >
-                      <textarea
-                        disabled={viewMode}
-                        className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-                        value={form.KPI_DESC}
-                        onChange={(e) => updateField("KPI_DESC", e.target.value)}
-                        placeholder={
-                          form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
-                            ? "Enter KPI description"
-                            : "Enter characteristic description"
-                        }
-                      />
-                    </Field>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE && (
+          {addMode === "import" && !editMode && !viewMode ? (
+            <ImportKpiEdi
+              designationLookup={designationLookup}
+              divisionCode={form.DIVISION_CODE}
+              divisionName={displayLookup(
+                divisionOptions,
+                "DIV_CODE",
+                "DIV_NAME",
+                form.DIVISION_CODE
+              )}
+              departmentCode={form.DEPARTMENT_CODE}
+              departmentName={displayLookup(
+                deptOptions,
+                "DEPT_CODE",
+                "DEPT_NAME",
+                form.DEPARTMENT_CODE
+              )}
+              onClose={() => setFormOpen(false)}
+              onSuccess={async () => {
+                setFormOpen(false);
+                toast.success("Records imported successfully.");
+                await loadRows();
+              }}
+            />
+          ) : (
+            <form className="grid gap-4" onSubmit={saveRecord}>
               <Card>
                 <CardHeader className="border-b bg-muted/30">
-                  <div className="flex items-center justify-between">
-                    <p className="eyebrow">Activities / KPI Items</p>
-                    {!viewMode && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={addActivity}
-                        disabled={activities.length >= 6}
-                        className="gap-1"
-                      >
-                        <Plus size={14} /> Add Activity
-                      </Button>
-                    )}
+                  <div>
+                    <p className="eyebrow">Details</p>
+                    <h2 className="m-0 text-sm font-semibold">
+                      {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
+                        ? "KPI Information"
+                        : "Characteristic Information"}
+                    </h2>
                   </div>
                 </CardHeader>
 
-                <CardContent className="pt-4">
-                  {activities.length === 0 ? (
-                    <p className="rounded-md bg-muted/30 py-4 text-center text-sm text-muted-foreground">
-                      No activities added. Click "Add Activity" to add.
-                    </p>
-                  ) : (
-                    <div className="grid gap-2">
-                      {activities.map((act, idx) => {
-                        const isDup = duplicateIndices.includes(idx);
-                        return (
-                          <div
-                            key={idx}
-                            className={`flex items-center gap-2 rounded-md border p-2 ${
-                              isDup ? "border-red-400 bg-red-50" : "bg-background"
-                            }`}
-                          >
-                            <span className="w-6 text-right text-xs text-muted-foreground">
-                              {idx + 1}.
-                            </span>
-                            <Input
-                              value={act.desc}
-                              disabled={viewMode}
-                              onChange={(e) => updateActivity(idx, e.target.value)}
-                              placeholder="Enter activity description"
-                              className={isDup ? "border-red-400 focus:ring-red-400" : ""}
-                            />
-                            {!viewMode && (
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => removeActivity(idx)}
-                              >
-                                <Trash2 size={14} />
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
+                <CardContent className="grid gap-4 pt-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <Field label="Designation" required>
+                      <LookupField
+                        compact
+                        disabled={viewMode || editMode || !form.DEPARTMENT_CODE}
+                        label="Designation"
+                        value={form.DESG_CODE}
+                        displayValue={displayLookup(
+                          desgOptions,
+                          "DESG_CODE",
+                          "DESG_NAME",
+                          form.DESG_CODE
+                        )}
+                        placeholder={
+                          !form.DIVISION_CODE
+                            ? "Select Division first"
+                            : !form.DEPARTMENT_CODE
+                              ? "Select Department first"
+                              : "Select Designation"
+                        }
+                        columns={[
+                          { field: "DESG_CODE", header: "Code" },
+                          { field: "DESG_NAME", header: "Name" },
+                        ]}
+                        valueField="DESG_CODE"
+                        displayFields={["DESG_CODE", "DESG_NAME"]}
+                        loadOptions={async () => desgOptions as LookupRow[]}
+                        onChange={(val) => updateField("DESG_CODE", val)}
+                      />
+                    </Field>
 
-                      {duplicateIndices.length > 0 && !viewMode && (
-                        <div className="mt-1 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
-                          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                          <span>
-                            Duplicate activities found. Please remove or edit the highlighted
-                            item(s) before saving.
-                          </span>
-                        </div>
-                      )}
+                    <Field label="KPI Type Code" required>
+                      <LookupField
+                        compact
+                        disabled={viewMode || editMode}
+                        label="KPI Type Code"
+                        value={form.KPI_TYPE_CODE}
+                        displayValue={displayLookup(
+                          kpiTypeOptions,
+                          "KPI_TYPE_CODE",
+                          "KPI_TYPE_DESC",
+                          form.KPI_TYPE_CODE
+                        )}
+                        placeholder="Select KPI Type"
+                        columns={[
+                          { field: "KPI_TYPE_CODE", header: "Code" },
+                          { field: "KPI_TYPE_DESC", header: "Description" },
+                        ]}
+                        valueField="KPI_TYPE_CODE"
+                        displayFields={["KPI_TYPE_CODE", "KPI_TYPE_DESC"]}
+                        loadOptions={async () =>
+                          kpiTypeOptions.filter(
+                            (o) => text(o.KPI_TYPE_CODE) === tabTypeCode
+                          ) as LookupRow[]
+                        }
+                        onChange={(val) => updateField("KPI_TYPE_CODE", val)}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <Field label="Standard Weightage">
+                      <Input
+                        disabled={viewMode}
+                        type="number"
+                        value={form.STANDARD_WEIGHTAGE}
+                        onChange={(e) =>
+                          updateField("STANDARD_WEIGHTAGE", Number(e.target.value || 0))
+                        }
+                        min={0}
+                        max={100}
+                        placeholder="Enter weightage"
+                      />
+                    </Field>
+
+                    <div className="lg:col-span-2">
+                      <Field
+                        label={
+                          form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
+                            ? "KPI Description (KPI Group)"
+                            : "Characteristic Description"
+                        }
+                        required
+                      >
+                        <textarea
+                          disabled={viewMode}
+                          className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                          value={form.KPI_DESC}
+                          onChange={(e) => updateField("KPI_DESC", e.target.value)}
+                          placeholder={
+                            form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE
+                              ? "Enter KPI description"
+                              : "Enter characteristic description"
+                          }
+                        />
+                      </Field>
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
-            )}
 
-            <div className="sticky bottom-0 -mx-4 -mb-4 flex justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                <X size={15} /> Cancel
-              </Button>
-              {!viewMode && (
-                <Button type="submit">
-                  <Save size={15} /> {saving ? "Saving..." : "Save"}
-                </Button>
+              {form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE && (
+                <Card>
+                  <CardHeader className="border-b bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <p className="eyebrow">Activities / KPI Items</p>
+                      {!viewMode && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={addActivity}
+                          disabled={activities.length >= 6}
+                          className="gap-1"
+                        >
+                          <Plus size={14} /> Add Activity
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="pt-4">
+                    {activities.length === 0 ? (
+                      <p className="rounded-md bg-muted/30 py-4 text-center text-sm text-muted-foreground">
+                        No activities added. Click "Add Activity" to add.
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {activities.map((act, idx) => {
+                          const isDup = duplicateIndices.includes(idx);
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center gap-2 rounded-md border p-2 ${
+                                isDup ? "border-red-400 bg-red-50" : "bg-background"
+                              }`}
+                            >
+                              <span className="w-6 text-right text-xs text-muted-foreground">
+                                {idx + 1}.
+                              </span>
+                              <Input
+                                value={act.desc}
+                                disabled={viewMode}
+                                onChange={(e) => updateActivity(idx, e.target.value)}
+                                placeholder="Enter activity description"
+                                className={isDup ? "border-red-400 focus:ring-red-400" : ""}
+                              />
+                              {!viewMode && (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => removeActivity(idx)}
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {duplicateIndices.length > 0 && !viewMode && (
+                          <div className="mt-1 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+                            <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                            <span>
+                              Duplicate activities found. Please remove or edit the highlighted
+                              item(s) before saving.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
-            </div>
-          </form>
-        )}
+
+              <div className="sticky bottom-0 -mx-4 -mb-4 flex justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
+                <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+                  <X size={15} /> Cancel
+                </Button>
+                {!viewMode && (
+                  <Button type="submit">
+                    <Save size={15} /> {saving ? "Saving..." : "Save"}
+                  </Button>
+                )}
+              </div>
+            </form>
+          )}
+        </div>
       </Dialog>
 
-      {/* ════════ DELETE DIALOG ════════ */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact

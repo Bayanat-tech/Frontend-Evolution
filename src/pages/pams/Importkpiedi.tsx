@@ -18,14 +18,22 @@ import { DataTable } from "../../components/ui/DataTable";
 import { pamsSelect, pamsSave } from "../../api/pams";
 import type { ColumnDef } from "@tanstack/react-table";
 
+export type DesignationInfo = {
+  divCode: string;
+  divName: string;
+  deptCode: string;
+  deptName: string;
+};
+
 interface ImportKpiEdiProps {
   onClose: () => void;
   onSuccess: () => void;
-  // ⭐ passed from KpiGroupPage (currently selected Division / Department)
+  // Fallback used when DESG_CODE is missing or not found in the map
   divisionCode?: string;
   divisionName?: string;
   departmentCode?: string;
   departmentName?: string;
+  designationLookup?: Record<string, DesignationInfo>;
 }
 
 interface EdiRow {
@@ -116,6 +124,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
   divisionName = "",
   departmentCode = "",
   departmentName = "",
+  designationLookup = {},
 }) => {
   const { user } = useAuth();
 
@@ -140,6 +149,27 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     () => `${totalCount} record${totalCount === 1 ? "" : "s"}`,
     [totalCount]
   );
+
+
+  const resolveScope = (desgCode: string) => {
+    const key = String(desgCode || "").trim();
+    const info = designationLookup[key];
+    if (info) {
+      return {
+        divCode: info.divCode,
+        divName: info.divName,
+        deptCode: info.deptCode,
+        deptName: info.deptName,
+      };
+    }
+    // Fallback to the parent-selected div/dept if DESG is unknown
+    return {
+      divCode: divisionCode,
+      divName: divisionName,
+      deptCode: departmentCode,
+      deptName: departmentName,
+    };
+  };
 
   // ═════════════════════════════════════════════════════════
   // FETCH STAGING
@@ -223,7 +253,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
 
         const normalized = json.map(normalizeRow);
 
-        // Basic header check
         const first = normalized[0] ?? {};
         const hasDesg = "DESG_CODE" in first || "DESGCODE" in first;
         const hasActivity = "KPI_ACTIVITY" in first || "KPIACTIVITY" in first;
@@ -290,7 +319,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
       for (const raw of excelData) {
         const r = normalizeRow(raw);
 
-        // New designation row => reset current "main"
         const desgCode = getVal(r, "DESGCODE", "DESG_CODE");
         const currentGroup = getVal(r, "KPIGROUP", "KPI_GROUP");
 
@@ -319,22 +347,25 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         filled.push(merged);
       }
 
-      // Pipe string: DIVCODE|DIVNAME|DEPTCODE|DEPTNAME|SECTIONCODE|SECTIONNAME|DESGCODE|DESGNAME|KPIGROUP|WEIGHTAGE|KPIACTIVITY
-      const mappedRows = filled.map((r) =>
-        [
-          divisionCode || "-",                          // 0
-          divisionName || "-",                          // 1
-          departmentCode || "-",                        // 2
-          departmentName || "-",                        // 3
-          "-",                                          // 4
-          "-",                                          // 5
-          getVal(r, "DESGCODE", "DESG_CODE").replace(/\.0+$/, ""), // 6
-          getVal(r, "DESGNAME", "DESG_NAME"),           // 7
-          getVal(r, "KPIGROUP", "KPI_GROUP"),           // 8
-          getVal(r, "WEIGHTAGE").replace(/\.0+$/, ""),  // 9
-          getVal(r, "KPIACTIVITY", "KPI_ACTIVITY"),     // 10
-        ].join("|")
-      );
+      //    DIV / DEPT resolved per-row using designationLookup[DESG_CODE]
+      const mappedRows = filled.map((r) => {
+        const desgCode = getVal(r, "DESGCODE", "DESG_CODE").replace(/\.0+$/, "");
+        const scope = resolveScope(desgCode);
+
+        return [
+          scope.divCode || "-",                            // 0
+          scope.divName || "-",                            // 1
+          scope.deptCode || "-",                           // 2
+          scope.deptName || "-",                           // 3
+          "-",                                             // 4  SECTIONCODE
+          "-",                                             // 5  SECTIONNAME
+          desgCode,                                        // 6
+          getVal(r, "DESGNAME", "DESG_NAME"),              // 7
+          getVal(r, "KPIGROUP", "KPI_GROUP"),              // 8
+          getVal(r, "WEIGHTAGE").replace(/\.0+$/, ""),     // 9
+          getVal(r, "KPIACTIVITY", "KPI_ACTIVITY"),        // 10
+        ].join("|");
+      });
 
       const chunks: string[][] = [];
       for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
@@ -378,7 +409,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
       return;
     }
 
-    // Re-validate 3–6 activity groups in staged data
     const groups: Record<string, number> = {};
     validRows.forEach((r) => {
       const key = `${r.div_code}|${r.dept_code}|${r.desg_code}|${r.kpi_group}`;
@@ -451,7 +481,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
   };
 
   // ═════════════════════════════════════════════════════════
-  // TEMPLATE — matches the sample Excel (5 columns)
+  // TEMPLATE — 5 columns
   // ═════════════════════════════════════════════════════════
   const handleDownloadTemplate = () => {
     try {
@@ -480,11 +510,11 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
 
       const ws = XLSX.utils.json_to_sheet(templateData);
       ws["!cols"] = [
-        { wch: 12 }, // DESG_CODE
-        { wch: 40 }, // DESG_NAME
-        { wch: 32 }, // KPI_GROUP
-        { wch: 12 }, // WEIGHTAGE
-        { wch: 55 }, // KPI_ACTIVITY
+        { wch: 12 },
+        { wch: 40 },
+        { wch: 32 },
+        { wch: 12 },
+        { wch: 55 },
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "KpiEdiTemplate");
