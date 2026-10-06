@@ -323,8 +323,8 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
 
 function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number) {
   const errors: string[] = [];
-  if (!header.DESCRIPTION || header.DESCRIPTION.trim() === "") errors.push("Description / Reason is required");
-  if (!header.REMARKS || header.REMARKS.trim() === "") errors.push("Remarks is required");
+  if (!String(header.DESCRIPTION ?? "").trim()) errors.push("Description / Reason is required");
+  if (!String(header.REMARKS ?? "").trim()) errors.push("Remarks is required");
   if (!header.PDO_TYPE) errors.push("POD Type is required");
   if (!header.CURR_CODE) errors.push("Currency is required");
   if (items.length === 0) {
@@ -391,6 +391,7 @@ const AddPRRequestPage = ({
   const isInitialized = useRef(false);
   const itemsLoadedRef = useRef(false);
   const lastLoadedRequestRef = useRef<string | undefined>(undefined);
+  const headerLoadedRef = useRef<string | null>(null);
   const autoAddedSuppliersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -499,23 +500,23 @@ const AddPRRequestPage = ({
     enabled: !!companyCode,
   });
 
-  const { data: hdrList = [] } = useQuery<TPRHeader[]>({
+  const { data: hdrList = [], isFetching: hdrFetching } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({ parameter: "PS_PREQUEST_ENTRY_HEADER_PAGE", loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
-    staleTime: 5 * 60 * 1000, refetchOnMount: false,
+    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
   });
-  const { data: itemList = [] } = useQuery<TPRItem[]>({
+  const { data: itemList = [], isFetching: itemsFetching } = useQuery<TPRItem[]>({
     queryKey: ["pr-item-list", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRItem>({ parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE", loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
-    staleTime: 5 * 60 * 1000, refetchOnMount: false,
+    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
   });
   const { data: termsList = [] } = useQuery<any[]>({
     queryKey: ["pr-terms", requestNumber, companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TERMS", loginid, code1: companyCode, code2: requestNumber || "", code3: "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
-    staleTime: 5 * 60 * 1000, refetchOnMount: false,
+    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
   });
   const { data: flowDetailData } = useQuery<LookupItem[]>({
     queryKey: ["pr-flow-details", flowCode, companyCode],
@@ -544,7 +545,10 @@ const AddPRRequestPage = ({
       setLoading(false);
       return;
     }
+    if (hdrFetching) return;
+    if (headerLoadedRef.current === (requestNumber || "")) return;
     if (hdrList.length > 0) {
+      headerLoadedRef.current = requestNumber || "";
       const h = hdrList[0];
       setHeader((prev) => ({
         ...prev, ...h,
@@ -559,10 +563,10 @@ const AddPRRequestPage = ({
         TX_COMPNTCAT_NAME: (h as any).TX_COMPNTCAT_NAME || prev.TX_COMPNTCAT_NAME || "",
       }));
       setLoading(false);
-    } else if (!loading) {
+    } else {
       setLoading(false);
     }
-  }, [hdrList, isEditMode, isViewMode, requestNumber, flowCode, flowDescription]);
+  }, [hdrList, hdrFetching, isEditMode, isViewMode, requestNumber, flowCode, flowDescription]);
 
   useEffect(() => {
     if (!isEditMode && !isViewMode) return;
@@ -587,6 +591,7 @@ const AddPRRequestPage = ({
 
   useEffect(() => {
     if (itemsLoadedRef.current) return;
+    if (itemsFetching) return;
     if (itemList.length === 0) {
       if (isViewMode && requestNumber) { setItems([]); itemsLoadedRef.current = true; }
       return;
@@ -630,7 +635,7 @@ const AddPRRequestPage = ({
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
     itemsLoadedRef.current = true;
-  }, [itemList, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
+  }, [itemList, itemsFetching, productCodes, costCodes, supplierList, taxCodes, taxComponentList, currencyList, isViewMode, requestNumber, userApprovalLevel, header.CURRENCY_RATE]);
 
   useEffect(() => {
     if (userApprovalLevel < 2) return;
@@ -724,9 +729,9 @@ const AddPRRequestPage = ({
   const colWidths = useMemo(() => {
     const qtyGroup = [60, 60, 60, ...(showAllColumns ? [60] : []), 70];
     const w: number[] = [30, 270, 60, ...qtyGroup, ...qtyGroup];
-    if (userApprovalLevel >= 6) w.push(220);
+    if (userApprovalLevel >= 6) w.push(300);
     w.push(80, 90, 65, 75, 80, 90, 95);
-    if (showAllColumns) w.push(75, 60, 80, 110, 110, 85, 95);
+    if (showAllColumns) w.push(75, 60, 80, 210, 210, 85, 95);
     w.push(44);
     return w;
   }, [showAllColumns, userApprovalLevel]);
@@ -857,6 +862,12 @@ const AddPRRequestPage = ({
 
   const [savingAction, setSavingAction] = useState<string | null>(null);
 
+  const refreshPrCaches = () => {
+    queryClient.invalidateQueries({ queryKey: ["pr-header"] });
+    queryClient.invalidateQueries({ queryKey: ["pr-item-list"] });
+    queryClient.invalidateQueries({ queryKey: ["pr-terms"] });
+  };
+
   const runAction = async (status: string, successMsg: string, remark = "", overrides: Partial<Record<string, any>> = {}) => {
     if (saving) return;
     if (status !== "SAVEASDRAFT") { if (!validateAndShowErrors()) return; }
@@ -865,6 +876,7 @@ const AddPRRequestPage = ({
     try {
       const result = await saveBulk(status, remark, overrides);
       if (!result.success) throw new Error(result.message || "Failed to save");
+      refreshPrCaches();
       toast.success(successMsg, 4000);
       setSavingAction(null);
       onClose(true);
@@ -900,6 +912,7 @@ const AddPRRequestPage = ({
       const isFinal = next >= fin ? "Y" : "N";
       const result = await saveBulk("APPROVED", "", { FLOW_LEVEL_RUNNING: next, FINAL_APPROVED: isFinal });
       if (!result.success) throw new Error(result.message || "Failed to approve");
+      refreshPrCaches();
       toast.success("PR approved successfully!", 4000);
       onClose(true);
     } catch (err) {
@@ -1118,7 +1131,7 @@ const AddPRRequestPage = ({
       >
         {/* ═══════════════ TOP BAR ═══════════════ */}
         <CardHeader className="flex-none border-b bg-[#00378C] px-4 py-2.5 text-white shadow-sm">
-          <div className="flex min-h-8 items-center justify-between gap-3">
+          <div className="flex min-h-11 items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 type="button"
@@ -1369,7 +1382,7 @@ const AddPRRequestPage = ({
                       </CField>
 
 
-                      <div className="col-span-2">
+                      <div className="col-span-4">
                         <LookupField
                           label="Currency *"
                           placeholder="Search Currency"
