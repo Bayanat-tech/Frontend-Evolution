@@ -14,26 +14,26 @@
 // }
 
 // ===================== TYPES (defined locally) =====================
-type THeaderDetail = {
-  id: string;
-  depend_pay_comp_type: string;
-  depend_pay_comp_desc: string;
-  depend_pay_comp_short_desc: string;
-  percent: number;
-  emp_percent: number;
-  status: string;
-  status_desc: string;
-  remarks: string;
-  isEditMode: boolean;
-};
+// type THeaderDetail = {
+//   id: string;
+//   depend_pay_comp_type: string;
+//   depend_pay_comp_desc: string;
+//   depend_pay_comp_short_desc: string;
+//   percent: number;
+//   emp_percent: number;
+//   status: string;
+//   status_desc: string;
+//   remarks: string;
+//   isEditMode: boolean;
+// };
 
-type TPayUnitFormValues = {
-  div_code: string;
-  div_name: string;
-  pay_comp_id: string;
-  pay_comp_desc: string;
-  headerDetail: THeaderDetail[];
-};
+// type TPayUnitFormValues = {
+//   div_code: string;
+//   div_name: string;
+//   pay_comp_id: string;
+//   pay_comp_desc: string;
+//   headerDetail: THeaderDetail[];
+// };
 
 // function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
 //   const out: Record<string, unknown> = {};
