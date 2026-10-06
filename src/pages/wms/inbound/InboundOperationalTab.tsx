@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
-import { executeWmsInboundSql, patchWmsInbound, postWmsInbound } from "../../../api/wms";
+import { executeWmsInboundSql, postWmsInbound } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -53,6 +53,92 @@ export type InboundOperationalTabHandle = {
 const TAX_FIVE_PERCENT_CODES = ["10100", "11100"];
 const deriveTaxPercentFromCategory = (taxCompntcatCode: unknown): number =>
   TAX_FIVE_PERCENT_CODES.includes(String(taxCompntcatCode ?? "")) ? 5 : 0;
+
+/**
+ * ⚠️ PROCESS ENDPOINTS — set these to your real backend routes.
+ * Every "Process ..." screen (Quality Clearance, Putaway, HHT Putaway, Job Confirmation)
+ * posts to the endpoint below. If a route here is wrong you will now see a visible
+ * error toast + a request in the Network tab (instead of nothing happening).
+ */
+const PROCESS_ENDPOINTS: Record<string, string> = {
+  // quality_clearance is saved via executeWmsInboundSql (UPDATE TI_PACKDET), not an API route
+  // putway_details: NOT CONFIGURED (no route known yet)
+  putway_hht:        "/api/wms/inbound/hhtputaway", // from tabConfig addEndpoint
+  // job_confirmation: NOT CONFIGURED (no route known yet)
+};
+
+// ─── Stable (module-level) presentational components ─────────────────────────
+// These MUST live outside the component. If they are declared inside, React sees a
+// brand-new component type on every render and remounts them, which makes inputs
+// lose focus after each keystroke.
+
+function SectionHeader({ icon: Icon, label, caption }: { icon: any; label: string; caption: string }) {
+  return (
+    <div className="flex items-center gap-3 pb-1">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+        <Icon size={18} />
+      </span>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-primary">{label}</div>
+        <div className="text-sm text-muted-foreground">{caption}</div>
+      </div>
+    </div>
+  );
+}
+
+function PackingSH({ icon: Icon, eyebrow, title }: { icon: any; eyebrow: string; title: string }) {
+  return (
+    <div className="flex items-center gap-2 border-b px-3 py-1.5">
+      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={14} /></div>
+      <div>
+        <p className="m-0 text-[9px] font-bold uppercase tracking-widest text-primary">{eyebrow}</p>
+        <p className="m-0 text-xs font-semibold text-foreground leading-tight">{title}</p>
+      </div>
+    </div>
+  );
+}
+
+function FreightPanel({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+  return (
+    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm mb-2">
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-4 w-4 items-center justify-center rounded bg-primary text-white">
+            <Icon size={10} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-[10px] font-semibold uppercase tracking-wider text-foreground">{title}</h3>
+          </div>
+        </div>
+      </div>
+      <div className="freight-panel-body p-2.5">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function LabelText({ text, required }: { text: string; required?: boolean }) {
+  return (
+    <span
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: "4px",
+        fontSize: "11px",
+        fontWeight: 600,
+        color: "#475569",
+        textTransform: "uppercase",
+        letterSpacing: "0.02em",
+        marginBottom: "4px",
+      }}
+    >
+      <span>{text}</span>
+      {required && <span style={{ color: "#dc2626" }}>*</span>}
+    </span>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Props>(
@@ -304,10 +390,11 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
 
     const [modalNotice,  setModalNotice]  = useState<string | null>(null);
 
-    const [clearanceForm, setClearanceForm] = useState({
+    const emptyClearanceForm = {
       truck_condition: "", container_condition: "", container_type: "",
       ref_box_temp: "", prod_temp: "", prod_con_acceptance: "",
-    });
+    };
+    const [clearanceForm, setClearanceForm] = useState(emptyClearanceForm);
 
     const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", location_from: "", location_code: "", location_to: "" });
     const debouncedLocation = useDebounce(putawayForm.location_code, 500);
@@ -338,21 +425,6 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
 
     const config = getInboundTabConfig(tab);
     const [tallySubTab, setTallySubTab] = useState<TallySubTab>("pallet");
-
-    // ── SectionHeader helper ─────────────────────────────────────────────────
-    function SectionHeader({ icon: Icon, label, caption }: { icon: any; label: string; caption: string }) {
-      return (
-        <div className="flex items-center gap-3 pb-1">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <Icon size={18} />
-          </span>
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-primary">{label}</div>
-            <div className="text-sm text-muted-foreground">{caption}</div>
-          </div>
-        </div>
-      );
-    }
 
     // ── getLookupProps ───────────────────────────────────────────────────────
     const getLookupProps = (field: FormField, isEditMode = false): LookupProps | null => {
@@ -555,6 +627,13 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       }
     }, [tab, jobNo, prinCode, loadingJob, viewMode]);
 
+    // Switching tabs: drop any open form / selection so state never leaks across tabs
+    useEffect(() => {
+      setViewMode("list");
+      setSelectedRows([]);
+      setModalNotice(null);
+    }, [tab]);
+
     // ── received qty helpers ─────────────────────────────────────────────────
     const parseLeadingNumber = (v: unknown): number => {
       if (v === null || v === undefined || v === "") return 0;
@@ -588,11 +667,28 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       },
     }), [tab, rows, toast]);
 
-    // ── open modals ──────────────────────────────────────────────────────────
+    // ── open / close views ───────────────────────────────────────────────────
+    const closeForm = () => {
+      setModalNotice(null);
+      setViewMode("list");
+    };
+
     const openAddModal = () => {
       setAddForm({ job_no: jobNo, prin_code: prinCode, company_code: companyCode });
       if (isTallyDetails) setTallySubTab("pallet");
+      setModalNotice(null);
       setViewMode("add");
+    };
+
+    // Generic "Process ..." opener (Quality Clearance, HHT, Job Confirmation)
+    const openProcess = () => {
+      setModalNotice(null);
+      if (tab === "quality_clearance") setClearanceForm(emptyClearanceForm);
+      if (tab === "putway_hht") {
+        setHhtPalletId(""); setHhtLocation(""); setHhtPalletProducts([]);
+        setHhtLocationError(""); setHhtLocationValid(null);
+      }
+      setViewMode("process");
     };
 
     const openPutawayModal = async () => {
@@ -638,7 +734,11 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     // ── save add ─────────────────────────────────────────────────────────────
     const saveAdd = async (e: FormEvent) => {
       e.preventDefault();
-      if (!config?.addEndpoint) return;
+      if (!config?.addEndpoint) {
+        const msg = `No add endpoint configured for "${tab}" in tabConfig.`;
+        setModalNotice(msg); toast.error(msg);
+        return;
+      }
       setModalNotice(null);
 
       if (tab === "packing_details") {
@@ -744,6 +844,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
         setViewMode("list");
         await loadRows();
       } catch (error) {
+        console.error("[InboundOperationalTab] add failed", error);
         const msg = error instanceof Error ? error.message : `Unable to add ${config?.title}`;
         setModalNotice(msg); toast.error(msg);
       } finally { setSaving(false); }
@@ -784,10 +885,132 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
         setViewMode("list");
         await loadRows();
       } catch (error) {
+        console.error("[InboundOperationalTab] edit failed", error);
         const msg = error instanceof Error ? error.message : "Unable to update record";
         setModalNotice(msg); toast.error(msg);
       } finally { setEditSaving(false); }
     };
+
+    // ── save process (Quality Clearance / Putaway / HHT / Job Confirmation) ──
+    // This was the missing piece: the process <form> used to have an empty onSubmit,
+    // so Save did nothing and no API call was ever made.
+const saveProcess = async (e: FormEvent) => {
+  e.preventDefault();
+  setModalNotice(null);
+
+  const userId = String(user?.USERNAME || user?.username || "");
+  const jobEnc = encodeURIComponent(jobNo);
+  const qs = `prin_code=${encodeURIComponent(prinCode)}&job_no=${jobEnc}&company_code=${encodeURIComponent(companyCode)}`;
+  const base = { company_code: companyCode, prin_code: prinCode, job_no: jobNo, user_id: userId };
+
+  const fail = (msg: string) => { setModalNotice(msg); toast.error(msg); };
+
+  // Describes the single request this tab needs
+  let run: (() => Promise<any>) | null = null;
+  let successMsg = "Processed successfully";
+
+  if (tab === "quality_clearance") {
+    if (selectedRows.length === 0) return fail("No rows selected.");
+    if (!clearanceForm.prod_con_acceptance.trim()) return fail("Product Condition Acceptance is required.");
+
+    const packdetNos = selectedRows
+      .map((r) => Number(value(r, "packdet_no")))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (packdetNos.length === 0 || packdetNos.length !== selectedRows.length)
+      return fail("Some selected rows are missing PACKDET_NO. Please re-select and try again.");
+
+run = async () => {
+  for (const n of packdetNos) {
+    const res = await api.put(`/api/wms/inbound/packing_details/clearance?${qs}`, {
+      ...base,
+      ...clearanceForm,
+      packdet_no: [n],            // keep it an array, since Joi accepted that shape
+    });
+    if (res?.data?.success === false)
+      throw new Error(res.data.message || `Clearance failed for packdet ${n}`);
+  }
+  return { data: { success: true } };
+};
+    successMsg = "Quality clearance processed successfully";
+
+} else if (tab === "putway_details") {
+  if (selectedRows.length === 0)  return fail("No rows selected.");
+  if (!putawayForm.site_from)     return fail("Site From is required.");
+  if (!putawayForm.location_from) return fail("Location From is required.");
+
+  const packdetNos = selectedRows
+    .map((r) => Number(value(r, "packdet_no")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (packdetNos.length !== selectedRows.length)
+    return fail("Some selected rows are missing PACKDET_NO. Please re-select and try again.");
+
+  run = () =>
+    api.put(`/api/wms/inbound/putway_details/${jobEnc}?${qs}`, {
+      // prin_code:     prinCode,
+      // job_no:        jobNo,
+      // user_id:       userId,
+      packdet_no:    packdetNos.map(String),
+      site_from:     putawayForm.site_from,
+      location_from: putawayForm.location_from,
+      site_to:       putawayForm.site_to || putawayForm.site_from,
+      location_to:   putawayForm.location_to || putawayForm.location_from,
+    });
+  successMsg = `Putaway processed for ${packdetNos.length} item(s)`;
+}
+
+   else if (isPutawayHHT) {
+    if (!hhtPalletId)              return fail("Pallet ID is required.");
+    if (!hhtLocation)              return fail("Location Code is required.");
+    if (hhtLocationValid !== true) return fail(hhtLocationError || "Enter a valid location code.");
+
+    run = () =>
+      postWmsInbound("hhtputaway", {
+        ...base,
+        pallet_id:     hhtPalletId,
+        location_code: hhtLocation,
+        site_code:     hhtLocation.slice(0, 2),
+        loc_code:      hhtLocation.slice(2),
+      });
+    successMsg = "HHT putaway processed successfully";
+
+  } else if (tab === "job_confirmation") {
+    if (selectedRows.length === 0) return fail("No rows selected.");
+
+    run = () =>
+      api.put(`/api/wms/inbound/job_confirmation/${jobEnc}?${qs}`, {
+        ...base,
+        rows: selectedRows.map((r) => stripUiFields(r)),
+      });
+    successMsg = "Job confirmed successfully";
+
+  } else {
+    return fail(`Nothing to process for tab "${tab}".`);
+  }
+
+  setSaving(true);
+  try {
+    const res = await run();
+    if (res?.data?.success === false) throw new Error(res.data.message || "Request failed");
+
+    toast.success(successMsg);
+    setSelectedRows([]);
+    setClearanceForm(emptyClearanceForm);
+    setHhtPalletId(""); setHhtLocation(""); setHhtPalletProducts([]);
+    setHhtLocationValid(null); setHhtLocationError("");
+    setViewMode("list");
+    await loadRows();
+    if (tab === "job_confirmation" && onJobUpdated) await onJobUpdated();
+  } catch (error: any) {
+    console.error("[InboundOperationalTab] process failed", error);
+    const msg =
+      error?.response?.data?.message ||
+      error?.response?.data?.details ||
+      (error instanceof Error ? error.message : "Unable to process");
+    setModalNotice(msg); toast.error(msg);
+  } finally {
+    setSaving(false);
+  }
+};
 
     if (isJobDetails) {
       return <InboundJobDetailsTab job={job} loadingJob={loadingJob} companyCode={companyCode} jobNo={jobNo} onSaved={onJobUpdated} />;
@@ -835,9 +1058,9 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     const getActionButton = () => {
       switch (tab) {
         case "putway_hht":
-          return renderActionButton(() => setViewMode("process"), <Truck size={14} />, "Process HHT Putaway", false, "outline");
+          return renderActionButton(openProcess, <Truck size={14} />, "Process HHT Putaway", false, "outline");
         case "quality_clearance":
-          return renderActionButton(() => setViewMode("process"), <Settings2 size={14} />, "Process Clearance", selectedRows.length === 0, "outline");
+          return renderActionButton(openProcess, <Settings2 size={14} />, "Process Clearance", selectedRows.length === 0, "outline");
         case "putway_details":
           return renderActionButton(openPutawayModal, <Truck size={14} />, "Process Putaway", selectedRows.length === 0, "outline");
         case "packing_details":
@@ -848,7 +1071,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
             </>
           );
         case "job_confirmation":
-          return renderActionButton(() => setViewMode("process"), <CheckCircle2 size={14} />, "Process Confirm Selected", selectedRows.length === 0, "outline");
+          return renderActionButton(openProcess, <CheckCircle2 size={14} />, "Process Confirm Selected", selectedRows.length === 0, "outline");
         case "receiving_details":
           return null;
         case "tally_details":
@@ -899,6 +1122,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
                 qty1_arrived: getReceivedQty(row), qty2_arrived: Number(row.qty2_arrived ?? 0),
               });
             }
+            setModalNotice(null);
             setViewMode("edit");
           }
         : undefined,
@@ -1037,7 +1261,6 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     const renderPackingDetailsSections = () => {
       const containerLp = getLookupProps({ name: "container_no", lookup: "container" } as any) as LookupProps;
       const productLp   = getLookupProps({ name: "prod_code",    lookup: "product"   } as any) as LookupProps;
-      const manufacturerLp = getLookupProps({ name: "manufacturer", lookup: "manufacturer" } as any) as LookupProps;
 
       const pUom      = String(addForm.p_uom    || "");
       const lUom      = String(addForm.l_uom    || "");
@@ -1049,20 +1272,10 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
         : "—";
       const prodNameStr = String(addForm.prod_name || "");
 
-      const SH = ({ icon: Icon, eyebrow, title }: { icon: any; eyebrow: string; title: string }) => (
-        <div className="flex items-center gap-2 border-b px-3 py-1.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={14} /></div>
-          <div>
-            <p className="m-0 text-[9px] font-bold uppercase tracking-widest text-primary">{eyebrow}</p>
-            <p className="m-0 text-xs font-semibold text-foreground leading-tight">{title}</p>
-          </div>
-        </div>
-      );
-
       return (
         <div className="grid grid-cols-2 gap-3">
           <section className="col-span-2 rounded-md border bg-card shadow-sm">
-            <SH icon={Package} eyebrow="Packing Information" title="Container & Product" />
+            <PackingSH icon={Package} eyebrow="Packing Information" title="Container & Product" />
             <div className="grid grid-cols-2 gap-2.5 p-2.5">
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Container No <strong className="text-destructive">*</strong></span>
@@ -1083,7 +1296,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
           </section>
 
           <section className="rounded-md border bg-card shadow-sm">
-            <SH icon={Hash} eyebrow="Quantity & UOM" title="Primary, Lowest & Total" />
+            <PackingSH icon={Hash} eyebrow="Quantity & UOM" title="Primary, Lowest & Total" />
             <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 p-2.5">
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Qty (Primary) <strong className="text-destructive">*</strong></span>
@@ -1126,7 +1339,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
           </section>
 
           <section className="rounded-md border bg-card shadow-sm">
-            <SH icon={FileText} eyebrow="References" title="Batch, Lot & Order References" />
+            <PackingSH icon={FileText} eyebrow="References" title="Batch, Lot & Order References" />
             <div className="grid grid-cols-3 gap-2.5 p-2.5">
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Batch No</span>
                 <Input className="h-8" value={String(addForm.batch_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, batch_no: e.target.value }))} /></label>
@@ -1142,7 +1355,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
           </section>
 
           <section className="col-span-2 rounded-md border bg-card shadow-sm">
-            <SH icon={CalendarDays} eyebrow="Dates & Shelf Life" title="Production, Expiry & Shelf Life" />
+            <PackingSH icon={CalendarDays} eyebrow="Dates & Shelf Life" title="Production, Expiry & Shelf Life" />
             <div className="grid grid-cols-4 gap-2.5 px-2.5 py-2">
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Production Date</span>
                 <Input className="h-8" type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
@@ -1167,46 +1380,6 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       const uomDetails  = addForm.p_uom
         ? `${addForm.p_uom}${addForm.uppp ? ` × ${addForm.uppp}` : ""}${Number(addForm.uom_count) > 1 && addForm.l_uom ? ` + ${addForm.l_uom}` : ""}`
         : "—";
-
-      // Helper to render the Freight-style section panel
-      const FreightPanel = ({ icon: Icon, title, children }: { icon: any, title: string, children: React.ReactNode }) => (
-        <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm mb-2">
-          <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-4 w-4 items-center justify-center rounded bg-primary text-white">
-                <Icon size={10} />
-              </span>
-              <div className="min-w-0">
-                <h3 className="m-0 truncate text-[10px] font-semibold uppercase tracking-wider text-foreground">{title}</h3>
-              </div>
-            </div>
-          </div>
-          <div className="freight-panel-body p-2.5">
-            {children}
-          </div>
-        </section>
-      );
-
-      // FIXED: Use inline styles to force the label into a single row
-      const LabelText = ({ text, required }: { text: string, required?: boolean }) => (
-        <span 
-          style={{ 
-            display: "flex", 
-            flexDirection: "row", 
-            alignItems: "center", 
-            gap: "4px",
-            fontSize: "11px",
-            fontWeight: 600,
-            color: "#475569",
-            textTransform: "uppercase",
-            letterSpacing: "0.02em",
-            marginBottom: "4px"
-          }}
-        >
-          <span>{text}</span>
-          {required && <span style={{ color: "#dc2626" }}>*</span>}
-        </span>
-      );
 
       return (
         <div className="grid gap-1">
@@ -1492,12 +1665,17 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
 
     // ── Render Form Views ─────────────────────────────────────────────────────
     if (viewMode !== "list") {
+      const onFormSubmit =
+        viewMode === "add"  ? saveAdd  :
+        viewMode === "edit" ? saveEdit :
+        saveProcess;
+
       return (
         <section className="grid gap-3 freight-dense-form freight-ui-standard p-1">
           {/* Freight-style Header */}
           <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1 shadow-sm">
             <div className="flex min-w-0 py-2 items-center gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setViewMode("list")}>
+              <Button type="button" size="sm" variant="outline" onClick={closeForm}>
                 <ArrowLeft size={14} /> Back
               </Button>
               
@@ -1540,17 +1718,18 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
                   {modalNotice}
                 </span>
               )}
-              <Button type="button" size="sm" variant="outline" onClick={() => setViewMode("list")}>
+              <Button type="button" size="sm" variant="outline" onClick={closeForm}>
                 <X size={14} /> Cancel
               </Button>
+              {/* type="submit" + form="inline-form" submits the form below even though this button sits outside it */}
               <Button type="submit" size="sm" form="inline-form" disabled={saving || editSaving}>
                 <Save size={14} /> {saving || editSaving ? "Saving..." : "Save"}
               </Button>
             </div>
           </div>
           {/* Form Body */}
-<div className="freight-form-card rounded-md border bg-card shadow-sm p-2">
-            <form id="inline-form" onSubmit={viewMode === "add" ? saveAdd : viewMode === "edit" ? saveEdit : (e) => { e.preventDefault(); /* handle process submit */ }} className="grid gap-2">
+          <div className="freight-form-card rounded-md border bg-card shadow-sm p-2">
+            <form id="inline-form" noValidate onSubmit={onFormSubmit} className="grid gap-2">
               
               {viewMode === "add" && (
                 isManualPutaway ? renderManualPutawaySections() :
