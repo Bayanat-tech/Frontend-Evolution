@@ -1,16 +1,14 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Eye, Plus, RefreshCw } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { NoticeToast } from "../../../components/ui/NoticeToast";
 import { getAllStockTransfers } from "../../../api/wms";
-import TransferForm from "./AddStockTransferForm";
+import {TransferForm} from "./AddStockTransferForm";
 
 type WmsRow = Record<string, unknown>;
 
-// ── Base path for stock transfer — keep in one place ──────────────────────────
 const STN_BASE = "/workspace/wms/activity/request/stock_transfer";
 
 function val(row: WmsRow, key: string) {
@@ -80,7 +78,6 @@ export function StockTransferPage() {
 
   useEffect(() => { void loadRows(); }, []);
 
-  // ── Build absolute detail URL ──
   function detailUrl(row: WmsRow) {
     const stn = val(row, "stn_no");
     const prin = val(row, "prin_code");
@@ -144,7 +141,7 @@ export function StockTransferPage() {
           className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
           title="View transfer"
           onClick={(e) => {
-            e.stopPropagation(); // Prevent row click from firing twice
+            e.stopPropagation();
             navigate(detailUrl(row.original));
           }}
         >
@@ -154,9 +151,23 @@ export function StockTransferPage() {
     },
   ], [navigate]);
 
+  // ── RENDER FULL PAGE FORM IF OPEN (Like Inbound Job) ──
+  if (formOpen) {
+    return (
+      <TransferForm
+        onClose={(shouldRefetch:any) => {
+          setFormOpen(false);
+          if (shouldRefetch) {
+            void loadRows(false);
+            setNotice({ type: "success", message: "Stock transfer created successfully." });
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <section className="freight-enquiry-list-screen grid gap-2">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 py-1">
         <div className="flex items-center gap-2.5">
           <h2
@@ -166,14 +177,10 @@ export function StockTransferPage() {
             Stock Transfer Listing
           </h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* <Button variant="outline" onClick={() => loadRows()}><RefreshCw size={15} /> Refresh</Button> */}
-        </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Table - exactly like Freight */}
       <DataTable
         columns={columns}
         data={rows}
@@ -205,25 +212,11 @@ export function StockTransferPage() {
           return stn ? `${co}-${prin}-${stn}` : String(index);
         }}
         rowClassName={(row) => {
-          // Apply row colors based on status, forcing onto cells to override DataTable defaults
-          if (val(row, "confirmed") === "Y") return "[&>td]:bg-emerald-50/70"; // Confirmed -> Light Green
-          return "[&>td]:bg-amber-50/70"; // Default -> Light Yellow (matching Freight's In Progress)
+          if (val(row, "confirmed") === "Y") return "[&>td]:bg-emerald-50/70";
+          return "[&>td]:bg-amber-50/70";
         }}
         onRowClick={(row) => navigate(detailUrl(row))}
       />
-
-      {formOpen && (
-        <TransferForm
-          open={formOpen}
-          onClose={(shouldRefetch) => {
-            setFormOpen(false);
-            if (shouldRefetch) {
-              void loadRows(false);
-              setNotice({ type: "success", message: "Stock transfer created successfully." });
-            }
-          }}
-        />
-      )}
     </section>
   );
 }
