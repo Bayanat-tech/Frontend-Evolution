@@ -42,7 +42,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
-import { FinanceDocumentActionButtons } from "../../components/finance/FinanceDocumentActionButtons";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -196,7 +196,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -205,7 +205,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center">Date</div>,
+      header: () => <div className="text-center font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name" },
@@ -215,28 +215,24 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
-      header: () => <div className="text-right">Amount</div>,
+      header: () => <div className="text-right font-bold">Amount</div>,
       cell: ({ getValue }) => {
         const val = Number(getValue() || 0);
-        return <div className="text-right font-mono font-medium">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
+        return <div className="text-right font-mono tabular-nums font-semibold text-slate-800">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
       },
     },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center">Div</div>,
+      header: () => <div className="text-center font-bold">Div</div>,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
-      size: 30,
+      size: 40,
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center">Status</div>,
+      header: () => <div className="text-center font-bold">Status</div>,
       cell: ({ getValue }) => (
         <div className="flex justify-center">
-          {String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive font-semibold">Cancelled</Badge>
-          ) : (
-            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Active</Badge>
-          )}
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
         </div>
       ),
     },
@@ -362,6 +358,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
+          rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
           getRowId={(row, index) => `${row.doc_no}_${index}`}
         />
       </div>

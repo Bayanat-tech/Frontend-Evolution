@@ -107,3 +107,31 @@ export const FinanceDocumentActionButtons: React.FC<FinanceDocumentActionButtons
     </div>
   );
 };
+
+export interface FinanceStatusBadgeProps {
+  isCancelled: boolean;
+  className?: string;
+}
+
+export const FinanceStatusBadge: React.FC<FinanceStatusBadgeProps> = ({ isCancelled, className = "" }) => {
+  if (isCancelled) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 shadow-2xs select-none ${className}`}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+        Cancelled
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/90 shadow-2xs select-none ${className}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      Active
+    </span>
+  );
+};
+

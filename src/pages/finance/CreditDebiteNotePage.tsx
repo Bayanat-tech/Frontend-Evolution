@@ -47,7 +47,7 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
-import { FinanceDocumentActionButtons } from "../../components/finance/FinanceDocumentActionButtons";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
@@ -165,7 +165,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
       accessorKey: "doc_no",
-      header: "Doc No",
+      header: () => <div className="font-bold">Doc No</div>,
       cell: ({ row }) => (
         <button
           type="button"
@@ -173,7 +173,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -182,7 +182,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center w-full">Date</div>,
+      header: () => <div className="text-center w-full font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name", size: 320 },
@@ -190,36 +190,28 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     { accessorKey: "remarks", header: "Description" },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center w-full">Div</div>,
-      size: 70,
+      header: () => <div className="text-center w-full font-bold">Div</div>,
+      size: 50,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
     },
     {
       id: "amount",
-      header: () => <div className="text-right w-full">Amount</div>,
+      header: () => <div className="text-right w-full font-bold">Amount</div>,
       accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
       cell: ({ row }) => (
-        <div className="text-right font-mono font-medium">
+        <div className="text-right font-mono tabular-nums font-semibold text-slate-800">
           {formatAmount(Number(row.original.net_amount ?? row.original.amount ?? 0))}
         </div>
       ),
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center w-full">Status</div>,
+      header: () => <div className="text-center w-full font-bold">Status</div>,
       cell: ({ getValue }) => {
         const isCanceled = String(getValue() || "N") === "Y";
         return (
           <div className="flex justify-center">
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                isCanceled
-                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              }`}
-            >
-              {isCanceled ? "Cancelled" : "Active"}
-            </span>
+            <FinanceStatusBadge isCancelled={isCanceled} />
           </div>
         );
       },
@@ -336,6 +328,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
                 setPageSize(nextPageSize);
                 setPageIndex(0);
               }}
+              rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
               getRowId={(row, index) => `${row.doc_no}_${index}`}
             />
           </div>
