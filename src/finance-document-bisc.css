@@ -923,9 +923,9 @@
 }
 .finance-document-editor .commercial-header-shell { flex:none !important; min-height:0 !important; max-height:none !important; overflow:visible !important; }
 .finance-document-editor .commercial-header-shell > .flex.items-center.justify-end { display:none; }
-.finance-document-editor .commercial-header-panel { display:flex !important; flex-direction:column !important; max-width:none !important; gap:5px !important; }
-.finance-document-editor .commercial-header-panel .commercial-header-block { width:100% !important; max-width:none !important; background:#ffffff !important; border:1px solid #cbd5e1 !important; border-radius:8px !important; box-shadow:0 1px 3px rgba(15, 23, 42, 0.04) !important; overflow:hidden !important; transition:border-color 0.15s ease !important; }
-.finance-document-editor .commercial-header-panel .commercial-header-block:hover { border-color:#94a3b8 !important; }
+.finance-document-editor .commercial-header-panel { display:flex !important; flex-direction:column !important; max-width:none !important; gap:8px !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block { width:100% !important; max-width:none !important; background:#ffffff !important; border:1.5px solid #94a3b8 !important; border-radius:8px !important; box-shadow:0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06) !important; overflow:hidden !important; transition:border-color 0.15s ease, box-shadow 0.15s ease !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block:hover { border-color:#64748b !important; box-shadow:0 3px 8px rgba(15, 23, 42, 0.1) !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-fields { display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)) !important; gap:4px 8px !important; padding:5px 10px 6px 10px !important; background:#ffffff !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-fields > * { grid-column:span 1 !important; order:0 !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields { grid-template-columns:repeat(6,minmax(0,1fr)) !important; }
