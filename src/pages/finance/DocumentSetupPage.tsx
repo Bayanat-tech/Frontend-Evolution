@@ -104,8 +104,8 @@ export function DocumentSetupPage() {
     if (clearNotice) setNotice(null);
     try {
       const [headers, details] = await Promise.all([
-        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_HDR", loginid: loginId, code1: doc.doc_id }),
-        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_DTL", loginid: loginId, code1: doc.doc_id }),
+        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_HDR", loginid: loginId, code1: doc.doc_id, code2: companyCode }),
+        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_DTL", loginid: loginId, code1: doc.doc_id, code2: companyCode }),
       ]);
       setHeaderRows(headers.map((row, index) => mapDocAccount(row, index, "H", doc, companyCode)));
       setDetailRows(details.map((row, index) => mapDocAccount(row, index, "D", doc, companyCode)));
