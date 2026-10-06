@@ -17,6 +17,7 @@ export default function MseProdGroup() {
       {
         name: "group_name",
         label: "Product Group Name",
+        required: true,
       },
       {
         name: "inv_ac_code",

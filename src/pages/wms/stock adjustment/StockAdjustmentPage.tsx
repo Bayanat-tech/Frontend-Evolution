@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, RefreshCw, Eye, ClipboardList, Search, Download } from "lucide-react";
+import { Plus, Eye, ClipboardList, Search, Download } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
@@ -71,9 +71,7 @@ export function StockAdjPage() {
 
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
-    null
-  );
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -99,17 +97,13 @@ export function StockAdjPage() {
       setRows(
         arr.map((row, index) => ({
           ...normalizeRow(row as WmsRow),
-          _id: `${val(row as WmsRow, "company_code")}-${val(
-            row as WmsRow,
-            "prin_code"
-          )}-${val(row as WmsRow, "adj_no")}-${index}`,
+          _id: `${val(row as WmsRow, "company_code")}-${val(row as WmsRow, "prin_code")}-${val(row as WmsRow, "adj_no")}-${index}`,
         }))
       );
     } catch (error) {
       setNotice({
         type: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to load stock adjustments.",
+        message: error instanceof Error ? error.message : "Unable to load stock adjustments.",
       });
     } finally {
       setLoading(false);
@@ -235,7 +229,22 @@ export function StockAdjPage() {
     [navigate]
   );
 
-  // ── Render ────────────────────────────────────────────────────
+  // ── Render Full Page Form if open (Replaces grid) ─────────────────────────
+  if (formOpen) {
+    return (
+      <AddStockAdjustmentForm
+        onClose={(shouldRefetch) => {
+          setFormOpen(false);
+          if (shouldRefetch) {
+            void loadRows(false);
+            setNotice({ type: "success", message: "Stock adjustment created successfully." });
+          }
+        }}
+      />
+    );
+  }
+
+  // ── Render Listing Page ───────────────────────────────────────────────────
   return (
     <section className="grid gap-3">
       {/* ── Page Header ─────────────────────────────────────── */}
@@ -278,9 +287,7 @@ export function StockAdjPage() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              /* hook up export here if needed */
-            }}
+            onClick={() => {}}
           >
             <Download size={14} /> Export
           </Button>
@@ -292,7 +299,7 @@ export function StockAdjPage() {
 
       {/* ── DataTable (no export, no search — handled above) ── */}
       <DataTable
-       enableExport={false}
+        enableExport={false}
         columns={columns}
         data={filteredRows}
         loading={loading}
@@ -304,22 +311,6 @@ export function StockAdjPage() {
         rowClassName={() => "freight-status-row freight-status-draft"}
         onRowClick={(row) => navigate(detailUrl(row))}
       />
-
-      {formOpen && (
-        <AddStockAdjustmentForm
-          open={formOpen}
-          onClose={(shouldRefetch) => {
-            setFormOpen(false);
-            if (shouldRefetch) {
-              void loadRows(false);
-              setNotice({
-                type: "success",
-                message: "Stock adjustment created successfully.",
-              });
-            }
-          }}
-        />
-      )}
     </section>
   );
 }

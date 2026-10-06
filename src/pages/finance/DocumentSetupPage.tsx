@@ -103,8 +103,8 @@ export function DocumentSetupPage() {
     if (clearNotice) setNotice(null);
     try {
       const [headers, details] = await Promise.all([
-        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_HDR", loginid: loginId, code1: doc.doc_id }),
-        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_DTL", loginid: loginId, code1: doc.doc_id }),
+        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_HDR", loginid: loginId, code1: doc.doc_id, code2: companyCode }),
+        getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_DTL", loginid: loginId, code1: doc.doc_id, code2: companyCode }),
       ]);
       setHeaderRows(headers.map((row, index) => mapDocAccount(row, index, "H", doc, companyCode)));
       setDetailRows(details.map((row, index) => mapDocAccount(row, index, "D", doc, companyCode)));
@@ -230,6 +230,8 @@ export function DocumentSetupPage() {
         rows: [stripAccountForSave(row, companyCode)],
         loginId,
       });
+      if (type === "header") setHeaderRows((prev) => prev.filter((item) => item.id !== row.id && item.ac_code !== row.ac_code));
+      if (type === "detail") setDetailRows((prev) => prev.filter((item) => item.id !== row.id && item.ac_code !== row.ac_code));
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Document account deleted" });
       if (selected) await loadDetails(selected, false);

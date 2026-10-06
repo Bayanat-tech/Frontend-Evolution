@@ -132,10 +132,15 @@ const AgeRangeField: React.FC<{
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const DEFAULT_PARAMS: Params = {
-    prin_code: ["All"], dept_code: ["All"], prod_code: ["All"],
-    age1: "30", age2: "60", age3: "90", age4: "120", age5: "150",
+    prin_code: ["All"],
+    dept_code: ["All"],
+    prod_code: ["All"],
+    age1: "30",
+    age2: "60",
+    age3: "90",
+    age4: "120",
+    age5: "150",
     group_by: "product_group",
-    
 };
 
 export default function StockAgeingQuantityReport() {
@@ -159,9 +164,10 @@ export default function StockAgeingQuantityReport() {
 
     const optionsRequestRef = useRef(0);
 
-    const ageErrors = useMemo(() => validateAgeBuckets(params), [
-        params.age1, params.age2, params.age3, params.age4, params.age5,
-    ]);
+    const ageErrors = useMemo(
+        () => validateAgeBuckets(params),
+        [params.age1, params.age2, params.age3, params.age4, params.age5],
+    );
     const hasAgeErrors = Object.keys(ageErrors).length > 0;
 
     const loadCascadedOptions = useCallback(async (p: Params) => {
@@ -255,8 +261,8 @@ export default function StockAgeingQuantityReport() {
     });
 
     const groupByOptions: ReportOption[] = [
-    { value: "product_group", label: "Detailed (Product Group)" },
-    { value: "principal", label: "Summary (Principal)" },
+        { value: "product_group", label: "Detailed (Product Group)" },
+        { value: "principal", label: "Summary (Principal)" },
     ];
 
     // ── Fetch the report HTML and feed it into NewReportDialog ───────────────
@@ -411,20 +417,20 @@ export default function StockAgeingQuantityReport() {
             loading: optLoading,
         },
         {
-        key: "group_by",
-        label: "Group By",
-        type: "select",
-        options: groupByOptions,
-        loading: optLoading,
-        // Use a generic placeholder to avoid duplication
-        placeholder: "Select Group By", 
-    },
+            key: "group_by",
+            label: "Group By",
+            type: "select",
+            options: groupByOptions,
+            loading: optLoading,
+            placeholder: "Select Group By",
+        },
     ];
 
     return (
         <>
             <NewReportPage
                 title="Stock Ageing (Quantity) Report"
+                filterLabel="Stock Ageing (Quantity) Filters"
                 fields={fields}
                 values={params}
                 onChange={setParam}
