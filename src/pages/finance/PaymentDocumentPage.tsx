@@ -1596,19 +1596,19 @@ function PaymentDocumentEditor({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
-                <div className="commercial-line-totals flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 font-medium text-[11px]">Total Amount</span>
-                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(total)}</strong>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2.5">
+                <div className="commercial-line-totals flex items-center gap-3">
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Amount</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 font-medium text-[11px]">Tax Amount</span>
-                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(totalTax)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Tax Amount</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(totalTax)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-md border border-blue-200 shadow-2xs">
-                    <span className="font-bold text-[#00378c] text-[11px]">Net Total</span>
-                    <strong className="text-[#00378c] font-mono text-xs font-bold">{formatAmount(total + totalTax)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-1.5 shadow-2xs">
+                    <span className="text-xs font-bold text-[#00378c]">Net Total</span>
+                    <strong className="font-mono text-base font-extrabold tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
                   </div>
                 </div>
               </div>

@@ -96,7 +96,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const disabled = isViewMode || saving;
   const Required = () => <span className="text-destructive ml-0.5">*</span>;
 
-
   const { data: hdrList = [] } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
     queryFn: () =>
@@ -120,6 +119,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
+
   const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
       parameter: "capex_req_ins_upd",
@@ -169,12 +169,11 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
       val1s42: header.ACCOUNT_NO || "",
 
-
-      val1s43: loginid,   // CREATED_BY 
-      val1s44: loginid,   // UPDATED_BY
-      val1s45: "",        // NEXT_ACTION_BY
-      val1s46: "",        // SENTBACK_REASON 
-      val1s47: "",        // REJECT_REASON 
+      val1s43: loginid,
+      val1s44: loginid,
+      val1s45: "",
+      val1s46: "",
+      val1s47: "",
 
       val1n1: header.FLOW_LEVEL_INITIAL || 1,
       val1n2: header.FLOW_LEVEL_RUNNING || 1,
@@ -186,7 +185,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,
       val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
 
-      ...extra, // Reject/Send Back override val1s46/47 here
+      ...extra,
     });
 
   const runAction = async (status: string, successMsg: string) => {
@@ -217,7 +216,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setSaving(true);
     setNotice(null);
     try {
-
       const result = await saveHeader("REJECTED", { val1s47: remarkText });
       if (result.success) {
         setNotice({ type: "success", message: "CR rejected successfully!" });
@@ -237,7 +235,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setSaving(true);
     setNotice(null);
     try {
-
       const result = await saveHeader("SENTBACK", { val1s46: remarkText });
       if (result.success) {
         setNotice({ type: "success", message: "CR sent back successfully!" });
@@ -251,7 +248,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       setSaving(false);
     }
   };
-
 
   const handleCancelConfirm = async () => {
     setSaving(true);
@@ -270,9 +266,14 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ Root wrapper fix — sidebar visible rahega
+  //    pehle: "fixed inset-0 z-50 bg-background" + section "h-screen"
+  //    ab:    flow-based (parent ke andar fit)
+  // ═══════════════════════════════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <section className="payment-workbench commercial-editor grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div>
@@ -355,8 +356,16 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 </div>
                 <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-6">
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
-                  <label className="field"><span>Tel No<Required /></span><Input  disabled={disabled}  type="tel" inputMode="numeric" maxLength={10} value={header.FIN_CONTACT_NUMBER || ""}  onChange={(e) => {
-                   const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  <label className="field">
+                    <span>Tel No<Required /></span>
+                    <Input
+                      disabled={disabled}
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={header.FIN_CONTACT_NUMBER || ""}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
                         setHdr("FIN_CONTACT_NUMBER", digitsOnly);
                       }}
                     />
@@ -467,7 +476,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     FREIGHT
                   </label>
 
-                  <label className="field  min-w-[200px]">
+                  <label className="field min-w-[200px]">
                     <span>Account No<Required /></span>
                     <Input disabled={disabled} value={header.ACCOUNT_NO || ""} onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)} />
                   </label>
@@ -566,6 +575,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
           Once canceled, this request will move to the "Canceled" tab and no further action can be taken on it.
         </p>
       </Dialog>
+
       <AttachmentDialog
         open={attachOpen}
         onClose={() => setAttachOpen(false)}
