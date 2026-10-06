@@ -58,8 +58,6 @@ type TaskPopupData = {
 
 const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
-
-  // ✅ FIX: Trim companyCode aur loginid — trailing space hatane ke liye
   const loginid = (user?.loginid || user?.username || "").trim();
   const companyCode = (user?.company_code || "").trim();
 
@@ -102,11 +100,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "pr"],
     queryFn: () => almsCommonSelect<TPurchaseSummaryTxn>({
       parameter: "PS_PREQUEST_ENTRY_TAB_LIST",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: activeCode3,
-      code4: "",
+      loginid, code1: companyCode, code2: loginid, code3: activeCode3, code4: "",
     }),
     enabled: !!loginid && !!companyCode && !isPoGeneratedTab,
   });
@@ -115,11 +109,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "po"],
     queryFn: () => almsCommonSelect<TPPOGenerated>({
       parameter: "PS_PREQUEST_ENTRY_POGENERATED",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: activeCode3,
-      code4: "",
+      loginid, code1: companyCode, code2: loginid, code3: activeCode3, code4: "",
     }),
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
@@ -153,7 +143,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     if (isError) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to load purchase requests"
+        message: error instanceof Error ? error.message : "Failed to load purchase requests",
       });
     }
   }, [isError, error]);
@@ -163,20 +153,12 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     try {
       const rawRows = await almsCommonSelect<Record<string, unknown>>({
         parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid,
-        code1: companyCode,
-        code2: loginid,
-        code3: "Admin",
-        code4: "",
+        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
       });
 
       const divisions = await almsCommonSelect({
         parameter: "PS_PREQUEST_ENTRY_DIVISION",
-        loginid,
-        code1: companyCode,
-        code2: loginid,
-        code3: "",
-        code4: ""
+        loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
       });
 
       const flowRows = rawRows
@@ -185,7 +167,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           const flowDivCode = String(row.DIV_CODE ?? "");
           const div = divisions.find((d: any) => d.DIV_CODE === flowDivCode);
           return {
-            flowCode: flowCode,
+            flowCode,
             flowDescription: String(row.FLOW_DESCRIPTION ?? row.flow_description ?? ""),
             divCode: flowDivCode,
             divName: div ? String(div.DIV_NAME || "") : "",
@@ -199,9 +181,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
       setFlowConfirm({
-        open: true,
-        loading: false,
-        rows: flowRows,
+        open: true, loading: false, rows: flowRows,
         selectedFlowCode: flowRows.length === 1 ? flowRows[0].flowCode : "",
       });
     } catch (err) {
@@ -230,7 +210,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
     const flowCode = (row as any).FLOW_CODE || "";
     const flowDescription = (row as any).FLOW_DESCRIPTION || "";
-
     setTaskPopup({
       open: true,
       title: `${actionType === "edit" ? "Edit" : "View"} PR - ${row.REQUEST_NUMBER}`,
@@ -238,8 +217,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         existingData: row,
         isEditMode: actionType === "edit",
         isViewMode: actionType === "view",
-        flowCode: flowCode,
-        flowDescription: flowDescription,
+        flowCode, flowDescription,
       },
     });
   };
@@ -250,7 +228,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       const queryKey = isPoGeneratedTab
         ? ["purchase-request-page", loginid, companyCode, activeCode3, "po"]
         : ["purchase-request-page", loginid, companyCode, activeCode3, "pr"];
-
       queryClient.refetchQueries({ queryKey, type: "active" });
     }
   }, [queryClient, loginid, companyCode, activeCode3, isPoGeneratedTab]);
@@ -266,10 +243,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return {
           ...prev,
           title: `Edit PR - ${savedRequestNumber}`,
-          data: {
-            ...prev.data,
-            existingData: syntheticRow,
-          },
+          data: { ...prev.data, existingData: syntheticRow },
         };
       }
       return prev;
@@ -277,7 +251,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   }, []);
 
   const handlePoView = (row: TPPOGenerated) => {
-    const prNumber = row.PR_NUMBER || '';
+    const prNumber = row.PR_NUMBER || "";
     setTaskPopup({
       open: true,
       title: `PO - ${row.PO_NUMBER}`,
@@ -299,9 +273,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         accessorKey: "REQUEST_NO",
         header: "Request No",
         cell: ({ row }) => (
-          <span className="font-semibold text-[#082A89]">
-            {row.original.REQUEST_NUMBER}
-          </span>
+          <span className="font-semibold text-[#082A89]">{row.original.REQUEST_NUMBER}</span>
         ),
       },
       {
@@ -322,10 +294,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
         },
       },
-      {
-        accessorKey: "CREATE_USER",
-        header: "Create User",
-      },
+      { accessorKey: "CREATE_USER", header: "Create User" },
       {
         accessorKey: "create_date",
         header: "Create Date",
@@ -340,11 +309,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           return (
             <span
               className="inline-block rounded-full border px-3 py-0.5 text-xs font-bold whitespace-nowrap"
-              style={{
-                background: style.bg,
-                color: style.color,
-                borderColor: style.border,
-              }}
+              style={{ background: style.bg, color: style.color, borderColor: style.border }}
             >
               {val || "—"}
             </span>
@@ -357,12 +322,9 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         cell: ({ row }) => {
           const r = row.original as any;
           return (
-            r.SENTBACK_REASON ||
-            r.sentback_reason ||
-            r.REJECT_REASON ||
-            r.reject_reason ||
-            r.REASON ||
-            "—"
+            r.SENTBACK_REASON || r.sentback_reason ||
+            r.REJECT_REASON || r.reject_reason ||
+            r.REASON || "—"
           );
         },
       },
@@ -385,19 +347,13 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           const isFinalApproved = String((row.original as any).FINAL_APPROVED || "").toUpperCase() === "Y";
           return (
             <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                title="View"
-                onClick={() => handleActions("view", row.original)}
-              >
+              <Button size="icon" variant="ghost" title="View" onClick={() => handleActions("view", row.original)}>
                 <Eye size={15} />
               </Button>
               {isPendingTab && (
                 <Button
-                  size="icon"
-                  variant="ghost"
-                  title={isFinalApproved ? "Approved  — cannot edit" : "Edit"}
+                  size="icon" variant="ghost"
+                  title={isFinalApproved ? "Approved — cannot edit" : "Edit"}
                   onClick={() => handleActions("edit", row.original)}
                   disabled={isFinalApproved}
                 >
@@ -418,16 +374,10 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         accessorKey: "PO_NUMBER",
         header: "PO Number",
         cell: ({ row }) => (
-          <span className="font-semibold text-[#082A89]">
-            {row.original.PO_NUMBER}
-          </span>
+          <span className="font-semibold text-[#082A89]">{row.original.PO_NUMBER}</span>
         ),
       },
-      {
-        accessorKey: "PO_DATE",
-        header: "PO Date",
-        cell: ({ row }) => row.original.PO_DATE || "NA",
-      },
+      { accessorKey: "PO_DATE", header: "PO Date", cell: ({ row }) => row.original.PO_DATE || "NA" },
       {
         accessorKey: "SUPPLIER_CODE",
         header: "Supplier",
@@ -442,16 +392,10 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         accessorKey: "PR_NUMBER",
         header: "PR Number",
         cell: ({ row }) => (
-          <span className="font-medium text-blue-600">
-            {row.original.PR_NUMBER || "—"}
-          </span>
+          <span className="font-medium text-blue-600">{row.original.PR_NUMBER || "—"}</span>
         ),
       },
-      {
-        accessorKey: "PR_DATE",
-        header: "PR Date",
-        cell: ({ row }) => row.original.PR_DATE || "NA",
-      },
+      { accessorKey: "PR_DATE", header: "PR Date", cell: ({ row }) => row.original.PR_DATE || "NA" },
       {
         accessorKey: "PR_DESCRIPTION",
         header: "PR Description",
@@ -463,6 +407,32 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
 
   const columns = isPoGeneratedTab ? poColumns : prColumns;
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ FULL-PAGE PR EDITOR — PO style (sidebar visible rahega)
+  // Dialog wrapper hata diya, direct page swap kiya
+  // ═══════════════════════════════════════════════════════════════════════
+  if (taskPopup.open) {
+    return (
+      <AddPRRequestPage
+        isEditMode={taskPopup.data.isEditMode}
+        isViewMode={taskPopup.data.isViewMode}
+        existingData={
+          taskPopup.data.existingData
+            ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+            : undefined
+        }
+        flowCode={taskPopup.data.flowCode}
+        flowDescription={taskPopup.data.flowDescription}
+        docType={taskPopup.data.docType}
+        docNo={taskPopup.data.docNo}
+        onClose={closePopup}
+      />
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // LIST PAGE
+  // ═══════════════════════════════════════════════════════════════════════
   return (
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
@@ -539,7 +509,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         />
       </div>
 
-      {/* Approval Flow Dialog */}
+      {/* Approval Flow Dialog — ye rahega (chhota modal hai, sidebar pe effect nahi) */}
       <Dialog
         open={flowConfirm.open}
         wide={false}
@@ -606,31 +576,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
               </tbody>
             </table>
           </div>
-        )}
-      </Dialog>
-
-      {/* Add / Edit / View Dialog */}
-      <Dialog
-        open={taskPopup.open}
-        wide
-        title={taskPopup.title}
-        onClose={() => closePopup()}
-      >
-        {taskPopup.open && (
-          <AddPRRequestPage
-            isEditMode={taskPopup.data.isEditMode}
-            isViewMode={taskPopup.data.isViewMode}
-            existingData={
-              taskPopup.data.existingData
-                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-                : undefined
-            }
-            flowCode={taskPopup.data.flowCode}
-            flowDescription={taskPopup.data.flowDescription}
-            docType={taskPopup.data.docType}
-            docNo={taskPopup.data.docNo}
-            onClose={closePopup}
-          />
         )}
       </Dialog>
     </section>
