@@ -1112,7 +1112,13 @@ function PaymentDocumentEditor({
                           columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
-                          loadOptions={() => getDocAccounts(form.doc_type, "H", form.div_code)}
+                          loadOptions={() => getDynamicLookup({
+                            parameter: "Account_AC_CODE_Serach_HDR",
+                            code1: user?.company_code,
+                            code2: "H",
+                            code3: form.doc_type,
+                            code4: form.div_code
+                          })}
                           disabled={disabled || !form.div_code}
                           onChange={async (value, row) => {
                             const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
@@ -1348,7 +1354,13 @@ function PaymentDocumentEditor({
                                 columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
-                                loadOptions={() => getDocAccounts(form.doc_type, "D", form.div_code)}
+                                loadOptions={() => getDynamicLookup({
+                                  parameter: "Account_AC_CODE_Serach_HDR",
+                                  code1: user?.company_code,
+                                  code2: "D",
+                                  code3: form.doc_type,
+                                  code4: form.div_code
+                                })}
                                 disabled={disabled}
                                 onChange={(value, row) => void selectDetailAccount(detail, value, row)}
                               />
