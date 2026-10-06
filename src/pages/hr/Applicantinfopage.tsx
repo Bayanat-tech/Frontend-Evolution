@@ -1,13 +1,19 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Edit2, Eye, Loader2, Plus, RefreshCw, Save, Send, Trash2, UserPlus, X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
-import { AddApplicantForm } from "./Addapplicantform";
-
+import {
+  AddApplicantForm,
+  type ApplicantFormHandle,
+  type FormMode,
+} from "./Addapplicantform";
 
 type ApplicantInfoRow = {
   doc_no: string;
@@ -23,12 +29,6 @@ type ApplicantInfoRow = {
   hire_flag: string;
   created_at: string;
   [key: string]: unknown;
-};
-
-type PopupState = {
-  open: boolean;
-  mode: "add" | "edit" | "view";
-  data: Partial<ApplicantInfoRow>;
 };
 
 const baseParams = (loginid: string, companyCode: string) => ({
@@ -48,7 +48,6 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
-
 const parseCreatedAt = (input: unknown): number => {
   if (input === null || input === undefined || input === "") return -Infinity;
 
@@ -67,13 +66,11 @@ const parseCreatedAt = (input: unknown): number => {
   let t = Date.parse(raw);
   if (!Number.isNaN(t)) return t;
 
-  // Try swapping a space-separated date/time into ISO-friendly form:
   // "YYYY-MM-DD HH24:MI:SS" -> "YYYY-MM-DDTHH24:MI:SS"
   t = Date.parse(raw.replace(" ", "T"));
   if (!Number.isNaN(t)) return t;
 
-  // Try common Oracle default NLS format: "DD-MON-YY" / "DD-MON-YYYY"
-  // e.g. "30-JUN-26", "30-JUN-2026", optionally with a time portion.
+  // Oracle default NLS format: "DD-MON-YY" / "DD-MON-YYYY" (+ optional time)
   const oracleMatch = raw.match(
     /^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
   );
@@ -95,59 +92,94 @@ const parseCreatedAt = (input: unknown): number => {
   return -Infinity;
 };
 
-const createdAtSortValue = (createdAt: unknown): number => parseCreatedAt(createdAt);
-
+// Newest first, keyed on the (hidden) created_at audit column
 const sortByCreatedAtDesc = (rows: ApplicantInfoRow[]): ApplicantInfoRow[] =>
-  [...rows].sort(
-    (a, b) => createdAtSortValue(b.created_at) - createdAtSortValue(a.created_at),
-  );
+  [...rows].sort((a, b) => parseCreatedAt(b.created_at) - parseCreatedAt(a.created_at));
+
+const formatDate = (val: unknown) => {
+  if (!val) return "-";
+  const d = new Date(String(val));
+  return Number.isNaN(d.getTime()) ? String(val) : d.toLocaleDateString("en-GB");
+};
 
 export function ApplicantInfoPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const loginid = user?.loginid || "ADMIN";
   const companyCode = user?.company_code || "";
 
   const [rows, setRows] = useState<ApplicantInfoRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
+
+  // inline form (replaces the grid while open)
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<FormMode>("add");
+  const [activeRow, setActiveRow] = useState<ApplicantInfoRow | null>(null);
+  const [formKey, setFormKey] = useState(0); // remount form when switching rows
+  const [saving, setSaving] = useState(false);
+
+  // delete state
   const [deleteTarget, setDeleteTarget] = useState<ApplicantInfoRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Ref to the form so the header buttons can trigger it
+  const formRef = useRef<ApplicantFormHandle>(null);
+
+  const readonly = formMode === "view";
+  const editing = formMode === "edit";
 
   const loadRows = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
-    setNotice(null);
     try {
       const data = await getDynamicLookup(baseParams(loginid, companyCode));
       const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
       const list: ApplicantInfoRow[] = raw.map((r) => ({
         ...(r as ApplicantInfoRow),
-        // Accept multiple possible key casings/names the backend might use
-        // for the SYSDATE audit column.
+        // Accept multiple possible key casings/names for the SYSDATE audit column.
         created_at: String(
           r.created_at ?? r.CREATED_AT ?? r.createdAt ?? r.CREATED_DATE ?? r.created_date ?? "",
         ),
       }));
       setRows(sortByCreatedAtDesc(list));
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load applicant records",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to load applicant records");
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginid, companyCode]);
 
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
+  /* ── Inline form open / close ── */
+  const openForm = (mode: FormMode, row: ApplicantInfoRow | null = null) => {
+    setFormMode(mode);
+    setActiveRow(row);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    if (saving) return;
+    setFormOpen(false);
+    setFormMode("add");
+    setActiveRow(null);
+  };
+
+  const handleFormClosed = (shouldRefetch?: boolean) => {
+    setFormOpen(false);
+    setFormMode("add");
+    setActiveRow(null);
+    if (shouldRefetch) void loadRows();
+  };
+
+  /* ── Delete ── */
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    setNotice(null);
     try {
       await executeDynamicDelete({
         parameter: "HR_CAM_APPLICANT_INFO_DELETE",
@@ -156,14 +188,11 @@ export function ApplicantInfoPage() {
         code2: deleteTarget.doc_type,
         code3: String(deleteTarget.doc_no),
       });
+      toast.success(`Document ${deleteTarget.doc_no} deleted successfully`);
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `Document ${deleteTarget.doc_no} deleted successfully.` });
       await loadRows();
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to delete applicant record",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to delete applicant record");
     } finally {
       setDeleting(false);
     }
@@ -171,31 +200,16 @@ export function ApplicantInfoPage() {
 
   const columns = useMemo<ColumnDef<ApplicantInfoRow>[]>(
     () => [
-      {
-        accessorKey: "doc_no",
-        header: "Doc No",
-        size: 100,
-        // Sorting disabled: the desired order (newest first) is already
-        // enforced by sortByCreatedAtDesc() pre-sorting the row array on
-        // load, using created_at as the sort key. That column is
-        // intentionally not rendered in the UI (see note near the bottom
-        // of this columns array).
-        enableSorting: false,
-      },
+      // Sorting is disabled on every column: the newest-first order is
+      // enforced by sortByCreatedAtDesc() on load. created_at itself is
+      // fetched and used for that sort but intentionally not rendered.
+      { accessorKey: "doc_no", header: "Doc No", size: 100, enableSorting: false },
       {
         accessorKey: "doc_date",
         header: "Doc Date",
         size: 120,
-        // Sorting disabled: doc_date is a user-editable business field
-        // (people can backdate/postdate it on the form), so it must never
-        // become the active sort column — otherwise it silently overrides
-        // the newest-first-by-created_at order this table is meant to show.
         enableSorting: false,
-        cell: ({ getValue }) => {
-          const val = getValue<string>();
-          if (!val) return "-";
-          return new Date(val).toLocaleDateString("en-GB");
-        },
+        cell: ({ getValue }) => formatDate(getValue()),
       },
       { accessorKey: "doc_ref_no", header: "Ref No", size: 120, enableSorting: false },
       { accessorKey: "cand_name", header: "Candidate Name", size: 180, enableSorting: false },
@@ -206,13 +220,8 @@ export function ApplicantInfoPage() {
         accessorKey: "intrvw_date",
         header: "Interview Date",
         size: 130,
-        // Same reasoning as doc_date: keep the table locked to created_at order.
         enableSorting: false,
-        cell: ({ getValue }) => {
-          const val = getValue<string>();
-          if (!val) return "-";
-          return new Date(val).toLocaleDateString("en-GB");
-        },
+        cell: ({ getValue }) => formatDate(getValue()),
       },
       {
         accessorKey: "hire_flag",
@@ -222,57 +231,44 @@ export function ApplicantInfoPage() {
         cell: ({ row }) => {
           const val = (row.original.hire_flag ?? "").toString().toUpperCase();
           if (val === "Y")
-            return (
-              <span style={{ color: "#16a34a", fontWeight: 600, fontSize: "0.8125rem" }}>
-                Hired
-              </span>
-            );
+            return <span className="text-[0.8125rem] font-semibold text-green-600">Hired</span>;
           if (val === "N")
-            return (
-              <span style={{ color: "#dc2626", fontWeight: 600, fontSize: "0.8125rem" }}>
-                Rejected
-              </span>
-            );
-          return <span style={{ color: "#6b7280", fontSize: "0.8125rem" }}>-</span>;
+            return <span className="text-[0.8125rem] font-semibold text-red-600">Rejected</span>;
+          return <span className="text-[0.8125rem] text-muted-foreground">-</span>;
         },
       },
-      // NOTE: created_at is intentionally NOT rendered as a column here.
-      // It's still fetched, parsed, and used to pre-sort `rows` (newest
-      // first) via sortByCreatedAtDesc() in loadRows(). It's just hidden
-      // from the UI. If you ever want it back, re-add a column with
-      // accessorKey: "created_at" using parseCreatedAt()/createdAtSortValue()
-      // for its cell rendering and sortingFn.
       {
         id: "actions",
         header: "Actions",
-        size: 100,
+        size: 110,
+        enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openForm("edit", row.original)}
               title="Edit"
-              onClick={() => setPopup({ open: true, mode: "edit", data: row.original })}
             >
-              <Edit2 size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openForm("view", row.original)}
               title="View"
-              onClick={() => setPopup({ open: true, mode: "view", data: row.original })}
             >
-              <Eye size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Delete"
+              <Eye size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
               onClick={() => setDeleteTarget(row.original)}
+              title="Delete"
             >
-              <Trash2 size={14} />
-            </Button>
+              <Trash2 size={13} />
+            </button>
           </div>
         ),
       },
@@ -280,70 +276,115 @@ export function ApplicantInfoPage() {
     [],
   );
 
+  const formBadge = formMode === "add" ? "Draft" : editing ? "Editing" : "View only";
+
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Applicant Info</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Manage applicant interview and hiring records.
-          </p>
+    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+      {/* Freight-style transaction header */}
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <UserPlus size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                HR Recruitment - Applicant Info
+              </h1>
+              <span className="text-xs text-muted-foreground">
+                {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
+              </span>
+              {formOpen && (
+                <>
+                  <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                    {formBadge}
+                  </span>
+                  {activeRow?.doc_no && (
+                    <span className="text-xs text-muted-foreground">
+                      Doc No: {activeRow.doc_no}
+                      {activeRow.cand_name ? ` - ${activeRow.cand_name}` : ""}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}>
-            <RefreshCw size={15} /> Refresh
+
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void loadRows()}
+            disabled={loading || saving}
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
           </Button>
-          <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
-            <Plus size={15} /> Add Applicant
+          <Button type="button" size="sm" variant="outline" onClick={() => openForm("add")} disabled={saving}>
+            <Plus size={14} /> Add
           </Button>
+          {formOpen && (
+            <>
+              <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
+                <X size={14} /> Close
+              </Button>
+              {!readonly && (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void formRef.current?.saveDraft()}
+                    disabled={saving}
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
+                    {saving ? "Saving" : "Save as Draft"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => formRef.current?.submit()}
+                    disabled={saving}
+                  >
+                    <Send size={14} /> Submit
+                  </Button>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
+      {/* Add / Edit / View form — replaces the grid while open */}
+      {formOpen ? (
+        <AddApplicantForm
+          key={formKey}
+          ref={formRef}
+          mode={formMode}
+          existingData={activeRow}
+          onClose={handleFormClosed}
+          onSavingChange={setSaving}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${rows.length.toLocaleString()} Records`}
+          subtitle="Applicant Info List"
+          searchPlaceholder="Search doc no, candidate, department..."
+          loading={loading}
+          emptyText="No applicant records found. Click Add to create one."
+          height={560}
+          minWidth={1100}
+          density="grid"
+          enablePagination
+          pageSize={100}
+          getRowId={(row) => `${row.doc_type}-${row.doc_no}`}
+        />
       )}
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        title={`${rows.length.toLocaleString()} Records`}
-        subtitle="Applicant Info List"
-        searchPlaceholder="Search doc no, candidate, department..."
-        loading={loading}
-        height={560}
-        minWidth={1100}
-        density="grid"
-        enablePagination
-        pageSize={100}
-        getRowId={(row) => `${row.doc_type}-${row.doc_no}`}
-      />
-
-      {popup.open && (
-        <Dialog
-          open
-          title={
-            popup.mode === "add"
-              ? "Add Applicant"
-              : popup.mode === "edit"
-                ? "Edit Applicant"
-                : "View Applicant"
-          }
-          wide
-          onClose={() => setPopup((p) => ({ ...p, open: false }))}
-        >
-          <AddApplicantForm
-            mode={popup.mode}
-            existingData={popup.data}
-            onClose={(shouldRefetch?: boolean) => {
-              setPopup((p) => ({ ...p, open: false }));
-              if (shouldRefetch) void loadRows();
-            }}
-          />
-        </Dialog>
-      )}
-
+      {/* Delete confirmation */}
       <Dialog
         open={Boolean(deleteTarget)}
         title="Delete Applicant"
@@ -356,13 +397,13 @@ export function ApplicantInfoPage() {
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={deleting} onClick={confirmDelete}>
+            <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
               {deleting ? "Deleting..." : "Delete"}
             </Button>
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="m-0 text-sm text-muted-foreground">
           Confirm delete for document <strong>{deleteTarget?.doc_no}</strong>?
         </p>
       </Dialog>
