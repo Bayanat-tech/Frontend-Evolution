@@ -1210,12 +1210,20 @@
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table .finance-sticky-col-right {
   position: sticky !important;
   right: 0 !important;
-  width: 48px !important;
-  min-width: 48px !important;
-  max-width: 48px !important;
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
   text-align: center !important;
   z-index: 5 !important;
   box-shadow: -3px 0 6px rgba(15, 23, 42, 0.08) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead th.finance-sticky-col-right {
+  padding: 0 4px !important;
+  text-align: center !important;
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
 }
 
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead .finance-sticky-col-right {
@@ -1361,7 +1369,7 @@
   width: fit-content !important;
   max-width: 100% !important;
   margin: 0 !important;
-  border-left: 2px solid #475569 !important;
+  border-left: 2px solid #0f766e !important;
   padding-left: 8px !important;
 }
 .finance-document-editor .finance-allocation-branch::before {
@@ -1370,24 +1378,25 @@
   top: 13px;
   left: 0;
   width: 7px;
-  border-top: 2px solid #475569;
+  border-top: 2px solid #0f766e;
 }
 .finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
 .finance-document-editor .finance-allocation-panel {
   width: fit-content !important;
   max-width: 100% !important;
   border: 1px solid #9fcfc4 !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   background: #fbfefd !important;
   box-shadow: 0 2px 7px rgba(15, 118, 110, 0.09) !important;
   margin: 1px 0 2px !important;
   overflow: hidden !important;
 }
 .finance-document-editor .finance-allocation-panel > .finance-allocation-toolbar {
-  min-height: 25px !important;
+  min-height: 20px !important;
+  height: 20px !important;
   background: linear-gradient(180deg, #f1faf8 0%, #e6f5f1 100%) !important;
   border-bottom: 1px solid #b8ddd5 !important;
-  padding: 2px 5px !important;
+  padding: 1px 5px !important;
   gap: 3px !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-table {
@@ -1405,23 +1414,25 @@
   color: #14554e !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-thead th {
-  height: 23px !important;
-  min-height: 23px !important;
-  padding: 2px 4px !important;
-  font-size: 9.5px !important;
-  line-height: 1.05 !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  padding: 0 4px !important;
+  font-size: 8.5px !important;
+  line-height: 18px !important;
   font-weight: 750 !important;
-  letter-spacing: 0.01em !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
   border-right: 1px solid #b7d9d1 !important;
-  border-bottom: 1px solid #9fcfc4 !important;
+  border-bottom: 1.5px solid #9fcfc4 !important;
   white-space: nowrap !important;
 }
 .finance-document-editor .finance-allocation-panel tbody td {
   background: #ffffff !important;
-  height: 25px !important;
-  padding: 1px 3px !important;
-  font-size: 10px !important;
-  line-height: 1.05 !important;
+  height: 20px !important;
+  padding: 0 3px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
   border-right: 1px solid #e2efec !important;
   border-bottom: 1px solid #deebe8 !important;
 }
@@ -1429,21 +1440,22 @@
   background: #f0faf7 !important;
 }
 .finance-document-editor .finance-allocation-panel :is(input, select, .lookup-field-trigger, .bisc-date-picker-trigger) {
-  min-height: 20px !important;
-  height: 20px !important;
-  font-size: 10px !important;
+  min-height: 18px !important;
+  height: 18px !important;
+  font-size: 9px !important;
   padding: 0 3px !important;
-  border-radius: 4px !important;
+  border-radius: 3px !important;
   border-color: #c4d8d4 !important;
 }
 .finance-document-editor .finance-allocation-panel .bisc-date-picker-trigger span {
-  font-size: 9.5px !important;
+  font-size: 8.5px !important;
 }
 .finance-document-editor .finance-allocation-panel button {
-  min-height: 20px !important;
-  height: 20px !important;
-  font-size: 9.5px !important;
-  border-radius: 5px !important;
+  min-height: 17px !important;
+  height: 17px !important;
+  font-size: 8.5px !important;
+  border-radius: 4px !important;
+  padding: 0 4px !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-grid {
   max-height: 132px !important;

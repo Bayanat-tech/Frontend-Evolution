@@ -1310,7 +1310,7 @@ function PaymentDocumentEditor({
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
-                      <th className="px-2 py-2 text-center w-[120px]">Allocations</th>
+                      <th className="px-1 py-2 text-center w-[92px] min-w-[92px] max-w-[92px]">Allocations</th>
                       <th className="px-2 py-2 text-left">Description</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
@@ -1322,7 +1322,7 @@ function PaymentDocumentEditor({
                       {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
-                      <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1366,7 +1366,7 @@ function PaymentDocumentEditor({
                               />
                             </div>
                           </td>
-                          <td className="px-2 py-1 text-center whitespace-nowrap">
+                          <td className="w-[92px] min-w-[92px] max-w-[92px] px-1 py-1 text-center whitespace-nowrap">
                             {detail.ac_code ? (
                               <button
                                 type="button"
@@ -1374,7 +1374,7 @@ function PaymentDocumentEditor({
                                   setSelectedDetailId(detail.id);
                                   toggleRowExpanded(detail.id);
                                 }}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-2xs border ${
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer shadow-2xs border ${
                                   isExpanded
                                     ? "bg-[#00378C] text-white border-[#00378C]"
                                     : isAllocMatched
@@ -1568,7 +1568,7 @@ function PaymentDocumentEditor({
                             </td>
                           )}
 
-                          <td className="finance-sticky-col-right px-1 py-1 text-center">
+                          <td className="finance-sticky-col-right px-1 py-1 text-center w-[76px] min-w-[76px] max-w-[76px]">
                             <button
                               type="button"
                               disabled={disabled}
