@@ -1,4 +1,4 @@
-import { Edit2, FileText, Plus, Save, Trash2, X } from "lucide-react";
+import { Edit2, FileText, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
@@ -135,6 +135,7 @@ const ProductPurchaseSales = () => {
   const [original, setOriginal] = useState<ProductRow | null>(null);
   const [form, setForm] = useState<ProductRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
+
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
 
@@ -185,6 +186,18 @@ const ProductPurchaseSales = () => {
 
   const closeForm = () => {
     setFormOpen(false);
+    setError("");
+  };
+
+
+  const resetForm = () => {
+    if (editMode && original) {
+   
+      setForm({ ...makeEmpty(), ...original, active: original.active ?? original.is_active ?? "" });
+    } else {
+     
+      setForm(makeEmpty());
+    }
     setError("");
   };
 
@@ -296,29 +309,39 @@ const ProductPurchaseSales = () => {
         </div>
 
         {formOpen && (
-          <div className="flex items-center gap-1.5">
-            <Button
-              type="submit"
-              form="product-form"
-              disabled={saving}
-              className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
-            >
-              <Save size={13} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={closeForm}
-              disabled={saving}
-              aria-label="Close"
-              title="Close"
-              className="h-7 w-7 rounded-md"
-            >
-              <X size={14} />
-            </Button>
-          </div>
-        )}
+  <div className="flex items-center gap-1.5">
+        <Button
+      type="button"
+      variant="outline"
+      onClick={resetForm}
+      disabled={saving}
+      title="Reset form"
+      className="h-7 gap-1 px-3 text-xs font-semibold rounded-md"
+    >
+      <RotateCcw size={13} /> Reset
+    </Button>
+    <Button
+      type="submit"
+      form="product-form"
+      disabled={saving}
+      className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
+    >
+      <Save size={13} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
+    </Button>
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      onClick={closeForm}
+      disabled={saving}
+      aria-label="Close"
+      title="Close"
+      className="h-7 w-7 rounded-md"
+    >
+      <X size={14} />
+    </Button>
+  </div>
+)}
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />

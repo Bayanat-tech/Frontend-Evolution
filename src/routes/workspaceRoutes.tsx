@@ -152,7 +152,7 @@ import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
 import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
-import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
+import ProductPurchaseSales from "../pages/purchase_sales/PS_Productmaster";
 
 
 
@@ -195,7 +195,7 @@ import AccrualTypePage from "../pages/hr/pay_componants/AccrualTypePage";
 import AttendanceTypesPage from "../pages/hr/pay_componants/AttendanceTypePage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
-import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+// import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
 import PurchaseRequestRegisterReport from "../pages/almswf/PurchaseRequestRegisterReport";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
@@ -216,6 +216,7 @@ import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 import StockReportPage from "../pages/purchase_sales/Reports/StockReportPage";
 import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 
 
  type WorkspaceRouteContext = {
@@ -298,18 +299,34 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
   name: 'Purchase Sales Product Brand',
-  match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
-  element: () => <ProductBrandPage />,
+  // match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
+   match: ({ pathname }) => isProductBrandRoute(pathname),
+  element: () => <ProductBrandPage/>,
 },
+
+
+
+
+
   {
     name: 'Purchase Sales Product',
-    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
-    element: () => <ProductPurchaseSales />
+      match: ({ pathname }) => isProductRoute(pathname),
+    element: () => <ProductPurchaseSales/>
   },
+
+  {
+  name: "Purchase Sales Product Type",
+  match: ({ pathname }) => isProductTypeRoute(pathname),
+  element: () => <ProductTypePage />,
+  },
+
+
+
+
   {
     name: 'HR Accural Pay Unit',
     match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
-    element: () => <AccuralPayUnit />,
+    element: () => <AccuralPayUnit/>,
   },
   {
     name: "Activity WMS Master",
@@ -1405,11 +1422,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
 
-  {
-  name: "Purchase Sales Product Type",
-  match: ({ pathname }) => isProductTypeRoute(pathname),
-  element: () => <ProductTypePage />,
-  },
+  
 
 
   {
@@ -1569,6 +1582,8 @@ function isProductBrandRoute(pathname: string) {
     "/workspace/purchase_sales/purchase_sales/masters/product_brand"
   );
 }
+
+
 
 function isProfitLossSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2875,23 +2890,36 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
   );
 }
 
+
+function isProductRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return /\/workspace\/purchase_sales\/purchase_sales\/masters\/product$/.test(normalized);
+}
+
+
 function isProductTypeRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
+     normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
   );
 }
+
+
+
+
+
+
 
 
 function isProductCategoryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
+        normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
   );
 }
