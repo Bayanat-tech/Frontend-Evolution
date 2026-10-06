@@ -437,6 +437,7 @@ function PaymentDocumentEditor({
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
+  const [showPartyDetails, setShowPartyDetails] = useState(false);
 
   const toggleRowExpanded = (id: string) => {
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -756,7 +757,15 @@ function PaymentDocumentEditor({
         extra_param3: form.doc_no || "0",
         extra_param4: String(detail.serial_no || 1),
       });
-      let mapped = rows.map((row, index) => {
+      const seenRowKeys = new Set<string>();
+      const uniqueRows = rows.filter((row) => {
+        const r = lowerRecord(row);
+        const k = `${r.dtl_sr_no}_${r.inv_no || r.job_no || r.exp_code || ""}`;
+        if (seenRowKeys.has(k)) return false;
+        seenRowKeys.add(k);
+        return true;
+      });
+      let mapped = uniqueRows.map((row, index) => {
         const m = mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1);
         return {
           ...m,
@@ -1000,11 +1009,11 @@ function PaymentDocumentEditor({
         </div>
       )}
 
-      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-3">
+      <CardContent className="commercial-editor-body min-h-0 overflow-auto p-1.5">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="commercial-editor-sections grid gap-3">
+          <div className="commercial-editor-sections grid gap-1.5">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             {/* Smart Collapsible Payment Header */}
@@ -1046,7 +1055,7 @@ function PaymentDocumentEditor({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-3 gap-2.5 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
+                <div className="grid grid-cols-2 gap-1.5 max-xl:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1054,6 +1063,7 @@ function PaymentDocumentEditor({
                       <span>Document & Payment Instrument</span>
                     </div>
                     <div className="finance-payment-header-fields">
+
                       <Field label="Doc Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
                       {docType !== "CR" && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
@@ -1174,35 +1184,50 @@ function PaymentDocumentEditor({
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Section 3: Party & Order Details (Compact Block) */}
-                  <div className="finance-payment-header-block">
-                    <div className="finance-section-title">
+                {/* Section 3: Party & Order Details (Optional / PB Parity) - Commented out to maximize space for Accounting Lines
+                <div className="finance-payment-header-block">
+                  <div
+                    className="finance-section-title cursor-pointer select-none flex items-center justify-between"
+                    onClick={() => setShowPartyDetails(!showPartyDetails)}
+                    title={showPartyDetails ? "Collapse Party & Order Details" : "Expand Party & Order Details"}
+                  >
+                    <div className="flex items-center gap-1.5">
                       <span className="finance-section-icon"><Building2 size={11} /></span>
-                      <span>Party & Order Details</span>
+                      <span>Party & Order Details (Optional)</span>
                     </div>
-                    <div className="finance-payment-header-fields">
+                    <div className="flex items-center gap-1 text-[11px] text-[#00378c] font-medium hover:underline mr-1">
+                      <span>{showPartyDetails ? "Collapse" : "Expand"}</span>
+                      {showPartyDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </div>
+                  </div>
+                  {showPartyDetails && (
+                    <div className="finance-payment-party-fields grid grid-cols-6 max-xl:grid-cols-3 max-sm:grid-cols-2 gap-2 p-2 bg-white">
                       <Field label="Payment Terms">
-                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="30 Days" />
+                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="e.g. 30 Days" />
                       </Field>
                       <Field label="LPO No">
-                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO Reference" />
+                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO / PO Reference" />
                       </Field>
                       <Field label="LPO Date">
                         <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
                       </Field>
-                      <Field label="Phone">
+                      <Field label="Party Phone">
                         <Input disabled={disabled} value={form.party_phone || ""} onChange={(e) => updateField("party_phone", e.target.value)} placeholder="Phone" />
                       </Field>
-                      <Field label="Fax">
+                      <Field label="Party Fax">
                         <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
                       </Field>
-                      <Field label="Party Address">
-                        <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Address" />
-                      </Field>
+                      <div className="col-span-1 max-xl:col-span-3 max-sm:col-span-2">
+                        <Field label="Party Address">
+                          <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Full Party Address" />
+                        </Field>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
+                */}
               </div>
             )}
 
@@ -2097,9 +2122,20 @@ function mapExistingDocument(
     detail.map((line) => [
       line.id,
       line.child_table
-        ? ((childrenRaw[line.child_table] || [])
-          .filter((child) => Number(lowerRecord(child).serial_no) === line.serial_no)
-          .map((child, index) => mapChildRow(child, line, {
+        ? (() => {
+            const rawList = (childrenRaw[line.child_table] || []).filter(
+              (child) => Number(lowerRecord(child).serial_no) === line.serial_no
+            );
+            const seenKeys = new Set<string>();
+            const uniqueList = rawList.filter((child) => {
+              const r = lowerRecord(child);
+              const key = `${r.dtl_sr_no}_${r.inv_no || r.job_no || r.exp_code || ""}`;
+              if (seenKeys.has(key)) return false;
+              seenKeys.add(key);
+              return true;
+            });
+            return uniqueList.map((child, index) =>
+              mapChildRow(child, line, {
             doc_type: docType,
             doc_no: text(header.doc_no || fallbackDetail.doc_no),
             doc_date: dateInput(header.doc_date || fallbackDetail.doc_date),
@@ -2109,7 +2145,9 @@ function mapExistingDocument(
             div_code: text(header.div_code || fallbackDetail.div_code),
             detail: [],
             children: {},
-          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)))
+          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)
+            );
+          })()
         : [],
     ]),
   );
