@@ -7990,15 +7990,8 @@ freight-dense-form .freight-form-card {
     minmax(135px, 0.62fr);
 }
 
-/* .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-party-primary {
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-party-primary {
   grid-column: span 3;
-} */
-
-.commercial-document-workbench
-.commercial-header-panel.is-expanded
-.commercial-header-block-party-sales
-.commercial-party-primary {
-  grid-column: span 2 !important;
 }
 
 .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(5) {
@@ -8128,16 +8121,6 @@ freight-dense-form .freight-form-card {
   .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax {
     grid-column: span 1;
   }
-}
-
-.commercial-document-workbench
-.commercial-header-panel.is-expanded
-.commercial-header-block-party-sales
-.commercial-header-block-fields
-> .commercial-party-currency {
-  grid-column: span 1 !important;
-  min-width: 0;
-  width: 100%;
 }
 
 .commercial-sticky-footer {
