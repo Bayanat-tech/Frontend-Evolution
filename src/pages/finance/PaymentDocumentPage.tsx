@@ -1035,7 +1035,7 @@ function PaymentDocumentEditor({
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="commercial-editor-sections grid gap-1.5">
+          <div className="commercial-editor-sections grid gap-2">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             {/* Smart Collapsible Payment Header */}
@@ -1076,8 +1076,8 @@ function PaymentDocumentEditor({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-1.5 max-xl:grid-cols-1">
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2 max-xl:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
