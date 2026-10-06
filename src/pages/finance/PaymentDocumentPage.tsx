@@ -52,6 +52,7 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { FinanceSetupAlert } from "../../components/finance/FinanceSetupAlert";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -90,6 +91,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       : docType === "CN" || docType === "DN"
       ? "MEMO"
       : "PAYMENT";
+  const { user } = useAuth();
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -105,6 +107,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
+  const [setupRequired, setSetupRequired] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -131,10 +134,17 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   };
 
   const loadLookups = async () => {
-    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
-    setFyPeriods(fyData);
-    setDivisions(divisionData);
-    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+    try {
+      const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
+      setFyPeriods(fyData);
+      setDivisions(divisionData);
+      setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+      if (companyInfo?.setup_required) {
+        setSetupRequired(true);
+      }
+    } catch (err: any) {
+      setNotice({ type: "error", message: err?.message || "Failed to load company finance settings" });
+    }
   };
 
   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
@@ -288,6 +298,17 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      {setupRequired && (
+        <FinanceSetupAlert
+          companyCode={user?.company_code}
+          onSuccess={() => {
+            setSetupRequired(false);
+            void loadLookups();
+            void loadRows();
+          }}
+        />
+      )}
 
       <div className="min-h-[650px]">
         <DataTable
