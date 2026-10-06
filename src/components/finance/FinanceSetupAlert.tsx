@@ -67,7 +67,7 @@ export const FinanceSetupAlert: React.FC<FinanceSetupAlertProps> = ({
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                Chart of Accounts (<code className="text-[11px]">MS_ACCODES</code> & Levels 1-4)
+                Standard COA Structure (Levels 1, 2, 3)
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -78,6 +78,9 @@ export const FinanceSetupAlert: React.FC<FinanceSetupAlertProps> = ({
                 Division Master (<code className="text-[11px]">MS_HR_DIVISION</code>)
               </li>
             </ul>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              * Note: Level 4 groups, Level 5 accounts (<code className="text-[10px]">MS_ACCODES</code>), and Document Account Mappings will be configured specifically by your finance team.
+            </p>
           </div>
         </div>
 
