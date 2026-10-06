@@ -42,6 +42,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -241,25 +242,21 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     },
     {
       id: "actions",
-      header: () => <div className="text-center">Actions</div>,
+      header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
+      size: 130,
+      minSize: 130,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType]);

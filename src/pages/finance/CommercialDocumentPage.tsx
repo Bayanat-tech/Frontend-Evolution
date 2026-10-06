@@ -39,6 +39,7 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../utils/date";
@@ -315,30 +316,27 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
     },
     {
       id: "actions",
-      header: () => <div className="text-center w-full">Actions</div>,
+      header: () => <div className="text-center w-full font-bold">Actions</div>,
+      enableSorting: false,
+      size: 130,
+      minSize: 130,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
-          <Button size="icon" variant="ghost" 
-          onClick={() =>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() =>
             void handleOpenReport(
               row.original.doc_type || docType,
               row.original.doc_no,
               `${meta.title} ${row.original.doc_no}`
             )
           }
-          title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-        </div>
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], []);

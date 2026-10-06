@@ -731,25 +731,30 @@
 }
 
 .finance-list-page .data-table-shell {
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 14px !important;
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04) !important;
+  border: 1.5px solid #94a3b8 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06) !important;
   background: #ffffff !important;
   overflow: hidden !important;
 }
 
 .finance-list-page .data-table-header {
   padding: 8px 14px !important;
-  border-bottom: 1px solid #cbd5e1 !important;
-  background: #ffffff !important;
+  border-bottom: 1.5px solid #94a3b8 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
 }
 
 .finance-list-page .data-table-search {
   height: 36px !important;
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 10px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 8px !important;
   background: #ffffff !important;
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.finance-list-page .data-table-search:focus-within {
+  border-color: #00378C !important;
+  box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.12) !important;
 }
 
 /* Hide duplicate top scrollbar on finance tables (same as freight) */
@@ -771,29 +776,33 @@
   height: 28px !important;
   line-height: 1.25 !important;
   vertical-align: middle !important;
-  border-color: #ecf0f5 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  border-right: 1px solid #ecf0f5 !important;
 }
 
-.finance-list-page .data-table-scroll tbody tr:hover {
+.finance-list-page .data-table-scroll tbody tr:hover td {
   background-color: #eff6ff !important;
 }
 
 .finance-list-page .data-table-scroll thead th {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  color: #334155 !important;
-  height: 36px !important;
-  border-right: 1px solid #ecf0f5 !important;
-  background-color: #ffffff !important;
+  font-size: 11.5px !important;
+  font-weight: 750 !important;
+  color: #1e293b !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.025em !important;
+  height: 34px !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 1.5px solid #94a3b8 !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
 }
 
 .finance-list-page .data-table-pagination {
-  border-top: 1px solid #cbd5e1 !important;
-  background: #ffffff !important;
+  border-top: 1.5px solid #94a3b8 !important;
+  background: #f8fafc !important;
   padding: 8px 14px !important;
   font-size: 12px !important;
-  color: #64748b !important;
+  color: #475569 !important;
 }
 
 /* BISC Sidebar Switch Module button styling */

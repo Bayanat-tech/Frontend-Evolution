@@ -49,6 +49,7 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
@@ -221,28 +222,22 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
     },
     {
       id: "actions",
-      header: () => <div className="text-center">Actions</div>,
+      header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
+      size: 155,
+      minSize: 155,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
-            <Trash2 size={15} />
-          </Button>
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          onDelete={() => setDeleteTarget(row.original)}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType, columnFilters]);
