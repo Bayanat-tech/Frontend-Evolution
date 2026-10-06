@@ -44,21 +44,52 @@
   min-height: 0;
 }
 
-/* ── Command header: BISC Royal Blue (#00378C) ────────────────────────────── */
+/* ── Command header: Light Grey with BISC Royal Blue (#00378C) Buttons ────────────────────────────── */
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header {
-  background: #00378C !important;
-  color: #ffffff !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  color: #0f172a !important;
   padding: 6px 14px !important;
-  border-color: transparent !important;
-  box-shadow: 0 2px 8px rgba(0, 55, 140, 0.18) !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
 }
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header::after { display: none; }
 
-/* Header identity text colors on dark background */
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header :is(h2, strong, p, span) { color: #fff; }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header h2 { font-size: 14px; font-weight: 600; }
-:where(.finance-document-ui, .finance-document-editor) .finance-document-identity { color: rgba(255,255,255,0.9); }
-:where(.finance-document-ui, .finance-document-editor) .finance-document-identity strong { color: #fff; }
+/* ── Option A: Refined Precision Toolbar ─────────────────────────────────── */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header,
+.payment-workbench .commercial-command-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Option A: Refined Executive Amber Doc No badge */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .finance-identity-docno,
+.payment-workbench .commercial-command-header .finance-identity-docno {
+  background: #fef3c7 !important;
+  border: 1px solid #f59e0b !important;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.12) !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .finance-identity-docno :is(span, strong),
+.payment-workbench .commercial-command-header .finance-identity-docno :is(span, strong) {
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+
+/* Option A: Hero Save Button Elevation */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header button[type="submit"],
+.payment-workbench .commercial-command-header button[type="submit"] {
+  background: #00378C !important;
+  color: #ffffff !important;
+  border: 1px solid #002d72 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.3) !important;
+}
+
+/* Header identity text colors on light background */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header :is(h2, strong, p, span) { color: #0f172a; }
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header h2 { font-size: 14px; font-weight: 700; color: #0f172a !important; }
+:where(.finance-document-ui, .finance-document-editor) .finance-document-identity { color: #334155; }
+:where(.finance-document-ui, .finance-document-editor) .finance-document-identity strong { color: #0f172a; }
 
 /* Doc No badge inside header - vibrant yellow background with solid dark black text */
 .finance-identity-docno,
@@ -72,51 +103,98 @@
   font-weight: 800 !important;
 }
 
-/* Buttons inside dark header */
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button {
+/* Buttons inside header - Styled like the Add button in the listing screen (#00378C Royal Blue) */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button,
+.finance-document-editor .commercial-command-header .ui-button {
   height: 28px !important;
   min-height: 28px !important;
   border-radius: 8px !important;
   font-size: 11px !important;
-  font-weight: 500 !important;
-  box-shadow: none !important;
-  padding-block: 3px !important;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-}
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-secondary,
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-outline {
-  background: rgba(255,255,255,0.12) !important;
-  border-color: rgba(255,255,255,0.25) !important;
-  color: #fff !important;
-}
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-secondary:hover,
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-outline:hover {
-  background: rgba(255,255,255,0.24) !important;
-}
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-default {
-  background: #ffffff !important;
-  color: #00378C !important;
   font-weight: 600 !important;
+  padding-block: 3px !important;
+  background: #00378C !important;
+  border: 1px solid #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.25) !important;
+  transition: all 0.15s ease !important;
 }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button-default:hover {
-  background: #f1f5f9 !important;
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button :is(svg, span) {
+  color: #ffffff !important;
 }
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:hover,
+.finance-document-editor .commercial-command-header .ui-button:hover {
+  background: #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.35) !important;
+}
+
+/* Cancel Document Button (Lucide Ban) */
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:has(.lucide-ban) {
-  background: rgba(254,205,211,0.2) !important;
-  color: #fecdd3 !important;
-  border-color: rgba(254,205,211,0.4) !important;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border: 1px solid #b91c1c !important;
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.2) !important;
 }
 :where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button:has(.lucide-ban):hover {
-  background: rgba(254,205,211,0.35) !important;
+  background: #b91c1c !important;
 }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"] {
-  background: rgba(255,255,255,0.1) !important;
-  color: rgba(255,255,255,0.85) !important;
-  border-color: rgba(255,255,255,0.2) !important;
+
+/* Close Button (Clean crisp secondary button) */
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"],
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn {
+  background: #ffffff !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
 }
-:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"]:hover {
-  background: rgba(255,255,255,0.22) !important;
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span) {
+  color: #334155 !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button[aria-label="Close"]:hover,
+:where(.finance-document-ui, .finance-document-editor) .commercial-command-header .ui-button.commercial-header-close-btn:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* ── Payment Screen Test: Close & Submit buttons same Royal Blue (#00378C) as Files ──── */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn {
+  background: #00378C !important;
   color: #ffffff !important;
+  border: 1px solid #002d72 !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.25) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span) {
+  color: #ffffff !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover {
+  background: #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.35) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button:disabled,
+.payment-workbench .commercial-command-header .ui-button:disabled {
+  background: #00378C !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid #002d72 !important;
+  opacity: 0.82 !important;
+  cursor: not-allowed !important;
+}
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .commercial-command-header .ui-button:disabled :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button:disabled :is(svg, span) {
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 /* ── Editor body layout ─────────────────────────────────────────────────────  */
@@ -452,6 +530,37 @@
   color: #ffffff !important;
   z-index: 8 !important;
 }
+
+/* ── Option A: Modern Platinum Precision Detail Table thead ───────────────── */
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench table thead th,
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .finance-lines-table thead th,
+.payment-workbench table thead th,
+.payment-workbench .finance-lines-table thead th {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .finance-lines-table thead .finance-sticky-col,
+.payment-workbench .finance-lines-table thead .finance-sticky-col,
+:where(.finance-document-ui, .finance-document-editor) .payment-workbench .finance-lines-table thead .finance-sticky-col-right,
+.payment-workbench .finance-lines-table thead .finance-sticky-col-right {
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+}
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr .finance-sticky-col {
   background: #ffffff !important;
   z-index: 4 !important;
@@ -773,11 +882,45 @@
 .finance-document-editor .commercial-command-header { padding:5px 10px !important; box-shadow:none !important; }
 .finance-document-editor .commercial-command-header > div { min-height:32px; flex-wrap:wrap; gap:5px; }
 .finance-document-editor .finance-document-identity { gap:10px; }
-.finance-document-editor .finance-document-identity strong { font-size:14px !important; line-height:20px; }
-.finance-header-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid #ffffff55; border-radius:6px; background:#ffffff18; color:white; }
-.finance-header-toggle:hover { background:#ffffff30; }
-.finance-document-editor .commercial-command-header .ui-button { background:#fff !important; border:1px solid #dbeafe !important; color:#00378c !important; }
-.finance-document-editor .commercial-command-header .ui-button:hover { background:#eff6ff !important; }
+.finance-header-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid #cbd5e1; border-radius:6px; background:#ffffff; color:#334155; }
+.finance-header-toggle:hover { background:#e2e8f0; color:#0f172a; }
+.finance-document-editor .commercial-command-header .ui-button { background:#00378C !important; border:1px solid #002d72 !important; color:#ffffff !important; font-weight:600 !important; }
+.finance-document-editor .commercial-command-header .ui-button:hover { background:#002d72 !important; color:#ffffff !important; }
+.finance-document-editor .commercial-command-header .ui-button[aria-label="Close"],
+.finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn { background:#ffffff !important; border:1px solid #cbd5e1 !important; color:#334155 !important; }
+.finance-document-editor .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn:hover { background:#f1f5f9 !important; color:#0f172a !important; }
+
+/* In Payment Workbench: Close button has same Royal Blue (#00378C) as Files */
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn,
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.payment-header-close-btn,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"],
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn,
+.payment-workbench .commercial-command-header .ui-button.payment-header-close-btn {
+  background: #00378C !important;
+  border: 1px solid #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.25) !important;
+}
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span),
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.payment-header-close-btn :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"] :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn :is(svg, span),
+.payment-workbench .commercial-command-header .ui-button.payment-header-close-btn :is(svg, span) {
+  color: #ffffff !important;
+}
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover,
+.finance-document-editor .payment-workbench .commercial-command-header .ui-button.payment-header-close-btn:hover,
+.payment-workbench .commercial-command-header .ui-button[aria-label="Close"]:hover,
+.payment-workbench .commercial-command-header .ui-button.commercial-header-close-btn:hover,
+.payment-workbench .commercial-command-header .ui-button.payment-header-close-btn:hover {
+  background: #002d72 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.35) !important;
+}
 .finance-document-editor .commercial-header-shell { flex:none !important; min-height:0 !important; max-height:none !important; overflow:visible !important; }
 .finance-document-editor .commercial-header-shell > .flex.items-center.justify-end { display:none; }
 .finance-document-editor .commercial-header-panel { display:flex !important; flex-direction:column !important; max-width:none !important; gap:5px !important; }
@@ -786,13 +929,19 @@
 .finance-document-editor .commercial-header-panel .commercial-header-block-fields { display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)) !important; gap:4px 8px !important; padding:5px 10px 6px 10px !important; background:#ffffff !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-fields > * { grid-column:span 1 !important; order:0 !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields { grid-template-columns:repeat(6,minmax(0,1fr)) !important; }
-.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :first-child { grid-column:span 3 !important; }
+/* .finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :first-child { grid-column:span 3 !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(2) { grid-column:span 2 !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(3) { grid-column:span 1 !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(4) { grid-column:span 2 !important; } */
+
+.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :first-child { grid-column:span 2 !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(2) { grid-column:span 1 !important; }
+.finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(3) { grid-column:span 1 !important; }
 .finance-document-editor .commercial-header-panel .commercial-header-block-party .commercial-header-block-fields > :nth-child(4) { grid-column:span 2 !important; }
+
 .finance-document-editor :is(.commercial-header-block-title, .finance-section-title) { display:flex !important; align-items:center !important; justify-content:flex-start !important; gap:5px !important; padding:2px 8px !important; min-height:22px !important; background:linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important; border-bottom:1px solid #e2e8f0 !important; }
 .finance-document-editor :is(.commercial-header-block-title, .finance-section-title)::before { content:none !important; display:none !important; }
-.finance-document-editor :is(.commercial-header-block-title, .finance-section-title) > span:not(.finance-section-icon) { font-size:11px !important; font-weight:700 !important; color:#00378c !important; text-transform:uppercase !important; letter-spacing:0.04em !important; line-height:1.2 !important; }
+.finance-document-editor :is(.commercial-header-block-title, .finance-section-title) > span:not(.finance-section-icon) { font-size:11px !important; font-weight:700 !important; color:#334155 !important; text-transform:uppercase !important; letter-spacing:0.04em !important; line-height:1.2 !important; }
 .finance-document-editor .commercial-header-block-tax .commercial-header-block-fields { grid-template-columns: minmax(130px, 1.2fr) 85px 130px minmax(260px, 3.5fr) !important; align-items:flex-start !important; }
 .finance-document-editor .finance-payment-header-block { max-width:none !important; background:#ffffff !important; border:1px solid #cbd5e1 !important; border-radius:6px !important; box-shadow:0 1px 3px rgba(15, 23, 42, 0.04) !important; overflow:hidden !important; margin-bottom:2px !important; }
 .finance-document-editor .finance-payment-header-block:has(> .finance-section-title:last-child) .finance-section-title { border-bottom:none !important; }
@@ -1067,12 +1216,20 @@
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table .finance-sticky-col-right {
   position: sticky !important;
   right: 0 !important;
-  width: 48px !important;
-  min-width: 48px !important;
-  max-width: 48px !important;
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
   text-align: center !important;
   z-index: 5 !important;
   box-shadow: -3px 0 6px rgba(15, 23, 42, 0.08) !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead th.finance-sticky-col-right {
+  padding: 0 4px !important;
+  text-align: center !important;
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
 }
 
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table thead .finance-sticky-col-right {
@@ -1218,7 +1375,7 @@
   width: fit-content !important;
   max-width: 100% !important;
   margin: 0 !important;
-  border-left: 2px solid #475569 !important;
+  border-left: 2px solid #0f766e !important;
   padding-left: 8px !important;
 }
 .finance-document-editor .finance-allocation-branch::before {
@@ -1227,24 +1384,25 @@
   top: 13px;
   left: 0;
   width: 7px;
-  border-top: 2px solid #475569;
+  border-top: 2px solid #0f766e;
 }
 .finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
 .finance-document-editor .finance-allocation-panel {
   width: fit-content !important;
   max-width: 100% !important;
   border: 1px solid #9fcfc4 !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   background: #fbfefd !important;
   box-shadow: 0 2px 7px rgba(15, 118, 110, 0.09) !important;
   margin: 1px 0 2px !important;
   overflow: hidden !important;
 }
 .finance-document-editor .finance-allocation-panel > .finance-allocation-toolbar {
-  min-height: 25px !important;
+  min-height: 20px !important;
+  height: 20px !important;
   background: linear-gradient(180deg, #f1faf8 0%, #e6f5f1 100%) !important;
   border-bottom: 1px solid #b8ddd5 !important;
-  padding: 2px 5px !important;
+  padding: 1px 5px !important;
   gap: 3px !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-table {
@@ -1262,23 +1420,25 @@
   color: #14554e !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-thead th {
-  height: 23px !important;
-  min-height: 23px !important;
-  padding: 2px 4px !important;
-  font-size: 9.5px !important;
-  line-height: 1.05 !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  padding: 0 4px !important;
+  font-size: 8.5px !important;
+  line-height: 18px !important;
   font-weight: 750 !important;
-  letter-spacing: 0.01em !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
   border-right: 1px solid #b7d9d1 !important;
-  border-bottom: 1px solid #9fcfc4 !important;
+  border-bottom: 1.5px solid #9fcfc4 !important;
   white-space: nowrap !important;
 }
 .finance-document-editor .finance-allocation-panel tbody td {
   background: #ffffff !important;
-  height: 25px !important;
-  padding: 1px 3px !important;
-  font-size: 10px !important;
-  line-height: 1.05 !important;
+  height: 20px !important;
+  padding: 0 3px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
   border-right: 1px solid #e2efec !important;
   border-bottom: 1px solid #deebe8 !important;
 }
@@ -1286,21 +1446,22 @@
   background: #f0faf7 !important;
 }
 .finance-document-editor .finance-allocation-panel :is(input, select, .lookup-field-trigger, .bisc-date-picker-trigger) {
-  min-height: 20px !important;
-  height: 20px !important;
-  font-size: 10px !important;
+  min-height: 18px !important;
+  height: 18px !important;
+  font-size: 9px !important;
   padding: 0 3px !important;
-  border-radius: 4px !important;
+  border-radius: 3px !important;
   border-color: #c4d8d4 !important;
 }
 .finance-document-editor .finance-allocation-panel .bisc-date-picker-trigger span {
-  font-size: 9.5px !important;
+  font-size: 8.5px !important;
 }
 .finance-document-editor .finance-allocation-panel button {
-  min-height: 20px !important;
-  height: 20px !important;
-  font-size: 9.5px !important;
-  border-radius: 5px !important;
+  min-height: 17px !important;
+  height: 17px !important;
+  font-size: 8.5px !important;
+  border-radius: 4px !important;
+  padding: 0 4px !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-grid {
   max-height: 132px !important;

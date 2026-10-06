@@ -273,7 +273,7 @@ export function SmartInlineAllocationTable({
               {colConfigs.map((col, i) => (
                 <th
                   key={i}
-                  className={`border-r border-[#b9cee4] px-1.5 py-0.5 text-[10px] font-bold text-[#163a63] last:border-r-0 ${
+                  className={`border-r border-[#b7d9d1] bg-[#dff2ed] px-1 py-0 h-[18px] leading-[18px] text-[8.5px] font-bold text-[#14554e] uppercase tracking-wider last:border-r-0 ${
                     col.align === "right"
                       ? "text-right"
                       : col.align === "center"

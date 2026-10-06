@@ -1947,7 +1947,7 @@ function isRVoucherRoute(pathname: string) {
 
 function isBankReconciliationRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/finance/accounts/transactions/bank_reconciliation") || normalized.includes("/finance/accounts/transactions/bank-reconciliation");
+  return normalized.includes("/finance/accounts/transactions/bank_recon") || normalized.includes("/finance/accounts/transactions/bank-reconciliation");
 }
 
 function getUtilityMasterConfig(pathname: string) {
