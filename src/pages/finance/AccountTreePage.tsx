@@ -736,7 +736,6 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
               <div className={`account-block-icon level-${level}`}><Layers3 size={15} /></div>
               <div>
                 <h3>Level {level} Information</h3>
-                <p>Maintain the account hierarchy name and applicable controls.</p>
               </div>
             </div>
             <div className="account-simple-form-grid">
