@@ -740,19 +740,26 @@
 
 .finance-list-page .data-table-header {
   padding: 8px 14px !important;
-  border-bottom: 1.5px solid #94a3b8 !important;
+  border: 1.5px solid #94a3b8 !important;
+  border-radius: 10px !important;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06) !important;
+  margin-bottom: 2px !important;
 }
 
-.finance-list-page .data-table-search {
-  height: 36px !important;
+.finance-list-page .data-table-search,
+.finance-list-page .data-table-search-input {
+  height: 34px !important;
   border: 1.5px solid #cbd5e1 !important;
   border-radius: 8px !important;
   background: #ffffff !important;
+  font-size: 12.5px !important;
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  transition: all 0.15s ease-in-out !important;
 }
 
-.finance-list-page .data-table-search:focus-within {
+.finance-list-page .data-table-search:focus-within,
+.finance-list-page .data-table-search-input:focus {
   border-color: #00378C !important;
   box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.12) !important;
 }
