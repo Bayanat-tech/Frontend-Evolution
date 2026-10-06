@@ -757,7 +757,15 @@ function PaymentDocumentEditor({
         extra_param3: form.doc_no || "0",
         extra_param4: String(detail.serial_no || 1),
       });
-      let mapped = rows.map((row, index) => {
+      const seenRowKeys = new Set<string>();
+      const uniqueRows = rows.filter((row) => {
+        const r = lowerRecord(row);
+        const k = `${r.dtl_sr_no}_${r.inv_no || r.job_no || r.exp_code || ""}`;
+        if (seenRowKeys.has(k)) return false;
+        seenRowKeys.add(k);
+        return true;
+      });
+      let mapped = uniqueRows.map((row, index) => {
         const m = mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1);
         return {
           ...m,
@@ -2114,9 +2122,20 @@ function mapExistingDocument(
     detail.map((line) => [
       line.id,
       line.child_table
-        ? ((childrenRaw[line.child_table] || [])
-          .filter((child) => Number(lowerRecord(child).serial_no) === line.serial_no)
-          .map((child, index) => mapChildRow(child, line, {
+        ? (() => {
+            const rawList = (childrenRaw[line.child_table] || []).filter(
+              (child) => Number(lowerRecord(child).serial_no) === line.serial_no
+            );
+            const seenKeys = new Set<string>();
+            const uniqueList = rawList.filter((child) => {
+              const r = lowerRecord(child);
+              const key = `${r.dtl_sr_no}_${r.inv_no || r.job_no || r.exp_code || ""}`;
+              if (seenKeys.has(key)) return false;
+              seenKeys.add(key);
+              return true;
+            });
+            return uniqueList.map((child, index) =>
+              mapChildRow(child, line, {
             doc_type: docType,
             doc_no: text(header.doc_no || fallbackDetail.doc_no),
             doc_date: dateInput(header.doc_date || fallbackDetail.doc_date),
@@ -2126,7 +2145,9 @@ function mapExistingDocument(
             div_code: text(header.div_code || fallbackDetail.div_code),
             detail: [],
             children: {},
-          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)))
+          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)
+            );
+          })()
         : [],
     ]),
   );

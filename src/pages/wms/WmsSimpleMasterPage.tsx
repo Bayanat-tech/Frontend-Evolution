@@ -412,7 +412,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
               <RefreshCw size={13} /> Reset
             </Button>
             {/* With steps, Save lives on the last step next to Back / Next. */}
-            {!hasTabs && (
+            
               <Button
                 type="submit"
                 form={FORM_ID}
@@ -421,7 +421,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
               >
                 <Save size={13} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
               </Button>
-            )}
+            
             <Button
               type="button"
               variant="outline"
