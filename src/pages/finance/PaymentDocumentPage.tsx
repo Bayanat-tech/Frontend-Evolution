@@ -52,6 +52,7 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { FinanceSetupAlert } from "../../components/finance/FinanceSetupAlert";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -90,6 +91,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       : docType === "CN" || docType === "DN"
       ? "MEMO"
       : "PAYMENT";
+  const { user } = useAuth();
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -105,6 +107,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
+  const [setupRequired, setSetupRequired] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -131,10 +134,17 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   };
 
   const loadLookups = async () => {
-    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
-    setFyPeriods(fyData);
-    setDivisions(divisionData);
-    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+    try {
+      const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
+      setFyPeriods(fyData);
+      setDivisions(divisionData);
+      setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+      if (companyInfo?.setup_required) {
+        setSetupRequired(true);
+      }
+    } catch (err: any) {
+      setNotice({ type: "error", message: err?.message || "Failed to load company finance settings" });
+    }
   };
 
   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
@@ -288,6 +298,17 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      {setupRequired && (
+        <FinanceSetupAlert
+          companyCode={user?.company_code}
+          onSuccess={() => {
+            setSetupRequired(false);
+            void loadLookups();
+            void loadRows();
+          }}
+        />
+      )}
 
       <div className="min-h-[650px]">
         <DataTable
@@ -949,7 +970,7 @@ function PaymentDocumentEditor({
 
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={DOCUMENT_META[docType]?.title || "Payment Voucher"}
@@ -988,6 +1009,7 @@ function PaymentDocumentEditor({
               aria-label="Close"
               type="button"
               variant="secondary"
+              className="payment-header-close-btn !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1090,13 +1112,7 @@ function PaymentDocumentEditor({
                           columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_AC_CODE_Serach_HDR",
-                            code1: user?.company_code,
-                            code2: "H",
-                            code3: form.doc_type,
-                            code4: form.div_code
-                          })}
+                          loadOptions={() => getDocAccounts(form.doc_type, "H", form.div_code)}
                           disabled={disabled || !form.div_code}
                           onChange={async (value, row) => {
                             const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
@@ -1284,23 +1300,23 @@ function PaymentDocumentEditor({
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
-                  <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
-                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
-                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-center text-white w-[120px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-center text-white w-14">Cr/Dr</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="finance-sticky-col-right px-2 py-2 text-center text-white">Action</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
+                      <th className="px-1 py-2 text-center w-[92px] min-w-[92px] max-w-[92px]">Allocations</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      <th className="px-2 py-2 text-left">Tax %</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1332,19 +1348,13 @@ function PaymentDocumentEditor({
                                 columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
-                                loadOptions={() => getDynamicLookup({
-                                  parameter: "Account_AC_CODE_Serach_HDR",
-                                  code1: user?.company_code,
-                                  code2: "D",
-                                  code3: form.doc_type,
-                                  code4: form.div_code
-                                })}
+                                loadOptions={() => getDocAccounts(form.doc_type, "D", form.div_code)}
                                 disabled={disabled}
                                 onChange={(value, row) => void selectDetailAccount(detail, value, row)}
                               />
                             </div>
                           </td>
-                          <td className="px-2 py-1 text-center whitespace-nowrap">
+                          <td className="w-[92px] min-w-[92px] max-w-[92px] px-1 py-1 text-center whitespace-nowrap">
                             {detail.ac_code ? (
                               <button
                                 type="button"
@@ -1352,7 +1362,7 @@ function PaymentDocumentEditor({
                                   setSelectedDetailId(detail.id);
                                   toggleRowExpanded(detail.id);
                                 }}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-2xs border ${
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer shadow-2xs border ${
                                   isExpanded
                                     ? "bg-[#00378C] text-white border-[#00378C]"
                                     : isAllocMatched
@@ -1546,7 +1556,7 @@ function PaymentDocumentEditor({
                             </td>
                           )}
 
-                          <td className="finance-sticky-col-right px-1 py-1 text-center">
+                          <td className="finance-sticky-col-right px-1 py-1 text-center w-[76px] min-w-[76px] max-w-[76px]">
                             <button
                               type="button"
                               disabled={disabled}
