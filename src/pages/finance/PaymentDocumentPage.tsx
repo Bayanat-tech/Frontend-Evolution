@@ -42,6 +42,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -195,7 +196,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -204,7 +205,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center">Date</div>,
+      header: () => <div className="text-center font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name" },
@@ -214,52 +215,44 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
-      header: () => <div className="text-right">Amount</div>,
+      header: () => <div className="text-right font-bold">Amount</div>,
       cell: ({ getValue }) => {
         const val = Number(getValue() || 0);
-        return <div className="text-right font-mono font-medium">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
+        return <div className="text-right font-mono tabular-nums font-semibold text-slate-800">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
       },
     },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center">Div</div>,
+      header: () => <div className="text-center font-bold">Div</div>,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
-      size: 30,
+      size: 40,
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center">Status</div>,
+      header: () => <div className="text-center font-bold">Status</div>,
       cell: ({ getValue }) => (
         <div className="flex justify-center">
-          {String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive font-semibold">Cancelled</Badge>
-          ) : (
-            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Active</Badge>
-          )}
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
         </div>
       ),
     },
     {
       id: "actions",
-      header: () => <div className="text-center">Actions</div>,
+      header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
+      size: 130,
+      minSize: 130,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType]);
@@ -365,6 +358,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
+          rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
           getRowId={(row, index) => `${row.doc_no}_${index}`}
         />
       </div>
@@ -1035,7 +1029,7 @@ function PaymentDocumentEditor({
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="commercial-editor-sections grid gap-1.5">
+          <div className="commercial-editor-sections grid gap-2">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             {/* Smart Collapsible Payment Header */}
@@ -1076,8 +1070,8 @@ function PaymentDocumentEditor({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-1.5 max-xl:grid-cols-1">
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2 max-xl:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1596,19 +1590,19 @@ function PaymentDocumentEditor({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
-                <div className="commercial-line-totals flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 font-medium text-[11px]">Total Amount</span>
-                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(total)}</strong>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2.5">
+                <div className="commercial-line-totals flex items-center gap-3">
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Amount</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 font-medium text-[11px]">Tax Amount</span>
-                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(totalTax)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Tax Amount</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(totalTax)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-md border border-blue-200 shadow-2xs">
-                    <span className="font-bold text-[#00378c] text-[11px]">Net Total</span>
-                    <strong className="text-[#00378c] font-mono text-xs font-bold">{formatAmount(total + totalTax)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-1.5 shadow-2xs">
+                    <span className="text-xs font-bold text-[#00378c]">Net Total</span>
+                    <strong className="font-mono text-base font-extrabold tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
                   </div>
                 </div>
               </div>
