@@ -478,31 +478,20 @@ export function DataTable<TData, TValue>({
               {actionButton}
             </div>
             {!onSearchChange && !toolbar && !showExport && !(_subtitle || _title) && <span className="min-h-1 flex-1" />}
-            {table.getState().columnFilters.filter((f) => hasFilterValue(f.value)).length > 0 && (
+            {table.getState().columnFilters.filter((f) => hasFilterValue(f.value) && !isStatusColumn(f.id)).length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 w-full pt-2 border-t border-border/50 text-xs">
                 <span className="text-[#64748b] font-semibold text-[11px] uppercase tracking-wide">
                   Filtered by:
                 </span>
                 {table.getState().columnFilters
-                  .filter((f) => hasFilterValue(f.value))
+                  .filter((f) => hasFilterValue(f.value) && !isStatusColumn(f.id))
                   .map((f) => {
                     const col = table.getColumn(f.id);
-                    const isStatus = isStatusColumn(f.id, typeof col?.columnDef.header === "string" ? col.columnDef.header : undefined);
-                    const headerTitle = isStatus
-                      ? "Status"
-                      : typeof col?.columnDef.header === "string"
-                        ? formatHeaderText(col.columnDef.header)
-                        : f.id;
+                    const headerTitle = typeof col?.columnDef.header === "string" ? formatHeaderText(col.columnDef.header) : f.id;
                     const val = f.value as any;
-                    const displayVal = isStatus
-                      ? String(val).toUpperCase() === "Y" || String(val).toLowerCase() === "cancelled" || String(val).toLowerCase() === "canceled"
-                        ? "Cancelled"
-                        : String(val).toUpperCase() === "N" || String(val).toLowerCase() === "active"
-                          ? "Active"
-                          : String(val)
-                      : typeof val === "object" && val
-                        ? `${val.from || "Any"} → ${val.to || "Any"}`
-                        : String(val);
+                    const displayVal = typeof val === "object" && val
+                      ? `${val.from || "Any"} → ${val.to || "Any"}`
+                      : String(val);
                     return (
                       <span
                         key={f.id}
@@ -523,7 +512,11 @@ export function DataTable<TData, TValue>({
                   })}
                 <button
                   type="button"
-                  onClick={() => table.resetColumnFilters()}
+                  onClick={() => {
+                    const currentFilters = table.getState().columnFilters;
+                    const statusOnly = currentFilters.filter((f) => isStatusColumn(f.id));
+                    table.setColumnFilters(statusOnly);
+                  }}
                   className="text-xs font-semibold text-[#00378C] hover:underline cursor-pointer ml-1"
                 >
                   Clear all

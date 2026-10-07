@@ -183,13 +183,14 @@ export function SmartInlineAllocationTable({
         </div>
 
         {/* Right-side actions: Add, Reload, Collapse */}
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           {!childTable && onSetChildTable && (
             <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-              <span className="text-[10px] text-slate-500 font-semibold">Attach:</span>
+              <span className="text-[11px] text-slate-500 font-semibold mr-0.5">Attach:</span>
               <button
                 type="button"
-                className="h-5 px-2 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
+                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
+                style={{ width: "auto", minWidth: "max-content" }}
                 onClick={() => onSetChildTable("job")}
                 disabled={disabled}
               >
@@ -197,7 +198,8 @@ export function SmartInlineAllocationTable({
               </button>
               <button
                 type="button"
-                className="h-5 px-2 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
+                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
+                style={{ width: "auto", minWidth: "max-content" }}
                 onClick={() => onSetChildTable("expense")}
                 disabled={disabled}
               >
@@ -205,7 +207,8 @@ export function SmartInlineAllocationTable({
               </button>
               <button
                 type="button"
-                className="h-5 px-2 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
+                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
+                style={{ width: "auto", minWidth: "max-content" }}
                 onClick={() => onSetChildTable("invoice")}
                 disabled={disabled}
               >
@@ -217,7 +220,8 @@ export function SmartInlineAllocationTable({
           {childTable === "invoice" && onRefreshInvoices && (
             <button
               type="button"
-              className="inline-flex items-center h-5 px-1.5 text-[10px] font-medium rounded border border-slate-300 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer"
+              className="inline-flex items-center h-6 px-2 text-[10px] font-medium rounded border border-slate-300 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer"
+              style={{ width: "auto", minWidth: "max-content" }}
               onClick={onRefreshInvoices}
               disabled={disabled || loading}
               title="Reload outstanding invoices from server"
@@ -229,7 +233,8 @@ export function SmartInlineAllocationTable({
           {childTable && (
             <button
               type="button"
-              className="inline-flex items-center h-5 px-2 text-[10px] font-bold rounded bg-[#1e293b] text-white hover:bg-slate-700 shadow-2xs cursor-pointer transition-colors"
+              className="inline-flex items-center h-6 px-2.5 text-[10px] font-bold rounded bg-[#1e293b] text-white hover:bg-slate-700 shadow-2xs cursor-pointer transition-colors"
+              style={{ width: "auto", minWidth: "max-content" }}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -249,7 +254,7 @@ export function SmartInlineAllocationTable({
               e.stopPropagation();
               onClose();
             }}
-            className="inline-flex items-center justify-center h-5 w-5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer"
+            className="finance-alloc-collapse-btn inline-flex items-center justify-center h-6 w-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer shrink-0"
             title="Collapse allocation table"
           >
             <ChevronUp size={12} />

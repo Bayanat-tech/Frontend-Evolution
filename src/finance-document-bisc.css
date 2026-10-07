@@ -835,22 +835,49 @@
 
 /* Universal tactile micro-buttons for table actions across all finance pages */
 :where(.finance-list-page, .finance-utility-page, .finance-page) td[data-column-id="actions"] button:not(.group),
-:where(.finance-list-page, .finance-utility-page, .finance-page) td:last-child .flex button:not(.group) {
-  height: 23px !important;
-  width: 23px !important;
-  min-height: 23px !important;
-  min-width: 23px !important;
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody > tr:not(.finance-allocation-row) > td:last-child:not(.finance-allocation-cell) .flex:not(.finance-allocation-toolbar) button:not(.group) {
+  height: 25px !important;
+  width: 25px !important;
+  min-height: 25px !important;
+  min-width: 25px !important;
   padding: 0 !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 5px !important;
+  border-radius: 6px !important;
   border: 1px solid #cbd5e1 !important;
   background-color: #f8fafc !important;
   color: #475569 !important;
   transition: all 0.15s ease-in-out !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
   cursor: pointer !important;
+}
+
+/* Explicit clean styling for allocation sub-panel header buttons */
+.finance-allocation-panel .finance-allocation-toolbar button,
+.finance-document-editor .finance-allocation-panel .finance-allocation-toolbar button {
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  border-radius: 5px !important;
+  box-sizing: border-box !important;
+}
+
+.finance-allocation-panel .finance-allocation-toolbar button.finance-alloc-collapse-btn {
+  width: 24px !important;
+  min-width: 24px !important;
+  padding: 0 !important;
 }
 
 :where(.finance-list-page, .finance-utility-page, .finance-page) td[data-column-id="actions"] button:not(.group):hover,
@@ -958,7 +985,22 @@
 .finance-document-editor .finance-document-identity { gap:10px; }
 .finance-header-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid #cbd5e1; border-radius:6px; background:#ffffff; color:#334155; }
 .finance-header-toggle:hover { background:#e2e8f0; color:#0f172a; }
-.finance-document-editor .commercial-command-header .ui-button { background:#00378C !important; border:1px solid #002d72 !important; color:#ffffff !important; font-weight:600 !important; }
+.finance-document-editor .commercial-command-header .ui-button {
+  background: #00378C !important;
+  border: 1px solid #002d72 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+  padding: 0 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.15) !important;
+}
 .finance-document-editor .commercial-command-header .ui-button:hover { background:#002d72 !important; color:#ffffff !important; }
 .finance-document-editor .commercial-command-header .ui-button[aria-label="Close"],
 .finance-document-editor .commercial-command-header .ui-button.commercial-header-close-btn { background:#ffffff !important; border:1px solid #cbd5e1 !important; color:#334155 !important; }
@@ -1212,10 +1254,13 @@ button.commercial-add-line-btn,
   color: #ffffff !important;
   font-weight: 600 !important;
   font-size: 12px !important;
-  padding: 4px 14px !important;
-  border-radius: 6px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
   display: inline-flex !important;
   align-items: center !important;
+  justify-content: center !important;
   gap: 6px !important;
   box-shadow: 0 1px 2px rgba(0, 55, 140, 0.2) !important;
   transition: all 140ms ease !important;
