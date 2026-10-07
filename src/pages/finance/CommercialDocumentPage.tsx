@@ -729,6 +729,26 @@ function CommercialEditor({
   if (isPI  && !form.ref_no)            hErr.ref_no    = "Ref No is required";
   if (isSales && !form.ref_no)          hErr.ref_no    = "Ref No is required";    //inv_no 
 
+  // Character limit validations
+  if (form.ref_no && form.ref_no.length > 30) {
+    setError("You have exceeded the character limit for Ref No.");
+    return;
+  }
+  if (form.remarks && form.remarks.length > 250) {
+    setError("You have exceeded the character limit for Remarks.");
+    return;
+  }
+  for (const line of form.detail) {
+    if (line.description && line.description.length > 250) {
+      setError("You have exceeded the character limit for Remarks.");
+      return;
+    }
+    if (line.ref_no && line.ref_no.length > 30) {
+      setError("You have exceeded the character limit for Ref No.");
+      return;
+    }
+  }
+
   const lErr: Record<string, Record<string, string>> = {};
   const visibleLines = form.detail.filter((l) => Number(l.serial_no) < 9000);
 
@@ -745,8 +765,14 @@ function CommercialEditor({
   setFieldErrors(hErr);
   setLineErrors(lErr);
 
-  if (Object.keys(hErr).length || Object.keys(lErr).length) {
-       scrollToFirstError();
+  if (Object.keys(lErr).length > 0) {
+    setError("Kindly fill in the missing fields.");
+    scrollToFirstError();
+    return;
+  }
+
+  if (Object.keys(hErr).length) {
+    scrollToFirstError();
     return;
   }
 

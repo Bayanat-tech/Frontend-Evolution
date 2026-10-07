@@ -7512,8 +7512,20 @@ freight-dense-form .freight-form-card {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-top: 3.5px solid #00378c;
   border-bottom: 1px solid #cbd5e1;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+.commercial-command-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.5px;
+  background: linear-gradient(90deg, #00255e 0%, #00378c 30%, #0284c7 65%, #38bdf8 85%, #60a5fa 100%);
+  z-index: 15;
 }
 
 .commercial-command-header::after {
@@ -9363,10 +9375,15 @@ freight-dense-form .freight-form-card {
 
 .app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header) {
   border-color: #33415d !important;
+  border-top-color: #2563eb !important;
   background:
     linear-gradient(180deg, rgba(21, 25, 39, 0.98) 0%, rgba(17, 24, 39, 0.98) 100%) !important;
   color: #e2e8f0 !important;
   box-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.commercial-command-header)::before {
+  background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #60a5fa 100%) !important;
 }
 
 .app.dark .workspace-content :where(.finance-list-heading)::after {
