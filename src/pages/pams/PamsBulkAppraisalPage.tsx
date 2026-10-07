@@ -1,7 +1,8 @@
 import {
   CheckCircle2, ChevronDown, Edit2, Plus, Save, Trash2, Users, X,
+  AlertTriangle,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";   // ⭐ useRef added
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   pamsCommonProcedure, pamsDelete, pamsSave, pamsSelect,
 } from "../../api/pams";
@@ -24,7 +25,6 @@ export function PamsBulkAppraisalPage() {
   const { toast } = useToast();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-
   const [selectedPeriod, setSelectedPeriod] = useState("");
   const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState("");
@@ -37,25 +37,23 @@ export function PamsBulkAppraisalPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState("");
-
   const [successOpen, setSuccessOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
-
   const [periodFormOpen, setPeriodFormOpen] = useState(false);
   const [periodReloadKey, setPeriodReloadKey] = useState(0);
-
   const [editPeriodTarget, setEditPeriodTarget] = useState<Row | null>(null);
   const [deletePeriodTarget, setDeletePeriodTarget] = useState<Row | null>(null);
-
   const [kpiEditorTarget, setKpiEditorTarget] = useState<Row | null>(null);
   const [kpiEditorMode, setKpiEditorMode] = useState<"add" | "edit">("add");
   const [kpiEditorOpen, setKpiEditorOpen] = useState(false);
-
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
-
-  // ⭐ In-flight guard — React StrictMode double-fire rokne ke liye
+  const [processAllPreviewOpen, setProcessAllPreviewOpen] = useState(false);
+  const [processAllConfirmOpen, setProcessAllConfirmOpen] = useState(false);
+  const [processAllTargets, setProcessAllTargets] = useState<Row[]>([]);
+  const [processAllLoading, setProcessAllLoading] = useState(false);
+  const [hasSameDesgEmployees, setHasSameDesgEmployees] = useState(false);
+  const [checkingDesg, setCheckingDesg] = useState(false);
   const loadInFlightRef = useRef(false);
-
   const itemTypes = [
     { value: "KPI", label: "Task" },
     { value: "CHARACTERISTICS", label: "Characteristics" },
@@ -121,11 +119,8 @@ export function PamsBulkAppraisalPage() {
     return () => { cancelled = true; };
   }, [loginid, companyCode, selectedPeriod, toast]);
 
-  // ⭐ FIXED — in-flight guard lagaya
   const loadAssignments = async () => {
     if (!selectedEmployee || !selectedType || !selectedPeriod) return;
-
-    // ⭐ Agar pichla call chal raha hai to skip karo (StrictMode double-fire rok)
     if (loadInFlightRef.current) return;
     loadInFlightRef.current = true;
 
@@ -164,8 +159,45 @@ export function PamsBulkAppraisalPage() {
   useEffect(() => {
     if (selectedEmployee && selectedType && selectedPeriod) void loadAssignments();
     else setRows([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedType, selectedPeriod]);
+
+
+  useEffect(() => {
+    setHasSameDesgEmployees(false);
+
+    if (!selectedEmployee || !selectedPeriod) return;
+
+    let cancelled = false;
+    setCheckingDesg(true);
+
+    (async () => {
+      try {
+        const data = await pamsSelect({
+          parameter: "employees_with_same_desg",
+          loginid,
+          code1: companyCode,
+          code2: selectedEmployee,
+          code3: selectedPeriod,
+        });
+
+        if (cancelled) return;
+
+        const list = (data || []).map(normalizeRow);
+        const pending = list.filter(
+          (r) => text(r.HAS_APPRAISAL).toUpperCase() !== "Y"
+        );
+
+        setHasSameDesgEmployees(pending.length > 0);
+      } catch {
+        if (!cancelled) setHasSameDesgEmployees(false);
+      } finally {
+        if (!cancelled) setCheckingDesg(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployee, selectedPeriod, companyCode, loginid]);
 
   const process = async () => {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
@@ -220,21 +252,145 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
-  // ⭐ CHANGED — Add KPI button: weightage 100 check
+  const openProcessAllPreview = async () => {
+    if (!selectedPeriod) {
+      toast.warning("Select a period first");
+      return;
+    }
+    if (!selectedEmployee) {
+      toast.warning("Select a source employee first (whose KPI will be copied)");
+      return;
+    }
+
+    setProcessAllLoading(true);
+    try {
+      const data = await pamsSelect({
+        parameter: "employees_with_same_desg",
+        loginid,
+        code1: companyCode,
+        code2: selectedEmployee,
+        code3: selectedPeriod,
+      });
+
+      const list = (data || []).map(normalizeRow);
+      const pending = list.filter(
+        (r) => text(r.HAS_APPRAISAL).toUpperCase() !== "Y"
+      );
+
+      setProcessAllTargets(pending);
+      setProcessAllPreviewOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to load target employees");
+    } finally {
+      setProcessAllLoading(false);
+    }
+  };
+
+  const runProcessAll = async () => {
+    if (!selectedEmployee || !selectedPeriod) return;
+
+    setProcessAllConfirmOpen(false);
+    setSaving(true);
+
+    let okCount = 0;
+    const failed: string[] = [];
+
+    try {
+      for (const target of processAllTargets) {
+        const targetEmp = text(target.EMPLOYEE_CODE);
+        if (!targetEmp) continue;
+
+        try {
+          // 1. Copy KPI rows source → target
+          const copyResult = await pamsSelect({
+            parameter: "copy_kpi_to_employee",
+            loginid,
+            code1: companyCode,
+            code2: selectedEmployee,
+            code3: targetEmp,
+            code4: selectedPeriod,
+          });
+
+          const copyMsg = String(
+            (copyResult?.[0] as Record<string, unknown>)?.RESULT ?? ""
+          );
+          if (copyMsg.toUpperCase().startsWith("ERROR")) {
+            throw new Error(copyMsg.replace(/^ERROR:\s*/i, ""));
+          }
+
+          // 2. Create appraisal doc for target
+          await pamsCommonProcedure({
+            parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
+            loginid,
+            val1s1: companyCode,
+            val1s2: selectedPeriod,
+            val1s3: targetEmp,
+          });
+
+          okCount++;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          failed.push(`${text(target.RPT_NAME) || targetEmp}: ${msg}`);
+        }
+      }
+
+      // Refresh processed employees list
+      try {
+        const hdrData = await pamsSelect({
+          parameter: "appraisal_hdr_employees",
+          loginid,
+          code1: companyCode,
+          code2: selectedPeriod,
+        });
+        const codes = new Set(
+          hdrData
+            .map((d) => text(d.EMPLOYEE_CODE || d.employee_code))
+            .filter(Boolean)
+        );
+        setProcessedEmployees(codes);
+      } catch { /* silent */ }
+
+      // Show result
+      if (failed.length === 0) {
+        toast.success(
+          `Successfully processed ${okCount} employee(s) for period ${selectedPeriod}.`
+        );
+      } else if (okCount === 0) {
+        toast.error(
+          `All ${failed.length} employee(s) failed. ` + failed.slice(0, 3).join(" | ")
+        );
+      } else {
+        toast.warning(
+          `${okCount} processed, ${failed.length} failed. ` + failed.slice(0, 3).join(" | ")
+        );
+      }
+
+      // Reset
+      setSelectedEmployee("");
+      setSelectedEmployeeLabel("");
+      setRows([]);
+      setProcessAllTargets([]);
+      setProcessAllPreviewOpen(false);
+      setHasSameDesgEmployees(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Process All failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Add KPI button
   const openAddKpi = () => {
     if (!selectedEmployee) {
       toast.warning("Select an employee first");
       return;
     }
-
-    // Weightage total 100 ka check (sirf KPI/Task ke liye)
     if (isKpiType && totalWeightage >= 100) {
       toast.error(
         `Total weightage is already ${totalWeightage}%. Maximum 100% allowed. Cannot add more KPI.`
       );
       return;
     }
-
     setKpiEditorTarget(null);
     setKpiEditorMode("add");
     setKpiEditorOpen(true);
@@ -290,6 +446,7 @@ export function PamsBulkAppraisalPage() {
         setSelectedEmployee("");
         setSelectedEmployeeLabel("");
         setRows([]);
+        setHasSameDesgEmployees(false);
       }
       toast.success(`Period ${periodNumber} deleted`);
     } catch (error) {
@@ -313,6 +470,22 @@ export function PamsBulkAppraisalPage() {
   const toggleRow = (key: string) =>
     setExpandedRows((current) => ({ ...current, [key]: !current[key] }));
 
+  const isProcessAllDisabled =
+    saving ||
+    processAllLoading ||
+    checkingDesg ||
+    !selectedEmployee ||
+    !hasSameDesgEmployees;
+
+  const processAllTooltip =
+    !selectedEmployee
+      ? "Select an employee first"
+      : checkingDesg
+      ? "Checking for employees with same designation..."
+      : !hasSameDesgEmployees
+      ? "No other employee has this designation — cannot process all"
+      : "Copy this employee's KPI to all employees with the same designation";
+
   return (
     <section className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
@@ -322,12 +495,27 @@ export function PamsBulkAppraisalPage() {
             Select period, employee, item type, and manage the required appraisal assignment rows.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={() => setPeriodFormOpen(true)}>
             <Plus size={15} /> Add New Period
           </Button>
+
           <Button type="button" disabled={saving} onClick={process}>
             <Users size={15} /> {saving ? "Processing..." : "Process"}
+          </Button>
+          <Button
+            type="button"
+            disabled={isProcessAllDisabled}
+            onClick={openProcessAllPreview}
+            className={
+              isProcessAllDisabled
+                ? "cursor-not-allowed opacity-60"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            }
+            title={processAllTooltip}
+          >
+            <Users size={15} />
+            {processAllLoading ? "Loading..." : "Process All"}
           </Button>
         </div>
       </div>
@@ -366,6 +554,7 @@ export function PamsBulkAppraisalPage() {
                 setSelectedEmployee("");
                 setSelectedEmployeeLabel("");
                 setRows([]);
+                setHasSameDesgEmployees(false);
               }}
               renderRowActions={(row) => (
                 <>
@@ -439,7 +628,6 @@ export function PamsBulkAppraisalPage() {
         </CardContent>
       </Card>
 
-      {/* ═══ Assignment Card ═══ */}
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <CardHeader className="shrink-0 border-b border-slate-200/70 px-4 py-2.5 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -548,7 +736,6 @@ export function PamsBulkAppraisalPage() {
                           ) : null}
                         </td>
 
-
                         <td
                           className={`px-3 py-3 ${hasItems ? "cursor-pointer select-none" : ""}`}
                           onClick={hasItems ? () => toggleRow(key) : undefined}
@@ -583,7 +770,6 @@ export function PamsBulkAppraisalPage() {
                           )}
                         </td>
 
-
                         {isKpiType && (
                           <td className="px-3 py-3 text-right">
                             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
@@ -594,7 +780,6 @@ export function PamsBulkAppraisalPage() {
 
                         <td className="px-3 py-3">
                           <div className="flex justify-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
-                  
                             {canEditRow && (
                               <button
                                 type="button"
@@ -620,7 +805,6 @@ export function PamsBulkAppraisalPage() {
                   })
                 )}
               </tbody>
-
 
               {isKpiType && (
                 <tfoot className="sticky bottom-0 bg-slate-50 dark:bg-slate-900">
@@ -679,7 +863,7 @@ export function PamsBulkAppraisalPage() {
         companyCode={companyCode}
         loginid={loginid}
         period={selectedPeriod}
-        totalWeightage={totalWeightage}   /* ⭐ NAYA PROP */
+        totalWeightage={totalWeightage}
         onRefresh={loadAssignments}
         onSave={async () => {
           setKpiEditorOpen(false);
@@ -751,14 +935,126 @@ export function PamsBulkAppraisalPage() {
           <span className="text-xs">This cannot be undone.</span>
         </p>
       </Dialog>
+
+      <Dialog
+        open={processAllPreviewOpen}
+        wide
+        title="Process All by Designation"
+        onClose={() => setProcessAllPreviewOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setProcessAllPreviewOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              disabled={processAllTargets.length === 0}
+              onClick={() => {
+                setProcessAllPreviewOpen(false);
+                setProcessAllConfirmOpen(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <CheckCircle2 size={15} /> Proceed ({processAllTargets.length})
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <p className="m-0 font-semibold">
+              Source employee: {selectedEmployeeLabel || selectedEmployee}
+            </p>
+            <p className="m-0 mt-1">
+              This employee's KPI will be copied to all employees below who have the{" "}
+              <strong>same designation</strong> and don't have an appraisal document yet
+              for <strong>{selectedPeriod}</strong>.
+            </p>
+          </div>
+
+          {processAllTargets.length === 0 ? (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-4 text-center text-sm text-amber-800">
+              No employees found with the same designation that need processing.
+            </div>
+          ) : (
+            <div className="max-h-80 overflow-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-slate-100">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left">#</th>
+                    <th className="px-2 py-1.5 text-left">Employee Code</th>
+                    <th className="px-2 py-1.5 text-left">Name</th>
+                    <th className="px-2 py-1.5 text-left">Designation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processAllTargets.map((r, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="px-2 py-1.5">{i + 1}</td>
+                      <td className="px-2 py-1.5 font-mono">
+                        {text(r.EMPLOYEE_CODE)}
+                      </td>
+                      <td className="px-2 py-1.5">{text(r.RPT_NAME)}</td>
+                      <td className="px-2 py-1.5">
+                        {text(r.DESG_CODE)} - {text(r.DESG_NAME)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={processAllConfirmOpen}
+        compact
+        title="Confirm Process All"
+        onClose={() => setProcessAllConfirmOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setProcessAllConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              disabled={saving}
+              onClick={runProcessAll}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {saving ? "Processing..." : "Confirm & Process"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 shrink-0 text-emerald-600" size={20} />
+          <div className="grid gap-1">
+            <p className="m-0 text-sm font-semibold">
+              {processAllTargets.length} employee(s) will be processed
+            </p>
+            <p className="m-0 text-xs text-muted-foreground">
+              KPI from <strong>{selectedEmployeeLabel || selectedEmployee}</strong> will be
+              copied to all listed employees, and appraisal documents will be created for
+              period <strong>{selectedPeriod}</strong>.
+              <br />
+              This action cannot be undone.
+            </p>
+          </div>
+        </div>
+      </Dialog>
     </section>
   );
 }
 
 
+// ═══════════════════════════════════════════════════════════════════
+// KPI EDITOR MODAL
+// ═══════════════════════════════════════════════════════════════════
 function KpiEditorModal({
   open, onClose, existingRow, itemType, employeeCode, companyCode, loginid,
-  period, totalWeightage, onSave, onRefresh,   // ⭐ totalWeightage add
+  period, totalWeightage, onSave, onRefresh,
 }: {
   open: boolean;
   onClose: () => void;
@@ -768,7 +1064,7 @@ function KpiEditorModal({
   companyCode: string;
   loginid: string;
   period: string;
-  totalWeightage: number;                      // ⭐ NAYA
+  totalWeightage: number;
   onSave: () => void;
   onRefresh: () => void | Promise<void>;
 }) {
@@ -778,7 +1074,7 @@ function KpiEditorModal({
   const isTask = itemType === "KPI";
   const needsWeightage = isTask;
   const needsActivities = isTask;
-  const isMulti = !isEdit && !isTask; // naam-only types: add mode mein kai naam ek saath
+  const isMulti = !isEdit && !isTask;
 
   const label =
     itemType === "SKILL" ? "Skill"
@@ -813,7 +1109,6 @@ function KpiEditorModal({
     }
   }, [open, existingRow]);
 
-  // ── Activities (Task) ─────────────────────────────────────────────
   const addActivityRow = () => {
     setActivities((prev) => [...prev, ""]);
     setTimeout(() => {
@@ -830,7 +1125,6 @@ function KpiEditorModal({
     setActivities((prev) => prev.map((a, i) => (i === index ? value : a)));
   };
 
-  // ── Names (Characteristics / Skill / Goal) ────────────────────────
   const addNameRow = () => {
     setNames((prev) => [...prev, ""]);
     setTimeout(() => {
@@ -847,9 +1141,7 @@ function KpiEditorModal({
     setNames((prev) => prev.map((n, i) => (i === index ? value : n)));
   };
 
-  // ── Save: ek saath kai naam ──────────────────────────────────────
   const submitMulti = async () => {
-    // trim + blank hatao + duplicate naam (case ignore) hatao
     const seen = new Set<string>();
     const cleaned: string[] = [];
     for (const raw of names) {
@@ -905,7 +1197,6 @@ function KpiEditorModal({
       return;
     }
 
-    // Kuch fail hue: jo ho gaye wo list mein dikhao, fail wale modal mein rakho
     setNames(failed.map((f) => f.name));
     if (okCount > 0) await onRefresh();
     toast.error(
@@ -927,9 +1218,6 @@ function KpiEditorModal({
       return;
     }
 
-    // ═══════════════════════════════════════════════════════
-    // ⭐ WEIGHTAGE TOTAL 100 CHECK
-    // ═══════════════════════════════════════════════════════
     if (needsWeightage) {
       if (weightage <= 0) {
         toast.warning("Weightage must be greater than 0");
@@ -956,7 +1244,6 @@ function KpiEditorModal({
       : [];
 
     if (needsActivities) {
-      // 1. Min / Max range
       if (finalActivities.length < 3) {
         toast.warning("Minimum 3 KPI items (activities) are required per designation/role.");
         return;
@@ -966,7 +1253,6 @@ function KpiEditorModal({
         return;
       }
 
-      // 2. Measurable check (min 5 chars)
       const invalidItem = finalActivities.find((a) => a.length < 5);
       if (invalidItem) {
         toast.warning(
@@ -975,9 +1261,6 @@ function KpiEditorModal({
         return;
       }
 
-      // ═══════════════════════════════════════════════════════
-      // ⭐ DUPLICATE ACTIVITY CHECK (case-insensitive)
-      // ═══════════════════════════════════════════════════════
       const seen = new Set<string>();
       const duplicates: string[] = [];
       for (const act of finalActivities) {
@@ -1015,7 +1298,6 @@ function KpiEditorModal({
           val1n1: needsWeightage ? weightage : 0,
         });
 
-        // Activities sirf KPI (Task) ke hote hain
         if (needsActivities) {
           for (let i = 0; i < originalActivities.length; i++) {
             await pamsDelete({
@@ -1083,7 +1365,6 @@ function KpiEditorModal({
       }
     >
       <form id="kpi-editor-form" className="grid gap-4" onSubmit={handleSubmit}>
-        {/* ── Characteristics / Skill / Goal: kai naam ek saath ── */}
         {isMulti ? (
           <Field label={`${label} name`} required>
             <div className="grid gap-2">
@@ -1180,11 +1461,11 @@ function KpiEditorModal({
                     ? "Add activities below"
                     : ``}
                 </span>
-                <Button 
+                <Button
                   type="button"
-                  size="sm" 
+                  size="sm"
                   onClick={addActivityRow}
-                  disabled={activities.length >= 6} 
+                  disabled={activities.length >= 6}
                 >
                   <Plus size={13} /> Add Activity
                 </Button>
@@ -1197,7 +1478,6 @@ function KpiEditorModal({
               ) : (
                 <div className="grid gap-1.5">
                   {activities.map((activity, i) => {
-                    // Case-insensitive duplicate check
                     const isDuplicate =
                       activity.trim() !== "" &&
                       activities.some(

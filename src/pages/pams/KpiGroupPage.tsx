@@ -51,7 +51,6 @@ type DesignationGroup = {
   totalWeightage: number;
 };
 
-
 export type DesignationInfo = {
   divCode: string;
   divName: string;
@@ -228,6 +227,7 @@ export function KpiGroupPage() {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabKey>("groups");
@@ -263,7 +263,6 @@ export function KpiGroupPage() {
   const [designationList, setDesignationList] = useState<Row[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
 
-
   const [designationLookup, setDesignationLookup] = useState<
     Record<string, DesignationInfo>
   >({});
@@ -298,7 +297,6 @@ export function KpiGroupPage() {
       setDivisionList(divs);
     })();
   }, [loginid, companyCode]);
-
 
   useEffect(() => {
     void (async () => {
@@ -703,27 +701,49 @@ export function KpiGroupPage() {
   };
 
   // ═════════════════════════════════════════════════════════
-  // DELETE
+  // DELETE — single call to safe_delete_kpi
   // ═════════════════════════════════════════════════════════
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setSaving(true);
+  const handleDeleteClick = async (row: Row) => {
+    const kpiCode = text(row.KPI_CODE);
+    const kpiDesc = text(row.KPI_DESC);
+    const kpiTypeCode = text(row.KPI_TYPE_CODE);
+
+    setDeleteCheckLoading(true);
     try {
-      await pamsDelete({
-        parameter: "delete_kpi",
+      const result = await pamsSelect({
+        parameter: "safe_delete_kpi",
         loginid,
-        code1: text(deleteTarget.KPI_CODE),
-        code2: text(deleteTarget.KPI_TYPE_CODE),
-        code3: companyCode,
+        code1: companyCode,
+        code2: kpiCode,
+        code3: kpiTypeCode,
       });
-      setDeleteTarget(null);
-      toast.success("Record deleted successfully");
+
+      const res = String(
+        (result?.[0] as Record<string, unknown>)?.RESULT ?? ""
+      );
+
+      if (res.toUpperCase().startsWith("ERROR_DOC_EXISTS")) {
+        setDeleteTarget(row);
+        return;
+      }
+      if (res.toUpperCase().startsWith("ERROR")) {
+        throw new Error(res.replace(/^ERROR:\s*/i, ""));
+      }
+
+      toast.success(`"${kpiDesc || kpiCode}" deleted successfully`);
       await loadRows();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to delete");
+    } catch (error: any) {
+      const raw = String(error?.message || error?.details || error || "");
+      toast.error(
+        raw.length > 200 ? raw.slice(0, 200) + "..." : raw || "Unable to delete"
+      );
     } finally {
-      setSaving(false);
+      setDeleteCheckLoading(false);
     }
+  };
+
+  const confirmDelete = async () => {
+    setDeleteTarget(null);
   };
 
   const kpiTypeOptions = kpiTypeList.map(normalizeRow);
@@ -1036,8 +1056,9 @@ export function KpiGroupPage() {
                                     <button
                                       type="button"
                                       title="Delete"
-                                      onClick={() => setDeleteTarget(row)}
-                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => void handleDeleteClick(row)}
+                                      disabled={deleteCheckLoading || saving}
+                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <Trash2 size={13} />
                                     </button>
@@ -1455,26 +1476,27 @@ export function KpiGroupPage() {
         </div>
       </Dialog>
 
+      {/* Block-only dialog — opens only when KPI is used in an appraisal doc */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact
         tone="danger"
-        title="Delete"
+        title="Cannot Delete Record"
         onClose={() => setDeleteTarget(null)}
         footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>
-              Delete
-            </Button>
-          </>
+          <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            OK
+          </Button>
         }
       >
         <p className="m-0 text-sm text-muted-foreground">
-          Please confirm to delete <strong>{text(deleteTarget?.KPI_CODE)}</strong> —{" "}
-          {text(deleteTarget?.KPI_DESC)}.
+          <strong>{text(deleteTarget?.KPI_CODE)}</strong> —{" "}
+          <strong>{text(deleteTarget?.KPI_DESC)}</strong> is already used in one or
+          more appraisal documents, so it cannot be deleted.
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Please remove the related appraisal(s) from the <strong>KPI Assignment</strong>{" "}
+          page first, then try deleting again.
         </p>
       </Dialog>
     </section>

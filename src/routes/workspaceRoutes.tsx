@@ -1148,20 +1148,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   // ── PAMS KPI Group — compact-token matching ──
-  {
-    name: "PAMS KPI Group",
-    match: (context) => isPamsToken(context, "kpigroups"),
-    element: () => <KpiGroupPage />,
-  },
+  // {
+  //   name: "PAMS KPI Group",
+  //   match: (context) => isPamsToken(context, "kpigroups"),
+  //   element: () => <KpiGroupPage />,
+  // },
 
   // ── PAMS KPI Item — compact-token matching ──
   {
     name: "PAMS KPI Item",
     match: (context) => isPamsToken(context, "kpiactivity", "kpiitem"),
-    element: () => <KpiActivityPage />,
+    element: () => <KpiGroupPage  />,
   },
 
-  // ── PAMS KPI Acceptance — FIXED: was matching /kpi_item, now /kpi_acceptance ──
   {
     name: "PAMS KPI Acceptance",
     match: (context) =>
@@ -2448,10 +2447,6 @@ function isPamsRoute(pathname: string) {
   return pathname.toLowerCase().includes("/pams/");
 }
 
-// ✅ NEW HELPERS — compact-token based matching for PAMS routes.
-//     Uses getPamsMatchText() which combines pathname + activeApp + activeLeaf
-//     (title / url_path / component_name). This avoids hardcoding raw URLs and
-//     keeps matching resilient if a URL slug changes but the menu label doesn't.
 function getPamsCompact(context: WorkspaceRouteContext): string {
   return getPamsMatchText(context).replace(/[^a-z0-9]/g, "");
 }

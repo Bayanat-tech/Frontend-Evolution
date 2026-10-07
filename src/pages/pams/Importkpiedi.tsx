@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "../../state/AuthContext";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import {
   Upload,
   Download,
@@ -28,7 +28,6 @@ export type DesignationInfo = {
 interface ImportKpiEdiProps {
   onClose: () => void;
   onSuccess: () => void;
-  // Fallback used when DESG_CODE is missing or not found in the map
   divisionCode?: string;
   divisionName?: string;
   departmentCode?: string;
@@ -150,7 +149,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     [totalCount]
   );
 
-
   const resolveScope = (desgCode: string) => {
     const key = String(desgCode || "").trim();
     const info = designationLookup[key];
@@ -162,7 +160,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         deptName: info.deptName,
       };
     }
-    // Fallback to the parent-selected div/dept if DESG is unknown
     return {
       divCode: divisionCode,
       divName: divisionName,
@@ -273,7 +270,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
 
           setUploadError(
             `Each KPI must have between min 3 and max 6 activities.\n${details}` +
-              (badGroups.length > 5 ? `\n...and ${badGroups.length - 5} more group(s)` : "")
+            (badGroups.length > 5 ? `\n...and ${badGroups.length - 5} more group(s)` : "")
           );
           setNotice({
             type: "error",
@@ -347,23 +344,22 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         filled.push(merged);
       }
 
-      //    DIV / DEPT resolved per-row using designationLookup[DESG_CODE]
       const mappedRows = filled.map((r) => {
         const desgCode = getVal(r, "DESGCODE", "DESG_CODE").replace(/\.0+$/, "");
         const scope = resolveScope(desgCode);
 
         return [
-          scope.divCode || "-",                            // 0
-          scope.divName || "-",                            // 1
-          scope.deptCode || "-",                           // 2
-          scope.deptName || "-",                           // 3
-          "-",                                             // 4  SECTIONCODE
-          "-",                                             // 5  SECTIONNAME
-          desgCode,                                        // 6
-          getVal(r, "DESGNAME", "DESG_NAME"),              // 7
-          getVal(r, "KPIGROUP", "KPI_GROUP"),              // 8
-          getVal(r, "WEIGHTAGE").replace(/\.0+$/, ""),     // 9
-          getVal(r, "KPIACTIVITY", "KPI_ACTIVITY"),        // 10
+          scope.divCode || "-",
+          scope.divName || "-",
+          scope.deptCode || "-",
+          scope.deptName || "-",
+          "-",
+          "-",
+          desgCode,
+          getVal(r, "DESGNAME", "DESG_NAME"),
+          getVal(r, "KPIGROUP", "KPI_GROUP"),
+          getVal(r, "WEIGHTAGE").replace(/\.0+$/, ""),
+          getVal(r, "KPIACTIVITY", "KPI_ACTIVITY"),
         ].join("|");
       });
 
@@ -427,7 +423,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
 
       setUploadError(
         `Each KPI must have 3-6 activities.\n${details}` +
-          (badGroups.length > 5 ? `\n...and ${badGroups.length - 5} more` : "")
+        (badGroups.length > 5 ? `\n...and ${badGroups.length - 5} more` : "")
       );
       return;
     }
@@ -480,48 +476,91 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // ═════════════════════════════════════════════════════════
-  // TEMPLATE — 5 columns
-  // ═════════════════════════════════════════════════════════
-  const handleDownloadTemplate = () => {
+
+  const handleDownloadTemplate = async () => {
     try {
-      const templateData = [
-        {
-          DESG_CODE: "219",
-          DESG_NAME: "General Manager - Bayanat Technology",
-          KPI_GROUP: "Business Performance",
-          WEIGHTAGE: "10",
-          KPI_ACTIVITY: "Annual Target",
-        },
-        { DESG_CODE: "", DESG_NAME: "", KPI_GROUP: "", WEIGHTAGE: "", KPI_ACTIVITY: "Revenue Growth" },
-        { DESG_CODE: "", DESG_NAME: "", KPI_GROUP: "", WEIGHTAGE: "", KPI_ACTIVITY: "Business Review" },
-        { DESG_CODE: "", DESG_NAME: "", KPI_GROUP: "", WEIGHTAGE: "", KPI_ACTIVITY: "Performance Report" },
-        {
+      setIsLoading(true);
+      setUploadError(null);
+
+      // ── Fetch unique designations under logged-in HOD ──────
+      const rows = await pamsSelect({
+        parameter: "hod_team_designations",
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code ?? "",
+      });
+
+      const templateData: Array<Record<string, string>> = [];
+
+      if (Array.isArray(rows) && rows.length > 0) {
+        for (const raw of rows) {
+          const r: AnyRow = {};
+          Object.keys(raw).forEach((k) => {
+            r[k.toUpperCase()] = (raw as AnyRow)[k];
+          });
+
+          const desgCode = text(r.DESG_CODE);
+          const desgName = text(r.DESG_NAME);
+          if (!desgCode && !desgName) continue;
+
+          templateData.push({
+            DESG_CODE: desgCode,
+            DESG_NAME: desgName,
+            KPI_GROUP: "",
+            WEIGHTAGE: "",
+            KPI_ACTIVITY: "",
+          });
+        }
+      }
+
+      // ── Fallback: header-only row if nothing fetched ───────
+      if (templateData.length === 0) {
+        templateData.push({
           DESG_CODE: "",
           DESG_NAME: "",
-          KPI_GROUP: "Financial Management",
-          WEIGHTAGE: "10",
-          KPI_ACTIVITY: "Budget Control",
-        },
-        { DESG_CODE: "", DESG_NAME: "", KPI_GROUP: "", WEIGHTAGE: "", KPI_ACTIVITY: "Expense Review" },
-        { DESG_CODE: "", DESG_NAME: "", KPI_GROUP: "", WEIGHTAGE: "", KPI_ACTIVITY: "Cost Reduction" },
-        { DESG_CODE: "", DESG_NAME: "", KPI_GROUP: "", WEIGHTAGE: "", KPI_ACTIVITY: "Financial Report" },
+          KPI_GROUP: "",
+          WEIGHTAGE: "",
+          KPI_ACTIVITY: "",
+        });
+      }
+
+      // ── Build worksheet ────────────────────────────────────
+      const ws = XLSX.utils.json_to_sheet(templateData);
+
+      // ── Pura header row YELLOW ─────────────────────────────
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+      const yellowStyle = {
+        fill: { patternType: "solid", fgColor: { rgb: "FFFF00" } },
+        font: { bold: true, color: { rgb: "000000" } },
+      };
+
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+        if (!ws[cellRef]) continue;
+        (ws[cellRef] as any).s = yellowStyle;
+      }
+
+      // ── Column widths ──────────────────────────────────────
+      ws["!cols"] = [
+        { wch: 12 }, // DESG_CODE
+        { wch: 40 }, // DESG_NAME
+        { wch: 32 }, // KPI_GROUP
+        { wch: 12 }, // WEIGHTAGE
+        { wch: 55 }, // KPI_ACTIVITY
       ];
 
-      const ws = XLSX.utils.json_to_sheet(templateData);
-      ws["!cols"] = [
-        { wch: 12 },
-        { wch: 40 },
-        { wch: 32 },
-        { wch: 12 },
-        { wch: 55 },
-      ];
+      // ── Write file ─────────────────────────────────────────
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "KpiEdiTemplate");
       XLSX.writeFile(wb, "KPI_EDI_Template.xlsx");
-      setNotice({ type: "success", message: "Template downloaded successfully." });
-    } catch {
-      setUploadError("Failed to generate template.");
+
+      setNotice({
+        type: "success",
+        message: `Template downloaded with ${templateData.length} designation(s).`,
+      });
+    } catch (err: any) {
+      setUploadError("Failed to generate template: " + (err?.message || err));
+    } finally {
+      setIsLoading(false);
     }
   };
 
