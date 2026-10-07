@@ -878,6 +878,7 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
+    if (!form.detail.some((d) => d.ac_code?.trim())) return setError("Add at least one detail account");
     if (docType !== "CR" && !form.cheque_no?.trim()) return setError("Cheque No is required");
     if (docType !== "CR" && !form.cheque_date) return setError("Cheque Date is required");
     setSaving(true);
@@ -1084,8 +1085,10 @@ function PaymentDocumentEditor({
                     <div className="finance-payment-header-fields">
                       <div className="col-span-2 max-md:col-span-1">
                         <LookupField
-                          label="Account *"
+                          label="Account"
                           value={form.ac_code}
+                          required
+                          enforceRequired
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                           columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                           valueField="ac_code"
@@ -1141,7 +1144,9 @@ function PaymentDocumentEditor({
                         />
                       </div>
                       <LookupField
-                        label="Currency *"
+                        label="Currency"
+                        required
+                        enforceRequired
                         value={form.curr_code}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1169,7 +1174,7 @@ function PaymentDocumentEditor({
                           }));
                         }}
                       />
-                      <Field label="Exchange Rate *">
+                      <Field label="Exchange Rate" required>
                         <ExchangeRateInput
                           disabled={disabled}
                           required
@@ -1286,25 +1291,26 @@ function PaymentDocumentEditor({
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
-                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
-                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-center text-white w-[120px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-center text-white w-14">Cr/Dr</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="finance-sticky-col-right px-2 py-2 text-center text-white">Action</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      {/* <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th> */}
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account <span className="text-destructive">*</span></th>
+                      <th className="px-1 py-2 text-center w-[92px] min-w-[92px] max-w-[92px]">Allocations</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      <th className="px-2 py-2 text-left">Tax %</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {form.detail.length === 0 ? (
+                    {form.detail.length === 0 ? ( 
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No detail lines yet — click "Add Line" to get started</td></tr>
                     ) : filteredDetail.length === 0 ? (
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={showAllColumns ? 15 : 9}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
@@ -1325,6 +1331,8 @@ function PaymentDocumentEditor({
                             <div className="w-full max-w-[460px] truncate">
                               <LookupField
                                 label="Detail Account"
+                                required
+                                enforceRequired
                                 compact
                                 placeholder="A/c code"
                                 value={detail.ac_code}
