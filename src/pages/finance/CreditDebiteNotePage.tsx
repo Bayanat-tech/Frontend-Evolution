@@ -878,9 +878,6 @@ function PaymentDocumentEditor({
       if (d.remarks && d.remarks.length > 250) {
         return setError("You have exceeded the character limit for Remarks.");
       }
-      if (d.ref_no && d.ref_no.length > 30) {
-        return setError("You have exceeded the character limit for Ref No.");
-      }
     }
 
     // Missing field validation on lines (new row without details / missing account or zero amount)
