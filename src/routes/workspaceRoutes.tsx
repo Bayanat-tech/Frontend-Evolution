@@ -215,6 +215,7 @@ import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
+import PostDateCheque from "../pages/finance/PostDateCheque";
 
 
  type WorkspaceRouteContext = {
@@ -236,6 +237,12 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  {
+    name : 'Post Date Cheque',
+    match : ({pathname}) => pathname.toLowerCase().includes("/finance/accounts/transactions/pdc"),
+    element : () => <PostDateCheque />
+  },
     {
     name: "WMS Dashboard",
     match: ({ pathname }) => isWmsDashboardRoute(pathname),

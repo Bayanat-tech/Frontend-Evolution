@@ -8,6 +8,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { FinanceSetupAlert } from "../../components/finance/FinanceSetupAlert";
 import { useAuth } from "../../state/AuthContext";
 
 type DocumentRow = {
@@ -270,6 +271,10 @@ export function DocumentSetupPage() {
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      {!loadingDocs && docs.length === 0 && (
+        <FinanceSetupAlert companyCode={companyCode} onSuccess={() => void loadDocs()} />
+      )}
 
       <form id="document-setup-form" onSubmit={(event) => void saveChanges(event)} />
 
