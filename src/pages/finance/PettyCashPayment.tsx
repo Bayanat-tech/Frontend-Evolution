@@ -994,7 +994,7 @@ function PettyCashPaymentDocument({
                           label="Account *"
                           value={form.ac_code}
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
                           loadOptions={() => getDynamicLookup({
@@ -1181,7 +1181,7 @@ function PettyCashPaymentDocument({
                               placeholder="A/c code"
                               value={detail.ac_code}
                               displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                               valueField="ac_code"
                               displayFields={["ac_code", "ac_name", "curr_code"]}
                               loadOptions={() => getDynamicLookup({

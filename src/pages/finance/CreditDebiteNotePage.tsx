@@ -1107,7 +1107,7 @@ function PaymentDocumentEditor({
                           label={docType === "CN" ? "Customer *" : "Supplier *"}
                           value={form.ac_code}
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
                           loadOptions={() => getDynamicLookup({
@@ -1337,7 +1337,7 @@ function PaymentDocumentEditor({
                                 placeholder="A/c code"
                                 value={detail.ac_code}
                                 displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
                                 loadOptions={() => getDynamicLookup({

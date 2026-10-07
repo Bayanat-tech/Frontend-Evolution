@@ -1094,10 +1094,8 @@ function CommercialEditor({
       value={form.ac_code}
       displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
       columns={[
-        { field: "ac_code",        header: "Code"     },
-        { field: "ac_name",        header: "Name"     },
-        { field: "curr_code",      header: "Currency" },
-        { field: "l4_description", header: "Remarks"  },
+        { field: "ac_code", header: "Code" },
+        { field: "ac_name", header: "Name" },
       ]}
       valueField="ac_code"
       displayFields={["ac_code", "ac_name"]}
@@ -1164,7 +1162,7 @@ function CommercialEditor({
       disabled={isCancelled}
       value={form.curr_code ?? ""}
       displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
-      columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }, { field: "ex_rate", header: "Ex Rate" }]}
+      columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
       valueField="curr_code"
       displayFields={["curr_code", "curr_name", "ex_rate"]}
       loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
@@ -1307,10 +1305,8 @@ function CommercialEditor({
   value={form.tx_compntcat_code_1 ?? ""}
   displayValue={form.tx_compntcat_code_1 ?? ""}
   columns={[
-    { field: "tx_compntcat_code",  header: "Category Code" },
-    { field: "tx_compntcat_name",  header: "Category Name" },
-    { field: "tx_cat_code",        header: "Tax Code"      },
-    { field: "tx_percnt",          header: "Tax %"         },
+    { field: "tx_compntcat_code", header: "Category Code" },
+    { field: "tx_compntcat_name", header: "Category Name" },
   ]}
   valueField="tx_compntcat_code"
   displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
@@ -1533,7 +1529,7 @@ function CommercialEditor({
                             placeholder="A/c code"
                             value={line.ac_code}
                             displayValue={line.ac_name ? `${line.ac_code} - ${line.ac_name}` : line.ac_code}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                             valueField="ac_code"
                             displayFields={["ac_code", "ac_name"]}
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
