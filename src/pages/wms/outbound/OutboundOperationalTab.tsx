@@ -568,18 +568,54 @@ export function OutboundOperationalTab({
         </div>
       </FreightPanel>
 
-      <FreightPanel icon={Hash} title="Quantity + Salesman">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 items-start">
-          <label className="field">
-            <LabelText text="Salesman" />
-            <Input className="h-8 text-xs" value={String(form.salesman_code || "")} onChange={e => setForm(c => ({ ...c, salesman_code: e.target.value }))} />
-          </label>
-          <label className="field">
-            <LabelText text="Min Expiry Period" />
-            <Input type="number" className="h-8 text-xs" value={String(form.minperiod_exppick || "")} onChange={e => setForm(c => ({ ...c, minperiod_exppick: e.target.value }))} />
-          </label>
-        </div>
-      </FreightPanel>
+<FreightPanel icon={Hash} title="Quantity + Salesman">
+  {(() => {
+    const pUom = String(form.p_uom || "");
+    const lUom = String(form.l_uom || "");
+    const lDisabled = !lUom || lUom === pUom;
+    const uppp = Number(form.uppp || 1);
+
+    const setQty = (field: "qty_puom" | "qty_luom") => (e: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = e.target.value;
+      setForm((c) => {
+        const next: WmsRow = { ...c, [field]: raw };
+        const p = Number(field === "qty_puom" ? raw : c.qty_puom) || 0;
+        const l = lDisabled ? 0 : Number(field === "qty_luom" ? raw : c.qty_luom) || 0;
+        next.quantity = lDisabled ? p : p * uppp + l;
+        return next;
+      });
+    };
+
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 items-start">
+        <label className="field">
+          <LabelText text={`Primary Qty${pUom ? ` (${pUom})` : ""}`} required />
+          <Input type="number" min="0" className="h-8 text-xs"
+            value={String(form.qty_puom ?? "")} onChange={setQty("qty_puom")} />
+        </label>
+        <label className="field">
+          <LabelText text={`Lower Qty${lUom ? ` (${lUom})` : ""}`} />
+          <Input type="number" min="0" className="h-8 text-xs" disabled={lDisabled}
+            value={lDisabled ? "0" : String(form.qty_luom ?? "")} onChange={setQty("qty_luom")} />
+        </label>
+        <label className="field">
+          <LabelText text="Total Quantity" />
+          <Input disabled className="h-8 text-xs bg-muted" value={String(form.quantity ?? 0)} />
+        </label>
+        <label className="field">
+          <LabelText text="Salesman" />
+          <Input className="h-8 text-xs" value={String(form.salesman_code || "")}
+            onChange={(e) => setForm((c) => ({ ...c, salesman_code: e.target.value }))} />
+        </label>
+        <label className="field">
+          <LabelText text="Min Expiry Period" />
+          <Input type="number" className="h-8 text-xs" value={String(form.minperiod_exppick ?? "")}
+            onChange={(e) => setForm((c) => ({ ...c, minperiod_exppick: e.target.value }))} />
+        </label>
+      </div>
+    );
+  })()}
+</FreightPanel>
     </>
   );
 
@@ -631,8 +667,8 @@ export function OutboundOperationalTab({
         onClose={() => setPickModalOpen(false)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setPickModalOpen(false)}>Cancel</Button>
-            <Button onClick={() => { setPickModalOpen(false); runPickAction("PICK"); }}>Ok</Button>
+            <Button onClick={() => setPickModalOpen(false)}>Cancel</Button>
+            <Button onClick={() => { setPickModalOpen(false); runPickAction("PICK"); }}>Select</Button>
           </>
         }
       >

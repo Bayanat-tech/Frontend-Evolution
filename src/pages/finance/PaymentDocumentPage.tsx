@@ -42,6 +42,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -52,6 +53,7 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { FinanceSetupAlert } from "../../components/finance/FinanceSetupAlert";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -90,6 +92,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       : docType === "CN" || docType === "DN"
       ? "MEMO"
       : "PAYMENT";
+  const { user } = useAuth();
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -105,6 +108,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
+  const [setupRequired, setSetupRequired] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -131,10 +135,17 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   };
 
   const loadLookups = async () => {
-    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
-    setFyPeriods(fyData);
-    setDivisions(divisionData);
-    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+    try {
+      const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
+      setFyPeriods(fyData);
+      setDivisions(divisionData);
+      setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+      if (companyInfo?.setup_required) {
+        setSetupRequired(true);
+      }
+    } catch (err: any) {
+      setNotice({ type: "error", message: err?.message || "Failed to load company finance settings" });
+    }
   };
 
   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
@@ -185,7 +196,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -194,7 +205,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center">Date</div>,
+      header: () => <div className="text-center font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name" },
@@ -204,52 +215,44 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
-      header: () => <div className="text-right">Amount</div>,
+      header: () => <div className="text-right font-bold">Amount</div>,
       cell: ({ getValue }) => {
         const val = Number(getValue() || 0);
-        return <div className="text-right font-mono font-medium">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
+        return <div className="text-right font-mono tabular-nums font-semibold text-slate-800">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
       },
     },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center">Div</div>,
+      header: () => <div className="text-center font-bold">Div</div>,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
-      size: 30,
+      size: 40,
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center">Status</div>,
+      header: () => <div className="text-center font-bold">Status</div>,
       cell: ({ getValue }) => (
         <div className="flex justify-center">
-          {String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive font-semibold">Cancelled</Badge>
-          ) : (
-            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Active</Badge>
-          )}
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
         </div>
       ),
     },
     {
       id: "actions",
-      header: () => <div className="text-center">Actions</div>,
+      header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
+      size: 130,
+      minSize: 130,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType]);
@@ -288,6 +291,17 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+      {setupRequired && (
+        <FinanceSetupAlert
+          companyCode={user?.company_code}
+          onSuccess={() => {
+            setSetupRequired(false);
+            void loadLookups();
+            void loadRows();
+          }}
+        />
+      )}
 
       <div className="min-h-[650px]">
         <DataTable
@@ -344,6 +358,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
+          rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
           getRowId={(row, index) => `${row.doc_no}_${index}`}
         />
       </div>
@@ -757,7 +772,15 @@ function PaymentDocumentEditor({
         extra_param3: form.doc_no || "0",
         extra_param4: String(detail.serial_no || 1),
       });
-      let mapped = rows.map((row, index) => {
+      const seenRowKeys = new Set<string>();
+      const uniqueRows = rows.filter((row) => {
+        const r = lowerRecord(row);
+        const k = `${r.dtl_sr_no}_${r.inv_no || r.job_no || r.exp_code || ""}`;
+        if (seenRowKeys.has(k)) return false;
+        seenRowKeys.add(k);
+        return true;
+      });
+      let mapped = uniqueRows.map((row, index) => {
         const m = mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1);
         return {
           ...m,
@@ -941,7 +964,7 @@ function PaymentDocumentEditor({
 
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={DOCUMENT_META[docType]?.title || "Payment Voucher"}
@@ -980,6 +1003,7 @@ function PaymentDocumentEditor({
               aria-label="Close"
               type="button"
               variant="secondary"
+              className="payment-header-close-btn !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1005,7 +1029,7 @@ function PaymentDocumentEditor({
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="commercial-editor-sections grid gap-1.5">
+          <div className="commercial-editor-sections grid gap-2">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             {/* Smart Collapsible Payment Header */}
@@ -1046,8 +1070,8 @@ function PaymentDocumentEditor({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-2 gap-1.5 max-xl:grid-cols-1">
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2 max-xl:grid-cols-1">
                   {/* Section 1: Document & Payment Instrument Details */}
                   <div className="finance-payment-header-block">
                     <div className="finance-section-title">
@@ -1082,13 +1106,7 @@ function PaymentDocumentEditor({
                           columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_AC_CODE_Serach_HDR",
-                            code1: user?.company_code,
-                            code2: "H",
-                            code3: form.doc_type,
-                            code4: form.div_code
-                          })}
+                          loadOptions={() => getDocAccounts(form.doc_type, "H", form.div_code)}
                           disabled={disabled || !form.div_code}
                           onChange={async (value, row) => {
                             const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
@@ -1276,23 +1294,23 @@ function PaymentDocumentEditor({
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
-                  <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
-                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
-                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-center text-white w-[120px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-center text-white w-14">Cr/Dr</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="finance-sticky-col-right px-2 py-2 text-center text-white">Action</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
+                      <th className="px-1 py-2 text-center w-[92px] min-w-[92px] max-w-[92px]">Allocations</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      <th className="px-2 py-2 text-left">Tax %</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1324,19 +1342,13 @@ function PaymentDocumentEditor({
                                 columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
-                                loadOptions={() => getDynamicLookup({
-                                  parameter: "Account_AC_CODE_Serach_HDR",
-                                  code1: user?.company_code,
-                                  code2: "D",
-                                  code3: form.doc_type,
-                                  code4: form.div_code
-                                })}
+                                loadOptions={() => getDocAccounts(form.doc_type, "D", form.div_code)}
                                 disabled={disabled}
                                 onChange={(value, row) => void selectDetailAccount(detail, value, row)}
                               />
                             </div>
                           </td>
-                          <td className="px-2 py-1 text-center whitespace-nowrap">
+                          <td className="w-[92px] min-w-[92px] max-w-[92px] px-1 py-1 text-center whitespace-nowrap">
                             {detail.ac_code ? (
                               <button
                                 type="button"
@@ -1344,7 +1356,7 @@ function PaymentDocumentEditor({
                                   setSelectedDetailId(detail.id);
                                   toggleRowExpanded(detail.id);
                                 }}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-2xs border ${
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer shadow-2xs border ${
                                   isExpanded
                                     ? "bg-[#00378C] text-white border-[#00378C]"
                                     : isAllocMatched
@@ -1538,7 +1550,7 @@ function PaymentDocumentEditor({
                             </td>
                           )}
 
-                          <td className="finance-sticky-col-right px-1 py-1 text-center">
+                          <td className="finance-sticky-col-right px-1 py-1 text-center w-[76px] min-w-[76px] max-w-[76px]">
                             <button
                               type="button"
                               disabled={disabled}
@@ -1578,19 +1590,19 @@ function PaymentDocumentEditor({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2 gap-3">
-                <div className="commercial-line-totals flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 font-medium text-[11px]">Total Amount</span>
-                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(total)}</strong>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2.5">
+                <div className="commercial-line-totals flex items-center gap-3">
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Amount</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 font-medium text-[11px]">Tax Amount</span>
-                    <strong className="text-slate-900 font-mono text-xs">{formatAmount(totalTax)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Tax Amount</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(totalTax)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-md border border-blue-200 shadow-2xs">
-                    <span className="font-bold text-[#00378c] text-[11px]">Net Total</span>
-                    <strong className="text-[#00378c] font-mono text-xs font-bold">{formatAmount(total + totalTax)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-1.5 shadow-2xs">
+                    <span className="text-xs font-bold text-[#00378c]">Net Total</span>
+                    <strong className="font-mono text-base font-extrabold tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
                   </div>
                 </div>
               </div>
@@ -2114,9 +2126,20 @@ function mapExistingDocument(
     detail.map((line) => [
       line.id,
       line.child_table
-        ? ((childrenRaw[line.child_table] || [])
-          .filter((child) => Number(lowerRecord(child).serial_no) === line.serial_no)
-          .map((child, index) => mapChildRow(child, line, {
+        ? (() => {
+            const rawList = (childrenRaw[line.child_table] || []).filter(
+              (child) => Number(lowerRecord(child).serial_no) === line.serial_no
+            );
+            const seenKeys = new Set<string>();
+            const uniqueList = rawList.filter((child) => {
+              const r = lowerRecord(child);
+              const key = `${r.dtl_sr_no}_${r.inv_no || r.job_no || r.exp_code || ""}`;
+              if (seenKeys.has(key)) return false;
+              seenKeys.add(key);
+              return true;
+            });
+            return uniqueList.map((child, index) =>
+              mapChildRow(child, line, {
             doc_type: docType,
             doc_no: text(header.doc_no || fallbackDetail.doc_no),
             doc_date: dateInput(header.doc_date || fallbackDetail.doc_date),
@@ -2126,7 +2149,9 @@ function mapExistingDocument(
             div_code: text(header.div_code || fallbackDetail.div_code),
             detail: [],
             children: {},
-          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)))
+          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)
+            );
+          })()
         : [],
     ]),
   );

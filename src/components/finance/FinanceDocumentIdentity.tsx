@@ -29,7 +29,7 @@ export function FinanceDocumentIdentity({
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center justify-center p-1.5 rounded-lg text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10 transition-colors"
+          className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors"
           title="Back"
         >
           <ArrowLeft size={16} />
@@ -37,35 +37,38 @@ export function FinanceDocumentIdentity({
       )}
       {title && (
         <div className="flex items-center gap-2 mr-1">
-          <FileText size={16} className="text-primary-foreground/80 shrink-0" />
-          <h2 className="m-0 text-sm font-semibold tracking-tight text-primary-foreground whitespace-nowrap">
+          <FileText size={16} className="text-[#00378C] shrink-0" />
+          <h2 className="m-0 text-sm font-bold tracking-tight text-slate-900 whitespace-nowrap">
             {title}
           </h2>
         </div>
       )}
       <div className="flex items-center gap-2 text-xs flex-wrap">
-        {/* Highlighted Doc No */}
-        <div className="finance-identity-docno rounded-md bg-amber-400 text-black border border-amber-500 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
-          <span className="text-[10px] uppercase font-extrabold text-black tracking-wider">Doc No</span>
-          <span className="text-black font-extrabold select-none">-</span>
-          <strong className="text-xs font-black text-black font-mono tracking-tight">
+        {/* Highlighted Doc No - Increased font size */}
+        <div className="finance-identity-docno rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+          <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Doc No</span>
+          <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
+          <strong className="text-[14px] font-black text-[#78350f] font-mono tracking-tight">
             {documentNo && documentNo !== "New" && documentNo !== "0"
               ? String(documentNo).trim()
               : "NEW"}
           </strong>
         </div>
 
-        {/* Highlighted Date */}
-        <div className="rounded-md bg-blue-950/40 border border-blue-300/40 text-blue-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
-          <span className="text-[10px] uppercase font-bold text-blue-200">Date</span>
-          <strong className="text-xs font-semibold text-white">{formatDate(documentDate) || "—"}</strong>
+        {/* Highlighted Date - Same amber background & increased font size */}
+        <div className="finance-identity-date rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+          <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Date</span>
+          <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
+          <strong className="text-[14px] font-black text-[#78350f] font-mono tracking-tight">
+            {formatDate(documentDate) || "—"}
+          </strong>
         </div>
 
         {/* Total Badge */}
         {total !== undefined && total !== null && total !== "" && (
-          <div className="rounded-md bg-emerald-950/40 border border-emerald-400/40 text-emerald-100 px-2.5 py-0.5 shadow-xs flex items-center gap-1.5 max-sm:hidden">
-            <span className="text-[10px] uppercase font-bold text-emerald-300">Total</span>
-            <strong className="text-xs font-bold text-emerald-200">{total}</strong>
+          <div className="rounded-md bg-emerald-50 border border-emerald-300 text-emerald-800 px-2.5 py-0.5 shadow-2xs flex items-center gap-1.5 max-sm:hidden">
+            <span className="text-[11px] uppercase font-bold text-emerald-600">Total</span>
+            <strong className="text-[13px] font-bold text-emerald-900">{total}</strong>
           </div>
         )}
       </div>
