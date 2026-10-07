@@ -17,7 +17,6 @@ import { FinanceDashboardPanel } from "../pages/finance/FinanceDashboardPanel";
 import { DocumentSetupPage } from "../pages/finance/DocumentSetupPage";
 import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
-// import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
@@ -49,7 +48,7 @@ import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSumma
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
-import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
+import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
@@ -67,10 +66,8 @@ import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/Masters/WmsBillingActivityPage";
-// import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
-// import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
 import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
 import BalanceSheetReportFilter from "../pages/accounts_report/detailed_reports/BalanceSheetReportFilter";
@@ -98,7 +95,7 @@ import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
 import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
 import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
-import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
+import { StorageComputationPage } from "../pages/wms/storage computation/StorageComputation";
 import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
 import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
 import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage";
@@ -113,7 +110,7 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 
-import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
@@ -150,13 +147,11 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
-import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import { ExpenseMasterPage } from "../pages/purchase_sales/Expensemasterpage";
 import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
 import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
 
-
-
-import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
+import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
 
 import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
@@ -168,7 +163,6 @@ import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
 import Capex_Request_page from "../pages/almswf/CapexRequestPage";
 import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 
-
 import PS_PendingPurchaseOrderReport from "../pages/purchase_sales/Reports/PS_PendingPurchaseOrderReport";
 
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
@@ -176,7 +170,8 @@ import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorde
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
 import { PS_ProductBomPage } from "../pages/purchase_sales/PS_ProductBomPage";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
-import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";
+import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
 import { PurchaseGRNPage } from "../pages/purchase_sales/purchase/PurchaseGRNPage";
 import { ProductionJobOrderPage } from "../pages/purchase_sales/production/ProductionJobOrderPage";
 import { SalesOrderPage } from "../pages/purchase_sales/sales/SalesorderPage";
@@ -198,7 +193,7 @@ import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
 import PurchaseRequestRegisterReport from "../pages/almswf/PurchaseRequestRegisterReport";
-import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
+import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage";
 import PoOrderRegisterPage from "../pages/purchase_sales/Reports/PoOrderRegister";
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
@@ -217,7 +212,7 @@ import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotat
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 
 
- type WorkspaceRouteContext = {
+type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -242,7 +237,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <WmsDashboard />,
   },
   {
-    name : 'HR Consolidate Pay Unit',
+    name: 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
     element: () => <ConsolidatePayUnitPage />,
   },
@@ -252,83 +247,69 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <SalaryAdvanceRecoveryPage />,
   },
 
-  // {
-  //   name: 'HR Leave Slap Page',
-  //   match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
-  //   element: () => <LeaveSlapPage />,
-  // },
-
   {
-   name: 'HR Leave Slap Page',
+    name: 'HR Leave Slap Page',
     match: (context) => isHrRoute(context) && isHrLeaveSlapRoute(context),
     element: () => <LeaveSlapPage />,
   },
 
-  // {
-  //   name: 'Travel Fare Page',
-  //   match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/travel_fare"),
-  //   element: () => <TravelFare />,
-  // },
-
-
-
   {
     name: 'Travel Fare Page',
-       match: (context) => isHrRoute(context) && isHrTravelFareRoute(context),
+    match: (context) => isHrRoute(context) && isHrTravelFareRoute(context),
     element: () => <TravelFare />,
   },
 
   {
     name: 'Company Info Master',
-    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
     element: () => <CompanyInfo />,
   },
   {
     name: 'MSE Prod Group',
-    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
 
   {
-  name: "Pending Purchase Order Report",
-  match: ({ pathname }) => isPendingPurchaseOrderRoute(pathname),
-  element: () => <PS_PendingPurchaseOrderReport />,
-    },
+    name: "Pending Purchase Order Report",
+    match: ({ pathname }) => isPendingPurchaseOrderRoute(pathname),
+    element: () => <PS_PendingPurchaseOrderReport />,
+  },
 
   {
-  name: 'Purchase Sales Product Brand',
-  match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
-  element: () => <ProductBrandPage />,
-},
+    name: 'Purchase Sales Product Brand',
+    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
+    element: () => <ProductBrandPage />,
+  },
   {
     name: 'Purchase Sales Product',
-    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
     element: () => <ProductPurchaseSales />
   },
   {
     name: 'HR Accural Pay Unit',
-    match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
     element: () => <AccuralPayUnit />,
   },
   {
     name: "Activity WMS Master",
-    match: ({pathname}) => pathname.toLowerCase().includes("/wms/wms/master/gm/activity"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/master/gm/activity"),
     element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.activity} />,
   },
 
   {
     name: 'mms inspection report',
-    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),
     element: () => <InspectionReportMainPage />,
   },
   {
     name: 'mms inspection form',
-    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-form"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-form"),
     element: () => <InspectionFormPage />
   },
   {
     name: 'mms asset inventory',
-    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
     element: () => <AssetInventoryMainPage />
   },
 
@@ -354,9 +335,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
-  name: "HR Accural Account Setup",
-  match: ({ pathname }) => isHrAccuralAccountSetupRoute(pathname),
-  element: () => <HrAccuralAccountSetup />,
+    name: "HR Accural Account Setup",
+    match: ({ pathname }) => isHrAccuralAccountSetupRoute(pathname),
+    element: () => <HrAccuralAccountSetup />,
   },
 
   {
@@ -399,22 +380,22 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
     element: () => <LeaveResumptionWorkspacePage />,
   },
-    {
+  {
     name: "Employee Master",
-    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+    match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
     element: () => <EmployeeMasterPage />
   },
   {
     name: "Employee Details",
-    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
+    match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/employee/employee_details"),
     element: () => <EmployeeDetailsPage />
   },
 
   {
-  name: "Employee Transfer",
-  match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
-  element: () => <EmployeeTransferPage />
-},
+    name: "Employee Transfer",
+    match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
+    element: () => <EmployeeTransferPage />
+  },
 
   {
     name: "HR Employee Profile",
@@ -432,32 +413,31 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <SalaryAdditionDeductionMainPage />,
   },
 
-//Grade master page route 
   {
-  name: "HR Grade Master",
-  match: ({ pathname }) =>
-    pathname
-      .toLowerCase()
-      .includes("/workspace/hcm/hcm/general%20master/grade%20master"),
-  element: () => <GradeMasterPage />,
-},
-
-{
-  name: "HR Grade Master",
-  match: ({ pathname }) =>
-    pathname
-      .toLowerCase()
-      .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
-  element: () => <GradeMasterPage />,
-},
-{
-  name: "Security Flow Assignment",
-  match: ({ pathname }) => isFlowAssignmentRoute(pathname),
-  element: () => <FlowAssignmentPage />,
-},
+    name: "HR Grade Master",
+    match: ({ pathname }) =>
+      pathname
+        .toLowerCase()
+        .includes("/workspace/hcm/hcm/general%20master/grade%20master"),
+    element: () => <GradeMasterPage />,
+  },
 
   {
-    name:"HR Grade Salary Increment",
+    name: "HR Grade Master",
+    match: ({ pathname }) =>
+      pathname
+        .toLowerCase()
+        .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
+    element: () => <GradeMasterPage />,
+  },
+  {
+    name: "Security Flow Assignment",
+    match: ({ pathname }) => isFlowAssignmentRoute(pathname),
+    element: () => <FlowAssignmentPage />,
+  },
+
+  {
+    name: "HR Grade Salary Increment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/grade_salary_increment"),
     element: () => <GradeSalaryIncrement />
   },
@@ -496,7 +476,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
   },
-   {
+  {
     name: "Finance Tax Report",
     match: ({ pathname }) => isTaxReportRoute(pathname),
     element: () => <TaxReportFilter />,
@@ -508,10 +488,26 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
-  name: "Finance AC Statement",
-  match: ({ pathname }) => isAcStatementRoute(pathname),
-  element: () => <AC_StatementPage />,
-},
+    name: "Finance AC Statement",
+    match: ({ pathname }) => isAcStatementRoute(pathname),
+    element: () => <AC_StatementPage />,
+  },
+
+  {
+    name: "Storage Computation",
+    match: ({ pathname }) => isStorageComputationRoute(pathname),
+    element: () => <StorageComputationPage />,
+  },
+  {
+    name: "Finance Outstanding Statement",
+    match: ({ pathname }) => isOutstandingStatementRoute(pathname),
+    element: () => <OutstandingStatementPage />,
+  },
+  {
+    name: "Pams Dashboard",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
+    element: () => <PamsDashboard />
+  },
 
 {
   name: "Storage Computation",
@@ -538,8 +534,10 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Ageing Report",
     match: ({ pathname }) => isAgeingReportRoute(pathname),
-    element: () => <PeriodWisePage />},
-  { name: "Finance Trail Balance L2 Report",
+    element: () => <PeriodWisePage />
+  },
+  {
+    name: "Finance Trail Balance L2 Report",
     match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
     element: () => <TrialBalancePage />,
   },
@@ -568,59 +566,58 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isDocumentSetupRoute(pathname),
     element: () => <DocumentSetupPage />,
   },
-    {
+  {
     name: "Budget Allocation Setup",
     match: ({ pathname }) => isBudgetSetupRoute(pathname),
     element: () => <BudgetRequestPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
   {
     name: "Finance Budget Version",
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
     element: () => <BudgetVersionPage />,
   },
-      {
+  {
     name: "Stock Transfer View",
     match: ({ pathname }) => isStockTransferViewRoute(pathname),
-    element: () => <StockTransferViewPage />,   
+    element: () => <StockTransferViewPage />,
   },
   {
-  name: "Stock Count",
-  match: ({ pathname }) => isStockCountRoute(pathname),
-  element: () => <StockCountPage />,
-},
-    {
+    name: "Stock Count",
+    match: ({ pathname }) => isStockCountRoute(pathname),
+    element: () => <StockCountPage />,
+  },
+  {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
   {
-  name: "Stock Adjustment View",
-  match: ({ pathname }) => isStockAdjViewRoute(pathname),
-  element: () => <StockAdjViewPage />,
-},
-{
-  name: "Stock Adjustment",
-  match: ({ pathname }) => isStockAdjustmentRoute(pathname),
-  element: () => <StockAdjPage />,
-},
-{
-  name: "WMS Invoice",
-  match: ({ pathname }) => isInvoiceRoute(pathname),
-  element: () => <InvoicePage />,
-},
-{
-  name: "Freight Invoice",
-  match: ({ pathname }) => isFreightInvoiceRoute(pathname),
-  element: () => <FreightInvoicePage />,
-},
+    name: "Stock Adjustment View",
+    match: ({ pathname }) => isStockAdjViewRoute(pathname),
+    element: () => <StockAdjViewPage />,
+  },
+  {
+    name: "Stock Adjustment",
+    match: ({ pathname }) => isStockAdjustmentRoute(pathname),
+    element: () => <StockAdjPage />,
+  },
+  {
+    name: "WMS Invoice",
+    match: ({ pathname }) => isInvoiceRoute(pathname),
+    element: () => <InvoicePage />,
+  },
+  {
+    name: "Freight Invoice",
+    match: ({ pathname }) => isFreightInvoiceRoute(pathname),
+    element: () => <FreightInvoicePage />,
+  },
   {
     name: "WMS Stock Transaction Report",
     match: ({ pathname }) => isTransactionReportRoute(pathname),
     element: () => <TransactionReportPage />,
   },
-
 
   {
     name: "Finance Account Wise Budget",
@@ -640,12 +637,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Journal Voucher",
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
-    element: () => <JVDocumentEditor docType={"JV"}  />,
+    element: () => <JVDocumentEditor docType={"JV"} />
   },
-    {
+  {
     name: "Finance RV Voucher",
     match: ({ pathname }) => isRVoucherRoute(pathname),
-    element: () => <RJVDocumentEditor docType={"RJV"}  />,
+    element: () => <RJVDocumentEditor docType={"RJV"} />
   },
   {
     name: "Finance Bank Reconciliation",
@@ -713,26 +710,26 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <AllocatedInvoicePage />,
   },
   {
-    name : "Profit and Loss",
-    match: ({pathname}) => isProfitLossRoute(pathname),
-    element: () => <ProfitLossPage/>
+    name: "Profit and Loss",
+    match: ({ pathname }) => isProfitLossRoute(pathname),
+    element: () => <ProfitLossPage />
   },
-{
-    name : "Visa Expiry Listing Report",
-    match: ({pathname}) => isVisaExpiryListingRoute(pathname),
-    element: () => <VisaExpiryListingPage/>
+  {
+    name: "Visa Expiry Listing Report",
+    match: ({ pathname }) => isVisaExpiryListingRoute(pathname),
+    element: () => <VisaExpiryListingPage />
   },
 
   {
-    name : "DN Summary Report",
-    match: ({pathname}) => isDnRoute(pathname),
-    element: () => <Dnsummaryreportpage/>
+    name: "DN Summary Report",
+    match: ({ pathname }) => isDnRoute(pathname),
+    element: () => <Dnsummaryreportpage />
   },
 
   {
-    name : "Grn Summary Report",
-    match: ({pathname}) => isGrnRoute(pathname),
-    element: () => <GrnSummaryReportPage/>
+    name: "Grn Summary Report",
+    match: ({ pathname }) => isGrnRoute(pathname),
+    element: () => <GrnSummaryReportPage />
   },
 
   {
@@ -745,14 +742,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsOutboundRoute(pathname),
     element: () => <WmsOutboundPage />,
   },
-   {
+  {
     name: "WMS Billing Activity Master",
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
   },
   {
     name: "Product Master",
-    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
+    match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
     element: () => <ProductWmsPage />
   },
   {
@@ -761,21 +758,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <StockSummaryReportPage />,
   },
   {
-  name: "WMS Stock Ageing Quantity Report",
-  match: ({ pathname }) => isStockAgeingQuantityRoute(pathname),
-  element: () => <StockAgeingQuantityReport />,
+    name: "WMS Stock Ageing Quantity Report",
+    match: ({ pathname }) => isStockAgeingQuantityRoute(pathname),
+    element: () => <StockAgeingQuantityReport />,
   },
   {
-  name: "WMS Stock Ageing Volume Report",
-  match: ({ pathname }) => isStockAgeingVolumeRoute(pathname),
-  element: () => <StockAgeingVolumeReport />,
+    name: "WMS Stock Ageing Volume Report",
+    match: ({ pathname }) => isStockAgeingVolumeRoute(pathname),
+    element: () => <StockAgeingVolumeReport />,
   },
   {
     name: "WMS Stock Report Job Listing",
     match: ({ pathname }) => isJobListingRoute(pathname),
     element: () => <JobListingReport />,
   },
-  
+
   {
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
@@ -897,17 +894,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
 
-   // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
+  // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
 
-   {
+  {
     name: "Purchase Request Register",
     match: ({ pathname }) => {
-        const normalized = pathname.toLowerCase();
-        return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
-               normalized.includes("/almswf/reports/purchase_request_register");
+      const normalized = pathname.toLowerCase();
+      return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
+        normalized.includes("/almswf/reports/purchase_request_register");
     },
     element: () => <PurchaseRequestRegisterReport />,
-},
+  },
   {
     name: "ALMS My Task Pending",
     match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),
@@ -940,31 +937,27 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: 'My Task',
-    match:(context) => isMyTaskRoute(context),
+    match: (context) => isMyTaskRoute(context),
     element: () => <Mytaskalmspage initialTab={0} />
   },
-  
 
   {
     name: 'Credit Request page',
-    match:(context) => isCreditRequestTaskRoute(context),
+    match: (context) => isCreditRequestTaskRoute(context),
     element: () => <Credit_Request_page initialTab={0} />
   },
 
   {
     name: 'Capex Request page',
-    match:(context) => isCapexRequestTaskRoute(context),
+    match: (context) => isCapexRequestTaskRoute(context),
     element: () => <Capex_Request_page initialTab={0} />
   },
 
-
   {
     name: 'Purchase Request page',
-    match:(context) => isPurchaseRequestTaskRoute(context),
+    match: (context) => isPurchaseRequestTaskRoute(context),
     element: () => <Purchase_Request_page initialTab={0} />
   },
-
-
 
   //// PAMS Routes
   {
@@ -972,6 +965,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
     element: () => <PamsDashboardPage />,
   },
+
+  // ✅ NEW: PAMS Appraisal List — matches "/activity/request/appraisal"
+  //     Uses compact-token matching (no hardcoded URL)
+  {
+    name: "PAMS Appraisal List",
+    match: (context) =>
+      isPamsToken(
+        context,
+        "activityrequestappraisal",
+        "activityrequestappraisals",
+        "activityrequestappraiselist"
+      ),
+    element: () => <MyTaskPage initialTab={0} />,
+  },
+
   {
     name: "PAMS Bulk Appraisal",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
@@ -983,91 +991,84 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPurchaseSalesSetupRoute(pathname),
     element: () => <PurchaseOrderPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
-    {
+  {
     name: "Purchase Invoice Setup",
     match: ({ pathname }) => isPurchaseInvoiceSetupRoute(pathname),
     element: () => <PurchaseInvoicePage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
 
-      {
+  {
     name: "Sales Invoice Setup",
     match: ({ pathname }) => isSalesInvoiceSetupRoute(pathname),
     element: () => <SalesInvoicePage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
 
-    {
+  {
     name: "Purchase Quotation Setup",
     match: ({ pathname }) => isPurchaseQuotationSetupRoute(pathname),
     element: () => <PurchaseQuotationPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
-
-    
+    }} />
   },
-     {
+  {
     name: "Purchase Quotation Setup",
     match: ({ pathname }) => isPurchaseGRNSetupRoute(pathname),
     element: () => <PurchaseGRNPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
 
-       {
+  {
     name: "Purchase Quotation Setup",
     match: ({ pathname }) => isPProductionJoborderSetupRoute(pathname),
     element: () => <ProductionJobOrderPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
 
-         {
+  {
     name: "Sales Order Setup",
     match: ({ pathname }) => isSalesorderSetupRoute(pathname),
     element: () => <SalesOrderPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
+    }} />
   },
-           {
+  {
     name: "Sales Order Setup",
     match: ({ pathname }) => isSalesDNSetupRoute(pathname),
     element: () => <SalesDNPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
-
-    
+    }} />
   },
-             {
+  {
     name: "Inventory Setup",
     match: ({ pathname }) => isStocksTransferSetupRoute(pathname),
     element: () => <StocksTransferPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
-
-    
+    }} />
   },
-               {
+  {
     name: "Inventory Setup",
     match: ({ pathname }) => isStocksAdjectmentSetupRoute(pathname),
     element: () => <StocksAdjectmentPage onClose={function (): void {
       throw new Error("Function not implemented.");
-    } }  />,
-
-    
+    }} />
   },
+
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
     name: "PAMS My Task Pending",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/my_task/pending") || 
-         normalized.includes("/my-task/pending"));
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/my_task/pending") ||
+          normalized.includes("/my-task/pending"));
     },
     element: () => <MyTaskPage initialTab={0} />,
   },
@@ -1075,9 +1076,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS My Task In Progress",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/my_task/in_progress") || 
-         normalized.includes("/my-task/in-progress"));
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/my_task/in_progress") ||
+          normalized.includes("/my-task/in-progress"));
     },
     element: () => <MyTaskPage initialTab={1} />,
   },
@@ -1085,9 +1086,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS My Task Rejected",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/my_task/rejected") || 
-         normalized.includes("/my-task/rejected"));
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/my_task/rejected") ||
+          normalized.includes("/my-task/rejected"));
     },
     element: () => <MyTaskPage initialTab={2} />,
   },
@@ -1095,9 +1096,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS My Task Sent Back",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/my_task/sent_back") || 
-         normalized.includes("/my-task/sent-back"));
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/my_task/sent_back") ||
+          normalized.includes("/my-task/sent-back"));
     },
     element: () => <MyTaskPage initialTab={3} />,
   },
@@ -1105,9 +1106,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS My Task Closed",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/my_task/closed") || 
-         normalized.includes("/my-task/closed"));
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/my_task/closed") ||
+          normalized.includes("/my-task/closed"));
     },
     element: () => <MyTaskPage initialTab={4} />,
   },
@@ -1115,8 +1116,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS My Task",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        normalized.includes("/my_task") && 
+      return isPamsRoute(pathname) &&
+        normalized.includes("/my_task") &&
         !normalized.includes("/view/") &&
         !normalized.includes("/edit/") &&
         !normalized.includes("/pending") &&
@@ -1127,115 +1128,100 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     },
     element: () => <MyTaskPage initialTab={0} />,
   },
+
   // ── PAMS Appraisal View/Edit Routes ──
   {
-  name: "PAMS Appraisal Tabs View",
-  match: ({ pathname }) => {
-    const normalized = pathname.toLowerCase();
-    return isPamsRoute(pathname) && 
-      (normalized.includes("/appraisal/view/") || 
-       normalized.includes("/appraisal/edit/") ||
-       normalized.includes("/view/") && normalized.includes("employee_code"));
+    name: "PAMS Appraisal Tabs View",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/appraisal/view/") ||
+          normalized.includes("/appraisal/edit/") ||
+          normalized.includes("/view/") && normalized.includes("employee_code"));
+    },
+    element: () => <AppraisalViewTabsPage />,
   },
-  element: () => <AppraisalViewTabsPage />,
-},
   {
     name: "PAMS Appraisal View",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/my_task/view/") || 
-         normalized.includes("/my-task/view/") ||
-         normalized.includes("/view/"));
+      return isPamsRoute(pathname) &&
+        (normalized.includes("/my_task/view/") ||
+          normalized.includes("/my-task/view/") ||
+          normalized.includes("/view/"));
     },
     element: () => <AppraisalViewTabsPage />,
   },
-  // {
-  //   name: "PAMS Reports",
-  //   match: ({ pathname }) => {
-  //     const normalized = pathname.toLowerCase();
-  //     return isPamsRoute(pathname) && 
-  //       (normalized.includes("appraisal_listing_summary") || 
-  //        normalized.includes("appraisal_listing") ||
-  //        normalized.includes("/reports"));
-  //   },
-  //   element: ({ pathname }) => <PamsReportPage type={pathname.toLowerCase().includes("summary") ? "summary" : "listing"} />,
-  // },
+
+  // ── PAMS Department Assignment — compact-token matching ──
   {
     name: "PAMS Department Assignment",
-    match: ({ pathname }) => {
-      const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-        (normalized.includes("/department_kpi") || 
-         normalized.includes("/kpi_assignment") ||
-         normalized.includes("/dept-kpi"));
-    },
-    element: () => <PamsDepartmentAssignmentPage />,
+    match: (context) =>
+      isPamsToken(context, "kpiassignment", "departmentkpi", "deptkpi"),
+    element: () => <PamsBulkAppraisalPage />,
   },
-//// reporting pages
+
+  //// reporting pages
   {
-  name: "PAMS Appraisal Summary Report",
-  match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
-  element: () => <AppraisalSummaryReportDesign required_values={{
-    loginid: undefined,
-    company_code: undefined,
-    period_label: undefined,
-  }} />,
-},
-// reporting pages section mein, AppraisalSummaryReport ke NEECHE add karo:
- {
-    name: "PAMS Appraisal Division Summary Report", 
+    name: "PAMS Appraisal Summary Report",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
+    element: () => <AppraisalSummaryReportDesign required_values={{
+      loginid: undefined,
+      company_code: undefined,
+      period_label: undefined,
+    }} />,
+  },
+  {
+    name: "PAMS Appraisal Division Summary Report",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalDivisionSummaryRoute(pathname),
     element: () => <AppraisalDivisionSummaryReport />,
   },
-  {
-    name: "PAMS KPI Group",
-    match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiGroupRoute(pathname),
-    element: () => <KpiGroupPage />,
-  },
 
+  // ── PAMS KPI Group — compact-token matching ──
+  // {
+  //   name: "PAMS KPI Group",
+  //   match: (context) => isPamsToken(context, "kpigroups"),
+  //   element: () => <KpiGroupPage />,
+  // },
+
+  // ── PAMS KPI Item — compact-token matching ──
   {
     name: "PAMS KPI Item",
-    match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
-    element: () => <KpiActivityPage />,
+    match: (context) => isPamsToken(context, "kpiactivity", "kpiitem"),
+    element: () => <KpiGroupPage  />,
   },
 
   {
     name: "PAMS KPI Acceptance",
-    match: ({ pathname }) => {
-      const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && 
-             (normalized.includes("/kpi_item") || 
-              normalized.includes("/kpi-item"));
-    },
+    match: (context) =>
+      isPamsToken(context, "kpiacceptance", "kpiacceptences"),
     element: () => <KpiAcceptancePage />,
   },
 
   // workspaceRoutes array mein, PAMS Master route se PEHLE add karo:
-{
-  name: "PAMS Period Setup",
-  match: ({ pathname, activeApp }) => {
-    if (!isPamsRoute(pathname)) return false;
-    const context = { pathname, activeApp };
-    const normalized = getPamsMatchText(context);
-    const compact = normalized.replace(/[^a-z0-9]/g, "");
-    return (
-      normalized.includes("/period_setup") ||
-      normalized.includes("/period-setup") ||
-      normalized.includes("appraisal_period_setup") ||
-      normalized.includes("appraisalperiodsetup") ||
-      compact.includes("periodsetup") ||
-      compact.includes("periodsetup")
-    );
+  {
+    name: "PAMS Period Setup",
+    match: ({ pathname, activeApp }) => {
+      if (!isPamsRoute(pathname)) return false;
+      const context = { pathname, activeApp };
+      const normalized = getPamsMatchText(context);
+      const compact = normalized.replace(/[^a-z0-9]/g, "");
+      return (
+        normalized.includes("/period_setup") ||
+        normalized.includes("/period-setup") ||
+        normalized.includes("appraisal_period_setup") ||
+        normalized.includes("appraisalperiodsetup") ||
+        compact.includes("periodsetup")
+      );
+    },
+    element: (context) => (
+      <PamsMasterPage
+        config={pamsMasterConfigs.period}
+        hideRefresh={true}
+        headerActions={<PeriodProcessButton />}
+      />
+    ),
   },
-  element: (context) => (
-    <PamsMasterPage
-  config={pamsMasterConfigs.period}
-  hideRefresh={true}
-  headerActions={<PeriodProcessButton />}
-/>
-  ),
-},
 
   {
     name: "PAMS Master",
@@ -1247,12 +1233,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalWeightageRoute(pathname),
     element: () => <AppraisalWeightageMaster />,
   },
- 
+
   {
     name: "Application Progress",
     match: (context) => isApplicationProgressRoute(context),
     element: () => <ApplicationProgressPage />,
-
   },
   {
     name: "Oxmaint",
@@ -1261,20 +1246,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
-  name: "HR Employee Pay Units",
-  match: (context) =>
-    isHrRoute(context) && isHrEmployeePayUnitsRoute(context),
-  element: () => <HrEmployeePayUnits />,
+    name: "HR Employee Pay Units",
+    match: (context) =>
+      isHrRoute(context) && isHrEmployeePayUnitsRoute(context),
+    element: () => <HrEmployeePayUnits />,
   },
 
   // ----------------------------- HR Pay Componants Routes --------------------------------
   {
     name: "HR Pay Units",
     match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
-    element: () => <PayUnitsPage/>,
+    element: () => <PayUnitsPage />,
   },
 
-  
   {
     name: "HR Pay Units Dependant",
     match: (context) => isHrRoute(context) && isHrPayUnitsDependantRoute(context),
@@ -1282,12 +1266,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
-  name: "HR Grade Pay Unit",
-  match: (context) => isHrRoute(context) && isHrGradePayUnitRoute(context),
-  element: () => <GradePayUnitPage />,
-},
+    name: "HR Grade Pay Unit",
+    match: (context) => isHrRoute(context) && isHrGradePayUnitRoute(context),
+    element: () => <GradePayUnitPage />,
+  },
 
-{
+  {
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <PayrollAccountSetupPage />,
@@ -1299,14 +1283,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <AccrualTypePage />,
   },
 
-
   {
     name: "HR Attendance Types",
     match: (context) => isHrRoute(context) && isHrAttendanceTypesRoute(context),
     element: () => <AttendanceTypesPage />,
   },
-
-
 
   {
     name: "HR Payroll Process",
@@ -1323,54 +1304,54 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
     element: () => <SalaryAdvancePage />,
   },
-  
+
   {
-  name: "HR Applicant Info",
-  match: (context) => isHrRoute(context) && isHrApplicantInfoRoute(context),
-  element: () => <ApplicantInfoPage />,
+    name: "HR Applicant Info",
+    match: (context) => isHrRoute(context) && isHrApplicantInfoRoute(context),
+    element: () => <ApplicantInfoPage />,
   },
 
   {
-  name: "HR Continuous Auto Memo",
-  match: (context) => isHrRoute(context) && isHrContinuousAutoMemoRoute(context),
-  element: () => <ContinuousAutoMemoPage />,
-},
-
-{
-  name: "HR Interview Evaluation",
-  match: (context) => isHrRoute(context) && isHrInterviewEvalRoute(context),
-  element: () => <InterviewEvalPage />,
-},
-
-  {
-  name: "HR Training Feedback",
-  match: (context) => isHrRoute(context) && isHrTrainingFeedbackRoute(context),
-  element: () => <TrainingFeedbackPage />,
+    name: "HR Continuous Auto Memo",
+    match: (context) => isHrRoute(context) && isHrContinuousAutoMemoRoute(context),
+    element: () => <ContinuousAutoMemoPage />,
   },
 
   {
-  name: "HR Joining",
-  match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
-  element: () => <HrJoiningPage />,
-},
+    name: "HR Interview Evaluation",
+    match: (context) => isHrRoute(context) && isHrInterviewEvalRoute(context),
+    element: () => <InterviewEvalPage />,
+  },
 
-{
-  name: "HR Manpower Requisition",
-  match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
-  element: () => <HrManpowerPage />,
-},
+  {
+    name: "HR Training Feedback",
+    match: (context) => isHrRoute(context) && isHrTrainingFeedbackRoute(context),
+    element: () => <TrainingFeedbackPage />,
+  },
 
-{
-  name: "HR Employee Education",
-  match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
-  element: () => <HrEmpEducationPage />,
-},
+  {
+    name: "HR Joining",
+    match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
+    element: () => <HrJoiningPage />,
+  },
 
-{
-  name: "Employee Information",
-  match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
-  element: () => <KpiEmployeeInformationPage />,
-},
+  {
+    name: "HR Manpower Requisition",
+    match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+    element: () => <HrManpowerPage />,
+  },
+
+  {
+    name: "HR Employee Education",
+    match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
+    element: () => <HrEmpEducationPage />,
+  },
+
+  {
+    name: "Employee Information",
+    match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
+    element: () => <KpiEmployeeInformationPage />,
+  },
   {
     name: "HR Leave Types",
     match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
@@ -1383,21 +1364,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
-  name : "Hr Employee Language Skills",
-  match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
-  element: () => <HrEmpLanguagePage/>
-},
-{
-    name : "Employee Dependants",
-    match: ({pathname}) => isHrEmpDependantsRoute(pathname),
-    element: () => <HrEmpDependantsPage/>
+    name: "Hr Employee Language Skills",
+    match: ({ pathname }) => isHrEmpLanguageSkillRoute(pathname),
+    element: () => <HrEmpLanguagePage />
   },
   {
-    name : "Vacation Settlement",
-    match: ({pathname}) => isVacationSettlementRoute(pathname),
-    element: () => <VacationSettlementPage/>
+    name: "Employee Dependants",
+    match: ({ pathname }) => isHrEmpDependantsRoute(pathname),
+    element: () => <HrEmpDependantsPage />
   },
-  
+  {
+    name: "Vacation Settlement",
+    match: ({ pathname }) => isVacationSettlementRoute(pathname),
+    element: () => <VacationSettlementPage />
+  },
+
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -1405,71 +1386,40 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
-  name: "Purchase Sales Product Type",
-  match: ({ pathname }) => isProductTypeRoute(pathname),
-  element: () => <ProductTypePage />,
-  },
-
-
-  {
-  name: "Purchase Sales Product Category",
-  match: ({ pathname }) => isProductCategoryRoute(pathname),
-  element: () => <ProductCategoryPage />,
-  },
-
-   {
-  name: "Purchase Sales Zone Master",
-  match: ({ pathname }) => isZoneMasterRoute(pathname),
-  element: () => <ZoneMasterPage />,
-  },
-
- 
-
-  {
-    name : "Expense Master",
-    match: ({pathname}) => isExpenseMasterRoute(pathname),
-    element: () => <ExpenseMasterPage/>
-  },
-  
-
-  
-  {
-    name : "Purchase Sale Setup",
-    match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
-    element: () => <PurchaseSaleSetupPage/>
+    name: "Purchase Sales Product Type",
+    match: ({ pathname }) => isProductTypeRoute(pathname),
+    element: () => <ProductTypePage />,
   },
 
   {
-  name: "Purchase Sales Stock Inquiry",
-  match: ({ pathname }) => isStockInquiryRoute(pathname),
-  element: () => <StockInquiryPage />,
-  },
-
-    {
-  name: "Purchase Sales Stock Inquiry",
-  match: ({ pathname }) => isJobProductionSetupRoute(pathname),
-  element: () => <JobProductionOrderPage />,
+    name: "Purchase Sales Product Category",
+    match: ({ pathname }) => isProductCategoryRoute(pathname),
+    element: () => <ProductCategoryPage />,
   },
 
   {
-  name: "Product BOM",
-  match: ({ pathname }) => isProductBomRoute(pathname),
-  element: () => <PS_ProductBomPage />},
+    name: "Purchase Sales Zone Master",
+    match: ({ pathname }) => isZoneMasterRoute(pathname),
+    element: () => <ZoneMasterPage />,
+  },
 
-  
   {
-  name: "Profit & Loss Summary Report",
-  match: ({ pathname }) => isProfitLossSummaryRoute(pathname),
-  element: () => <PLSummaryPage />,
-},
-  
-{
-  name: "PO Order Register Report",
-  match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
-  element: () => <PoOrderRegisterPage />,
-},
+    name: "Expense Master",
+    match: ({ pathname }) => isExpenseMasterRoute(pathname),
+    element: () => <ExpenseMasterPage />
+  },
 
+  {
+    name: "Purchase Sale Setup",
+    match: ({ pathname }) => isPurchaseSaleSetupRoute(pathname),
+    element: () => <PurchaseSaleSetupPage />
+  },
 
+  {
+    name: "Purchase Sales Stock Inquiry",
+    match: ({ pathname }) => isStockInquiryRoute(pathname),
+    element: () => <StockInquiryPage />,
+  },
 {
   name: "Purchase Request Register(old) Report",
   match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
@@ -1481,14 +1431,40 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isPnSRoute(pathname),
   element: () => <PurchaseSalesDashboard />},
 
+  {
+    name: "Purchase Sales Stock Inquiry",
+    match: ({ pathname }) => isJobProductionSetupRoute(pathname),
+    element: () => <JobProductionOrderPage />,
+  },
 
+  {
+    name: "Product BOM",
+    match: ({ pathname }) => isProductBomRoute(pathname),
+    element: () => <PS_ProductBomPage />
+  },
+
+  {
+    name: "Profit & Loss Summary Report",
+    match: ({ pathname }) => isProfitLossSummaryRoute(pathname),
+    element: () => <PLSummaryPage />,
+  },
+
+  {
+    name: "PO Order Register Report",
+    match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
+    element: () => <PoOrderRegisterPage />,
+  },
+
+  {
+    name: "Purchase Request Register(old) Report",
+    match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
+    element: () => <PrRegisterOldPage />,
+  }
 ];
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
-
-
 
 function isHrEmpLanguageSkillRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
@@ -1498,7 +1474,6 @@ function isHrEmpLanguageSkillRoute(pathname: string) {
   );
 }
 
-
 function isHrEmpDependantsRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
   return (
@@ -1507,8 +1482,6 @@ function isHrEmpDependantsRoute(pathname: string) {
   );
 }
 
-
-
 function isVacationSettlementRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
   return (
@@ -1516,7 +1489,6 @@ function isVacationSettlementRoute(pathname: string) {
     normalized.includes("/hcm/hcm/transactions/vacation%20settlement")
   );
 }
-
 
 function isHrHolidayCalendarRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
@@ -1531,14 +1503,11 @@ function isHrHolidayCalendarRoute(pathname: string) {
 
 function isHrLeaveTypeRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
-  // const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     normalized.includes("/hcm/hcm/pay components/leave_types") ||
     normalized.includes("/hcm/hcm/pay%20components/leave_types")
-    // compact.includes("paycomponentsleavetype")
   );
 }
-
 
 //--------PURCHASE SALE-------
 function isExpenseMasterRoute(pathname: string) {
@@ -1547,8 +1516,6 @@ function isExpenseMasterRoute(pathname: string) {
     "/workspace/purchase_sales/purchase_sales/masters/expense_master"
   );
 }
-
-
 
 function isPurchaseSaleSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1584,7 +1551,6 @@ function isPurchaseRequestRegisterOldRoute(pathname: string) {
     "/workspace/purchase_sales/purchase_sales/reports/purchase_request_register"
   );
 }
-
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1634,66 +1600,53 @@ function isBudgetSetupRoute(pathname: string) {
   );
 }
 
-
 function isPurchaseSalesSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/purchase/purchase_order"))
+  return (normalized.includes("purchase_sales/purchase/purchase_order"))
 }
 function isPurchaseInvoiceSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/purchase/purchase_invoice"))
+  return (normalized.includes("purchase_sales/purchase/purchase_invoice"))
 }
 
 function isSalesInvoiceSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/sales/sales_invoice"))
+  return (normalized.includes("purchase_sales/sales/sales_invoice"))
 }
-
 
 function isPurchaseQuotationSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
+  return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
 }
 function isPurchaseGRNSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/purchase/purchase_grn"))
+  return (normalized.includes("purchase_sales/purchase/purchase_grn"))
 }
 
 function isPProductionJoborderSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/production/job_order"))
+  return (normalized.includes("purchase_sales/production/job_order"))
 }
 
 function isSalesorderSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/sales/sales_order"))
+  return (normalized.includes("purchase_sales/sales/sales_order"))
 }
 function isSalesDNSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/sales/sales_dn"))
+  return (normalized.includes("purchase_sales/sales/sales_dn"))
 }
 function isStocksTransferSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/inventory/stock_transfer"))
+  return (normalized.includes("purchase_sales/inventory/stock_transfer"))
 }
 function isStocksAdjectmentSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/inventory/stock_adjustment"))
+  return (normalized.includes("purchase_sales/inventory/stock_adjustment"))
 }
 function isJobProductionSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  
-    return (normalized.includes("purchase_sales/production/job_production"))
+  return (normalized.includes("purchase_sales/production/job_production"))
 }
 
 function isExpenseTypeRoute(pathname: string) {
@@ -1770,17 +1723,16 @@ function isBalanceSheetRoute(pathname: string) {
 function isAcStatementRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement") ||
-         normalized.includes("/finance/accounts_report/detailed_reports/a%2fc_statement") ||
-         normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c-statement");
+    normalized.includes("/finance/accounts_report/detailed_reports/a%2fc_statement") ||
+    normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c-statement");
 }
 
 function isOutstandingStatementRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/detailed_reports/outstanding_statement") ||
-         normalized.includes("/finance/accounts_report/detailed_reports/outstanding-statement") ||
-         normalized.includes("/finance/accounts/reports/account-report/detailed-reports/outstanding-statement");
+    normalized.includes("/finance/accounts_report/detailed_reports/outstanding-statement") ||
+    normalized.includes("/finance/accounts/reports/account-report/detailed-reports/outstanding-statement");
 }
-
 
 function isAgeingReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1789,7 +1741,7 @@ function isAgeingReportRoute(pathname: string) {
 
 function isHrJoiningRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("hrjoining") ||
     compact.includes("joiningform") ||
@@ -1813,7 +1765,7 @@ function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
 
 function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("empeducation") ||
     compact.includes("educationqualification") ||
@@ -1825,7 +1777,7 @@ function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
 
 function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("manpowerrequisition") ||
     compact.includes("confirmationreview") ||
@@ -1837,7 +1789,7 @@ function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
 
 function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("continousautomemo") ||
     normalized.includes("continous_auto_memo") ||
@@ -1847,7 +1799,7 @@ function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
 
 function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("applicantinfo") ||
     compact.includes("applicantinformation") ||
@@ -1856,10 +1808,9 @@ function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
   );
 }
 
-
 function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("intervieweval") ||
     compact.includes("interviewevaluation") ||
@@ -1867,8 +1818,6 @@ function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
     normalized.includes("int_eval")
   );
 }
-
-
 
 function getCreditDebitNoteDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1912,7 +1861,6 @@ function getTransactionDocType(pathname: string) {
   return null;
 }
 
-
 function getCommercialDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (normalized.includes("/finance/accounts/transactions/lpo")) return "PO" as const;
@@ -1933,7 +1881,6 @@ function isJournalVoucherRoute(pathname: string) {
   );
 }
 
-
 function isRVoucherRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -1943,7 +1890,6 @@ function isRVoucherRoute(pathname: string) {
     normalized.includes("/finance/accounts/transactions/reverse")
   );
 }
-
 
 function isBankReconciliationRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1982,7 +1928,7 @@ function isStockTransferRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
     normalized.includes("wms/activity/request/stock_transfer") &&
-    !normalized.includes("/view/")  // ← add this
+    !normalized.includes("/view/")
   );
 }
 function isInvoiceRoute(pathname: string) {
@@ -1998,12 +1944,10 @@ function isStockAdjustmentRoute(pathname: string) {
   return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
 }
 
-
-
 function isTransactionReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
-         normalized.includes("/wms/reports/stock%20report/transaction-report");
+    normalized.includes("/wms/reports/stock%20report/transaction-report");
 }
 function isStockCountRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2025,7 +1969,7 @@ function isJobListingRoute(pathname: string) {
     normalized.includes("/wms/reports/stock-report/job-listing")
   );
 }
-function isStockSummaryRoute(pathname: string) {  
+function isStockSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   const stockReportPath =
     normalized.includes("/wms/wms/reports/stock%20report/") ||
@@ -2086,30 +2030,28 @@ function isAllocatedInvoiceRoute(pathname: string) {
   return normalized.includes("/finance/accounts/transactions/allocated_invoice") || normalized.includes("/finance/accounts/transactions/allocated-invoice");
 }
 
-function isProfitLossRoute(pathname:string) {
+function isProfitLossRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/finance/accounts_report/profit_and_loss/profit_and_loss")
 }
 
-
-function isDnRoute(pathname:string) {  
+function isDnRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/wms/reports/summary%20report/dn_summary")
-   || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
+    || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
 }
 
-function isGrnRoute(pathname:string) {  
+function isGrnRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/wms/reports/summary%20report/grn_summary")
-   || normalized.includes("/wms/wms/reports/summary_report/grn_summary");
+    || normalized.includes("/wms/wms/reports/summary_report/grn_summary");
 }
 
-function isVisaExpiryListingRoute(pathname:string) {
+function isVisaExpiryListingRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("hr/reports/employee/visa_expiry_listing") || 
-          normalized.includes("hr/reports/employee/visa-expiry-listing");
+  return normalized.includes("hr/reports/employee/visa_expiry_listing") ||
+    normalized.includes("hr/reports/employee/visa-expiry-listing");
 }
-
 
 function isHrAccuralAccountSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2138,7 +2080,6 @@ function isWmsInboundRoute(pathname: string) {
     normalized.includes("/inbound") &&
     (normalized.includes("/jobs") || normalized.includes("/inboundjob"));
 
-  // Only match /view/ if it's under an inbound path OR the job no starts with ib
   const isDetail =
     normalized.includes("/inbound") && normalized.includes("/view/");
 
@@ -2391,12 +2332,12 @@ function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {
     action: compact.includes("freightreports") || compact.includes("enquirylist") || compact.includes("rfqlist") || compact.includes("quotationlist")
       ? "reports"
       : compact.includes("costsheet")
-      ? "cost-sheet"
-      : compact.includes("jobsheet")
-        ? "job-sheet"
-        : compact.includes("document")
-          ? "documents"
-          : "job",
+        ? "cost-sheet"
+        : compact.includes("jobsheet")
+          ? "job-sheet"
+          : compact.includes("document")
+            ? "documents"
+            : "job",
   };
 }
 
@@ -2439,8 +2380,6 @@ function isCreditRequestTaskRoute(context: WorkspaceRouteContext) {
   );
 }
 
-
-
 function isCapexRequestTaskRoute(context: WorkspaceRouteContext) {
   const normalized = getGenericMatchText(context);
   const compact = normalized.replace(/[^a-z0-9]/g, "");
@@ -2453,8 +2392,6 @@ function isCapexRequestTaskRoute(context: WorkspaceRouteContext) {
     !normalized.includes("/edit/")
   );
 }
-
-
 
 function isPurchaseRequestTaskRoute(context: WorkspaceRouteContext) {
   const normalized = getGenericMatchText(context);
@@ -2554,6 +2491,16 @@ function isPamsRoute(pathname: string) {
   return pathname.toLowerCase().includes("/pams/");
 }
 
+function getPamsCompact(context: WorkspaceRouteContext): string {
+  return getPamsMatchText(context).replace(/[^a-z0-9]/g, "");
+}
+
+function isPamsToken(context: WorkspaceRouteContext, ...tokens: string[]): boolean {
+  if (!isPamsRoute(context.pathname)) return false;
+  const compact = getPamsCompact(context);
+  return tokens.some((token) => compact.includes(token.replace(/[^a-z0-9]/g, "")));
+}
+
 function isPamsBulkAppraisalRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
   return normalized.endsWith("/pams/masters/gm/kpi") || normalized.includes("/bulk");
@@ -2569,25 +2516,23 @@ function isPamsKpiItemRoute(pathname: string) {
   return normalized.includes("/kpi_activity");
 }
 
-
 function isPamsAppraisalSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/appraisal_listing_summary") || 
-         normalized.includes("/appraisal-listing-summary");
+  return normalized.includes("/appraisal_listing_summary") ||
+    normalized.includes("/appraisal-listing-summary");
 }
 
 function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/appraisal_listing") ||
-         normalized.includes("/appraisal-listing");
+    normalized.includes("/appraisal-listing");
 }
 
 function isPamsAppraisalWeightageRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/appraisal_weightage") || 
-         normalized.includes("/appraisal_weightage");
+  return normalized.includes("/appraisal_weightage") ||
+    normalized.includes("/appraisal_weightage");
 }
-
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {
   if (!isPamsRoute(context.pathname)) return null;
@@ -2757,8 +2702,6 @@ function isHrTravelFareRoute(context: WorkspaceRouteContext) {
   return compact.includes("TravelFare") || compact.includes("travelfare");
 }
 
-
-
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollprocessing") || compact.includes("payrollprocess") || compact.includes("payrollprocesspage");
@@ -2766,7 +2709,7 @@ function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
 
 function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup") && !compact.includes("accrualtype") && !compact.includes("attendancetypes") && !compact.includes("leaveslap")&& !compact.includes("travelfare");
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend") && !compact.includes("grade") && !compact.includes("payrollaccountsetup") && !compact.includes("accrualtype") && !compact.includes("attendancetypes") && !compact.includes("leaveslap") && !compact.includes("travelfare");
 }
 
 function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
@@ -2779,13 +2722,10 @@ function isHrGradePayUnitRoute(context: WorkspaceRouteContext) {
   return compact.includes("gradepayunit") || compact.includes("gradepayunits");
 }
 
-
-
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
 }
-
 
 function isHrAccrualTypeRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
@@ -2796,7 +2736,6 @@ function isHrAttendanceTypesRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("attendancetypes") || compact.includes("attendance_type");
 }
-
 
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
@@ -2832,16 +2771,10 @@ function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
   return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
 }
 
-
 function isHrEmployeeTransferRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("employeetransfer") || compact.includes("employeetransfers") || compact.includes("hremployeetransfer");
 }
-
-// function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
-//   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-//   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
-// }
 
 function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
@@ -2854,7 +2787,7 @@ function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
 
 function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
     compact.includes("trainingfeedback") ||
     normalized.includes("training_feedback") ||
@@ -2872,7 +2805,6 @@ function isProductTypeRoute(pathname: string) {
   );
 }
 
-
 function isProductCategoryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
@@ -2882,7 +2814,6 @@ function isProductCategoryRoute(pathname: string) {
     normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
   );
 }
-
 
 function isZoneMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2927,7 +2858,6 @@ function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
     compact.includes("employee_payunits")
   );
 }
-
 
 function isPendingPurchaseOrderRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
