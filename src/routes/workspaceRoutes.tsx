@@ -510,11 +510,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isOutstandingStatementRoute(pathname),
     element: () => <OutstandingStatementPage />,
   },
-  {
-    name: "Pams Dashboard",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
-    element: () => <PamsDashboard />
-  },
+  // {
+  //   name: "Pams Dashboard",
+  //   match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
+  //   element: () => <PamsDashboard />
+  // },
 
 {
   name: "Storage Computation",
@@ -526,11 +526,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
   element: () => <OutstandingStatementPage />,
 },
-{
-  name: "Pams Dashboard",
-  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
-  element: () => <PamsDashboard />
-},
+// {
+//   name: "Pams Dashboard",
+//   match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
+//   element: () => <PamsDashboard />
+// },
 
 {
   name: "Quotation Comparison",
@@ -967,11 +967,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   //// PAMS Routes
-  {
-    name: "PAMS Dashboard",
-    match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
-    element: () => <PamsDashboardPage />,
-  },
+  // {
+  //   name: "PAMS Dashboard",
+  //   match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
+  //   element: () => <PamsDashboardPage />,
+  // },
 
   // ✅ NEW: PAMS Appraisal List — matches "/activity/request/appraisal"
   //     Uses compact-token matching (no hardcoded URL)
