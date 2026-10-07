@@ -279,8 +279,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
     const designation = encodeURIComponent(text(row.DESG_NAME));
     const department = encodeURIComponent(text(row.DEPT_NAME));
+    // ✅ Pass the source tab so the appraisal page knows which buttons to show
+    const sourceTab = encodeURIComponent(TAB_STATUS[activeTab]);
     navigate(
-      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
+      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}&source_tab=${sourceTab}`,
       { state: { prefetchedRow: row } }
     );
   };

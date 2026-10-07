@@ -7512,8 +7512,20 @@ freight-dense-form .freight-form-card {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-top: 3.5px solid #00378c;
   border-bottom: 1px solid #cbd5e1;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+.commercial-command-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.5px;
+  background: linear-gradient(90deg, #00255e 0%, #00378c 30%, #0284c7 65%, #38bdf8 85%, #60a5fa 100%);
+  z-index: 15;
 }
 
 .commercial-command-header::after {
@@ -8135,7 +8147,7 @@ freight-dense-form .freight-form-card {
 }
 
 .lookup-popover {
-  border: 1px solid #cbd5e1 !important;
+  border: 1.5px solid #94a3b8 !important;
   border-radius: 12px !important;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2) !important;
   background: #ffffff !important;
@@ -8160,27 +8172,36 @@ freight-dense-form .freight-form-card {
 }
 
 .lookup-popover table td {
-  height: 32px;
+  min-height: 32px;
   border-color: #f1f5f9;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  padding: 6px 12px;
 }
 
 .lookup-popover .lookup-results-table {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
-.lookup-popover .lookup-results-table th {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.lookup-popover .lookup-results-table th:first-child,
+.lookup-popover .lookup-results-table td:first-child {
+  width: 125px !important;
+  min-width: 110px !important;
+  max-width: 140px !important;
+  white-space: nowrap !important;
+}
+
+.lookup-popover .lookup-results-table th:nth-child(2),
+.lookup-popover .lookup-results-table td:nth-child(2) {
+  width: auto !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
 }
 
 .lookup-popover .lookup-results-table tr {
-  height: 32px;
+  min-height: 32px;
   transition: background-color 120ms ease;
 }
 
@@ -9354,10 +9375,15 @@ freight-dense-form .freight-form-card {
 
 .app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header) {
   border-color: #33415d !important;
+  border-top-color: #2563eb !important;
   background:
     linear-gradient(180deg, rgba(21, 25, 39, 0.98) 0%, rgba(17, 24, 39, 0.98) 100%) !important;
   color: #e2e8f0 !important;
   box-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.commercial-command-header)::before {
+  background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #60a5fa 100%) !important;
 }
 
 .app.dark .workspace-content :where(.finance-list-heading)::after {
