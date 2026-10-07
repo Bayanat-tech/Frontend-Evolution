@@ -20,7 +20,8 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
-import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
+import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage"
+import WmsDashboard from "../pages/wms/dashboard/WmsDashboard";;
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
@@ -207,6 +208,9 @@ import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 import { PamsBulkAppraisalPage } from "../pages/pams/PamsBulkAppraisalPage";
 import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
+import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
+import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
+import PostDateCheque from "../pages/finance/PostDateCheque";
 
 
 type WorkspaceRouteContext = {
@@ -228,6 +232,17 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  {
+    name : 'Post Date Cheque',
+    match : ({pathname}) => pathname.toLowerCase().includes("/finance/accounts/transactions/pdc"),
+    element : () => <PostDateCheque />
+  },
+    {
+    name: "WMS Dashboard",
+    match: ({ pathname }) => isWmsDashboardRoute(pathname),
+    element: () => <WmsDashboard />,
+  },
   {
     name: 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
@@ -501,6 +516,28 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PamsDashboard />
   },
 
+{
+  name: "Storage Computation",
+  match: ({ pathname }) => isStorageComputationRoute(pathname),
+  element: () => <StorageComputationPage />,
+},
+{
+  name: "Finance Outstanding Statement",
+  match: ({ pathname }) => isOutstandingStatementRoute(pathname),
+  element: () => <OutstandingStatementPage />,
+},
+{
+  name: "Pams Dashboard",
+  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
+  element: () => <PamsDashboard />
+},
+
+{
+  name: "Quotation Comparison",
+  match: ({ pathname }) => pathname.toLowerCase().includes("purchase_sales/purchase/quotation_comparison"),
+  element: () => <QuotationComparisonPage />
+},
+  
   {
     name: "Finance Ageing Report",
     match: ({ pathname }) => isAgeingReportRoute(pathname),
@@ -1390,6 +1427,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockInquiryRoute(pathname),
     element: () => <StockInquiryPage />,
   },
+{
+  name: "Purchase Request Register(old) Report",
+  match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
+  element: () => <PrRegisterOldPage />,
+},
+
+  {
+  name: "Purchase & Sales Dashboard",
+  match: ({ pathname }) => isPnSRoute(pathname),
+  element: () => <PurchaseSalesDashboard />},
 
   {
     name: "Purchase Sales Stock Inquiry",
@@ -1853,7 +1900,7 @@ function isRVoucherRoute(pathname: string) {
 
 function isBankReconciliationRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/finance/accounts/transactions/bank_reconciliation") || normalized.includes("/finance/accounts/transactions/bank-reconciliation");
+  return normalized.includes("/finance/accounts/transactions/bank_recon") || normalized.includes("/finance/accounts/transactions/bank-reconciliation");
 }
 
 function getUtilityMasterConfig(pathname: string) {
@@ -2027,6 +2074,10 @@ function isWmsCountryRoute(pathname: string) {
 function isWmsBillingActRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
+function isWmsDashboardRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/wms/wms";
 }
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2798,6 +2849,14 @@ function isProductBomRoute(pathname: string) {
   );
 }
 
+function isPnSRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales") 
+   
+  );
+}
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
 

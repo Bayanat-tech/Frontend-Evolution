@@ -157,6 +157,8 @@ export type Division = {
 export type CompanyInfo = {
   company_code?: string;
   ac_fy_period?: string;
+  setup_required?: boolean;
+  message?: string;
 };
 
 export type FinanceOutstandingBalance = {
@@ -173,6 +175,15 @@ export async function getCompanyInfo() {
   const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
   return response.data.data || {};
+}
+
+export async function initializeCompanyFinance(companyCode?: string) {
+  const response = await api.post<ApiResponse<Record<string, unknown>>>(
+    "/api/finance/transactions/initialize_company_finance",
+    { company_code: companyCode }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Failed to initialize company finance setup");
+  return response.data;
 }
 
 export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {
@@ -1342,6 +1353,33 @@ export async function getSalesAccountDetailsReportExcel(params: Record<string, a
   window.URL.revokeObjectURL(url);
 }
 
+
+// Sales DN Report HTML and Excel route
+export async function getSalesDNReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSalesDNReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SalesDNReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Delivery_Note.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 
 

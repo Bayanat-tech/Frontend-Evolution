@@ -1,4 +1,4 @@
-import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Save, Truck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport, getOubServiceActivityReport, downloadOubServiceActivityReportExcel, getSalesOrderReportHtml, getSalesOrderSheetReportExcelDownload } from "../../../api/wms";
@@ -28,39 +28,12 @@ type TReport = {
   excelFn?:     (prinCode: string, jobNo: string) => Promise<void>;
 };
 
-
 const REPORTS: TReport[] = [
-  {
-    id:          1,
-    reportTitle: "Job Details Report",
-    apiFn:       getOubJobDetReport,
-    excelFn:     downloadOubJobDetReportExcel,
-  },
-  {
-    id:          2,
-    reportTitle: "Pick List Report",
-    apiFn:       getOubPickReport,
-    excelFn:     downloadOubPickReportExcel,
-  },
-  {
-    id:          3,
-    reportTitle: "Delivery Note Report",
-    apiFn:       getDnReport,
-    excelFn:     downloadDnReportExcel,
-  },
-  {
-    id:          4,
-    reportTitle: "Activity Services Report",
-    apiFn:       getOubServiceActivityReport,
-    excelFn:     downloadOubServiceActivityReportExcel,
-  },
-   {
-    id:          5,
-    reportTitle: "Sales Order Report",
-    apiFn:       getSalesOrderReportHtml,
-    excelFn:     getSalesOrderSheetReportExcelDownload,
-  },
-  
+  { id: 1, reportTitle: "Job Details Report", apiFn: getOubJobDetReport, excelFn: downloadOubJobDetReportExcel },
+  { id: 2, reportTitle: "Pick List Report", apiFn: getOubPickReport, excelFn: downloadOubPickReportExcel },
+  { id: 3, reportTitle: "Delivery Note Report", apiFn: getDnReport, excelFn: downloadDnReportExcel },
+  { id: 4, reportTitle: "Activity Services Report", apiFn: getOubServiceActivityReport, excelFn: downloadOubServiceActivityReportExcel },
+  { id: 5, reportTitle: "Sales Order Report", apiFn: getSalesOrderReportHtml, excelFn: getSalesOrderSheetReportExcelDownload },
 ];
 
 export function OutboundJobDetail({
@@ -73,8 +46,7 @@ export function OutboundJobDetail({
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const principalCode =
-    new URLSearchParams(location.search).get("principal_code") || "";
+  const principalCode = new URLSearchParams(location.search).get("principal_code") || "";
   const [job, setJob] = useState<WmsRow | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -89,6 +61,7 @@ export function OutboundJobDetail({
 
   const loadJob = async () => {
     setLoading(true);
+    
     try {
       const data = await executeWmsInboundSql(
         `SELECT * FROM TO_ORDER
@@ -146,7 +119,6 @@ export function OutboundJobDetail({
     }
   };
 
-  // Open the report HTML in a new browser tab
   const handleOpenReportInNewWindow = () => {
     if (!reportHtml) return;
     const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
@@ -159,7 +131,6 @@ export function OutboundJobDetail({
     }
   };
 
-  // Trigger the browser print dialog (Save as PDF) for the current report
   const handleDownloadReportPdf = () => {
     if (!reportHtml) return;
     const PRINT_IFRAME_ID = "outbound-job-report-print-iframe";
@@ -169,8 +140,7 @@ export function OutboundJobDetail({
       iframe = document.createElement("iframe");
       iframe.id = PRINT_IFRAME_ID;
       iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
-      iframe.style.cssText =
-        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
       document.body.appendChild(iframe);
     }
 
@@ -185,9 +155,7 @@ export function OutboundJobDetail({
       try {
         iframe?.contentWindow?.focus();
         iframe?.contentWindow?.print();
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     };
 
     if (iframe.contentDocument?.readyState === "complete") {
@@ -214,112 +182,150 @@ export function OutboundJobDetail({
     setReportError("");
   };
 
-  const activeTab = detailTabs.some((item) => item.value === tab)
-    ? tab
-    : "order_entry";
-  const jobClass =
-    jobClassLabels[value(job || {}, "job_class")] ||
-    value(job || {}, "job_class") ||
-    "Normal";
-  const status = isCanceled(job || {})
-    ? "Canceled"
-    : hasDate(value(job || {}, "confirm_date"))
-      ? "Confirmed"
-      : "In Progress";
+  const activeTab = detailTabs.some((item) => item.value === tab) ? tab : "order_entry";
+  
+  const jobClass = jobClassLabels[value(job || {}, "job_class")] || value(job || {}, "job_class") || "Normal";
+  const status = isCanceled(job || {}) ? "Canceled" : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
   const jobDate = formatDate(value(job || {}, "job_date"));
+
+  // Exact status colors from Inbound
+  const statusColor = status === "Canceled" 
+    ? "text-red-600 bg-red-50 border-red-200"
+    : status === "Confirmed" 
+      ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+      : "text-blue-600 bg-blue-50 border-blue-200";
 
   const hasExcelExport = !!selectedReport?.excelFn;
 
   return (
     <section className="grid gap-3">
-      {/* ── Job Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            size="icon"
-            variant="outline"
+      {/* ── Job Header (Exact Inbound Style) ── */}
+      <div 
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          backgroundColor: "#ffffff",
+          padding: "12px 16px",
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)"
+        }}
+      >
+        {/* LEFT SIDE: Identity */}
+        <div style={{ display: "flex", minWidth: 0, alignItems: "center", gap: "12px" }}>
+          
+          <Button 
+            size="icon" 
+            variant="outline" 
+            style={{ height: "32px", width: "32px", flexShrink: 0, borderRadius: "8px" }}
             onClick={() => navigate(outboundJobsPath)}
             title="Back to jobs"
           >
             <ArrowLeft size={16} />
           </Button>
-          <div className="min-w-0">
-            <p className="m-0 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Outbound Job
-            </p>
-            <h1 className="m-0 truncate text-2xl font-bold text-foreground">
-              {jobNo}
+
+          <div 
+            style={{ 
+              display: "grid", placeItems: "center", width: "32px", height: "32px", 
+              borderRadius: "8px", backgroundColor: "rgba(0, 55, 140, 0.08)", 
+              color: "#00378C", flexShrink: 0
+            }}
+          >
+            <Truck size={16} />
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+            <h1 style={{ margin: 0, fontSize: "18px", fontWeight: 700, lineHeight: 1.2, color: "#0f172a" }}>
+              Job No: {jobNo}
             </h1>
-          </div>
-
-          {/* Principal chip */}
-          <div className="hidden items-center gap-1 rounded-md border bg-background px-3 py-1.5 sm:flex">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Principal
+            
+            <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[10.5px] leading-tight font-semibold ${statusColor}`}>
+              {status}
             </span>
-            <span className="ml-1.5 text-sm font-bold text-foreground">
-              {value(job || {}, "prin_code") || principalCode || "-"}
+            
+            {/* Job Class badge styled like Inbound pill */}
+            <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10.5px] leading-tight font-semibold text-blue-700">
+              {jobClass}
             </span>
           </div>
+        </div>
 
-          {/* Job Date chip */}
-          {jobDate && (
-            <div className="hidden items-center gap-1 rounded-md border bg-background px-3 py-1.5 sm:flex">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Job Date
+        {/* RIGHT SIDE: Metadata Pill & Actions */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "16px" }}>
+          
+          {job && (
+            <div 
+              style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                backgroundColor: "#f8fafc", border: "1px solid #e2e8f0",
+                borderRadius: "9999px", padding: "5px 14px",
+              }}
+            >
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#1e293b" }}>
+                {value(job, "prin_code")}
+                {value(job, "prin_name") ? ` - ${value(job, "prin_name")}` : ""}
               </span>
-              <span className="ml-1.5 text-sm font-bold text-foreground">
+              
+              <span style={{ width: "1px", height: "12px", backgroundColor: "#cbd5e1" }} />
+              
+              <span style={{ fontSize: "12px", fontWeight: 500, color: "#475569" }}>
                 {jobDate}
               </span>
             </div>
           )}
 
-          {/* Job Class badge */}
-          <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-            {jobClass}
-          </span>
-
-          {/* Status badge */}
-          <span
-            className={
-              status === "Canceled"
-                ? "rounded-full border border-red-300 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700"
-                : status === "Confirmed"
-                  ? "rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"
-                  : "rounded-full border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700"
-            }
-          >
-            {status}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={loadJob}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-          <Button size="sm" variant="outline" onClick={openListDialog}>
-            <Printer size={14} /> Print
-          </Button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {/* <Button 
+              size="sm" 
+              variant="outline" 
+              style={{ height: "32px", borderRadius: "8px", padding: "0 14px", fontSize: "13px", fontWeight: 500 }}
+              onClick={loadJob}
+            >
+              <RefreshCw size={15} /> Refresh
+            </Button> */}
+            <Button 
+              size="sm" 
+              variant="outline" 
+              style={{ height: "32px", borderRadius: "8px", padding: "0 14px", fontSize: "13px", fontWeight: 500 }}
+              onClick={openListDialog}
+            >
+              <Printer size={15} /> Print
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* ── Tab Strip ── */}
-      <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
-        {detailTabs.map((item) =>
-            <Link
-              className={
-                item.value === activeTab
-                  ? "ui-button ui-button-default ui-button-sm"
-                  : "ui-button ui-button-outline ui-button-sm"
-              }
-              key={item.value}
-              to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
-            >
-              {item.label}
-            </Link>
-          // )
+      {/* ── Tab Strip (Exact Inbound Style) ── */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {loading ? (
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-8 w-28 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : (
+          detailTabs.map((item) => {
+            const active = item.value === activeTab;
+            return (
+              <Link
+                key={item.value}
+                to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary font-medium"
+                }`}
+              >
+                <span>{item.label}</span>
+              </Link>
+            );
+          })
         )}
       </div>
+
       <OutboundOperationalTab
         job={job}
         jobNo={jobNo}
@@ -327,6 +333,7 @@ export function OutboundJobDetail({
         loadingJob={loading}
         principalCode={principalCode}
       />
+
       {/* ── Dialog 1: Report list ── */}
       <Dialog
         open={listOpen}

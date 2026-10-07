@@ -1,362 +1,419 @@
-import { useMemo, useRef, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Save, RotateCcw, Pencil } from 'lucide-react';
-import { useAuth } from '../../../state/AuthContext';
-import { getDynamicLookup, postFinance } from '../../../api/lookups';
-import { Button } from '../../../components/ui/Button';
-import { DataTable } from '../../../components/ui/DataTable';
-import AddPayrollAccountSetupForm from './AddPayrollAccountSetupForm';
+// Payroll Account Setup page — new UI
+//  • Cascading filters (Company → Division → Department → Section) in a SectionPanel
+//  • Two-view state machine: list ↔ full-page editor (add / edit / view)
+//  • DataTable toolbar holds Reset / Refresh / Add Payroll; row actions are Edit / View
+//  • Header Save calls formRef.current?.save() — the modal + bottom Submit bar are gone
+//  • Removed: the leftover "cancel leave" handleSave, empCode / docNo state, gridRef and postFinance
 
-
-function lowercaseKeys<T extends Record<string, unknown>>(row: T): T {
-  const out: Record<string, unknown> = {};
-  for (const key in row) {
-    out[key.toLowerCase()] = row[key];
-  }
-  return out as T;
-}
+import { useQuery } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { ArrowLeft, Edit2, Eye, FileText, Filter, Plus, RefreshCw, RotateCcw, Save, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { getDynamicLookup } from "../../../api/lookups";
+import { Button } from "../../../components/ui/Button";
+import { DataTable } from "../../../components/ui/DataTable";
+import { Field, SectionPanel } from "../../../components/ui/Formblocks";
+import { Select } from "../../../components/ui/Select";
+import { uppercaseKeys } from "../../../components/ui/Uselookupoptions";
+import { useAuth } from "../../../state/AuthContext";
+import AddPayrollAccountSetupForm, {
+  type PayrollAccountFormHandle,
+  type TPayrollAccountForm,
+} from "./AddPayrollAccountSetupForm";
 
 type TLeaveRow = {
   pay_comp_id: string;
   ac_code_db: string;
   ac_code_cr: string;
+  [key: string]: unknown; // keep every field the lookup returns so edit can populate from the row
 };
 
-// ─── Columns ──────────────────────────────────────────────────────────────
-const leaveColumns: ColumnDef<TLeaveRow>[] = [
-  {
-    id: 'srno',
-    header: '#',
-    size: 50,
-    cell: ({ row }) => row.index + 1
-  },
-  { accessorKey: 'pay_comp_id', header: 'Pay Component ID', size: 200 },
-  { accessorKey: 'ac_code_db', header: 'DB Account Code', size: 200 },
-  { accessorKey: 'ac_code_cr', header: 'CR Account Code *', size: 200 }
-];
+type EditorMode = "add" | "edit" | "view";
 
-// ─── Helper ───────────────────────────────────────────────────────────────
-const fetchLookup = async (parameter: string, code1: string, code2 = '', code3 = '', code4 = '') => {
+function lowercaseKeys(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key in row) out[key.toLowerCase()] = row[key];
+  return out;
+}
+
+const fetchLookup = async (parameter: string, code1: string, code2 = "", code3 = "", code4 = "") => {
   const res = await getDynamicLookup({ parameter, code1, code2, code3, code4 });
   const rows = (res ?? []) as unknown as Record<string, unknown>[];
   return rows.map(lowercaseKeys);
 };
 
+const s = (v: unknown) => (v == null ? "" : String(v));
+
 const PayrollAccountSetupPage = () => {
   const { user } = useAuth();
-  const gridRef = useRef<any>(null);
-  const queryClient = useQueryClient();
+  const loginid = user?.loginid ?? "";
+  const userCompany = user?.company_code ?? "";
 
-  const loginid = user?.loginid ?? '';
-  const companyCode = user?.company_code ?? '';
+  // ── Filter state (codes only; names are looked up from the option lists) ──
+  const [company, setCompany] = useState("");
+  const [division, setDivision] = useState("");
+  const [department, setDepartment] = useState("");
+  const [section, setSection] = useState("");
+  const [query, setQuery] = useState("");
 
-  // ── Filter State ──────────────────────────────────────────────────────────
-  const [company, setCompany] = useState<any>(null);
-  const [division, setDivision] = useState<any>(null);
-  const [department, setDepartment] = useState<any>(null);
-  const [section, setSection] = useState<any>(null);
-  const [empCode, setEmpCode] = useState<any>(null);
+  // ── View state ──
+  const [view, setView] = useState<"list" | "editor">("list");
+  const [editorMode, setEditorMode] = useState<EditorMode>("add");
+  const [activeRow, setActiveRow] = useState<TLeaveRow | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  // ── Form State ────────────────────────────────────────────────────────────
-  const [docNo, setDocNo] = useState<any>(null);
+  const formRef = useRef<PayrollAccountFormHandle>(null);
 
-  // ── Add/Edit Modal State ─────────────────────────────────────────────────
-  const [showForm, setShowForm] = useState(false);
-  const [editingRow, setEditingRow] = useState<TLeaveRow | null>(null);
-
-  // ── Company Query ─────────────────────────────────────────────────────────
-  const { data: companyData } = useQuery({
-    queryKey: ['lc_company'],
-    queryFn: async () => ({ tableData: await fetchLookup('EDUCATION_QUALIFICATION_Company', companyCode, loginid) })
+  // ── Filter option queries ──
+  const { data: companies = [] } = useQuery({
+    queryKey: ["lc_company", userCompany],
+    queryFn: async () =>
+      (await fetchLookup("EDUCATION_QUALIFICATION_Company", userCompany, loginid)).map((r) => ({
+        company_code: s(r.company_code),
+        comp_name: s(r.comp_name),
+      })),
+    enabled: !!userCompany,
   });
 
-  // ── Division Query ─────────────────────────────────────────────────────────
-  const { data: divisionData } = useQuery({
-    queryKey: ['lc_division', company?.company_code],
-    queryFn: async () => ({ tableData: await fetchLookup('Account_division', company?.company_code ?? '', loginid) }),
+  const { data: divisions = [] } = useQuery({
+    queryKey: ["lc_division", company],
+    queryFn: async () =>
+      (await fetchLookup("Account_division", company, loginid)).map((r) => ({
+        div_code: s(r.div_code),
+        div_name: s(r.div_name),
+      })),
     enabled: !!company,
     staleTime: 0,
-    gcTime: 0
+    gcTime: 0,
   });
 
-  // ── Department Query ───────────────────────────────────────────────────────
-  const { data: departmentData } = useQuery({
-    queryKey: ['lc_department', division?.div_code],
-    queryFn: async () => ({
-      tableData: await fetchLookup('EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE', companyCode, division?.div_code ?? '')
-    }),
+  const { data: departments = [] } = useQuery({
+    queryKey: ["lc_department", company, division],
+    queryFn: async () =>
+      (await fetchLookup("EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE", company, division)).map((r) => ({
+        dept_code: s(r.dept_code),
+        dept_name: s(r.dept_name),
+      })),
     enabled: !!division,
     staleTime: 0,
-    gcTime: 0
+    gcTime: 0,
   });
 
-  // ── Section Query ──────────────────────────────────────────────────────────
-  const { data: sectionData } = useQuery({
-    queryKey: ['lc_section', division?.div_code, department?.dept_code],
-    queryFn: async () => ({
-      tableData: await fetchLookup(
-        'EDUCATION_QUALIFICATION_MS_HR_SECTION',
-        companyCode,
-        division?.div_code ?? '',
-        department?.dept_code ?? ''
-      )
-    }),
+  const { data: sections = [] } = useQuery({
+    queryKey: ["lc_section", company, division, department],
+    queryFn: async () =>
+      (await fetchLookup("EDUCATION_QUALIFICATION_MS_HR_SECTION", company, division, department)).map((r) => ({
+        section_code: s(r.section_code),
+        section_name: s(r.section_name),
+      })),
     enabled: !!department,
     staleTime: 0,
-    gcTime: 0
+    gcTime: 0,
   });
 
-  // ── Leave Grid Data Query ──────────────────────────────────────────────────
-  const { data: leaveData } = useQuery({
-    queryKey: ['pa_setup', company?.company_code, division?.div_code, department?.dept_code, section?.section_code],
-    queryFn: async () => ({
-      tableData: await fetchLookup(
-        'PAY_COMPONENT_AccountSetup',
-        company?.company_code ?? '', // P_CODE1 → COMPANY_CODE
-        division?.div_code ?? '', // P_CODE2 → DIV_CODE
-        department?.dept_code ?? '', // P_CODE3 → DEPT_CODE
-        section?.section_code ?? '' // P_CODE4 → SECTION_CODE
-      )
-    }),
-    enabled: !!company && !!division && !!department && !!section,
+  // ── Grid data ──
+  const ready = !!company && !!division && !!department && !!section;
+
+  const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["pa_setup", company, division, department, section],
+    queryFn: async () =>
+      (
+        await fetchLookup(
+          "PAY_COMPONENT_AccountSetup",
+          company, // P_CODE1 → COMPANY_CODE
+          division, // P_CODE2 → DIV_CODE
+          department, // P_CODE3 → DEPT_CODE
+          section, // P_CODE4 → SECTION_CODE
+        )
+      ).map(
+        (r): TLeaveRow => ({
+          ...r,
+          pay_comp_id: s(r.pay_comp_id),
+          ac_code_db: s(r.ac_code_db),
+          ac_code_cr: s(r.ac_code_cr),
+        }),
+      ),
+    enabled: ready,
     staleTime: 0,
-    gcTime: 0
+    gcTime: 0,
   });
 
-  const leaveRows: TLeaveRow[] = (leaveData?.tableData ?? []) as TLeaveRow[];
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => [r.pay_comp_id, r.ac_code_db, r.ac_code_cr].some((v) => s(v).toLowerCase().includes(q)));
+  }, [rows, query]);
 
+  // ── Filter handlers (each level clears everything below it) ──
+  const handleCompany = (code: string) => {
+    setCompany(code);
+    setDivision("");
+    setDepartment("");
+    setSection("");
+  };
+  const handleDivision = (code: string) => {
+    setDivision(code);
+    setDepartment("");
+    setSection("");
+  };
+  const handleDepartment = (code: string) => {
+    setDepartment(code);
+    setSection("");
+  };
 
   const handleReset = () => {
-    setCompany(null);
-    setDivision(null);
-    setDepartment(null);
-    setSection(null);
-    setEmpCode(null);
-    setDocNo(null);
+    setCompany("");
+    setDivision("");
+    setDepartment("");
+    setSection("");
+    setQuery("");
   };
 
-  const handleSave = async () => {
-    if (!empCode || !docNo) {
-      alert('Please select Employee and Doc No!');
-      return;
-    }
+  // ── Navigation handlers ──
+  const openEditor = (mode: EditorMode, row: TLeaveRow | null = null) => {
+    setEditorMode(mode);
+    setActiveRow(row);
+    setView("editor");
+  };
 
+  const handleCloseEditor = () => {
+    setView("list");
+    setEditorMode("add");
+    setActiveRow(null);
+  };
+
+  const handleSaved = () => {
+    handleCloseEditor();
+    void refetch();
+  };
+
+  const handleHeaderSave = async () => {
+    setSaving(true);
     try {
-      const response: any = await postFinance('PROC_CANCEL_LEAVE', {
-        loginid: user?.loginid ?? '',
-        val1s1: docNo?.lve_doc_no ?? '', // LVE_DOC_NO
-        val1s2: empCode?.employee_code ?? '', // employee_code
-        val1s3: user?.company_code ?? '' // company_code
-      });
-
-      console.log('Save response:', response);
-      // TODO: success message
-    } catch (error) {
-      console.error('Save error:', error);
-      // TODO: error message
+      await formRef.current?.save();
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ── Add / Edit Modal Handlers ────────────────────────────────────────────
-  const handleAddClick = () => {
-    setEditingRow(null);
-    setShowForm(true);
-  };
-
-
-
-  const handleFormClose = (refetch?: boolean) => {
-    setShowForm(false);
-    setEditingRow(null);
-    if (refetch) {
-      queryClient.invalidateQueries({
-        queryKey: ['pa_setup', company?.company_code, division?.div_code, department?.dept_code, section?.section_code]
-      });
-    }
-  };
-  const handleRowEdit = (row: TLeaveRow) => {
-    setEditingRow(row);
-    setShowForm(true);
-  };
-
-  const columnsWithActions = useMemo<ColumnDef<TLeaveRow>[]>(
+  // ── Columns ──
+  const columns = useMemo<ColumnDef<TLeaveRow>[]>(
     () => [
-      ...leaveColumns,
+      { id: "srno", header: "#", size: 50, enableSorting: false, cell: ({ row }) => row.index + 1 },
+      { accessorKey: "pay_comp_id", header: "Pay Component ID", size: 200, enableSorting: false },
+      { accessorKey: "ac_code_db", header: "DB Account Code", size: 200, enableSorting: false },
+      { accessorKey: "ac_code_cr", header: "CR Account Code", size: 200, enableSorting: false },
       {
-        id: 'actions',
-        header: '',
-        size: 60,
+        id: "actions",
+        header: "Actions",
+        size: 90,
+        enableColumnFilter: false,
         cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={() => handleRowEdit(row.original)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-            aria-label="Edit"
-          >
-            <Pencil size={14} />
-          </button>
-        )
-      }
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor("edit", row.original)}
+              title="Edit payroll account setup"
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor("view", row.original)}
+              title="View payroll account setup"
+            >
+              <Eye size={13} />
+            </button>
+          </div>
+        ),
+      },
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <div className="flex h-full w-full flex-col gap-4">
-      {/* ══════════════════════════════════════════════════════════════════
-          SECTION 1 — Employee Filters
-      ══════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-md border bg-card p-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Company */}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Company</span>
-            <select
-              value={company?.company_code ?? ''}
-              onChange={(e) => {
-                const val = (companyData?.tableData ?? []).find((opt: any) => opt.company_code === e.target.value) ?? null;
-                setCompany(val);
-                setDivision(null);
-                setDepartment(null);
-                setSection(null);
-                setEmpCode(null);
-                setDocNo(null);
-              }}
-              className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Select</option>
-              {(companyData?.tableData ?? []).map((opt: any) => (
-                <option key={opt.company_code} value={opt.company_code}>
-                  {opt.company_code} - {opt.comp_name}
-                </option>
-              ))}
-            </select>
-          </label>
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header (with Save button)
+     ───────────────────────────────────────────────────────── */
+  if (view === "editor") {
+    const isView = editorMode === "view";
+    const title =
+      editorMode === "add"
+        ? "New Payroll Account Setup"
+        : editorMode === "edit"
+          ? "Edit Payroll Account Setup"
+          : "View Payroll Account Setup";
+    const badge = editorMode === "add" ? "Draft" : editorMode === "edit" ? "Editing" : "View only";
 
-          {/* Division */}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Division</span>
-            <select
-              disabled={!company}
-              value={division?.div_code ?? ''}
-              onChange={(e) => {
-                const val = (divisionData?.tableData ?? []).find((opt: any) => opt.div_code === e.target.value) ?? null;
-                setDivision(val);
-                setDepartment(null);
-                setSection(null);
-                setEmpCode(null);
-              }}
-              className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">Select</option>
-              {(divisionData?.tableData ?? []).map((opt: any) => (
-                <option key={opt.div_code} value={opt.div_code}>
-                  {opt.div_code} - {opt.div_name}
-                </option>
-              ))}
-            </select>
-          </label>
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{title}</h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {badge}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {[division, department, section].filter(Boolean).join(" / ")}
+                  {activeRow?.pay_comp_id ? ` — ${activeRow.pay_comp_id}` : ""}
+                </span>
+              </div>
+            </div>
+          </div>
 
-          {/* Department */}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Department</span>
-            <select
-              disabled={!division}
-              value={department?.dept_code ?? ''}
-              onChange={(e) => {
-                const val = (departmentData?.tableData ?? []).find((opt: any) => opt.dept_code === e.target.value) ?? null;
-                setDepartment(val);
-                setSection(null);
-                setEmpCode(null);
-              }}
-              className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">Select</option>
-              {(departmentData?.tableData ?? []).map((opt: any) => (
-                <option key={opt.dept_code} value={opt.dept_code}>
-                  {opt.dept_code} - {opt.dept_name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* Section */}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Section</span>
-            <select
-              disabled={!department}
-              value={section?.section_code ?? ''}
-              onChange={(e) => {
-                const val = (sectionData?.tableData ?? []).find((opt: any) => opt.section_code === e.target.value) ?? null;
-                setSection(val);
-                setEmpCode(null);
-              }}
-              className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">Select</option>
-              {(sectionData?.tableData ?? []).map((opt: any) => (
-                <option key={opt.section_code} value={opt.section_code}>
-                  {opt.section_code} - {opt.section_name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-
-      <div className="flex flex-1 flex-col rounded-md border bg-card p-3">
-        <div className="mb-3 flex justify-end">
-          <Button
-            type="button"
-            variant="default"
-            onClick={handleAddClick}
-            disabled={!company || !division || !department || !section}
-          >
-            <Plus size={15} /> Add Payroll
-          </Button>
-        </div>
-
-        <DataTable
-          columns={leaveColumns}
-          data={leaveRows}
-          height={350}
-          density="compact"
-          getRowId={(row: TLeaveRow) => String(row.pay_comp_id)}
-
-        />
-
-
-
-
-        <div className="mt-3 border-t pt-3">
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={handleReset}>
-              <RotateCcw size={15} /> Reset
+          {/* Actions: List / Close / Save (Save hidden in view mode) */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <ArrowLeft size={14} /> List
             </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            {!isView && (
+              <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
+                <Save size={14} /> {saving ? "Saving" : "Save"}
+              </Button>
+            )}
           </div>
         </div>
 
+        <AddPayrollAccountSetupForm
+          key={activeRow?.pay_comp_id || "new"}
+          ref={formRef}
+          mode={editorMode}
+          // the form reads UPPERCASE keys; the list rows are lowercased
+          existingData={activeRow ? (uppercaseKeys(activeRow) as Partial<TPayrollAccountForm>) : undefined}
+          company_code={company}
+          div_code={division}
+          dept_code={department}
+          section_code={section}
+          onClose={(shouldRefetch?: boolean) => (shouldRefetch ? handleSaved() : handleCloseEditor())}
+        />
+      </section>
+    );
+  }
 
-
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — filters + DataTable (buttons inside the toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <h2
+          className="text-foreground m-0"
+          style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+        >
+          Payroll Account Setup
+        </h2>
       </div>
 
-      {/*
-          Add / Edit Modal*/}
-      {showForm && (
-        <AddPayrollAccountSetupForm
-          onClose={handleFormClose}
-          isEdit={!!editingRow}
-          company_code={company?.company_code ?? ''}
-          div_code={division?.div_code ?? ''}
-          dept_code={department?.dept_code ?? ''}
-          section_code={section?.section_code ?? ''}
-          pay_comp_id={editingRow?.pay_comp_id}
-        />
-      )}
-    </div>
+      {/* Field / Select / SectionPanel are styled by these Freight classes (the editor forms carry them too) */}
+      <div className="freight-workspace-ui freight-dense-form freight-ui-standard">
+      <SectionPanel title="Filters" icon={Filter}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Company">
+            <Select value={company} onChange={(e) => handleCompany(e.target.value)}>
+              <option value="">-- Select --</option>
+              {companies.map((o) => (
+                <option key={o.company_code} value={o.company_code}>
+                  {o.company_code} - {o.comp_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Division">
+            <Select disabled={!company} value={division} onChange={(e) => handleDivision(e.target.value)}>
+              <option value="">-- Select --</option>
+              {divisions.map((o) => (
+                <option key={o.div_code} value={o.div_code}>
+                  {o.div_code} - {o.div_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Department">
+            <Select disabled={!division} value={department} onChange={(e) => handleDepartment(e.target.value)}>
+              <option value="">-- Select --</option>
+              {departments.map((o) => (
+                <option key={o.dept_code} value={o.dept_code}>
+                  {o.dept_code} - {o.dept_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Section">
+            <Select disabled={!department} value={section} onChange={(e) => setSection(e.target.value)}>
+              <option value="">-- Select --</option>
+              {sections.map((o) => (
+                <option key={o.section_code} value={o.section_code}>
+                  {o.section_code} - {o.section_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </SectionPanel>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
+        subtitle="Payroll Account Setup List"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search pay component, account code..."
+        loading={isLoading}
+        emptyText={ready ? "No payroll account setups found" : "Select company, division, department and section"}
+        height={460}
+        minWidth={800}
+        density="grid"
+        getRowId={(row, index) => row.pay_comp_id || `temp-${index}`}
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <RotateCcw size={14} />
+              Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={!ready || isFetching}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={() => openEditor("add")}
+              disabled={!ready}
+              title={ready ? "Add payroll account setup" : "Select all four filters first"}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus size={14} />
+              Add Payroll
+            </button>
+          </div>
+        }
+      />
+    </section>
   );
 };
 
