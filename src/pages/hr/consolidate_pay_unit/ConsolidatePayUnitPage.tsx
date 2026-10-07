@@ -1,20 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import {
-  Banknote, Edit2, Eye, IdCard, Loader2, Plus, RefreshCw, Save, Trash2, X,
-} from "lucide-react";
+import { ColumnDef } from "@tanstack/react-table";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import { LookupField } from "../../../components/ui/LookupField";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Input } from "../../../components/ui/Input";
-import { Select } from "../../../components/ui/Select";
 import { Button } from "../../../components/ui/Button";
-import { Dialog } from "../../../components/ui/Dialog";
-import { Field, SectionPanel } from "../../../components/ui/Formblocks";
 import { useToast } from "../../../components/ui/AlertToast";
-import {
-  getDynamicLookup, executeDynamicMutation, executeDynamicDelete, type LookupRow,
-} from "../../../api/lookups";
+import { getDynamicLookup, executeDynamicMutation, executeDynamicDelete, LookupRow
+ } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -56,8 +51,6 @@ type FormState = {
   status: string;
   remarks: string;
 };
-
-type FormMode = "add" | "edit" | "view";
 
 const emptyForm = (defaults?: { payUnitStatus?: string; status?: string }): FormState => ({
   employeeId: "",
@@ -149,9 +142,6 @@ function codeLabel(options: CodeOption[], code?: string): string {
   return found?.VALUE_DESC || code;
 }
 
-const fmtAmount = (n: number) =>
-  n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ConsolidatePayUnitPage() {
@@ -164,25 +154,14 @@ export default function ConsolidatePayUnitPage() {
   const [payCompLabel, setPayCompLabel] = useState("");
   const [rows, setRows] = useState<EmpCompRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
 
   const [payUnitStatusOptions, setPayUnitStatusOptions] = useState<CodeOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<CodeOption[]>([]);
 
-  // inline form (shown above the table)
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<FormMode>("add");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
-  const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
-
-  // delete confirm
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<EmpCompRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const readonly = formMode === "view";
-  const editing = formMode === "edit";
 
   // Load status dropdowns from HR_CODE_VALUES
   useEffect(() => {
@@ -234,14 +213,16 @@ export default function ConsolidatePayUnitPage() {
   // ── Lookups ──────────────────────────────────────────────────────────────
 
   const loadPayUnits = useCallback(
-    async (q?: string) => {
+    async (query?: string) => {
       const data = await getDynamicLookup({
         parameter: "MST_HR_CONSOLIDATE_PAY_UNIT",
         code1: companyCode,
       });
-      const list = (data || []).map((row) => normalizePayUnitRow(row as Record<string, unknown>));
-      if (!q?.trim()) return list as unknown as LookupRow[];
-      const term = q.trim().toLowerCase();
+      const list = (data || []).map((row) =>
+        normalizePayUnitRow(row as Record<string, unknown>),
+      );
+      if (!query?.trim()) return list as unknown as LookupRow[];
+      const term = query.trim().toLowerCase();
       return list.filter(
         (r) =>
           String(r.PAY_COMP_ID ?? "").toLowerCase().includes(term) ||
@@ -253,7 +234,7 @@ export default function ConsolidatePayUnitPage() {
   );
 
   const loadEmployees = useCallback(
-    async (q?: string) => {
+    async (query?: string) => {
       const data = await getDynamicLookup({
         parameter: "MST_HR_EMPLOYEE_LOOKUP",
         code1: companyCode,
@@ -268,8 +249,8 @@ export default function ConsolidatePayUnitPage() {
           ...r,
         } as LookupRow;
       });
-      if (!q?.trim()) return list;
-      const term = q.trim().toLowerCase();
+      if (!query?.trim()) return list;
+      const term = query.trim().toLowerCase();
       return list.filter((r) =>
         Object.values(r).some((v) => String(v ?? "").toLowerCase().includes(term)),
       );
@@ -282,27 +263,25 @@ export default function ConsolidatePayUnitPage() {
     [rows],
   );
 
-  // ── Inline form open / close ─────────────────────────────────────────────
+  // ── Dialog ───────────────────────────────────────────────────────────────
 
   const openAdd = () => {
     if (!payCompId) {
       toast.warning("Please select a Pay Unit first");
       return;
     }
-    setFormMode("add");
-    setErrors({});
+    setEditing(false);
     setForm(
       emptyForm({
         payUnitStatus: payUnitStatusOptions[0]?.VALUE_CODE ?? "",
         status: statusOptions[0]?.VALUE_CODE ?? "",
       }),
     );
-    setFormOpen(true);
+    setDialogOpen(true);
   };
 
-  const openRow = (mode: "edit" | "view", row: EmpCompRow) => {
-    setFormMode(mode);
-    setErrors({});
+  const openEdit = (row: EmpCompRow) => {
+    setEditing(true);
     setForm({
       employeeId: String(row.EMPLOYEE_ID ?? ""),
       employeeCode: String(row.EMPLOYEE_CODE ?? ""),
@@ -313,14 +292,12 @@ export default function ConsolidatePayUnitPage() {
       status: String(row.STATUS_FLAG ?? statusOptions[0]?.VALUE_CODE ?? ""),
       remarks: String(row.REMARKS ?? ""),
     });
-    setFormOpen(true);
+    setDialogOpen(true);
   };
 
-  const closeForm = () => {
+  const closeDialog = () => {
     if (saving) return;
-    setFormOpen(false);
-    setFormMode("add");
-    setErrors({});
+    setDialogOpen(false);
     setForm(emptyForm());
   };
 
@@ -329,16 +306,6 @@ export default function ConsolidatePayUnitPage() {
   };
 
   // ── Save ─────────────────────────────────────────────────────────────────
-
-  const validate = (): string | null => {
-    const next: Partial<Record<keyof FormState, string>> = {};
-    if (!form.employeeId.trim()) next.employeeId = "Employee is required";
-    if (form.amount === "" || Number.isNaN(Number(form.amount))) next.amount = "Amount is required";
-    if (!form.payUnitStatus.trim()) next.payUnitStatus = "Pay Unit Status is required";
-    if (!form.status.trim()) next.status = "Status is required";
-    setErrors(next);
-    return Object.values(next)[0] ?? null;
-  };
 
   const handleSave = async () => {
     if (!companyCode) {
@@ -349,13 +316,24 @@ export default function ConsolidatePayUnitPage() {
       toast.warning("Login id not found. Please login again.");
       return;
     }
+    if (!form.employeeId.trim()) {
+      toast.warning("Employee is required");
+      return;
+    }
+    if (form.amount === "" || Number.isNaN(Number(form.amount))) {
+      toast.warning("Amount is required");
+      return;
+    }
     if (!payCompId) {
       toast.warning("Pay Unit is required");
       return;
     }
-    const error = validate();
-    if (error) {
-      toast.warning(error);
+    if (!form.payUnitStatus.trim()) {
+      toast.warning("Pay Unit Status is required");
+      return;
+    }
+    if (!form.status.trim()) {
+      toast.warning("Status is required");
       return;
     }
 
@@ -368,15 +346,16 @@ export default function ConsolidatePayUnitPage() {
         val1s1: companyCode,
         val1s2: form.employeeId.trim(),
         val1s3: payCompId,
+        // optional strings → null so SQL stores NULL not ''
         val1s5: form.remarks.trim(),
         val1s6: form.status.trim(), // STATUS_FLAG (VALUE_CODE from GROUP 6)
         val1s7: form.payUnitStatus.trim(), // COMP_STATUS (VALUE_CODE from GROUP 36)
         // APPROVED_ON as YYYY-MM-DD string — avoids ORA-01861 with DATE bind/NLS
-        val1s9: form.approvedOn,
+        val1s9: form.approvedOn ,
         val1n1: Number(form.amount),
       });
       toast.success(editing ? "Record updated successfully" : "Record saved successfully");
-      setFormOpen(false);
+      setDialogOpen(false);
       setForm(emptyForm());
       await loadMainPage(payCompId);
     } catch (err) {
@@ -388,34 +367,22 @@ export default function ConsolidatePayUnitPage() {
 
   // ── Delete ───────────────────────────────────────────────────────────────
 
-  const requestDelete = (row: EmpCompRow) => {
-    setDeleteTarget(row);
-    setDeleteOpen(true);
-  };
+  const handleDelete = async (row: EmpCompRow) => {
+    const label = row.EMPLOYEE_CODE || row.RPT_NAME || row.EMPLOYEE_ID;
+    if (!window.confirm(`Delete pay unit for employee ${label}?`)) return;
 
-  const deleteLabel = deleteTarget
-    ? deleteTarget.EMPLOYEE_CODE || deleteTarget.RPT_NAME || deleteTarget.EMPLOYEE_ID
-    : "";
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
     try {
       await executeDynamicDelete({
         parameter: "MST_HR_CONSOLIDATE_EMP_COMP_DELETE",
         loginid,
         code1: companyCode,
-        code2: String(deleteTarget.EMPLOYEE_ID),
-        code3: String(deleteTarget.PAY_COMP_ID || payCompId),
+        code2: String(row.EMPLOYEE_ID),
+        code3: String(row.PAY_COMP_ID || payCompId),
       });
       toast.success("Record deleted successfully");
-      setDeleteOpen(false);
-      setDeleteTarget(null);
       await loadMainPage(payCompId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to delete record");
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -424,10 +391,41 @@ export default function ConsolidatePayUnitPage() {
   const columns = useMemo<ColumnDef<EmpCompRow, unknown>[]>(
     () => [
       {
+        id: "actions",
+        header: "Actions",
+        size: 80,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              className="grid h-7 w-7 place-items-center rounded text-slate-600 hover:bg-slate-100 hover:text-primary"
+              title="Edit"
+              onClick={(e) => {
+                e.stopPropagation();
+                openEdit(row.original);
+              }}
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              type="button"
+              className="grid h-7 w-7 place-items-center rounded text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+              title="Delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleDelete(row.original);
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ),
+      },
+      {
         id: "employee",
         header: "Employee",
         size: 280,
-        enableSorting: false,
         accessorFn: (row) =>
           `${row.EMPLOYEE_CODE ?? row.EMPLOYEE_ID ?? ""} ${row.RPT_NAME ?? ""}`.trim(),
         cell: ({ row }) => {
@@ -445,149 +443,59 @@ export default function ConsolidatePayUnitPage() {
         accessorKey: "PAY_COMP_AMT",
         header: "Amount",
         size: 110,
-        enableSorting: false,
         cell: ({ getValue }) => {
           const v = getValue();
           if (v == null || v === "") return "";
-          return fmtAmount(Number(v));
+          return Number(v).toLocaleString(undefined, {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3,
+          });
         },
       },
       {
         accessorKey: "COMP_STATUS",
         header: "Pay Unit Status",
         size: 130,
-        enableSorting: false,
         cell: ({ getValue }) => codeLabel(payUnitStatusOptions, String(getValue() ?? "")),
       },
       {
         accessorKey: "APPROVED_ON",
         header: "Approved On",
         size: 110,
-        enableSorting: false,
         cell: ({ getValue }) => formatDateDisplay(getValue()),
       },
       {
         accessorKey: "STATUS_FLAG",
         header: "Status",
         size: 90,
-        enableSorting: false,
         cell: ({ getValue }) => codeLabel(statusOptions, String(getValue() ?? "")),
       },
       {
         accessorKey: "REMARKS",
         header: "Remarks",
         size: 160,
-        enableSorting: false,
-      },
-      {
-        id: "actions",
-        header: "Actions",
-        size: 110,
-        enableSorting: false,
-        enableColumnFilter: false,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openRow("edit", row.original)}
-              title="Edit"
-            >
-              <Edit2 size={13} />
-            </button>
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openRow("view", row.original)}
-              title="View"
-            >
-              <Eye size={13} />
-            </button>
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => requestDelete(row.original)}
-              title="Delete"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [payCompId, companyCode, payUnitStatusOptions, statusOptions],
   );
 
-  const formTitle =
-    formMode === "add" ? "New Pay Unit Entry" : editing ? "Edit Pay Unit Entry" : "View Pay Unit Entry";
-  const formBadge = formMode === "add" ? "Draft" : editing ? "Editing" : "View only";
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <Banknote size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                HR Payroll - Consolidate Pay Unit
-              </h1>
-              <span className="text-xs text-muted-foreground">
-                {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
-              </span>
-              {formOpen && (
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  {formBadge}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => void loadMainPage(payCompId)}
-            disabled={!payCompId || loading || saving}
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={openAdd} disabled={!payCompId || saving}>
-            <Plus size={14} /> Add
-          </Button>
-          {formOpen && (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
-                <X size={14} /> Close
-              </Button>
-              {!readonly && (
-                <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-                  {saving ? "Saving" : "Save"}
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Pay Unit selection */}
-      <SectionPanel title="Pay Unit Selection" icon={Banknote}>
-        <div className="grid gap-3 md:grid-cols-3">
-          <Field label="Pay Unit" required className="md:col-span-2">
+    <div className="grid w-full min-w-0 gap-3 p-3">
+      {/* Heading + Pay Unit lookup + Add */}
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-[#aebbd0] bg-white px-3 py-3 shadow-sm">
+        <div className="grid gap-2">
+          <div className="grid min-w-[280px] max-w-[420px] gap-1">
+            <span className="text-xs font-medium text-slate-600">
+              Pay Unit <span className="text-rose-600">*</span>
+            </span>
             <LookupField
-              compact
               label="Pay Unit"
               value={payCompId}
               displayValue={payCompLabel}
+              compact
               columns={[
                 { field: "PAY_COMP_ID", header: "Code" },
                 { field: "PAY_COMP_DESC", header: "Description" },
@@ -602,167 +510,198 @@ export default function ConsolidatePayUnitPage() {
                   ? `${row.PAY_COMP_ID ?? value} — ${row.PAY_COMP_DESC ?? ""}`
                   : value;
                 setPayCompLabel(label);
-                // key changed → drop any half-filled form
-                setFormOpen(false);
-                setForm(emptyForm());
                 void loadMainPage(value);
               }}
-              placeholder="Pay unit code or name"
+              placeholder="Select pay unit..."
             />
-          </Field>
-        </div>
-      </SectionPanel>
-
-      {/* Add / Edit / View form — above the table */}
-      {formOpen && (
-        <SectionPanel title={formTitle} icon={IdCard}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Employee" required error={errors.employeeId} className="md:col-span-2">
-              <LookupField
-                compact
-                label="Employee"
-                disabled={readonly}
-                value={form.employeeId}
-                displayValue={
-                  form.employeeId
-                    ? `${form.employeeCode || form.employeeId}${form.employeeName ? `  ${form.employeeName}` : ""}`
-                    : ""
-                }
-                columns={[
-                  { field: "EMPLOYEE_CODE", header: "Code" },
-                  { field: "RPT_NAME", header: "Name" },
-                  { field: "EMPLOYEE_ID", header: "ID" },
-                ]}
-                valueField="EMPLOYEE_ID"
-                displayFields={["EMPLOYEE_CODE", "RPT_NAME"]}
-                loadOptions={loadEmployees}
-                onChange={(value, row) => {
-                  setForm((prev) => ({
-                    ...prev,
-                    employeeId: value,
-                    employeeCode: String(row?.EMPLOYEE_CODE ?? ""),
-                    employeeName: String(row?.RPT_NAME ?? ""),
-                  }));
-                }}
-                placeholder="Employee code or name"
-              />
-            </Field>
-
-            <Field label="Amount" required error={errors.amount}>
-              <Input
-                type="number"
-                step="0.001"
-                disabled={readonly}
-                value={form.amount}
-                onChange={(e) => setField("amount", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Pay Unit Status" required error={errors.payUnitStatus}>
-              <Select
-                disabled={readonly}
-                value={form.payUnitStatus}
-                onChange={(e) => setField("payUnitStatus", e.target.value)}
-              >
-                <option value="">-- Select --</option>
-                {payUnitStatusOptions.map((opt) => (
-                  <option key={opt.VALUE_CODE} value={opt.VALUE_CODE}>
-                    {opt.VALUE_DESC}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
-            <Field label="Approved On">
-              <Input
-                type="date"
-                disabled={readonly}
-                value={form.approvedOn}
-                onChange={(e) => setField("approvedOn", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Status" required error={errors.status}>
-              <Select
-                disabled={readonly}
-                value={form.status}
-                onChange={(e) => setField("status", e.target.value)}
-              >
-                <option value="">-- Select --</option>
-                {statusOptions.map((opt) => (
-                  <option key={opt.VALUE_CODE} value={opt.VALUE_CODE}>
-                    {opt.VALUE_DESC}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
-            <Field label="Remarks" className="md:col-span-2">
-              <Input
-                disabled={readonly}
-                value={form.remarks}
-                onChange={(e) => setField("remarks", e.target.value)}
-              />
-            </Field>
           </div>
-        </SectionPanel>
-      )}
+        </div>
 
-      {/* Pay unit grid */}
+        <Button type="button" size="sm" onClick={openAdd} disabled={!payCompId}>
+          <Plus size={14} />
+          Add
+        </Button>
+      </div>
+
+      {/* Grid */}
       <DataTable
         columns={columns}
         data={rows}
-        title={loading ? "Loading" : `${rows.length.toLocaleString()} Employees`}
-        subtitle="Employee Pay Unit Amounts"
-        searchValue={query}
-        onSearchChange={(value) => setQuery(value)}
-        searchPlaceholder="Search employee..."
         loading={loading}
-        emptyText={payCompId ? "No records found. Click Add to create one." : "Select Pay Unit to begin."}
-        height={420}
-        minWidth={1000}
-        density="grid"
+        loaderType="circle"
+        density="compact"
+        height={520}
         enablePagination
         pageSize={100}
-        getRowId={(row) => `${row.EMPLOYEE_ID}-${row.PAY_COMP_ID}`}
+        searchPlaceholder="Search employee..."
+        onSearchChange={() => {}}
+        emptyText={
+          payCompId
+            ? "No records found. Click Add to create one."
+            : "Select a Pay Unit to load data"
+        }
         enableExport
-        exportFilename={`hr-pay-units-${payCompId || "all"}.csv`}
+        exportFilename={`hr-pay-units-${payCompId || "all"}`}
       />
 
       {/* Total */}
       {payCompId && rows.length > 0 && (
         <div className="flex items-center justify-end gap-2 text-sm">
           <span className="font-semibold text-slate-700">Total:</span>
-          <span className="min-w-[100px] rounded border border-border bg-card px-3 py-1 text-right font-semibold tabular-nums">
-            {fmtAmount(totalAmount)}
+          <span className="min-w-[100px] rounded border border-[#aebbd0] bg-white px-3 py-1 text-right font-semibold tabular-nums">
+            {totalAmount.toLocaleString(undefined, {
+              minimumFractionDigits: 3,
+              maximumFractionDigits: 3,
+            })}
           </span>
         </div>
       )}
 
-      {/* Delete confirmation */}
-      <Dialog
-        open={deleteOpen}
-        title="Delete Pay Unit Record"
-        description={deleteTarget ? `Delete pay unit for employee ${deleteLabel}?` : undefined}
-        compact
-        tone="danger"
-        onClose={() => setDeleteOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
-              {deleting ? "Deleting..." : "Delete"}
-            </Button>
-          </>
-        }
-      >
-        <p className="m-0 text-sm text-muted-foreground">
-          This action cannot be undone. Are you sure you want to delete the record for{" "}
-          <strong>{deleteLabel}</strong>?
-        </p>
-      </Dialog>
-    </section>
+      {/* Add / Edit dialog */}
+      {dialogOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[5000] flex items-center justify-center bg-slate-900/45 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeDialog();
+            }}
+          >
+            <div
+              className="w-full max-w-lg overflow-hidden rounded-lg border border-[#aebbd0] bg-white shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex items-center justify-between border-b border-[#c7d2e3] bg-[#f8fafc] px-4 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">
+                  {editing ? "Edit Pay Unit" : "Add Pay Unit"}
+                </h2>
+                <button
+                  type="button"
+                  className="text-slate-500 hover:text-slate-800"
+                  onClick={closeDialog}
+                  disabled={saving}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid gap-3 px-4 py-4">
+                <div className="grid gap-1">
+                  <span className="text-xs font-medium text-slate-600">Pay Unit</span>
+                  <Input value={payCompLabel || payCompId} disabled className="h-8 text-xs" />
+                </div>
+
+                <div className="grid gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Employee <span className="text-rose-600">*</span>
+                  </span>
+                  <LookupField
+                    label="Employee"
+                    value={form.employeeId}
+                    displayValue={
+                      form.employeeId
+                        ? `${form.employeeCode || form.employeeId}${form.employeeName ? `  ${form.employeeName}` : ""}`
+                        : ""
+                    }
+                    compact
+                    columns={[
+                      { field: "EMPLOYEE_CODE", header: "Code" },
+                      { field: "RPT_NAME", header: "Name" },
+                      { field: "EMPLOYEE_ID", header: "ID" },
+                    ]}
+                    valueField="EMPLOYEE_ID"
+                    displayFields={["EMPLOYEE_CODE", "RPT_NAME"]}
+                    loadOptions={loadEmployees}
+                    onChange={(value, row) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        employeeId: value,
+                        employeeCode: String(row?.EMPLOYEE_CODE ?? ""),
+                        employeeName: String(row?.RPT_NAME ?? ""),
+                      }));
+                    }}
+                    placeholder="Select employee..."
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    Amount <span className="text-rose-600">*</span>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={form.amount}
+                      onChange={(e) => setField("amount", e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    Pay Unit Status <span className="text-rose-600">*</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      value={form.payUnitStatus}
+                      onChange={(e) => setField("payUnitStatus", e.target.value)}
+                    >
+                      <option value="">Select...</option>
+                      {payUnitStatusOptions.map((opt) => (
+                        <option key={opt.VALUE_CODE} value={opt.VALUE_CODE}>
+                          {opt.VALUE_DESC}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    Approved On
+                    <Input
+                      type="date"
+                      value={form.approvedOn}
+                      onChange={(e) => setField("approvedOn", e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    Status <span className="text-rose-600">*</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      value={form.status}
+                      onChange={(e) => setField("status", e.target.value)}
+                    >
+                      <option value="">Select...</option>
+                      {statusOptions.map((opt) => (
+                        <option key={opt.VALUE_CODE} value={opt.VALUE_CODE}>
+                          {opt.VALUE_DESC}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="grid gap-1 text-xs font-medium text-slate-600">
+                  Remarks
+                  <Input
+                    value={form.remarks}
+                    onChange={(e) => setField("remarks", e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-[#c7d2e3] bg-[#f8fafc] px-4 py-3">
+                <Button type="button" variant="outline" size="sm" onClick={closeDialog} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>
+                  {saving ? "Saving..." : editing ? "Update" : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
   );
 }

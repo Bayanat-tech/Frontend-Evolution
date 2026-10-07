@@ -1,98 +1,324 @@
-import { useQuery } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, FileText, Loader2, Plus, RefreshCw, Save, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { getDynamicLookup } from "../../../api/lookups";
-import { Button } from "../../../components/ui/Button";
-import { DataTable } from "../../../components/ui/DataTable";
-import { useAuth } from "../../../state/AuthContext";
-import {
-  AddSalaryAdditionDeductionForm,
-  type FormMode,
-  type SalaryFormHandle,
-} from "./AddUpdate/AddSalaryAdditionDeductionPage";
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useFormik } from 'formik';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Edit2, Plus, Printer, Save } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
+import { DataTable } from '../../../components/ui/DataTable';
+import { useToast } from '../../../components/ui/AlertToast';
+import { DocumentPageShell } from '../../../components/ui/DocumentPageShell';
+import { NewReportDialog } from '../../../components/new_report_format';
+import AddSalaryAdditionDeductionPage from './AddUpdate/AddSalaryAdditionDeductionPage';
+import type { SalaryAdditionDeductionDetailRow } from './AddUpdate/types';
+import hrSalaryAdvDedServiceInstance from '../../../api/hr/upsertHrSalaryAdvDed';
+import { getDynamicLookup } from '../../../api/lookups';
+import { api } from '../../../api/client';
+import { useAuth } from '../../../state/AuthContext';
 
-const gridDataParameter = "HR_ADDITION_DEDUCTION_MAIN_PAGE";
-const title = "Salary Addition/Deduction";
+const gridDataParameter = 'HR_ADDITION_DEDUCTION_MAIN_PAGE';
+
+// print=false stops the backend HTML from auto-opening a print dialog inside the preview.
+const SALARY_ADV_DED_REPORT_URL = '/api/wms/reports/salary-adv-ded/html?print=false';
+
+const PRINT_IFRAME_ID = 'salary-adv-ded-print-iframe';
 
 const columnDef: ColumnDef<any>[] = [
-  { accessorKey: "doc_no", header: "Doc No", enableSorting: false },
-  { accessorKey: "doc_type", header: "Doc Type", enableSorting: false },
-  { accessorKey: "doc_date", header: "Doc Date", enableSorting: false },
-  { accessorKey: "ref_no", header: "Ref No", enableSorting: false },
-  { accessorKey: "name_from", header: "Name From", enableSorting: false },
-  { accessorKey: "addr_from", header: "Addr From", enableSorting: false },
-  { accessorKey: "name_to", header: "Name To", enableSorting: false },
-  { accessorKey: "addr_to", header: "Addr To", enableSorting: false },
-  { accessorKey: "amount", header: "Amount", enableSorting: false },
+  { accessorKey: 'doc_no', header: 'Doc No' },
+  { accessorKey: 'doc_type', header: 'Doc Type' },
+  { accessorKey: 'doc_date', header: 'Doc Date' },
+  { accessorKey: 'ref_no', header: 'Ref No' },
+  { accessorKey: 'name_from', header: 'Name From' },
+  { accessorKey: 'addr_from', header: 'Addr From' },
+  { accessorKey: 'name_to', header: 'Name To' },
+  { accessorKey: 'addr_to', header: 'Addr To' },
+  { accessorKey: 'amount', header: 'Amount' },
 ];
 
+const normalizeValue = (value: any) =>
+  value === null || value === undefined ? '' : String(value);
+
+const normalizeDateValue = (value: any) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+};
+
+const getInitialFormValues = (rowData: any) => ({
+  docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
+  docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? 'ADV'),
+  docDate:
+    normalizeDateValue(rowData?.doc_date),
+  refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
+  nameFrom: normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
+  nameTo: normalizeValue(rowData?.nameTo ?? rowData?.name_to),
+  addrFrom: normalizeValue(rowData?.addrFrom ?? rowData?.addr_from),
+  addrTo: normalizeValue(rowData?.addrTo ?? rowData?.addr_to),
+  lettrSubject: normalizeValue(rowData?.lettrSubject ?? rowData?.lettr_subject),
+  remarks1: normalizeValue(rowData?.remarks1 ?? rowData?.remarks_1),
+  remarks2: normalizeValue(rowData?.remarks2 ?? rowData?.remarks_2),
+  signatoryName: normalizeValue(rowData?.signatoryName ?? rowData?.signatory_name),
+  signatoryPosition: normalizeValue(
+    rowData?.signatoryPosition ?? rowData?.signatory_position,
+  ),
+});
+
+const mapDetailApiRow = (
+  row: any,
+  index: number,
+): SalaryAdditionDeductionDetailRow => {
+  const deductFromLeave = String(
+    row?.DEDUCT_FROM_LEAVE ?? row?.deduct_from_leave ?? 'N',
+  ).toUpperCase();
+  return {
+    srNo: row?.SERIAL_NO ?? row?.serial_no ?? row?.SR_NO ?? row?.sr_no ?? index + 1,
+    employeeId: normalizeValue(row?.EMPLOYEE_ID ?? row?.employee_id),
+    employee: normalizeValue(row?.EMP_NAME ?? row?.emp_name),
+    payUnit: normalizeValue(row?.PAY_COMP_ID ?? row?.pay_comp_id),
+    description: normalizeValue(row?.DESCRIPTION ?? row?.description),
+    amount: normalizeValue(row?.AMOUNT ?? row?.amount),
+    effectiveFrom: normalizeDateValue(row?.RECOVER_FROM_DT ?? row?.recover_from_dt),
+    cancel: deductFromLeave === 'Y' || deductFromLeave === 'YES' ? 'Yes' : 'No',
+  };
+};
+
+// ── Backend report fetch (full HTML with company header/footer) ──────────────
+const fetchSalaryAdvDedReportHtml = async (docNo: number): Promise<string> => {
+  try {
+    const res = await api.post(
+      SALARY_ADV_DED_REPORT_URL,
+      { doc_no: docNo },
+      { responseType: 'text' },
+    );
+    return res.data;
+  } catch (e: any) {
+    let message = 'Failed to load report. Please try again.';
+    const data = e?.response?.data;
+    try {
+      // responseType 'text' leaves the JSON error body as a string
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      if (parsed?.message) {
+        message = parsed.code ? `${parsed.code}: ${parsed.message}` : parsed.message;
+      }
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
+  }
+};
+
 const SalaryAdditionDeductionMainPage = () => {
+  const title = 'Salary Addition/Deduction';
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [selectedRowData, setSelectedRowData] = useState<any>(null);
+  const [detailRows, setDetailRows] = useState<SalaryAdditionDeductionDetailRow[]>(
+    [],
+  );
+  const [dialogStatus, setDialogStatus] = useState<{
+    open: boolean;
+    type: '' | 'add' | 'edit';
+  }>({ open: false, type: '' });
+  const [isSaving, setIsSaving] = useState(false);
 
-  // inline form (shown above the table)
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<FormMode>("add");
-  const [activeRow, setActiveRow] = useState<any>(null);
-  const [formKey, setFormKey] = useState(0); // remount form when switching rows
-  const [saving, setSaving] = useState(false);
-  const [query, setQuery] = useState("");
+  // ── Report preview dialog state (NewReportDialog: raw HTML) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportTitle, setReportTitle] = useState(title);
 
-  // Ref to the form so the header Save button can trigger it
-  const formRef = useRef<SalaryFormHandle>(null);
+  const fetchDetailRowsByDocNo = async (docNo: number | string | undefined) => {
+    const parsedDocNo = Number(docNo);
+    if (!parsedDocNo || Number.isNaN(parsedDocNo)) return [];
+    const response = await getDynamicLookup({
+      parameter: 'HR_ADDITION_DEDUCTION_DETAIL',
+      loginid: user?.loginid ?? '',
+      code1: user?.company_code ?? '',
+      number1: parsedDocNo,
+    });
+    const rows = Array.isArray(response) ? response : [];
+    return rows.map(mapDetailApiRow);
+  };
 
-  const {
-    data: gridData,
-    isLoading,
-    isFetching,
-    refetch: refetchGridData,
-  } = useQuery({
-    queryKey: ["data", gridDataParameter, user?.company_code],
-    queryFn: async () => {
-      const response = await getDynamicLookup({
-        parameter: gridDataParameter,
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code ?? "",
-      });
-      return Array.isArray(response) ? response : [];
+  const formik = useFormik({
+    enableReinitialize: true,
+    initialValues: getInitialFormValues(selectedRowData),
+    onSubmit: async (values) => {
+      if (detailRows.length === 0) {
+        toast.error('Please add at least one detail line');
+        return;
+      }
+      setIsSaving(true);
+      try {
+        const totalAmount = detailRows.reduce(
+          (sum, row) => sum + Number(row.amount || 0),
+          0,
+        );
+
+        const header = {
+          company_code: user?.company_code ?? '',
+          doc_type: values.docType || 'ADV',
+          doc_no: values.docNo ? Number(values.docNo) : 0,
+          doc_date: values.docDate
+            ? new Date(values.docDate).toISOString()
+            : new Date().toISOString(),
+          ref_no: values.refNo || '',
+          name_from: values.nameFrom || '',
+          addr_from: values.addrFrom || '',
+          name_to: values.nameTo || '',
+          addr_to: values.addrTo || '',
+          lettr_subject: values.lettrSubject || '',
+          remarks_1: values.remarks1 || '',
+          remarks_2: values.remarks2 || '',
+          signatory_name: values.signatoryName || '',
+          signatory_position: values.signatoryPosition || '',
+          amount: totalAmount,
+          user_id: user?.loginid || '',
+        };
+
+        const details = detailRows.map((row, index) => ({
+          company_code: user?.company_code ?? '',
+          doc_type: values.docType || 'ADV',
+          doc_no: values.docNo ? Number(values.docNo) : 0,
+          sr_no: Number(row.srNo) || index + 1,
+          employee_id: row.employeeId || '',
+          emplyee_code: row.employeeId || '',
+          pay_comp_id: row.payUnit || '',
+          amount: Number(row.amount || 0),
+          recover_mth_amt: Number(row.amount || 0),
+          recover_from_dt: row.effectiveFrom
+            ? new Date(row.effectiveFrom).toISOString()
+            : undefined,
+          deduct_from_leave: row.cancel === 'Yes' ? 'Y' : 'N',
+        }));
+
+        const success = await hrSalaryAdvDedServiceInstance.upsertHrSalaryAdvDed({
+          header,
+          details,
+          loginid: user?.loginid || '',
+        });
+
+        if (success) {
+          toast.success(
+            dialogStatus.type === 'edit' ? 'Updated Successfully' : 'Saved Successfully',
+          );
+          closeDialog();
+          refetchGridData();
+          return;
+        }
+        toast.error(dialogStatus.type === 'edit' ? 'Update Failed' : 'Save Failed');
+      } catch (error) {
+        console.error('Salary Addition/Deduction save error:', error);
+        toast.error('Error while saving data');
+      } finally {
+        setIsSaving(false);
+      }
     },
-    enabled: !!user?.company_code,
   });
 
-  const rows = gridData ?? [];
-  const loading = isLoading || isFetching;
-  const readonly = formMode === "view";
-  const editing = formMode === "edit";
-
-  /* ── Inline form open / close ── */
-  const openForm = (mode: FormMode, row: any = null) => {
-    setFormMode(mode);
-    setActiveRow(row);
-    setFormKey((k) => k + 1);
-    setFormOpen(true);
+  const closeDialog = () => {
+    setDialogStatus({ open: false, type: '' });
+    setSelectedRowData(null);
+    setDetailRows([]);
+    formik.resetForm();
   };
 
-  const closeForm = () => {
-    if (saving) return;
-    setFormOpen(false);
-    setFormMode("add");
-    setActiveRow(null);
+  const openAdd = () => {
+    setSelectedRowData(null);
+    setDetailRows([]);
+    setDialogStatus({ open: true, type: 'add' });
   };
 
-  const handleFormClosed = (shouldRefetch?: boolean) => {
-    setFormOpen(false);
-    setFormMode("add");
-    setActiveRow(null);
-    if (shouldRefetch) void refetchGridData();
-  };
-
-  /* ── Header Save button handler ── */
-  const handleHeaderSave = async () => {
-    setSaving(true);
+  const openEdit = async (row: any) => {
+    setSelectedRowData(row);
+    setDetailRows([]);
+    setDialogStatus({ open: true, type: 'edit' });
     try {
-      await formRef.current?.save();
+      const apiDetails = await fetchDetailRowsByDocNo(row?.doc_no ?? row?.docNo);
+      setDetailRows(apiDetails);
+    } catch (error) {
+      console.error('Failed to fetch detail rows for edit mode:', error);
+      setDetailRows([]);
+    }
+  };
+
+  // ── Row-level print: fetch full report HTML from backend, open dialog ──
+  const handlePrintSalaryAdditionDeduction = async (row: any) => {
+    const docNo = Number(row?.doc_no ?? row?.docNo);
+    if (!docNo || Number.isNaN(docNo)) return;
+
+    setReportTitle(`${title} ${docNo}`.trim());
+    setReportHtml(null);
+    setReportPreviewError('');
+    setReportPreviewOpen(true);
+    setReportLoading(true);
+
+    try {
+      setReportHtml(await fetchSalaryAdvDedReportHtml(docNo));
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : 'Failed to load report. Please try again.',
+      );
     } finally {
-      setSaving(false);
+      setReportLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError('');
+  };
+
+  // Open report HTML in a new tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Print dialog (Save as PDF)
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-modals');
+      iframe.style.cssText =
+        'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === 'complete') {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
     }
   };
 
@@ -100,133 +326,142 @@ const SalaryAdditionDeductionMainPage = () => {
     () => [
       ...columnDef,
       {
-        id: "actions",
-        header: "Actions",
-        size: 90,
-        enableSorting: false,
-        enableColumnFilter: false,
+        id: 'actions',
+        header: 'Actions',
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openForm("edit", row.original)}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => openEdit(row.original)}
               title="Edit"
             >
-              <Edit2 size={13} />
-            </button>
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openForm("view", row.original)}
-              title="View"
+              <Edit2 size={14} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => void handlePrintSalaryAdditionDeduction(row.original)}
+              title="Print / PDF"
             >
-              <Eye size={13} />
-            </button>
+              <Printer size={14} />
+            </Button>
           </div>
         ),
+        size: 110,
       },
     ],
-    [],
+    [user?.company_code, user?.loginid],
   );
 
-  const formBadge = formMode === "add" ? "Draft" : editing ? "Editing" : "View only";
+  const {
+    data: gridData,
+    isLoading,
+    refetch: refetchGridData,
+  } = useQuery({
+    queryKey: ['data', gridDataParameter, user?.company_code],
+    queryFn: async () => {
+      const response = await getDynamicLookup({
+        parameter: gridDataParameter,
+        loginid: user?.loginid ?? '',
+        code1: user?.company_code ?? '',
+      });
+      return Array.isArray(response) ? response : [];
+    },
+    enabled: !!user?.company_code,
+  });
+
+  const totalAmount = detailRows.reduce(
+    (sum, row) => sum + Number(row.amount || 0),
+    0,
+  );
 
   return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <FileText size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                HR Transactions - {title}
-              </h1>
-              <span className="text-xs text-muted-foreground">
-                {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
-              </span>
-              {formOpen && (
-                <>
-                  <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                    {formBadge}
-                  </span>
-                  {activeRow?.doc_no && (
-                    <span className="text-xs text-muted-foreground">
-                      Doc No: {activeRow.doc_no}
-                      {activeRow.ref_no ? ` - Ref: ${activeRow.ref_no}` : ""}
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => void refetchGridData()}
-            disabled={loading || saving}
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => openForm("add")} disabled={saving}>
-            <Plus size={14} /> Add
-          </Button>
-          {formOpen && (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
-                <X size={14} /> Close
-              </Button>
-              {!readonly && (
-                <Button type="button" size="sm" onClick={() => void handleHeaderSave()} disabled={saving}>
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-                  {saving ? "Saving" : editing ? "Update" : "Save"}
-                </Button>
-              )}
-            </>
-          )}
-        </div>
+    <section className="relative flex h-full min-h-0 flex-col gap-2 overflow-hidden p-0">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1">
+        <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">
+          {title}
+        </h1>
+        <Button title={`Add ${title}`} onClick={openAdd} size="sm">
+          <Plus size={14} /> Add
+        </Button>
       </div>
 
-      {/* Add / Edit / View form — above the table */}
-      {formOpen && (
-        <AddSalaryAdditionDeductionForm
-          key={formKey}
-          ref={formRef}
-          mode={formMode}
-          existingData={activeRow}
-          onClose={handleFormClosed}
-        />
-      )}
-
-      {/* Document grid — hidden while the form is open */}
-      {!formOpen && (
+      <div className="min-h-0 flex-1">
         <DataTable
           columns={columns}
-          data={rows}
-          title={isLoading ? "Loading" : `${rows.length.toLocaleString()} Documents`}
-          subtitle={`${title} List`}
-          searchValue={query}
-          onSearchChange={(value) => setQuery(value)}
-          searchPlaceholder="Search doc no, ref no, name..."
-          loading={loading}
-          emptyText={`No ${title.toLowerCase()} records found. Click Add to create one.`}
-          height={420}
-          minWidth={1000}
+          data={gridData || []}
+          loading={isLoading}
+          emptyText={`No ${title.toLowerCase()} records found`}
+          height={590}
           density="grid"
-          enablePagination
-          pageSize={100}
           getRowId={(row: any) => String(row.doc_no)}
-          enableExport
-          exportFilename="salary-addition-deduction-list.csv"
         />
+      </div>
+
+      {dialogStatus.open && (
+        <DocumentPageShell
+          eyebrow={dialogStatus.type === 'edit' ? 'Edit Document' : 'Add Document'}
+          title={title}
+          badges={[
+            { label: 'Doc No', value: formik.values.docNo || 'New' },
+            { label: 'Doc Date', value: formik.values.docDate || '—' },
+            { label: 'Ref No', value: formik.values.refNo || '—' },
+          ]}
+          onClose={closeDialog}
+          onCancel={closeDialog}
+          footer={
+            <>
+              <div className="text-sm text-slate-600">
+                Total Amount{' '}
+                <span className="text-base font-semibold text-[#0e4f8f]">
+                  {totalAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 3,
+                    maximumFractionDigits: 3,
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={closeDialog} disabled={isSaving}>
+                  Close
+                </Button>
+                <Button
+                  onClick={() => formik.submitForm()}
+                  className="bg-[#0e4f8f] hover:bg-[#0c4278]"
+                  disabled={isSaving}
+                >
+                  <Save size={14} />{' '}
+                  {isSaving
+                    ? 'Saving…'
+                    : dialogStatus.type === 'edit'
+                      ? 'Update'
+                      : 'Save'}
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <AddSalaryAdditionDeductionPage
+            mode={dialogStatus.type}
+            formik={formik}
+            detailRows={detailRows}
+            setDetailRows={setDetailRows}
+          />
+        </DocumentPageShell>
+        
       )}
+
+      {/* ── Report preview dialog ── */}
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportPreviewError || null}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
     </section>
   );
 };

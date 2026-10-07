@@ -85,35 +85,35 @@ export function SmartInlineAllocationTable({
     }
   };
 
-  // Define compact column configs with comfortable widths for readability
+  // Define compact column configs with fixed widths
   const colConfigs =
     childTable === "invoice"
       ? [
-          { key: "sr", header: "#", width: 28, align: "center" },
-          { key: "inv_no", header: "Invoice No", width: 120, align: "left" },
-          { key: "inv_date", header: "Invoice Date", width: 118, align: "left" },
-          { key: "inv_amt", header: "Invoice Amount", width: 110, align: "right" },
-          { key: "outstanding", header: "Outstanding", width: 110, align: "right" },
-          { key: "allocated", header: "Allocated", width: 135, align: "right" },
-          { key: "action", header: "", width: 28, align: "center" },
+          { key: "sr", header: "#", width: 24, align: "center" },
+          { key: "inv_no", header: "Invoice No", width: 105, align: "left" },
+          { key: "inv_date", header: "Invoice Date", width: 96, align: "left" },
+          { key: "inv_amt", header: "Invoice Amount", width: 92, align: "right" },
+          { key: "outstanding", header: "Outstanding", width: 92, align: "right" },
+          { key: "allocated", header: "Allocated", width: 110, align: "right" },
+          { key: "action", header: "", width: 24, align: "center" },
         ]
       : childTable === "job"
         ? [
-            { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "job_no", header: "Job No", width: 135, align: "left" },
-            { key: "doc_refno", header: "Doc Ref", width: 115, align: "left" },
-            { key: "doc_refno_2", header: "Doc Ref 2", width: 115, align: "left" },
-            { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "", width: 28, align: "center" },
+            { key: "sr", header: "#", width: 24, align: "center" },
+            { key: "job_no", header: "Job No", width: 125, align: "left" },
+            { key: "doc_refno", header: "Doc Ref", width: 100, align: "left" },
+            { key: "doc_refno_2", header: "Doc Ref 2", width: 100, align: "left" },
+            { key: "amount", header: "Amount", width: 92, align: "right" },
+            { key: "action", header: "", width: 24, align: "center" },
           ]
         : [
-            { key: "sr", header: "#", width: 28, align: "center" },
-            { key: "exp_type", header: "Expense Type", width: 125, align: "left" },
-            { key: "exp_subtype", header: "Subtype", width: 125, align: "left" },
-            { key: "description", header: "Description", width: 135, align: "left" },
-            { key: "job_no", header: "Job No", width: 95, align: "left" },
-            { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "", width: 28, align: "center" },
+            { key: "sr", header: "#", width: 24, align: "center" },
+            { key: "exp_type", header: "Expense Type", width: 110, align: "left" },
+            { key: "exp_subtype", header: "Subtype", width: 110, align: "left" },
+            { key: "description", header: "Description", width: 115, align: "left" },
+            { key: "job_no", header: "Job No", width: 85, align: "left" },
+            { key: "amount", header: "Amount", width: 92, align: "right" },
+            { key: "action", header: "", width: 24, align: "center" },
           ];
 
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
@@ -146,11 +146,11 @@ export function SmartInlineAllocationTable({
           {childTable && (
             <div className="flex items-center gap-1 flex-wrap">
               <span
-                className="inline-flex items-center rounded border border-[#bfd1e8] bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#00378C] shadow-2xs"
+                className="inline-flex items-center rounded border border-[#bfd1e8] bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#244467] shadow-2xs"
                 title={`Allocated ${formatAmount(totalAllocated)} of ${formatAmount(parentAmount)}`}
               >
                 {formatAmount(totalAllocated)}
-                <span className="mx-1 text-slate-400">/</span>
+                <span className="mx-1 text-slate-300">/</span>
                 {formatAmount(parentAmount)}
               </span>
 
@@ -273,7 +273,7 @@ export function SmartInlineAllocationTable({
               {colConfigs.map((col, i) => (
                 <th
                   key={i}
-                  className={`h-[18px] border-r border-[#b7d9d1] bg-[#dff2ed] px-1.5 py-0 text-[9px] font-bold uppercase leading-[18px] tracking-wide text-[#14554e] last:border-r-0 ${
+                  className={`border-r border-[#b9cee4] px-1.5 py-0.5 text-[10px] font-bold text-[#163a63] last:border-r-0 ${
                     col.align === "right"
                       ? "text-right"
                       : col.align === "center"
@@ -309,7 +309,7 @@ export function SmartInlineAllocationTable({
                   className="border-b border-[#dce7f2] bg-white hover:bg-[#f1f7fd] transition-colors"
                 >
                   {/* # Column */}
-                  <td className="px-1 py-1 text-center font-mono text-xs text-slate-500">
+                  <td className="px-1 py-0.5 text-center font-mono text-[10.5px] text-slate-500">
                     {row.dtl_sr_no}
                   </td>
 
@@ -318,7 +318,7 @@ export function SmartInlineAllocationTable({
                       {/* Invoice No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 font-mono text-xs font-semibold text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-medium text-slate-900 focus:border-[#00378C] focus:outline-none"
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
@@ -345,7 +345,7 @@ export function SmartInlineAllocationTable({
                       </td>
 
                       {/* Invoice Amount */}
-                      <td className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate">
+                      <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] text-slate-600 truncate">
                         {row.inv_amt != null && Number(row.inv_amt) > 0
                           ? formatAmount(Number(row.inv_amt))
                           : Number(row.amount || 0) > 0
@@ -354,7 +354,7 @@ export function SmartInlineAllocationTable({
                       </td>
 
                       {/* Outstanding */}
-                      <td className="px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 truncate">
+                      <td className="px-1.5 py-0.5 text-right font-mono text-[10.5px] font-semibold text-slate-800 truncate">
                         {row.c_bal_amt_org != null && Number(row.c_bal_amt_org) > 0
                           ? formatAmount(Number(row.c_bal_amt_org))
                           : Number(row.amount || 0) > 0
@@ -366,7 +366,7 @@ export function SmartInlineAllocationTable({
                       <td className="px-1 py-0.5">
                         <div className="flex items-center gap-1">
                           <input
-                            className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none"
+                            className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
                             disabled={disabled}
                             type="number"
                             step="0.001"
@@ -388,7 +388,7 @@ export function SmartInlineAllocationTable({
                                 e.stopPropagation();
                                 onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) });
                               }}
-                              className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
+                              className="h-[20px] px-1 text-[9px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
                               title="Allocate full outstanding amount"
                             >
                               Full
@@ -430,7 +430,7 @@ export function SmartInlineAllocationTable({
                       {/* Doc Ref */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.doc_refno)}
                           onChange={(e) => onChange(row.id, { doc_refno: e.target.value })}
@@ -446,7 +446,7 @@ export function SmartInlineAllocationTable({
                       {/* Doc Ref 2 */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.doc_refno_2)}
                           onChange={(e) => onChange(row.id, { doc_refno_2: e.target.value })}
@@ -462,7 +462,7 @@ export function SmartInlineAllocationTable({
                       {/* Amount */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           type="number"
                           step="0.001"
@@ -562,7 +562,7 @@ export function SmartInlineAllocationTable({
                       {/* Description */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.exp_description)}
                           onChange={(e) => onChange(row.id, { exp_description: e.target.value })}
@@ -578,7 +578,7 @@ export function SmartInlineAllocationTable({
                       {/* Job No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           value={text(row.job_no)}
                           onChange={(e) => onChange(row.id, { job_no: e.target.value })}
@@ -594,7 +594,7 @@ export function SmartInlineAllocationTable({
                       {/* Amount */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className="h-[22px] w-full rounded border border-slate-300 bg-white px-1.5 py-0 text-[11px] font-mono text-right text-slate-900 focus:border-[#1e293b] focus:outline-none"
                           disabled={disabled}
                           type="number"
                           step="0.001"

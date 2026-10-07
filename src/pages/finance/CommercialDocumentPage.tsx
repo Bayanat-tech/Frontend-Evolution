@@ -39,7 +39,6 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
-import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { formatDate } from "../../utils/date";
@@ -257,7 +256,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
       accessorKey: "doc_no",
-      header: () => <div className="font-bold">Doc No</div>,
+      header: "Doc No",
       cell: ({ row, getValue }) => (
         <button
           type="button"
@@ -265,7 +264,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${String(getValue() || "")}`}
         >
           {String(getValue() || '')}
@@ -274,62 +273,72 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center w-full font-bold">Date</div>,
+      header: () => <div className="text-center w-full">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Party" },
     { accessorKey: "remarks", header: "Description" },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center w-full font-bold">Div</div>,
+      header: () => <div className="text-center w-full">Div</div>,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
-      size: 40,
     },
     {
       id: "amount",
-      header: () => <div className="text-right w-full font-bold">Amount</div>,
+      header: () => <div className="text-right w-full">Amount</div>,
       accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
       cell: ({ row }) => (
-        <div className="text-right font-mono tabular-nums font-semibold text-slate-800">
+        <div className="text-right font-mono font-medium">
           {formatAmount(Number(row.original.net_amount ?? row.original.amount ?? 0))}
         </div>
       ),
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center w-full font-bold">Status</div>,
+      header: () => <div className="text-center w-full">Status</div>,
       cell: ({ getValue }) => {
         const isCanceled = String(getValue() || "N") === "Y";
         return (
           <div className="flex justify-center">
-            <FinanceStatusBadge isCancelled={isCanceled} />
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                isCanceled
+                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              }`}
+            >
+              {isCanceled ? "Cancelled" : "Active"}
+            </span>
           </div>
         );
       },
     },
     {
       id: "actions",
-      header: () => <div className="text-center w-full font-bold">Actions</div>,
-      enableSorting: false,
-      size: 130,
-      minSize: 130,
+      header: () => <div className="text-center w-full">Actions</div>,
       cell: ({ row }) => (
-        <FinanceDocumentActionButtons
-          onEdit={() => {
-            setNotice(null);
-            setEditor({ mode: "edit", row: row.original });
-          }}
-          onPrint={() =>
+        <div className="flex items-center justify-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }}><Edit2 size={15} /></Button>
+          <Button size="icon" variant="ghost" 
+          onClick={() =>
             void handleOpenReport(
               row.original.doc_type || docType,
               row.original.doc_no,
               `${meta.title} ${row.original.doc_no}`
             )
           }
-          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
-          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
-          isCancelled={row.original.canceled === "Y"}
-        />
+          title="Print / PDF">
+            <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
+            <Download size={15} />
+          </Button>
+          {row.original.canceled !== "Y" && (
+            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
+              <Ban size={15} />
+            </Button>
+          )}
+        </div>
       ),
     },
   ], []);
@@ -398,7 +407,6 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           setPageSize(nextPageSize);
           setPageIndex(0);
         }}
-        rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
       />
 
       </>}
@@ -766,7 +774,7 @@ function CommercialEditor({
 
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
+      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={docType === "PI" ? "Purchase Invoice" : META[docType]?.title || "Commercial"}

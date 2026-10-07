@@ -4,6 +4,7 @@ import { useAuth } from "../../state/AuthContext";
 import { Plus, Eye, Edit2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { Dialog } from "../../components/ui/Dialog";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
@@ -11,6 +12,9 @@ import AddCRRequestPage from "./AddCRRequestPage";
 import { getDynamicLookup } from "../../api/lookups";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// NOTE: these must exactly match PROC_BUILD_DYNAMIC_CREDITREQUEST_ENTRY's P_CODE3
+// CASE values (PS_CREDITREQUEST_ENTRY_TAB_LIST). No spaces — "INPROGRESS" and
+// "SENDBACK" are single words on the backend, unlike the generic PR/PO tab set.
 const TAB_STATUS = ["PENDING", "INPROGRESS", "CLOSED", "CANCELED", "REJECTED", "SENDBACK"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Closed", "Canceled", "Rejected", "Send Back"] as const;
 
@@ -26,9 +30,12 @@ function fmtDate(val: unknown): string {
 }
 
 function statusOf(row: TPurchaseSummaryTxn): string {
-  return String((row as any).LAST_ACTION ?? (row as any).last_action ?? "").toUpperCase();
+  return String((row as any).LAST_ACTION ?? (row as any).LAST_ACTION ?? "").toUpperCase();
 }
 
+// getDynamicLookup returns raw lowercase keys from Oracle (unlike almsCommonSelect,
+// which auto-uppercases). Normalize here so columns/cells (which read UPPERCASE keys
+// like REQUEST_NUMBER, DESCRIPTION, AMOUNT) resolve correctly instead of showing NA/blank.
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -39,11 +46,11 @@ function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface CreditRequestPageProps {
-  initialTab?: number;
+  initialTab?: number; // index into TAB_STATUS, kept for backward-compat with existing routing
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
+const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const { user } = useAuth();
 
   const [rows, setRows] = useState<TPurchaseSummaryTxn[]>([]);
@@ -64,7 +71,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
     },
   });
 
-  // ── Fetch (server-side, tab-driven) ─────────────────────────────────────────
+  // ── Fetch (server-side, tab-driven — mirrors PS_POORDER_ENTRY_TAB_List pattern) ──
   const fetchCreditRequest = async () => {
     const response = await getDynamicLookup({
       parameter: "PS_CREDITREQUEST_ENTRY_TAB_LIST",
@@ -96,7 +103,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, user?.company_code, user?.loginid, user?.username]);
 
-  // ── Client-side search filter ───────────────────────────────────────────────
+  // ── Client-side search filter (tab filtering is already done server-side) ───
   const filteredRows = useMemo(() => {
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
@@ -247,25 +254,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
     [tab]
   );
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ FULL-PAGE CR EDITOR — sidebar visible rahega (Dialog wrapper hata diya)
-  // ═══════════════════════════════════════════════════════════════════════
-  if (taskPopup.open) {
-    return (
-      <AddCRRequestPage
-        isEditMode={taskPopup.data.isEditMode}
-        isViewMode={taskPopup.data.isViewMode}
-        existingData={
-          taskPopup.data.existingData
-            ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-            : undefined
-        }
-        onClose={closePopup}
-      />
-    );
-  }
-
-  // ── Render (List page) ─────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
       {/* Breadcrumb */}
@@ -327,8 +316,29 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
         enableColumnFilters
         getRowId={(row, index) => row.REQUEST_NUMBER || `temp-${index}`}
       />
+
+      {/* Add / Edit / View Dialog */}
+      <Dialog
+        open={taskPopup.open}
+        wide
+        title={taskPopup.title}
+        onClose={() => closePopup()}
+      >
+        {taskPopup.open && (
+          <AddCRRequestPage
+            isEditMode={taskPopup.data.isEditMode}
+            isViewMode={taskPopup.data.isViewMode}
+            existingData={
+              taskPopup.data.existingData
+                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+                : undefined
+            }
+            onClose={closePopup}
+          />
+        )}
+      </Dialog>
     </div>
   );
 };
 
-export default CreditRequestPage;
+export default Credit_Request_page;

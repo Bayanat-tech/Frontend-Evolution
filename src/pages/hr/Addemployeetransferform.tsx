@@ -1,192 +1,19 @@
-// src/pages/hr/Addemployeetransferform.tsx
-//
-// Employee Transfer form — same pattern as the Grade Master form:
-//  • forwardRef + useImperativeHandle → the page header calls save() / submit()
-//  • SectionPanel / Field / CodeNameLookup building blocks (defined below)
-//  • toast for validation / API feedback (no inline alert banner)
-//  • No bottom button row — List / Close / Save / Submit live in the page header
-
-import { ArrowRightLeft, StickyNote, UserCog } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
-import { executeDynamicMutation, getDynamicLookup, type LookupRow } from "../../api/lookups";
-import { useToast } from "../../components/ui/AlertToast";
+import { Save, Send, X } from "lucide-react";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { executeDynamicMutation, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
-/* ─────────────────────────────────────────────────────────────
-   Option helpers
-   Every org dropdown (division / department / section / designation /
-   employee) is just { code, name } — one shape, one lookup component.
-   ───────────────────────────────────────────────────────────── */
-
-export type Option = { code: string; name: string };
-
-export function toOption(
-  row: Record<string, unknown> | null | undefined,
-  codeKey: string,
-  nameKey: string,
-): Option | null {
-  const code = String(row?.[codeKey] ?? "");
-  if (!code) return null;
-  return { code, name: String(row?.[nameKey] ?? "") };
-}
-
-/** "CODE - Name" when a name is known, otherwise the bare code. */
-export function optionLabel(o?: Option | null): string {
-  if (!o?.code) return "";
-  return o.name && o.name !== o.code ? `${o.code} - ${o.name}` : o.code;
-}
-
-/** Same idea for flat row fields (used by the list page). */
-export function codeName(code?: unknown, name?: unknown): string {
-  const c = String(code ?? "");
-  const n = String(name ?? "");
-  if (!c) return "";
-  return n && n !== c ? `${c} - ${n}` : c;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   SectionPanel — Freight structure (same as Grade Master form)
-   ───────────────────────────────────────────────────────────── */
-export function SectionPanel({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: ReactNode;
-}) {
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <div className="freight-panel-title flex items-center gap-2 border-b bg-muted/35 px-3 py-2">
-        <span className="freight-section-icon">
-          <Icon size={16} />
-        </span>
-        <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-      </div>
-      <div className="freight-panel-body p-3">{children}</div>
-    </section>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────
-   Field — Freight label styling, with inline error
-   ───────────────────────────────────────────────────────────── */
-export function Field({
-  label,
-  required,
-  error,
-  children,
-  className = "",
-}: {
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <label className={`freight-field-label group flex min-w-0 flex-col gap-0.5 ${className}`}>
-      <span className="text-[11px] font-medium text-muted-foreground transition-colors group-focus-within:text-primary">
-        {label}
-        {required && <strong className="ml-0.5 font-bold text-destructive"> *</strong>}
-      </span>
-      {children}
-      {error && <span className="text-[10.5px] text-destructive">{error}</span>}
-    </label>
-  );
-}
-
-export function ReadOnlyField({
-  label,
-  value,
-  loading,
-  className,
-}: {
-  label: string;
-  value: string;
-  loading?: boolean;
-  className?: string;
-}) {
-  return (
-    <Field label={label} className={className}>
-      <Input type="text" disabled readOnly value={loading ? "Loading..." : value} />
-    </Field>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────
-   CodeNameLookup — generic LookupField wrapper
-   ───────────────────────────────────────────────────────────── */
-type CodeNameLookupProps = {
-  label: string;
-  value: Option | null;
-  onChange: (next: Option | null) => void;
-  loadOptions: (query?: string) => Promise<LookupRow[]>;
-  /** Row keys returned by the lookup, e.g. "div_code" / "div_name". */
-  codeField: string;
-  nameField: string;
-  nameHeader?: string;
-  required?: boolean;
-  disabled?: boolean;
-  error?: string;
-  className?: string;
-};
-
-export function CodeNameLookup({
-  label,
-  value,
-  onChange,
-  loadOptions,
-  codeField,
-  nameField,
-  nameHeader,
-  required,
-  disabled,
-  error,
-  className,
-}: CodeNameLookupProps) {
-  return (
-    <Field label={label} required={required} error={error} className={className}>
-      <LookupField
-        compact
-        dense
-        label={label}
-        disabled={disabled}
-        value={value?.code ?? ""}
-        displayValue={optionLabel(value)}
-        columns={[
-          { field: codeField, header: "Code" },
-          { field: nameField, header: nameHeader ?? label },
-        ]}
-        valueField={codeField}
-        displayFields={[codeField, nameField]}
-        loadOptions={loadOptions}
-        placeholder={`Select ${label.toLowerCase()}`}
-        onChange={(_: unknown, row: Record<string, unknown> | null) => onChange(toOption(row, codeField, nameField))}
-      />
-    </Field>
-  );
-}
-
-
-/* ✅ Exposed to the parent (header buttons) */
-export type TransferFormHandle = {
-  /** Validate and save as draft. */
-  save: () => Promise<void>;
-  /** Validate, ask for confirmation, then save. */
-  submit: () => void;
-};
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type TEmployeeTransfer = {
   doc_no?: string | number | null;
   doc_type?: string;
+  company_code?: string;
   div_code?: string;
   div_name?: string;
   dept_code?: string;
@@ -197,6 +24,7 @@ export type TEmployeeTransfer = {
   employee_name?: string;
   desg_code?: string;
   desg_name?: string;
+  company_code_to?: string;
   div_code_to?: string;
   div_name_to?: string;
   dept_code_to?: string;
@@ -206,8 +34,19 @@ export type TEmployeeTransfer = {
   desg_code_to?: string;
   desg_name_to?: string;
   remarks?: string;
+  approved?: string;
   user_dt?: string;
 };
+
+type DivisionOption = { div_code: string; div_name: string };
+type DeptOption = { dept_code: string; dept_name: string };
+type SectionOption = { section_code: string; section_name: string };
+// The employee list lookup (EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER)
+// only returns EMPLOYEE_ID + EMPLOYEE_NAME — no org/designation codes. Those
+// are fetched separately (see loadEmployeeDetail) the moment an employee is
+// picked, so this option type intentionally stays minimal.
+type EmployeeOption = { employee_id: string; employee_name: string };
+type DesignationOption = { desg_code: string; desg_name: string };
 
 type FormMode = "add" | "edit" | "view";
 
@@ -215,22 +54,47 @@ type Props = {
   mode: FormMode;
   existingData?: Partial<TEmployeeTransfer>;
   onClose: (shouldRefetch?: boolean) => void;
-  /** Lets the header disable its buttons while a save is in flight. */
-  onSavingChange?: (saving: boolean) => void;
 };
 
-type Placement = {
-  division: Option | null;
-  department: Option | null;
-  section: Option | null;
-  designation: Option | null;
+// doc_no / doc_type are tracked but never surfaced as editable fields —
+// doc_no is autogenerated by the backend and doc_type is fixed, same idea
+// as the applicant form.
+const EMPTY: TEmployeeTransfer = {
+  doc_no: null,
+  doc_type: "ETR",
+  company_code: "",
+  div_code: "",
+  div_name: "",
+  dept_code: "",
+  dept_name: "",
+  section_code: "",
+  section_name: "",
+  employee_id: "",
+  employee_name: "",
+  desg_code: "",
+  desg_name: "",
+  company_code_to: "",
+  div_code_to: "",
+  div_name_to: "",
+  dept_code_to: "",
+  dept_name_to: "",
+  section_code_to: "",
+  section_name_to: "",
+  desg_code_to: "",
+  desg_name_to: "",
+  remarks: "",
+  approved: "N",
+  user_dt: new Date().toISOString().slice(0, 10),
 };
 
-type Errors = Partial<Record<"employee" | "division" | "department" | "section", string>>;
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-function buildParams(parameter: string, loginid: string, companyCode: string, code2 = "", code3 = "", code4 = "") {
+function buildParams(
+  parameter: string,
+  loginid: string,
+  companyCode: string,
+  code2 = "",
+  code3 = "",
+  code4 = "",
+) {
   return {
     parameter,
     loginid,
@@ -249,340 +113,716 @@ function buildParams(parameter: string, loginid: string, companyCode: string, co
   };
 }
 
-// Rebuild an Option from a saved row; fall back to the code when no name came back.
-const fromRow = (d: Partial<TEmployeeTransfer>, codeKey: string, nameKey: string): Option | null => {
-  const opt = toOption(d as Record<string, unknown>, codeKey, nameKey);
-  return opt && !opt.name ? { ...opt, name: opt.code } : opt;
-};
+// "CODE - Name" when a name is known, otherwise just the bare code.
+function formatCodeName(code?: string, name?: string): string {
+  if (!code) return "";
+  return name && name !== code ? `${code} - ${name}` : code;
+}
 
-export const AddEmployeeTransferForm = forwardRef<TransferFormHandle, Props>(function AddEmployeeTransferForm(
-  { mode, existingData, onClose, onSavingChange },
-  ref,
-) {
+export function AddEmployeeTransferForm({ mode, existingData, onClose }: Props) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
-  const locked = readonly || isEdit; // the "from" side never changes once a record exists
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
+  const companyName = user?.company_name ?? companyCode;
 
-  // The page unmounts this form when it returns to the list, so lazy initial
-  // state replaces a "populate on edit/view" effect.
-  const seed = existingData ?? {};
-
-  const [employee, setEmployee] = useState<Option | null>(
-    seed.employee_id ? { code: seed.employee_id, name: seed.employee_name ?? "" } : null,
-  );
-  // Current placement: filters until an employee is picked, then that
-  // employee's actual record (read-only).
-  const [from, setFrom] = useState<Placement>({
-    division: fromRow(seed, "div_code", "div_name"),
-    department: fromRow(seed, "dept_code", "dept_name"),
-    section: fromRow(seed, "section_code", "section_name"),
-    designation: fromRow(seed, "desg_code", "desg_name"),
+  const [form, setForm] = useState<TEmployeeTransfer>({
+    ...EMPTY,
+    company_code: companyCode,
+    company_code_to: companyCode,
   });
-  const [to, setTo] = useState<Placement>({
-    division: fromRow(seed, "div_code_to", "div_name_to"),
-    department: fromRow(seed, "dept_code_to", "dept_name_to"),
-    section: fromRow(seed, "section_code_to", "section_name_to"),
-    designation: fromRow(seed, "desg_code_to", "desg_name_to"),
-  });
-  const [remarks, setRemarks] = useState(seed.remarks ?? "");
-  const [date, setDate] = useState((seed.user_dt ?? "").slice(0, 10) || today());
+  const [errors, setErrors] = useState<Partial<Record<keyof TEmployeeTransfer, string>>>({});
+  const [saving, setSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
-  const [errors, setErrors] = useState<Errors>({});
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [saving, setSavingState] = useState(false);
-  const detailRequest = useRef(0);
+  // ── From-side filters — only meaningful while no employee is picked yet;
+  // they narrow the Employee dropdown, same as the optional
+  // AND DIV_CODE=... / AND DEPT_CODE=... in the PB 'p_5' query. ───────────
+  const [division, setDivision] = useState<DivisionOption | null>(null);
+  const [department, setDepartment] = useState<DeptOption | null>(null);
+  const [section, setSection] = useState<SectionOption | null>(null);
+  const [employee, setEmployee] = useState<EmployeeOption | null>(null);
+  const [loadingEmpDetail, setLoadingEmpDetail] = useState(false);
 
-  const setSaving = (value: boolean) => {
-    setSavingState(value);
-    onSavingChange?.(value);
-  };
+  // ── To-side (transfer destination) state — unchanged ────────────────────
+  const [divisionTo, setDivisionTo] = useState<DivisionOption | null>(null);
+  const [departmentTo, setDepartmentTo] = useState<DeptOption | null>(null);
+  const [sectionTo, setSectionTo] = useState<SectionOption | null>(null);
+  const [designationTo, setDesignationTo] = useState<DesignationOption | null>(null);
 
-  const orgIsText = locked || Boolean(employee);
+  // Once an employee is selected (add mode) or we're editing/viewing an
+  // existing row, the From-side org fields switch from dropdowns to
+  // read-only text — there's nothing left to "select", it's just what
+  // that employee's record says.
+  const showOrgAsText = isEdit || readonly || Boolean(employee?.employee_id);
 
-  // ── Cascading pickers: clear children in the handler, not in effects ──
-  const pickFromDivision = (division: Option | null) =>
-    setFrom((p) => ({ ...p, division, department: null, section: null }));
-  const pickFromDepartment = (department: Option | null) => setFrom((p) => ({ ...p, department, section: null }));
-  const pickToDivision = (division: Option | null) =>
-    setTo((p) => ({ ...p, division, department: null, section: null }));
-  const pickToDepartment = (department: Option | null) => setTo((p) => ({ ...p, department, section: null }));
+  const set = (field: keyof TEmployeeTransfer, value: unknown) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
-  // ── Picking an employee fetches their current placement ───────────────
-  const pickEmployee = async (picked: Option | null) => {
-    const requestId = ++detailRequest.current;
-    setEmployee(picked);
-    setErrors((e) => ({ ...e, employee: undefined }));
+  // ── Populate on edit / view ──────────────────────────────────────────────
+  useEffect(() => {
+    if ((isEdit || readonly) && existingData) {
+      setForm({ ...EMPTY, company_code: companyCode, company_code_to: companyCode, ...existingData });
 
-    if (!picked) {
-      setFrom({ division: null, department: null, section: null, designation: null });
-      return;
-    }
-
-    setLoadingDetail(true);
-    try {
-      const res = await getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_EMP_TRANSFER_EMP_DETAIL", loginid, companyCode, picked.code),
+      setEmployee(
+        existingData.employee_id
+          ? { employee_id: existingData.employee_id, employee_name: existingData.employee_name ?? "" }
+          : null,
       );
-      if (requestId !== detailRequest.current) return; // a newer pick superseded this one
-      const row = (Array.isArray(res) ? res[0] : null) as Record<string, unknown> | null;
-      if (!row) return;
-      setEmployee({ code: picked.code, name: String(row.employee_name ?? row.rpt_name ?? picked.name) });
-      setFrom({
-        division: toOption(row, "div_code", "div_name"),
-        department: toOption(row, "dept_code", "dept_name"),
-        section: toOption(row, "section_code", "section_name"),
-        designation: toOption(row, "desg_code", "desg_name"),
-      });
-    } catch (error) {
-      if (requestId === detailRequest.current) {
-        toast.error(error instanceof Error ? error.message : "Unable to load employee details");
-      }
-    } finally {
-      if (requestId === detailRequest.current) setLoadingDetail(false);
-    }
-  };
 
-  // ── Lookup loaders ────────────────────────────────────────────────────
-  const lookup = useCallback(
-    async (parameter: string, c2 = "", c3 = "", c4 = ""): Promise<LookupRow[]> =>
-      ((await getDynamicLookup(buildParams(parameter, loginid, companyCode, c2, c3, c4))) as LookupRow[]) ?? [],
+      setDivisionTo(
+        existingData.div_code_to
+          ? { div_code: existingData.div_code_to, div_name: existingData.div_name_to ?? existingData.div_code_to }
+          : null,
+      );
+      setDepartmentTo(
+        existingData.dept_code_to
+          ? { dept_code: existingData.dept_code_to, dept_name: existingData.dept_name_to ?? existingData.dept_code_to }
+          : null,
+      );
+      setSectionTo(
+        existingData.section_code_to
+          ? {
+              section_code: existingData.section_code_to,
+              section_name: existingData.section_name_to ?? existingData.section_code_to,
+            }
+          : null,
+      );
+      setDesignationTo(
+        existingData.desg_code_to
+          ? { desg_code: existingData.desg_code_to, desg_name: existingData.desg_name_to ?? existingData.desg_code_to }
+          : null,
+      );
+    }
+  }, [isEdit, readonly, existingData, companyCode]);
+
+  // ── From-side cascading resets — only relevant while filtering (add
+  // mode, no employee picked yet). Picking a parent clears the children. ──
+  useEffect(() => {
+    if (isEdit || readonly || employee) return;
+    setDepartment(null);
+    setSection(null);
+  }, [division, isEdit, readonly, employee]);
+
+  useEffect(() => {
+    if (isEdit || readonly || employee) return;
+    setSection(null);
+  }, [department, isEdit, readonly, employee]);
+
+  // ── Lookup loader for a single employee's full org placement + designation.
+  // Fired the moment an employee is picked directly, so the From-side text
+  // fields fill in with real data instead of staying blank. ────────────────
+  const loadEmployeeDetail = useCallback(
+    (employeeId: string) =>
+      getDynamicLookup(
+        buildParams("EDUCATION_QUALIFICATION_EMP_TRANSFER_EMP_DETAIL", loginid, companyCode, employeeId),
+      ),
     [loginid, companyCode],
   );
 
-  const divisions = () => lookup("EDUCATION_QUALIFICATION_LANG_DIVISION_LIST");
-  const departments = (div?: string) => () => lookup("EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE", div ?? "");
-  const sections = (div?: string, dept?: string) => () =>
-    lookup("EDUCATION_QUALIFICATION_MS_HR_SECTION", div ?? "", dept ?? "");
-  const employees = () =>
-    lookup(
-      "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
-      from.division?.code ?? "",
-      from.department?.code ?? "",
-      from.section?.code ?? "",
-    );
-  const designations = () => lookup("EDUCATION_QUALIFICATION_DESIGNATION_LIST");
+  useEffect(() => {
+    if (!employee?.employee_id){
+    if (isEdit || readonly) return; // edit/view already has everything from existingData
+    // Employee cleared — go back to filter mode, blank the snapshot.
+      set("div_code", "");
+      set("div_name", "");
+      set("dept_code", "");
+      set("dept_name", "");
+      set("section_code", "");
+      set("section_name", "");
+      set("desg_code", "");
+      set("employee_name","");
+      set("desg_name", "");
+      return;
+    }
 
-  // ── Validation: inline errors + returns the first message for the toast ─
-  const validate = (): string | null => {
-    const next: Errors = {};
-    if (!employee?.code) next.employee = "Employee is required";
-    if (!to.division) next.division = "Division to is required";
-    if (!to.department) next.department = "Department to is required";
-    if (!to.section) next.section = "Section to is required";
+    let cancelled = false;
+    setLoadingEmpDetail(true);
+
+    loadEmployeeDetail(employee.employee_id)
+      .then((res) => {
+        if (cancelled) return;
+        const row = (Array.isArray(res) ? res[0] : null) as Record<string, unknown> | null;
+
+if (row) {
+  const employeeName = String(
+    row.employee_name ??
+    row.rpt_name ??
+    employee.employee_name ??
+    ""
+  );
+
+  setEmployee({
+    employee_id: employee.employee_id,
+    employee_name: employeeName,
+  });
+
+  set("employee_name", employeeName);
+
+  set("div_code", String(row.div_code ?? ""));
+  set("div_name", String(row.div_name ?? ""));
+  set("dept_code", String(row.dept_code ?? ""));
+  set("dept_name", String(row.dept_name ?? ""));
+  set("section_code", String(row.section_code ?? ""));
+  set("section_name", String(row.section_name ?? ""));
+  set("desg_code", String(row.desg_code ?? ""));
+  set("desg_name", String(row.desg_name ?? ""));
+}
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingEmpDetail(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee?.employee_id, loadEmployeeDetail]);
+
+  // ── To-side cascading resets — unchanged ────────────────────────────────
+  useEffect(() => {
+    if (isEdit || readonly) return;
+    setDepartmentTo(null);
+    setSectionTo(null);
+  }, [divisionTo, isEdit, readonly]);
+
+  useEffect(() => {
+    if (isEdit || readonly) return;
+    setSectionTo(null);
+  }, [departmentTo, isEdit, readonly]);
+
+  useEffect(() => {
+    set("div_code_to", divisionTo?.div_code ?? "");
+    set("div_name_to", divisionTo?.div_name ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [divisionTo]);
+
+  useEffect(() => {
+    set("dept_code_to", departmentTo?.dept_code ?? "");
+    set("dept_name_to", departmentTo?.dept_name ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departmentTo]);
+
+  useEffect(() => {
+    set("section_code_to", sectionTo?.section_code ?? "");
+    set("section_name_to", sectionTo?.section_name ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionTo]);
+
+  useEffect(() => {
+    set("desg_code_to", designationTo?.desg_code ?? "");
+    set("desg_name_to", designationTo?.desg_name ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designationTo]);
+
+  // ── Lookup loaders — From-side filters (division/department/section) and
+  // the employee list itself, all reusing the language-skills parameters. ──
+
+  const loadDivisions = useCallback(
+    () => getDynamicLookup(buildParams("EDUCATION_QUALIFICATION_LANG_DIVISION_LIST", loginid, companyCode)),
+    [loginid, companyCode],
+  );
+
+  const loadDepartments = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE",
+          loginid,
+          companyCode,
+          division?.div_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, division?.div_code],
+  );
+
+  const loadSections = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
+          loginid,
+          companyCode,
+          division?.div_code ?? "",
+          department?.dept_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, division?.div_code, department?.dept_code],
+  );
+
+  const loadEmployees = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
+          loginid,
+          companyCode,
+          division?.div_code ?? "",
+          department?.dept_code ?? "",
+          section?.section_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, division?.div_code, department?.dept_code, section?.section_code],
+  );
+
+  // ── To-side lookup loaders — company-scoped only, unchanged ────────────
+  const loadDivisionsTo = useCallback(
+    () => getDynamicLookup(buildParams("EDUCATION_QUALIFICATION_LANG_DIVISION_LIST", loginid, companyCode)),
+    [loginid, companyCode],
+  );
+
+  const loadDepartmentsTo = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE",
+          loginid,
+          companyCode,
+          divisionTo?.div_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, divisionTo?.div_code],
+  );
+
+  const loadSectionsTo = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
+          loginid,
+          companyCode,
+          divisionTo?.div_code ?? "",
+          departmentTo?.dept_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, divisionTo?.div_code, departmentTo?.dept_code],
+  );
+
+  const loadDesignationsTo = useCallback(
+    () => getDynamicLookup(buildParams("EDUCATION_QUALIFICATION_DESIGNATION_LIST", loginid, companyCode)),
+    [loginid, companyCode],
+  );
+
+  // ── Validation — Employee stays mandatory regardless of how it was picked ─
+  const validate = (): boolean => {
+    const next: Partial<Record<keyof TEmployeeTransfer, string>> = {};
+    if (!form.employee_id) next.employee_id = "Employee is required";
+    if (!form.div_code_to) next.div_code_to = "Division to is required";
+    if (!form.dept_code_to) next.dept_code_to = "Department to is required";
+    if (!form.section_code_to) next.section_code_to = "Section to is required";
     setErrors(next);
-    return Object.values(next)[0] ?? null;
+    return Object.keys(next).length === 0;
   };
 
-  // ── Save — parameter "MST_HR_EMP_TRANSFER" ────────────────────────────
-  // Slot layout matches PROC_BUILD_DYNAMIC_INS_UPD_MST_HR:
-  //   val1s1 COMPANY  val1s2 DOC_TYPE  val1n1 DOC_NO (edit only)
-  //   val1s3-5 from div/dept/section   val1s6 EMPLOYEE_ID
-  //   val1s7-9 to div/dept/section     val1s10 REMARKS
-  //   wval1s1 APPROVED (always 'N')    wval1s2 DESG_CODE   wval1s3 DESG_CODE_TO
-  const persist = async () => {
+  // ── Save — parameter "MST_HR_EMP_TRANSFER" ──────────────────────────────
+  // Slot layout matches PROC_BUILD_DYNAMIC_INS_UPD_MST_HR exactly:
+  //   val1s1  = COMPANY_CODE
+  //   val1s2  = DOC_TYPE
+  //   val1n1  = DOC_NO (edit only; omit/undefined on insert — auto-generated)
+  //   val1s3  = DIV_CODE       (from)
+  //   val1s4  = DEPT_CODE      (from)
+  //   val1s5  = SECTION_CODE   (from)
+  //   val1s6  = EMPLOYEE_ID
+  //   val1s7  = DIV_CODE_TO
+  //   val1s8  = DEPT_CODE_TO
+  //   val1s9  = SECTION_CODE_TO
+  //   val1s10 = REMARKS
+  //   wval1s1 = APPROVED — no UI control anymore, always sent as 'N'
+  //   wval1s2 = DESG_CODE
+  //   wval1s3 = DESG_CODE_TO
+  const handleSave = async () => {
+    if (!validate()) return;
     setSaving(true);
+    setApiError("");
     try {
-      const docNo = isEdit && seed.doc_no != null && seed.doc_no !== "" ? Number(seed.doc_no) : undefined;
+      const docNo =
+        isEdit && form.doc_no !== "" && form.doc_no != null ? Number(form.doc_no) : undefined;
+
       await executeDynamicMutation({
         parameter: "MST_HR_EMP_TRANSFER",
         loginid,
         val1s1: companyCode,
-        val1s2: seed.doc_type ?? "ETR",
+        val1s2: form.doc_type ?? "ETR",
         val1n1: docNo,
-        val1s3: from.division?.code ?? "",
-        val1s4: from.department?.code ?? "",
-        val1s5: from.section?.code ?? "",
-        val1s6: employee?.code ?? "",
-        val1s7: to.division?.code ?? "",
-        val1s8: to.department?.code ?? "",
-        val1s9: to.section?.code ?? "",
-        val1s10: remarks,
+        val1s3: form.div_code || "",
+        val1s4: form.dept_code || "",
+        val1s5: form.section_code || "",
+        val1s6: form.employee_id || "",
+        val1s7: form.div_code_to || "",
+        val1s8: form.dept_code_to || "",
+        val1s9: form.section_code_to || "",
+        val1s10: form.remarks || "",
         wval1s1: "N",
-        wval1s2: from.designation?.code ?? "",
-        wval1s3: to.designation?.code ?? "",
+        wval1s2: form.desg_code || "",
+        wval1s3: form.desg_code_to || "",
       });
-      toast.success(isEdit ? "Transfer updated successfully" : "Transfer saved successfully");
       onClose(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save employee transfer");
+      setApiError(error instanceof Error ? error.message : "Unable to save employee transfer record");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSave = async () => {
-    const error = validate();
-    if (error) {
-      toast.warning(error);
-      return;
-    }
-    await persist();
+  const handleSubmitClick = () => {
+    if (!validate()) return;
+    setConfirmSubmitOpen(true);
   };
-
-  const handleSubmit = () => {
-    const error = validate();
-    if (error) {
-      toast.warning(error);
-      return;
-    }
-    setConfirmOpen(true);
-  };
-
   const confirmSubmit = async () => {
-    setConfirmOpen(false);
-    await persist();
+    setConfirmSubmitOpen(false);
+    await handleSave();
   };
 
-  /* ✅ Expose save() / submit() to parent */
-  useImperativeHandle(ref, () => ({ save: handleSave, submit: handleSubmit }));
+  const topGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    columnGap: "1rem",
+    rowGap: "0.75rem",
+    minWidth: 0,
+  };
 
-  // ── UI ────────────────────────────────────────────────────────────────
   return (
-    <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-      <SectionPanel title="Employee" icon={UserCog}>
-        <div className="grid gap-3 md:grid-cols-4">
-          {orgIsText ? (
-            <>
-              <ReadOnlyField label="Division" value={optionLabel(from.division)} loading={loadingDetail} />
-              <ReadOnlyField label="Department" value={optionLabel(from.department)} loading={loadingDetail} />
-              <ReadOnlyField label="Section" value={optionLabel(from.section)} loading={loadingDetail} />
-            </>
-          ) : (
-            <>
-              <CodeNameLookup
+    <div className="grid gap-y-4" style={{ overflowX: "hidden", minWidth: 0 }}>
+      {apiError && <div className="alert error">{apiError}</div>}
+
+      {/* ── Current placement — dropdown filters until an employee is
+          picked, then read-only text snapshot of that employee's record ── */}
+      <div className="min-w-0" style={topGridStyle}>
+        {showOrgAsText ? (
+          <>
+            <label className="field min-w-0">
+              <span>Division</span>
+              <Input
+                type="text"
+                disabled
+                readOnly
+                value={loadingEmpDetail ? "Loading..." : formatCodeName(form.div_code, form.div_name)}
+              />
+            </label>
+            <label className="field min-w-0">
+              <span>Department</span>
+              <Input
+                type="text"
+                disabled
+                readOnly
+                value={loadingEmpDetail ? "Loading..." : formatCodeName(form.dept_code, form.dept_name)}
+              />
+            </label>
+            <label className="field min-w-0">
+              <span>Section</span>
+              <Input
+                type="text"
+                disabled
+                readOnly
+                value={loadingEmpDetail ? "Loading..." : formatCodeName(form.section_code, form.section_name)}
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="field min-w-0">
+              <span>Division</span>
+              <LookupField
+                compact
                 label="Division"
-                value={from.division}
-                onChange={pickFromDivision}
-                loadOptions={divisions}
-                codeField="div_code"
-                nameField="div_name"
+                value={division?.div_code ?? ""}
+                displayValue={division ? `${division.div_code} - ${division.div_name}` : ""}
+                columns={[
+                  { field: "div_code", header: "Code" },
+                  { field: "div_name", header: "Division" },
+                ]}
+                valueField="div_code"
+                displayFields={["div_code", "div_name"]}
+                loadOptions={loadDivisions}
+                onChange={(_, row) =>
+                  setDivision(
+                    row ? { div_code: String(row.div_code ?? ""), div_name: String(row.div_name ?? "") } : null,
+                  )
+                }
               />
-              <CodeNameLookup
+            </label>
+            <label className="field min-w-0">
+              <span>Department</span>
+              <LookupField
+                compact
                 label="Department"
-                value={from.department}
-                onChange={pickFromDepartment}
-                loadOptions={departments(from.division?.code)}
-                codeField="dept_code"
-                nameField="dept_name"
+                value={department?.dept_code ?? ""}
+                displayValue={department ? `${department.dept_code} - ${department.dept_name}` : ""}
+                columns={[
+                  { field: "dept_code", header: "Code" },
+                  { field: "dept_name", header: "Department" },
+                ]}
+                valueField="dept_code"
+                displayFields={["dept_code", "dept_name"]}
+                loadOptions={loadDepartments}
+                onChange={(_, row) =>
+                  setDepartment(
+                    row ? { dept_code: String(row.dept_code ?? ""), dept_name: String(row.dept_name ?? "") } : null,
+                  )
+                }
               />
-              <CodeNameLookup
+            </label>
+            <label className="field min-w-0">
+              <span>Section</span>
+              <LookupField
+                compact
                 label="Section"
-                value={from.section}
-                onChange={(section) => setFrom((p) => ({ ...p, section }))}
-                loadOptions={sections(from.division?.code, from.department?.code)}
-                codeField="section_code"
-                nameField="section_name"
+                value={section?.section_code ?? ""}
+                displayValue={section ? `${section.section_code} - ${section.section_name}` : ""}
+                columns={[
+                  { field: "section_code", header: "Code" },
+                  { field: "section_name", header: "Section" },
+                ]}
+                valueField="section_code"
+                displayFields={["section_code", "section_name"]}
+                loadOptions={loadSections}
+                onChange={(_, row) =>
+                  setSection(
+                    row
+                      ? {
+                          section_code: String(row.section_code ?? ""),
+                          section_name: String(row.section_name ?? ""),
+                        }
+                      : null,
+                  )
+                }
               />
-            </>
-          )}
+            </label>
+          </>
+        )}
 
-          <CodeNameLookup
+        <label className="field min-w-0">
+          <span>
+            Employee <strong className="text-destructive">*</strong>
+          </span>
+          <LookupField
+            compact
             label="Employee"
-            required
-            disabled={locked}
-            value={employee}
-            onChange={pickEmployee}
-            loadOptions={employees}
-            codeField="employee_id"
-            nameField="employee_name"
-            error={errors.employee}
-            className="md:col-span-2"
+            disabled={readonly || isEdit}
+            value={employee?.employee_id ?? ""}
+            displayValue={employee ? `${employee.employee_id} - ${employee.employee_name}` : ""}
+            columns={[
+              { field: "employee_id", header: "ID" },
+              { field: "employee_name", header: "Employee" },
+            ]}
+            valueField="employee_id"
+            displayFields={["employee_id", "employee_name"]}
+            loadOptions={loadEmployees}
+            onChange={(_, row) => {
+              const picked = row
+                ? {
+                    employee_id: String(row.employee_id ?? ""),
+                    employee_name: String(row.employee_name ?? row.rpt_name ?? ""),
+                  }
+                : null;
+              setEmployee(picked);
+              // Write straight onto form state so Transfer-to's
+              // `!form.employee_id` gate unlocks immediately, without
+              // waiting on the async employee-detail fetch (that fetch
+              // only fills in div/dept/section/designation, below).
+              set("employee_id", picked?.employee_id ?? "");
+              set("employee_name", picked?.employee_name ?? "");
+            }}
           />
-          <ReadOnlyField label="Designation" value={optionLabel(from.designation)} loading={loadingDetail} />
-          <Field label="Date">
-            <Input type="date" disabled={readonly} value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
+          {errors.employee_id && (
+            <span className="text-destructive text-xs mt-0.5">{errors.employee_id}</span>
+          )}
+        </label>
+      </div>
+
+      <div className="min-w-0" style={topGridStyle}>
+        <label className="field min-w-0">
+          <span>Date</span>
+          <Input
+            type="date"
+            disabled={readonly}
+            value={String(form.user_dt ?? "").slice(0, 10)}
+            onChange={(e) => set("user_dt", e.target.value)}
+          />
+        </label>
+        <label className="field min-w-0">
+          <span>Designation</span>
+          <Input
+            type="text"
+            disabled
+            readOnly
+            value={loadingEmpDetail ? "Loading..." : formatCodeName(form.desg_code, form.desg_name)}
+          />
+        </label>
+      </div>
+
+      <hr className="border-border" />
+
+      {/* ── Transfer to — unchanged: cascading Division to / Department to /
+          Section to, plus optional Designation to ─────────────────────── */}
+      <div>
+        <h3 className="m-0 mb-2 text-sm font-semibold">Transfer to</h3>
+        <div className="min-w-0" style={topGridStyle}>
+          <label className="field min-w-0">
+            <span>
+              Division to <strong className="text-destructive">*</strong>
+            </span>
+            <LookupField
+              compact
+              label="Division to"
+              disabled={readonly}
+              value={divisionTo?.div_code ?? ""}
+              displayValue={divisionTo ? `${divisionTo.div_code} - ${divisionTo.div_name}` : ""}
+              columns={[
+                { field: "div_code", header: "Code" },
+                { field: "div_name", header: "Division" },
+              ]}
+              valueField="div_code"
+              displayFields={["div_code", "div_name"]}
+              loadOptions={loadDivisionsTo}
+              onChange={(_, row) =>
+                setDivisionTo(
+                  row ? { div_code: String(row.div_code ?? ""), div_name: String(row.div_name ?? "") } : null,
+                )
+              }
+            />
+            {errors.div_code_to && (
+              <span className="text-destructive text-xs mt-0.5">{errors.div_code_to}</span>
+            )}
+          </label>
+
+          <label className="field min-w-0">
+            <span>
+              Department to <strong className="text-destructive">*</strong>
+            </span>
+            <LookupField
+              compact
+              label="Department to"
+              disabled={readonly}
+              value={departmentTo?.dept_code ?? ""}
+              displayValue={departmentTo ? `${departmentTo.dept_code} - ${departmentTo.dept_name}` : ""}
+              columns={[
+                { field: "dept_code", header: "Code" },
+                { field: "dept_name", header: "Department" },
+              ]}
+              valueField="dept_code"
+              displayFields={["dept_code", "dept_name"]}
+              loadOptions={loadDepartmentsTo}
+              onChange={(_, row) =>
+                setDepartmentTo(
+                  row ? { dept_code: String(row.dept_code ?? ""), dept_name: String(row.dept_name ?? "") } : null,
+                )
+              }
+            />
+            {errors.dept_code_to && (
+              <span className="text-destructive text-xs mt-0.5">{errors.dept_code_to}</span>
+            )}
+          </label>
+
+          <label className="field min-w-0">
+            <span>
+              Section to <strong className="text-destructive">*</strong>
+            </span>
+            <LookupField
+              compact
+              label="Section to"
+              disabled={readonly}
+              value={sectionTo?.section_code ?? ""}
+              displayValue={sectionTo ? `${sectionTo.section_code} - ${sectionTo.section_name}` : ""}
+              columns={[
+                { field: "section_code", header: "Code" },
+                { field: "section_name", header: "Section" },
+              ]}
+              valueField="section_code"
+              displayFields={["section_code", "section_name"]}
+              loadOptions={loadSectionsTo}
+              onChange={(_, row) =>
+                setSectionTo(
+                  row
+                    ? {
+                        section_code: String(row.section_code ?? ""),
+                        section_name: String(row.section_name ?? ""),
+                      }
+                    : null,
+                )
+              }
+            />
+            {errors.section_code_to && (
+              <span className="text-destructive text-xs mt-0.5">{errors.section_code_to}</span>
+            )}
+          </label>
+
+          <label className="field min-w-0">
+            <span>Designation to</span>
+            <LookupField
+              compact
+              label="Designation to"
+              disabled={readonly}
+              value={designationTo?.desg_code ?? ""}
+              displayValue={designationTo ? `${designationTo.desg_code} - ${designationTo.desg_name}` : ""}
+              columns={[
+                { field: "desg_code", header: "Code" },
+                { field: "desg_name", header: "Designation" },
+              ]}
+              valueField="desg_code"
+              displayFields={["desg_code", "desg_name"]}
+              loadOptions={loadDesignationsTo}
+              onChange={(_, row) =>
+                setDesignationTo(
+                  row ? { desg_code: String(row.desg_code ?? ""), desg_name: String(row.desg_name ?? "") } : null,
+                )
+              }
+            />
+          </label>
         </div>
-      </SectionPanel>
+      </div>
 
-      <SectionPanel title="Transfer to" icon={ArrowRightLeft}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <CodeNameLookup
-            label="Division to"
-            required
-            disabled={readonly}
-            value={to.division}
-            onChange={pickToDivision}
-            loadOptions={divisions}
-            codeField="div_code"
-            nameField="div_name"
-            error={errors.division}
-          />
-          <CodeNameLookup
-            label="Department to"
-            required
-            disabled={readonly}
-            value={to.department}
-            onChange={pickToDepartment}
-            loadOptions={departments(to.division?.code)}
-            codeField="dept_code"
-            nameField="dept_name"
-            error={errors.department}
-          />
-          <CodeNameLookup
-            label="Section to"
-            required
-            disabled={readonly}
-            value={to.section}
-            onChange={(section) => setTo((p) => ({ ...p, section }))}
-            loadOptions={sections(to.division?.code, to.department?.code)}
-            codeField="section_code"
-            nameField="section_name"
-            error={errors.section}
-          />
-          <CodeNameLookup
-            label="Designation to"
-            disabled={readonly}
-            value={to.designation}
-            onChange={(designation) => setTo((p) => ({ ...p, designation }))}
-            loadOptions={designations}
-            codeField="desg_code"
-            nameField="desg_name"
-            nameHeader="Designation"
-          />
-        </div>
-      </SectionPanel>
+      <label className="field min-w-0">
+        <span>Remarks</span>
+        <Input
+          type="text"
+          disabled={readonly}
+          value={form.remarks ?? ""}
+          onChange={(e) => set("remarks", e.target.value)}
+        />
+      </label>
 
-      <SectionPanel title="Notes" icon={StickyNote}>
-        <Field label="Remarks">
-          <textarea
-            className="input"
-            rows={3}
-            disabled={readonly}
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            style={{ resize: "vertical", fontFamily: "inherit" }}
-          />
-        </Field>
-      </SectionPanel>
+      {/* ── Actions ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+        <Button variant="outline" onClick={() => onClose(false)}>
+          {readonly ? "Close" : "Cancel"}
+        </Button>
+        {!readonly && (
+          <>
+            <Button variant="outline" disabled={saving} onClick={handleSave}>
+              <Save size={15} /> {saving ? "Saving..." : "Save as Draft"}
+            </Button>
+            <Button disabled={saving} onClick={handleSubmitClick}>
+              <Send size={15} /> Submit
+            </Button>
+          </>
+        )}
+      </div>
 
-      {/* Submit confirmation */}
+      {/* ── Submit confirmation ──────────────────────────────────────────── */}
       <Dialog
-        open={confirmOpen}
-        title="Submit transfer"
-        description="Are you sure you want to submit?"
+        open={confirmSubmitOpen}
+        title="Submit"
+        description="Are you sure you want to Submit?"
         compact
-        onClose={() => setConfirmOpen(false)}
+        onClose={() => setConfirmSubmitOpen(false)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+            <Button variant="outline" onClick={() => setConfirmSubmitOpen(false)}>
               No
             </Button>
-            <Button onClick={() => void confirmSubmit()} disabled={saving}>
+            <Button onClick={confirmSubmit} disabled={saving}>
               Yes
             </Button>
           </>
         }
       >
-        <p className="m-0 text-sm text-muted-foreground">
-          This will submit the transfer for <strong>{employee?.name || "the selected employee"}</strong>.
+        <p className="text-sm text-muted-foreground">
+          This will submit the transfer for <strong>{form.employee_name || "(selected employee)"}</strong>.
         </p>
       </Dialog>
     </div>
   );
-});
+}

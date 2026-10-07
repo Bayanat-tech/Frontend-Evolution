@@ -292,16 +292,16 @@ export function BiscDatePicker({
         disabled={disabled}
         onClick={handleToggle}
         className={`bisc-date-picker-trigger w-full ${
-          compact ? "h-[25px] px-2 py-0 text-xs rounded" : "h-[28px] px-2 rounded-[6px] text-xs"
+          compact ? "h-[22px] px-1.5 py-0 text-[10.5px] rounded" : "h-[28px] px-2 rounded-[6px] text-xs"
         } border ${
           error ? "border-destructive ring-1 ring-destructive/40" : "border-[#94a3b8]"
         } bg-white text-foreground flex items-center justify-between transition-all cursor-pointer select-none
           ${disabled ? "opacity-60 cursor-not-allowed bg-slate-50" : "hover:border-[#64748b] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30 shadow-2xs"}`}
       >
-        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-xs font-mono font-medium tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-xs" : "text-[12px]"} text-slate-400`}>
+        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-[10.5px] font-mono tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-[10px]" : "text-[12px]"} text-slate-400`}>
           {formattedDisplay || placeholder || defaultPlaceholder}
         </span>
-        <CalendarIcon className={`${compact ? "w-3.5 h-3.5 ml-1" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />
+        <CalendarIcon className={`${compact ? "w-3 h-3 ml-0.5" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />
       </button>
 
       {/* Portaled Interactive Calendar Popover */}

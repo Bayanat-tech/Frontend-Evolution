@@ -1,35 +1,19 @@
-// AddHrManpower.tsx
-//
-// Confirmation Review form — Freight-style:
-//  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
-//  • Freight tabs replace the Back / Next stepper (Save works from any tab)
-//  • SectionPanel / Field from shared Formblocks
-//  • toast for validation / API feedback (no inline alert banners)
-//  • No bottom button row — Close / Save live in the page header
-
-import {
-  ClipboardList, FileText, ListChecks, PenLine, ShieldCheck, UserRound,
-} from "lucide-react";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { executeDynamicMutationColumn90, getDynamicLookup, type LookupRow } from "../../api/lookups";
-import { useToast } from "../../components/ui/AlertToast";
-import { Field, SectionPanel } from "../../components/ui/Formblocks";
+import { Save, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { executeDynamicMutationColumn90, getDynamicLookup, LookupRow } from "../../api/lookups";
+import { Button } from "../../components/ui/Button";
+import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
-import type { TManpowerTransaction } from "./HrManpower";
+import { TManpowerTransaction } from "./HrManpower";
 
-/* ✅ Expose save() to the parent (header Save button) */
-export type ManpowerFormHandle = {
-  save: () => Promise<void>;
-};
-
-export type FormMode = "add" | "edit" | "view";
+type FormMode = "add" | "edit" | "view";
 
 type Props = {
   mode: FormMode;
-  existingData?: Partial<TManpowerTransaction> | null;
+  existingData?: Partial<TManpowerTransaction>;
   onClose: (shouldRefetch?: boolean) => void;
 };
 
@@ -41,9 +25,7 @@ const DEFAULT_AREAS = [
   "Communication Skills",
 ];
 
-const TABS = ["Document & Employee", "Key Responsibilities", "Performance", "Decision & Signatories"];
-
-type Key = keyof TManpowerTransaction;
+const STEPS = ["Document & Employee", "Key Responsibilities", "Performance", "Decision & Signatories"];
 
 function toDate(value: unknown): string {
   if (!value) return "";
@@ -97,19 +79,7 @@ const EMPTY: TManpowerTransaction = {
   date_3: "",
 };
 
-const normalizeDates = (data: Partial<TManpowerTransaction>): TManpowerTransaction => ({
-  ...EMPTY,
-  ...data,
-  doc_date: toDate(data.doc_date),
-  doj: toDate(data.doj),
-  conf_due_dt: toDate(data.conf_due_dt),
-  extended_till: toDate(data.extended_till),
-  date_1: toDate(data.date_1),
-  date_2: toDate(data.date_2),
-  date_3: toDate(data.date_3),
-});
-
-function extractDocNo(data: Record<string, unknown> | null | undefined): string {
+function extractDocNo(data: Record<string, unknown> | undefined): string {
   const raw = data?.doc_no ?? data?.DOC_NO ?? null;
   if (raw === null || raw === undefined) return "";
   const str = String(raw).trim();
@@ -117,30 +87,38 @@ function extractDocNo(data: Record<string, unknown> | null | undefined): string 
   return str;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Main Form (forwardRef so parent can trigger save)
-   ───────────────────────────────────────────────────────────── */
-export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function AddHrManpowerForm(
-  { mode, existingData, onClose },
-  ref,
-) {
+export function AddHrManpowerForm({ mode, existingData, onClose }: Props) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
 
-  const [tab, setTab] = useState(0);
-  const [form, setForm] = useState<TManpowerTransaction>(() =>
-    mode !== "add" && existingData ? normalizeDates(existingData) : { ...EMPTY },
-  );
-  const [errors, setErrors] = useState<Partial<Record<Key, string>>>({});
+  const [activeStep, setActiveStep] = useState(0);
+  const [form, setForm] = useState<TManpowerTransaction>({ ...EMPTY });
+  const [errors, setErrors] = useState<Partial<Record<keyof TManpowerTransaction, string>>>({});
+  const [saving, setSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [loadingRecord, setLoadingRecord] = useState(false);
 
-  const docNoFromGrid = extractDocNo(existingData as Record<string, unknown> | null);
+  const docNoFromGrid = extractDocNo(existingData as Record<string, unknown>);
 
-  // ── Fetch the full record on edit / view (grid row only has a subset) ───
+  useEffect(() => {
+    if ((isEdit || readonly) && existingData) {
+      setForm({
+        ...EMPTY,
+        ...existingData,
+        doc_date: toDate(existingData.doc_date),
+        doj: toDate(existingData.doj),
+        conf_due_dt: toDate(existingData.conf_due_dt),
+        extended_till: toDate(existingData.extended_till),
+        date_1: toDate(existingData.date_1),
+        date_2: toDate(existingData.date_2),
+        date_3: toDate(existingData.date_3),
+      });
+    }
+  }, [isEdit, readonly, existingData]);
+
   useEffect(() => {
     if (!(isEdit || readonly) || !docNoFromGrid || !companyCode) return;
 
@@ -173,10 +151,20 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
           Object.entries(row as Record<string, unknown>).map(([k, v]) => [k.toLowerCase(), v]),
         ) as Partial<TManpowerTransaction>;
 
-        setForm(normalizeDates(normalised));
+        setForm({
+          ...EMPTY,
+          ...normalised,
+          doc_date: toDate(normalised.doc_date),
+          doj: toDate(normalised.doj),
+          conf_due_dt: toDate(normalised.conf_due_dt),
+          extended_till: toDate(normalised.extended_till),
+          date_1: toDate(normalised.date_1),
+          date_2: toDate(normalised.date_2),
+          date_3: toDate(normalised.date_3),
+        });
       } catch (error) {
         if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Unable to load full record");
+          setApiError(error instanceof Error ? error.message : "Unable to load full record");
         }
       } finally {
         if (!cancelled) setLoadingRecord(false);
@@ -188,10 +176,10 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, readonly, docNoFromGrid, companyCode, loginid]);
 
-  const set = (field: Key, value: unknown) => setForm((prev) => ({ ...prev, [field]: value }));
+  const set = (field: keyof TManpowerTransaction, value: unknown) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
   const fetchLookup = async (parameter: string): Promise<LookupRow[]> => {
     const response = await getDynamicLookup({
@@ -213,28 +201,23 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
     return Array.isArray(response) ? (response as LookupRow[]) : [];
   };
 
-  // ── Validation ───────────────────────────────────────────────────────────
-  const validate = (): string | null => {
-    const next: Partial<Record<Key, string>> = {};
+  const validate = (): boolean => {
+    const next: Partial<Record<keyof TManpowerTransaction, string>> = {};
     if (!form.cand_name?.trim()) next.cand_name = "Candidate Name is required";
     if (!form.desig?.trim()) next.desig = "Designation is required";
     if (!form.doj) next.doj = "Date of Joining is required";
     if (!form.conf_due_dt) next.conf_due_dt = "Confirmation Due Date is required";
     setErrors(next);
-
-    const first = Object.values(next)[0];
-    if (first) setTab(0); // all required fields live on the first tab
-    return first ?? null;
+    return Object.keys(next).length === 0;
   };
 
-  // ── Save (called by the page header Save button) ─────────────────────────
   const handleSubmit = async () => {
-    const error = validate();
-    if (error) {
-      toast.warning(error);
+    if (!validate()) {
+      setActiveStep(0);
       return;
     }
-
+    setSaving(true);
+    setApiError("");
     try {
       await executeDynamicMutationColumn90({
         parameter: "hr_conf_revw_form_ins_upd",
@@ -283,53 +266,58 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
         val1s42: toDate(form.date_3),
       });
 
-      toast.success(isEdit ? "Record updated successfully" : "Record saved successfully");
       onClose(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save record");
+      setApiError(error instanceof Error ? error.message : "Unable to save record");
+    } finally {
+      setSaving(false);
     }
   };
 
-  /* ✅ Expose save() to parent */
-  useImperativeHandle(ref, () => ({
-    save: handleSubmit,
-  }));
-
-  // ── Field helpers (built on the shared Field) ────────────────────────────
-  const field = (label: string, key: Key, required = false, className?: string) => (
-    <Field label={label} required={required} error={errors[key]} className={className}>
+  const field = (label: string, key: keyof TManpowerTransaction, required = false) => (
+    <label className="field" key={key}>
+      <span>
+        {label}
+        {required && <strong className="text-destructive"> *</strong>}
+      </span>
       <Input
         disabled={readonly}
         value={String(form[key] ?? "")}
         onChange={(e) => set(key, e.target.value)}
       />
-    </Field>
+      {errors[key] && <span className="text-destructive text-xs mt-0.5">{errors[key]}</span>}
+    </label>
   );
 
-  const dateField = (label: string, key: Key, required = false) => (
-    <Field label={label} required={required} error={errors[key]}>
+  const dateField = (label: string, key: keyof TManpowerTransaction, required = false) => (
+    <label className="field" key={key}>
+      <span>
+        {label}
+        {required && <strong className="text-destructive"> *</strong>}
+      </span>
       <Input
         type="date"
         disabled={readonly}
         value={String(form[key] ?? "")}
         onChange={(e) => set(key, e.target.value)}
       />
-    </Field>
+      {errors[key] && <span className="text-destructive text-xs mt-0.5">{errors[key]}</span>}
+    </label>
   );
 
   const lookupField = (
     label: string,
-    key: Key,
+    key: keyof TManpowerTransaction,
     parameter: string,
     valueField: string,
     displayFields: string[],
     columns: { field: string; header: string }[],
     required = false,
   ) => (
-    <Field label={label} required={required} error={errors[key]}>
+    <label className="field" key={key}>
       <LookupField
-        compact
         label={label}
+        required={required}
         value={String(form[key] ?? "")}
         columns={columns}
         valueField={valueField}
@@ -338,196 +326,282 @@ export const AddHrManpowerForm = forwardRef<ManpowerFormHandle, Props>(function 
         onChange={(value) => set(key, value)}
         disabled={readonly}
       />
-    </Field>
+      {errors[key] && <span className="text-destructive text-xs mt-0.5">{errors[key]}</span>}
+    </label>
   );
 
-  // ── UI ───────────────────────────────────────────────────────────────────
-  return (
-    <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-      <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
-        <div className="freight-tabs-list flex overflow-x-auto">
-          {TABS.map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setTab(index)}
-              aria-pressed={tab === index}
-              className={`freight-workspace-tab ${tab === index ? "active" : ""}`}
-            >
-              {index + 1}. {label}
-            </button>
-          ))}
+  const ratingSelect = (num: number) => {
+    const key = `rating_${num}` as keyof TManpowerTransaction;
+    return (
+      <Select
+        disabled={readonly}
+        value={String(form[key] ?? "")}
+        onChange={(e) => set(key, e.target.value)}
+      >
+        <option value="">-</option>
+        {[1, 2, 3, 4, 5].map((v) => (
+          <option key={v} value={String(v)}>
+            {v}
+          </option>
+        ))}
+      </Select>
+    );
+  };
+
+  const commentField = (num: number) => {
+    const key = `comment${num}` as keyof TManpowerTransaction;
+    return (
+      <Input
+        placeholder="Comments"
+        disabled={readonly}
+        value={String(form[key] ?? "")}
+        onChange={(e) => set(key, e.target.value)}
+      />
+    );
+  };
+
+  const renderStepDocumentEmployee = () => (
+    <Card>
+      <CardHeader>
+        <div>
+          <p className="eyebrow">Document</p>
+          <h2 className="m-0 text-sm font-semibold">Document Information</h2>
         </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {dateField("Doc Date", "doc_date")}
+        {field("Reference No", "doc_ref_no")}
+      </CardContent>
+      <CardHeader>
+        <div>
+          <p className="eyebrow">Employee</p>
+          <h2 className="m-0 text-sm font-semibold">Employee Details</h2>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {field("Candidate No", "cand_no")}
+        {field("Candidate Name", "cand_name", true)}
+        {lookupField(
+          "Designation",
+          "desig",
+          "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_DESIG_LIST",
+          "desig_code",
+          ["desig_name"],
+          [
+            { field: "desig_code", header: "Code" },
+            { field: "desig_name", header: "Name" },
+          ],
+          true,
+        )}
+        {lookupField(
+          "Division",
+          "division",
+          "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_DIVISION_LIST",
+          "div_code",
+          ["div_name"],
+          [
+            { field: "div_code", header: "Code" },
+            { field: "div_name", header: "Name" },
+          ],
+        )}
+        {lookupField(
+          "Reviewer",
+          "reviewer",
+          "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_RPT_NAME_LIST",
+          "employee_id",
+          ["rpt_name"],
+          [
+            { field: "employee_id", header: "Employee ID" },
+            { field: "rpt_name", header: "Name" },
+          ],
+        )}
+        {lookupField(
+          "Grade",
+          "grade",
+          "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_GRADE_LIST",
+          "grade_code",
+          ["grade_name"],
+          [
+            { field: "grade_code", header: "Code" },
+            { field: "grade_name", header: "Name" },
+          ],
+        )}
+        {dateField("Date of Joining", "doj", true)}
+        {dateField("Confirmation Due Date", "conf_due_dt", true)}
+      </CardContent>
+    </Card>
+  );
 
-        <div className="freight-tabs-panel border-t p-3 grid gap-3">
-          {loadingRecord && (
-            <p className="m-0 text-xs text-muted-foreground">Loading full record...</p>
+  const renderStepKeyResponsibilities = () => (
+    <Card>
+      <CardHeader>
+        <div>
+          <p className="eyebrow">Responsibilities</p>
+          <h2 className="m-0 text-sm font-semibold">Key Responsibilities</h2>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2">
+        {field("Responsibility 1", "kr_1")}
+        {field("Responsibility 2", "kr_2")}
+        {field("Responsibility 3", "kr_3")}
+        {field("Responsibility 4", "kr_4")}
+        {field("Responsibility 5", "kr_5")}
+      </CardContent>
+    </Card>
+  );
+
+  const renderStepPerformance = () => (
+    <Card>
+      <CardHeader>
+        <div>
+          <p className="eyebrow">Assessment</p>
+          <h2 className="m-0 text-sm font-semibold">Performance Assessment</h2>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        <div className="grid grid-cols-[2.5fr_0.6fr_3fr] gap-2 text-xs font-semibold text-muted-foreground">
+          <span>Assessment Area</span>
+          <span>Rating</span>
+          <span>Comments</span>
+        </div>
+        {DEFAULT_AREAS.map((area, i) => {
+          const num = i + 1;
+          const areaKey = `assesmnt_area${num}` as keyof TManpowerTransaction;
+          const displayArea = String(form[areaKey] ?? area);
+          return (
+            <div key={num} className="grid grid-cols-[2.5fr_0.6fr_3fr] items-center gap-2">
+              <span className="truncate rounded-md border bg-muted/40 px-2 py-1.5 text-sm" title={displayArea}>
+                {displayArea}
+              </span>
+              {ratingSelect(num)}
+              {commentField(num)}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+
+  const renderStepDecisionSignatories = () => (
+    <>
+      <Card>
+        <CardHeader>
+          <div>
+            <p className="eyebrow">Decision</p>
+            <h2 className="m-0 text-sm font-semibold">Confirmation Decision</h2>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label className="field">
+            <span>Confirmed</span>
+            <Select
+              disabled={readonly}
+              value={form.confirmed ?? ""}
+              onChange={(e) => set("confirmed", e.target.value)}
+            >
+              <option value="">-</option>
+              <option value="Y">Yes</option>
+              <option value="N">No</option>
+            </Select>
+          </label>
+          {field("Extended", "extended")}
+          {dateField("Extended Till", "extended_till")}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <div>
+            <p className="eyebrow">Signatories</p>
+            <h2 className="m-0 text-sm font-semibold">Signatories</h2>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {field("Signatory 1", "sign_1")}
+          {dateField("Date 1", "date_1")}
+          {field("Signatory 2", "sign_2")}
+          {dateField("Date 2", "date_2")}
+          {field("Signatory 3", "sign_3")}
+          {dateField("Date 3", "date_3")}
+        </CardContent>
+      </Card>
+    </>
+  );
+
+  const renderActiveStep = () => {
+    switch (activeStep) {
+      case 0:
+        return renderStepDocumentEmployee();
+      case 1:
+        return renderStepKeyResponsibilities();
+      case 2:
+        return renderStepPerformance();
+      case 3:
+        return renderStepDecisionSignatories();
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="grid gap-4">
+      {apiError && <div className="alert error">{apiError}</div>}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+        <div>
+          <p className="eyebrow m-0">
+            {readonly ? "View Only" : isEdit ? "Edit Mode" : "Autogenerated"}
+          </p>
+          <p className="m-0 text-sm font-semibold text-foreground">
+            {form.doc_no ? `Doc No: ${form.doc_no}` : "New Document"}
+          </p>
+        </div>
+        {loadingRecord && <span className="text-xs text-muted-foreground">Loading record...</span>}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {STEPS.map((label, index) => (
+          <Button
+            key={label}
+            type="button"
+            size="sm"
+            variant={activeStep === index ? "default" : "outline"}
+            onClick={() => setActiveStep(index)}
+          >
+            {index + 1}. {label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid gap-4">{loadingRecord ? <p className="text-sm text-muted-foreground">Loading full record...</p> : renderActiveStep()}</div>
+
+      <div className="flex justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={activeStep === 0}
+          onClick={() => setActiveStep((prev) => Math.max(prev - 1, 0))}
+        >
+          Back
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => onClose(false)}>
+            {readonly ? "Close" : "Cancel"}
+          </Button>
+          {activeStep < STEPS.length - 1 && (
+            <Button
+              type="button"
+              onClick={() => setActiveStep((prev) => Math.min(prev + 1, STEPS.length - 1))}
+            >
+              Next
+            </Button>
           )}
-
-          {/* ══ TAB 0 — Document & Employee ══ */}
-          {tab === 0 && (
-            <>
-              <SectionPanel title="Document Information" icon={FileText}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {dateField("Doc Date", "doc_date")}
-                  {field("Reference No", "doc_ref_no")}
-                </div>
-              </SectionPanel>
-
-              <SectionPanel title="Employee Details" icon={UserRound}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {field("Candidate No", "cand_no")}
-                  {field("Candidate Name", "cand_name", true)}
-                  {lookupField(
-                    "Designation",
-                    "desig",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_DESIG_LIST",
-                    "desig_code",
-                    ["desig_name"],
-                    [
-                      { field: "desig_code", header: "Code" },
-                      { field: "desig_name", header: "Name" },
-                    ],
-                    true,
-                  )}
-                  {lookupField(
-                    "Division",
-                    "division",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_DIVISION_LIST",
-                    "div_code",
-                    ["div_name"],
-                    [
-                      { field: "div_code", header: "Code" },
-                      { field: "div_name", header: "Name" },
-                    ],
-                  )}
-                  {lookupField(
-                    "Reviewer",
-                    "reviewer",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_RPT_NAME_LIST",
-                    "employee_id",
-                    ["rpt_name"],
-                    [
-                      { field: "employee_id", header: "Employee ID" },
-                      { field: "rpt_name", header: "Name" },
-                    ],
-                  )}
-                  {lookupField(
-                    "Grade",
-                    "grade",
-                    "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_GRADE_LIST",
-                    "grade_code",
-                    ["grade_name"],
-                    [
-                      { field: "grade_code", header: "Code" },
-                      { field: "grade_name", header: "Name" },
-                    ],
-                  )}
-                  {dateField("Date of Joining", "doj", true)}
-                  {dateField("Confirmation Due Date", "conf_due_dt", true)}
-                </div>
-              </SectionPanel>
-            </>
-          )}
-
-          {/* ══ TAB 1 — Key Responsibilities ══ */}
-          {tab === 1 && (
-            <SectionPanel title="Key Responsibilities" icon={ClipboardList}>
-              <div className="grid gap-3 md:grid-cols-2">
-                {field("Responsibility 1", "kr_1")}
-                {field("Responsibility 2", "kr_2")}
-                {field("Responsibility 3", "kr_3")}
-                {field("Responsibility 4", "kr_4")}
-                {field("Responsibility 5", "kr_5")}
-              </div>
-            </SectionPanel>
-          )}
-
-          {/* ══ TAB 2 — Performance ══ */}
-          {tab === 2 && (
-            <SectionPanel title="Performance Assessment" icon={ListChecks}>
-              <div className="grid gap-2">
-                <div className="grid grid-cols-[2.5fr_0.6fr_3fr] gap-2 text-[11px] font-medium text-muted-foreground">
-                  <span>Assessment Area</span>
-                  <span>Rating</span>
-                  <span>Comments</span>
-                </div>
-                {DEFAULT_AREAS.map((area, i) => {
-                  const num = i + 1;
-                  const areaKey = `assesmnt_area${num}` as Key;
-                  const ratingKey = `rating_${num}` as Key;
-                  const commentKey = `comment${num}` as Key;
-                  const displayArea = String(form[areaKey] ?? area);
-                  return (
-                    <div key={num} className="grid grid-cols-[2.5fr_0.6fr_3fr] items-center gap-2">
-                      <span
-                        className="truncate rounded-md border bg-muted/40 px-2 py-1.5 text-[12px]"
-                        title={displayArea}
-                      >
-                        {displayArea}
-                      </span>
-                      <Select
-                        disabled={readonly}
-                        value={String(form[ratingKey] ?? "")}
-                        onChange={(e) => set(ratingKey, e.target.value)}
-                      >
-                        <option value="">-</option>
-                        {[1, 2, 3, 4, 5].map((v) => (
-                          <option key={v} value={String(v)}>
-                            {v}
-                          </option>
-                        ))}
-                      </Select>
-                      <Input
-                        placeholder="Comments"
-                        disabled={readonly}
-                        value={String(form[commentKey] ?? "")}
-                        onChange={(e) => set(commentKey, e.target.value)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionPanel>
-          )}
-
-          {/* ══ TAB 3 — Decision & Signatories ══ */}
-          {tab === 3 && (
-            <>
-              <SectionPanel title="Confirmation Decision" icon={ShieldCheck}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Field label="Confirmed">
-                    <Select
-                      disabled={readonly}
-                      value={form.confirmed ?? ""}
-                      onChange={(e) => set("confirmed", e.target.value)}
-                    >
-                      <option value="">-</option>
-                      <option value="Y">Yes</option>
-                      <option value="N">No</option>
-                    </Select>
-                  </Field>
-                  {field("Extended", "extended")}
-                  {dateField("Extended Till", "extended_till")}
-                </div>
-              </SectionPanel>
-
-              <SectionPanel title="Signatories" icon={PenLine}>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {field("Signatory 1", "sign_1")}
-                  {dateField("Date 1", "date_1")}
-                  <div className="hidden md:block" />
-                  {field("Signatory 2", "sign_2")}
-                  {dateField("Date 2", "date_2")}
-                  <div className="hidden md:block" />
-                  {field("Signatory 3", "sign_3")}
-                  {dateField("Date 3", "date_3")}
-                </div>
-              </SectionPanel>
-            </>
+          {!readonly && activeStep === STEPS.length - 1 && (
+            <Button disabled={saving} onClick={handleSubmit}>
+              <Save size={15} /> {saving ? "Saving..." : isEdit ? "Update" : "Submit"}
+            </Button>
           )}
         </div>
       </div>
     </div>
   );
-});
+}

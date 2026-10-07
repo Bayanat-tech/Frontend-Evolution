@@ -1,15 +1,14 @@
-import {
-  ArrowLeft, ChevronsDownUp, ChevronsUpDown, Edit2, FileText, Loader2, RefreshCw, Save, UserCog, X,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Edit2, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useAuth } from "../../../state/AuthContext";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
+import { Dialog } from "../../../components/ui/Dialog";
 import { getDynamicLookup } from "../../../api/lookups";
-import type { TEmployeeDetails } from "./EmployeeDetails.types";
-import EditEmployeeDetailsForm, { type EmployeeFormHandle } from "./Employeedetailform";
+import { TEmployeeDetails } from "./EmployeeDetails.types";
+import EditEmployeeDetailsForm from "./Employeedetailform";
 
 // dd/mm/yyyy — used for every date column rendered in the table
 function formatDate(value: unknown): string {
@@ -130,29 +129,21 @@ function mapEmployeeDetails(row: Record<string, unknown>): TEmployeeDetails {
 export function EmployeeDetailsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const loginid = user?.loginid ?? "";
-  const companyCode = user?.company_code;
 
   const [rows, setRows] = useState<TEmployeeDetails[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // view state
-  const [view, setView] = useState<"list" | "editor">("list");
-  const [activeEmployee, setActiveEmployee] = useState<TEmployeeDetails | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [allOpen, setAllOpen] = useState(false); // mirrors the form's section state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<TEmployeeDetails | null>(null);
 
-  // Ref to the form so the header buttons can trigger it
-  const formRef = useRef<EmployeeFormHandle>(null);
-
-  const loadRows = useCallback(async () => {
+  const loadRows = async () => {
     setLoading(true);
     try {
       const response = await getDynamicLookup({
         parameter: "MS_HR_EMPDETAIL_EMPLOYEE",
-        loginid,
-        code1: companyCode,
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code,
       });
       const tableData = (Array.isArray(response) ? response : []) as Record<string, unknown>[];
       setRows(tableData.map(mapEmployeeDetails));
@@ -161,172 +152,82 @@ export function EmployeeDetailsPage() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginid, companyCode]);
+  };
 
   useEffect(() => {
     void loadRows();
-  }, [loadRows]);
+  }, []);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((row) =>
-      [row.employee_code, row.rpt_name, row.first_name, row.last_name, row.family_name, row.dept_code, row.section_code]
+      [row.employee_code, row.rpt_name , row.first_name, row.last_name, row.family_name, row.dept_code, row.section_code]
         .some((value) => String(value ?? "").toLowerCase().includes(term)),
     );
   }, [query, rows]);
 
-  /* ── Navigation handlers ── */
   const openEdit = (row: TEmployeeDetails) => {
-    setActiveEmployee(row);
-    setView("editor");
+    setEditTarget(row);
+    setEditOpen(true);
   };
 
-  const handleCloseEditor = () => {
-    if (saving) return;
-    setView("list");
-    setActiveEmployee(null);
+  const closeEdit = (refetch?: boolean) => {
+    setEditOpen(false);
+    setEditTarget(null);
+    if (refetch) void loadRows();
   };
 
-  const handleSaved = () => {
-    setSaving(false);
-    setView("list");
-    setActiveEmployee(null);
-    void loadRows();
-  };
-
-  /* ── Header Save button handler ── */
-  const handleHeaderSave = async () => {
-    setSaving(true);
-    try {
-      await formRef.current?.save();
-    } finally {
-      setSaving(false);
-    }
-  };
+  const fullName = (row: TEmployeeDetails) =>
+    [row.first_name, row.second_name, row.last_name].filter(Boolean).join(" ");
 
   const columns = useMemo<ColumnDef<TEmployeeDetails>[]>(
     () => [
-      { accessorKey: "employee_code", header: "Employee Code", size: 110, enableSorting: false },
-      { accessorKey: "rpt_name", header: "Employee Name", size: 220, enableSorting: false },
-      { accessorKey: "dept_code", header: "Department", size: 100, enableSorting: false },
-      { accessorKey: "section_code", header: "Section", size: 100, enableSorting: false },
-      { accessorKey: "mobile_no", header: "Mobile No", size: 120, enableSorting: false },
-      { accessorKey: "email_official", header: "Official Email", size: 200, enableSorting: false },
+      { accessorKey: "employee_code", header: "Employee Code", size: 110 },
+      { accessorKey: "rpt_name", header: "Employee Name", size: 220},
+      { accessorKey: "dept_code", header: "Department", size: 100 },
+      { accessorKey: "section_code", header: "Section", size: 100 },
+      { accessorKey: "mobile_no", header: "Mobile No", size: 120 },
+      { accessorKey: "email_official", header: "Official Email", size: 200 },
       {
         accessorKey: "birth_date",
         header: "Date of Birth",
         size: 110,
-        enableSorting: false,
         cell: ({ getValue }) => formatDate(getValue()),
       },
-      { accessorKey: "emp_status", header: "Status", size: 90, enableSorting: false },
+      { accessorKey: "emp_status", header: "Status", size: 90 },
       {
         id: "actions",
         header: "Actions",
-        size: 70,
-        enableSorting: false,
-        enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openEdit(row.original)}
-              title="Edit employee details"
-            >
-              <Edit2 size={13} />
-            </button>
+          <div className="flex items-center gap-1">
+            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title="Edit employee details">
+              <Edit2 size={14} />
+            </Button>
           </div>
         ),
+        size: 70,
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
-  /* ─────────────────────────────────────────────────────────
-     EDITOR — full-page, Freight-style transaction header
-     ───────────────────────────────────────────────────────── */
-  if (view === "editor" && activeEmployee) {
-    return (
-      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={15} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Edit Employee Details</h1>
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] font-medium leading-tight text-amber-700">
-                  Editing
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {activeEmployee.employee_code}
-                  {activeEmployee.rpt_name ? ` - ${activeEmployee.rpt_name}` : ""}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions: List / Close / Expand all / Save */}
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-
-            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
-              <X size={14} /> Close
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => formRef.current?.toggleAll()}>
-              {allOpen ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}{" "}
-              {allOpen ? "Collapse all" : "Expand all"}
-            </Button>
-            <Button type="button" size="sm" onClick={() => void handleHeaderSave()} disabled={saving}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-              {saving ? "Saving" : "Save"}
-            </Button>
-          </div>
-        </div>
-
-        <EditEmployeeDetailsForm
-          ref={formRef}
-          existingData={activeEmployee}
-          onAllOpenChange={setAllOpen}
-          onClose={(shouldRefetch?: boolean) => (shouldRefetch ? handleSaved() : handleCloseEditor())}
-        />
-      </section>
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────
-     LIST VIEW — Freight-style transaction header + DataTable
-     ───────────────────────────────────────────────────────── */
   return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <UserCog size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                HR Master - Employee Details
-              </h1>
-              <span className="text-xs text-muted-foreground">
-                {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
-              </span>
-            </div>
-          </div>
+    <section className="grid gap-4">
+      {/* ── Header ── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="eyebrow">HR Master</p>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">Employee Details</h1>
         </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => loadRows()}>
+            <RefreshCw size={15} /> Refresh
           </Button>
         </div>
       </div>
 
+      {/* ── Table ── */}
       <DataTable
         columns={columns}
         data={filteredRows}
@@ -341,8 +242,20 @@ export function EmployeeDetailsPage() {
         minWidth={1000}
         density="grid"
         getRowId={(row) => `${row.employee_code}-${row.employee_id}`}
-        onRowClick={openEdit}
       />
+
+      {/* ── Edit Details Dialog ── */}
+      <Dialog
+        open={editOpen}
+        title="Edit Employee Details"
+        description={editTarget ? `${fullName(editTarget)} (${editTarget.employee_code} - ${editTarget?.rpt_name})` : undefined}
+        wide
+        onClose={() => closeEdit()}
+      >
+        {editTarget && (
+          <EditEmployeeDetailsForm existingData={editTarget} onClose={() => closeEdit(true)} />
+        )}
+      </Dialog>
     </section>
   );
 }

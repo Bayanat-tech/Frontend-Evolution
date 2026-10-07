@@ -121,12 +121,6 @@ const PAGE_SIZE: Record<Orientation, { w: number; h: number }> = {
 const DEFAULT_PAGE_MARGIN_MM = 8;
 
 /**
- * What "100%" means in the toolbar. 1 = page fits the full preview width;
- * 0.9 = 100% shows what used to be the 90% view (page slightly narrower than the preview).
- */
-const BASE_VIEW_RATIO = 0.9;
-
-/**
  * Single font size (CSS px) forced on all report text inside the dialog
  * (headings h1–h6 keep their own sizes). Change this one value to resize every report.
  */
@@ -164,7 +158,7 @@ const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
  * - The report header (logo/company) and footer repeat on every page
  * - Toolbar page indicator + left thumbnails driven by page count
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
- * - 100% zoom = BASE_VIEW_RATIO (90%) of the preview width, centred
+ * - 100% zoom = page fits the full width of the preview area (no side gutters)
  * - Responsive: full-screen on phones, slide-over page navigator, trimmed toolbar, touch pinch-zoom
  */
 export function NewReportDialog({
@@ -239,9 +233,9 @@ export function NewReportDialog({
   const contentW = pageW - pageMarginPx * 2;
   const contentH = pageH - pageMarginPx * 2;
 
-  /** Scale that makes the A4 sheet as wide as the preview area (× BASE_VIEW_RATIO) */
-  const baseScale = viewW > 0 ? (viewW / pageW) * BASE_VIEW_RATIO : 1;
-  /** Final scale applied to the pages (100% zoom = old 90% view) */
+  /** Scale that makes the A4 sheet exactly as wide as the preview area */
+  const baseScale = viewW > 0 ? viewW / pageW : 1;
+  /** Final scale applied to the pages (100% zoom = fit width) */
   const scale = baseScale * (zoom / 100);
   scaleRef.current = scale;
   zoomRef.current = zoom;
@@ -1542,7 +1536,7 @@ export function NewReportDialog({
               flex: 1,
               minWidth: 0,
               overflowY: "auto",
-              overflowX: pageW * scale > viewW + 1 ? "auto" : "hidden",
+              overflowX: zoom > 100.5 ? "auto" : "hidden",
               background: "#374151",
               padding: "0 0 40px",
               touchAction: "pan-x pan-y",

@@ -976,17 +976,6 @@ export async function getInvocieDetailReport(prin_code: string, invoice_no: stri
   if (!response.data) throw new Error("Unable to fetch Invoice Detail Report");
   return response.data;
 }
-// Add this new function next to your existing getInvocieDetailReport
-export async function getInvoiceDetailStandardReport(prin_code: string, invoice_no: string, company_code: string): Promise<string> {
-  // Assuming your Express route for the new standard report is "/api/wms/inbound/reports/invoice-report-standard"
-  // You will need to make sure this route is mapped in your backend routes file!
-  const response = await api.get(
-    `/api/wms/inbound/reports/invoice-report-standard?prin_code=${prin_code}&invoice_no=${invoice_no}&company_code=${company_code}`,
-    { responseType: "text" }
-  );
-  if (!response.data) throw new Error("Unable to fetch Standard Invoice Detail Report");
-  return response.data;
-}
 
 export async function downloadInvocieDetailReportExcel(prin_code: string, invoice_no: string): Promise<void> {
   const response = await api.get(

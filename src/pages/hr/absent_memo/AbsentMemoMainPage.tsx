@@ -1,241 +1,306 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Edit2, FileText, Loader2, Plus, RefreshCw, Save, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDynamicLookup } from "../../../api/lookups";
-import { useToast } from "../../../components/ui/AlertToast";
-import { Button } from "../../../components/ui/Button";
-import { DataTable } from "../../../components/ui/DataTable";
-import { useAuth } from "../../../state/AuthContext";
-import AddAbsentMemoPage, { type AbsentMemoFormHandle } from "./AddAbsentMemoPage";
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useFormik } from 'formik';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Edit2, Plus, Save } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
+import { DataTable } from '../../../components/ui/DataTable';
+import { useToast } from '../../../components/ui/AlertToast';
+import { DocumentPageShell } from '../../../components/ui/DocumentPageShell';
+import AddAbsentMemoPage from './AddAbsentMemoPage';
+import type { AbsentMemoDetailRow } from './types';
+import { getDynamicLookup } from '../../../api/lookups';
+import { useAuth } from '../../../state/AuthContext';
+import hrSalaryAdvDedServiceInstance from '../../../api/hr/upsertHrSalaryAdvDed';
 
-const gridDataParameter = "HR_ABSENT_MEMO_MAIN_PAGE";
+const gridDataParameter = 'HR_ABSENT_MEMO_MAIN_PAGE';
 
-export type AbsentMemoRow = {
-  doc_no: string | number;
-  doc_type?: string;
-  doc_date?: string;
-  ref_no?: string;
-  employee_code?: string;
-  name_from?: string;
-  amount?: number | string;
-  [key: string]: unknown;
+const columnDef: ColumnDef<any>[] = [
+  { accessorKey: 'doc_no', header: 'Doc No' },
+  { accessorKey: 'doc_type', header: 'Doc Type' },
+  { accessorKey: 'doc_date', header: 'Doc Date' },
+  { accessorKey: 'ref_no', header: 'Ref No' },
+  { accessorKey: 'employee_code', header: 'Employee Code' },
+  { accessorKey: 'name_from', header: 'Name From' },
+  { accessorKey: 'amount', header: 'Amount' },
+];
+
+const normalizeValue = (value: any) => (value === null || value === undefined ? '' : String(value));
+
+const normalizeDateValue = (value: any) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
 };
 
-type EditorMode = "add" | "edit";
+const mapDetailRows = (rows: any[]): AbsentMemoDetailRow[] =>
+  rows.map((row, index) => ({
+    srNo: row?.sr_no ?? row?.SR_NO ?? row?.serial_no ?? row?.SERIAL_NO ?? index + 1,
+    payUnit: String(row?.pay_comp_id ?? row?.PAY_COMP_ID ?? ''),
+    description: String(row?.sal_type_flag ?? row?.SAL_TYPE_FLAG ?? row?.description ?? ''),
+    effectiveFrom: normalizeDateValue(row?.recover_from_dt ?? row?.RECOVER_FROM_DT),
+    absentFromDate: normalizeDateValue(row?.leave_start_date ?? row?.LEAVE_START_DATE ?? row?.recover_from_dt),
+    absentToDate: normalizeDateValue(row?.leave_end_date ?? row?.LEAVE_END_DATE),
+    noOfDays: row?.deduct_noof_leavedays ?? row?.DEDUCT_NOOF_LEAVEDAYS ?? row?.leave_days_paid ?? '',
+    amount: row?.amount ?? row?.AMOUNT ?? row?.recover_mth_amt ?? row?.RECOVER_MTH_AMT ?? '',
+    refLeaveDocNo: String(row?.ref_leave_doc_no ?? row?.REF_LEAVE_DOC_NO ?? ''),
+    cancel: String(row?.cancel_status ?? row?.CANCEL_STATUS ?? (row?.deduct_from_leave === 'Y' ? 'Yes' : 'No')),
+  }));
+
+const getInitialFormValues = (rowData: any) => ({
+  docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
+  docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? 'Absent'),
+  docDate: normalizeDateValue(rowData?.docDate ?? rowData?.doc_date) || new Date().toISOString().slice(0, 10),
+  refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
+  employeeCode: normalizeValue(rowData?.employeeCode ?? rowData?.employee_code),
+  nameFrom: normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
+  addrFrom: normalizeValue(rowData?.addrFrom ?? rowData?.addr_from),
+  lettrSubject: normalizeValue(rowData?.lettrSubject ?? rowData?.lettr_subject ?? 'Salary Deduction'),
+  remarks1: normalizeValue(rowData?.remarks1 ?? rowData?.remarks_1),
+  remarks2: normalizeValue(rowData?.remarks2 ?? rowData?.remarks_2),
+  signatoryName: normalizeValue(rowData?.signatoryName ?? rowData?.signatory_name),
+  signatoryPosition: normalizeValue(rowData?.signatoryPosition ?? rowData?.signatory_position),
+});
 
 const AbsentMemoMainPage = () => {
-  const title = "Absent Memo";
+  const title = 'Absent Memo';
   const { user } = useAuth();
   const { toast } = useToast();
-  const loginid = user?.loginid ?? "";
-  const companyCode = user?.company_code ?? "";
+  const [selectedRowData, setSelectedRowData] = useState<any>(null);
+  const [detailRows, setDetailRows] = useState<AbsentMemoDetailRow[]>([]);
+  const [dialogStatus, setDialogStatus] = useState<{ open: boolean; type: '' | 'add' | 'edit' }>({
+    open: false,
+    type: '',
+  });
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [rows, setRows] = useState<AbsentMemoRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const formik = useFormik({
+    enableReinitialize: true,
+    initialValues: getInitialFormValues(selectedRowData),
+    onSubmit: async (values) => {
+      if (!values.employeeCode) {
+        toast.error('Employee Code is required');
+        return;
+      }
+      if (detailRows.length === 0) {
+        toast.error('Please add at least one detail line');
+        return;
+      }
 
-  // view state (list ⇄ full-page editor)
-  const [view, setView] = useState<"list" | "editor">("list");
-  const [editorMode, setEditorMode] = useState<EditorMode>("add");
-  const [activeRow, setActiveRow] = useState<AbsentMemoRow | null>(null);
-  const [saving, setSaving] = useState(false);
+      setIsSaving(true);
+      try {
+        const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  // Ref to the form so the header Save button can trigger it
-  const formRef = useRef<AbsentMemoFormHandle>(null);
+        const header = {
+          company_code: user?.company_code ?? '',
+          doc_type: values.docType || 'Absent',
+          doc_no: values.docNo ? Number(values.docNo) : 0,
+          doc_date: values.docDate ? new Date(values.docDate).toISOString() : new Date().toISOString(),
+          ref_no: values.refNo || '',
+          name_from: values.nameFrom || '',
+          addr_from: values.addrFrom || '',
+          lettr_subject: values.lettrSubject || 'Salary Deduction',
+          remarks_1: values.remarks1 || '',
+          remarks_2: values.remarks2 || '',
+          signatory_name: values.signatoryName || '',
+          signatory_position: values.signatoryPosition || '',
+          employee_code: values.employeeCode || '',
+          employee_id: values.employeeCode || '',
+          amount: totalAmount,
+          user_id: user?.loginid || '',
+        };
 
-  const loadRows = useCallback(async () => {
-    if (!companyCode) return;
-    setLoading(true);
-    try {
-      const response = await getDynamicLookup({
-        parameter: gridDataParameter,
-        loginid,
-        code1: companyCode,
-      });
-      setRows(Array.isArray(response) ? (response as AbsentMemoRow[]) : []);
-    } catch (error) {
-      setRows([]);
-      toast.error(error instanceof Error ? error.message : "Unable to load absent memos");
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginid, companyCode]);
+        const details = detailRows.map((row, index) => ({
+          company_code: user?.company_code ?? '',
+          doc_type: values.docType || 'Absent',
+          doc_no: values.docNo ? Number(values.docNo) : 0,
+          sr_no: Number(row.srNo) || index + 1,
+          employee_id: values.employeeCode || '',
+          emplyee_code: values.employeeCode || '', // matches DB column spelling
+          pay_comp_id: row.payUnit || '',
+          amount: Number(row.amount || 0),
+          recover_mth_amt: Number(row.amount || 0),
+          recover_from_dt: row.effectiveFrom
+            ? new Date(row.effectiveFrom).toISOString()
+            : row.absentFromDate
+              ? new Date(row.absentFromDate).toISOString()
+              : undefined,
+          deduct_from_leave: row.cancel === 'Yes' ? 'Y' : 'N',
+          deduct_noof_leavedays: Number(row.noOfDays || 0),
+          ref_leave_doc_no: row.refLeaveDocNo || '',
+        }));
+
+        const success = await hrSalaryAdvDedServiceInstance.upsertHrSalaryAdvDed({
+          header,
+          details,
+          loginid: user?.loginid || '',
+        });
+
+        if (success) {
+          toast.success(dialogStatus.type === 'edit' ? 'Updated Successfully' : 'Saved Successfully');
+          closeDialog();
+          refetchGridData();
+        } else {
+          toast.error(dialogStatus.type === 'edit' ? 'Update Failed' : 'Save Failed');
+        }
+      } catch (error) {
+        console.error('Absent Memo save error:', error);
+        toast.error('Error while saving data');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+  });
 
   useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
+    const fetchDetailRows = async () => {
+      if (!dialogStatus.open || dialogStatus.type !== 'edit' || !selectedRowData?.doc_no) return;
+      try {
+        const response = await getDynamicLookup({
+          parameter: 'HR_ABSENT_MEMO_TAB_2_DATA',
+          loginid: user?.loginid ?? '',
+          code1: user?.company_code ?? '',
+          number1: selectedRowData.doc_no,
+        });
+        const rawRows = Array.isArray(response) ? response : [];
+        setDetailRows(mapDetailRows(rawRows));
+      } catch (error) {
+        console.error('Failed to load absent memo detail rows:', error);
+        setDetailRows([]);
+      }
+    };
+    void fetchDetailRows();
+  }, [dialogStatus.open, dialogStatus.type, selectedRowData, user?.company_code, user?.loginid]);
 
-  /* ── Navigation handlers ── */
-  const openEditor = (mode: EditorMode, row: AbsentMemoRow | null = null) => {
-    setEditorMode(mode);
-    setActiveRow(row);
-    setView("editor");
+  const closeDialog = () => {
+    setDialogStatus({ open: false, type: '' });
+    setSelectedRowData(null);
+    setDetailRows([]);
+    formik.resetForm();
   };
 
-  const handleCloseEditor = () => {
-    if (saving) return;
-    setView("list");
-    setEditorMode("add");
-    setActiveRow(null);
+  const openAdd = () => {
+    setSelectedRowData(null);
+    setDetailRows([]);
+    setDialogStatus({ open: true, type: 'add' });
   };
 
-  const handleSaved = () => {
-    setView("list");
-    setEditorMode("add");
-    setActiveRow(null);
-    void loadRows();
+  const openEdit = (row: any) => {
+    setSelectedRowData(row);
+    setDetailRows([]);
+    setDialogStatus({ open: true, type: 'edit' });
   };
 
-  /* ── Header Save button handler ── */
-  const handleHeaderSave = async () => {
-    setSaving(true);
-    try {
-      await formRef.current?.save();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const columns = useMemo<ColumnDef<AbsentMemoRow>[]>(
+  const columns = useMemo<ColumnDef<any>[]>(
     () => [
-      { accessorKey: "doc_no", header: "Doc No", size: 100, enableSorting: false },
-      { accessorKey: "doc_type", header: "Doc Type", size: 110, enableSorting: false },
-      { accessorKey: "doc_date", header: "Doc Date", size: 120, enableSorting: false },
-      { accessorKey: "ref_no", header: "Ref No", size: 120, enableSorting: false },
-      { accessorKey: "employee_code", header: "Employee Code", size: 140, enableSorting: false },
-      { accessorKey: "name_from", header: "Name From", size: 200, enableSorting: false },
-      { accessorKey: "amount", header: "Amount", size: 110, enableSorting: false },
+      ...columnDef,
       {
-        id: "actions",
-        header: "Actions",
-        size: 80,
-        enableSorting: false,
-        enableColumnFilter: false,
+        id: 'actions',
+        header: 'Actions',
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openEditor("edit", row.original)}
-              title="Edit"
-            >
-              <Edit2 size={13} />
-            </button>
+            <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title="Edit">
+              <Edit2 size={14} />
+            </Button>
           </div>
         ),
+        size: 80,
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
-  /* ─────────────────────────────────────────────────────────
-     EDITOR — Full-page, Freight-style header (with Save button)
-     ───────────────────────────────────────────────────────── */
-  if (view === "editor") {
-    const isEdit = editorMode === "edit";
-    const editorTitle = isEdit ? `Edit ${title}` : `New ${title}`;
-    const badge = isEdit ? "Editing" : "Draft";
+  const { data: gridData, isLoading, refetch: refetchGridData } = useQuery({
+    queryKey: ['data', gridDataParameter, user?.company_code],
+    queryFn: async () => {
+      const response = await getDynamicLookup({
+        parameter: gridDataParameter,
+        loginid: user?.loginid ?? '',
+        code1: user?.company_code ?? '',
+      });
+      return Array.isArray(response) ? response : [];
+    },
+    enabled: !!user?.company_code,
+  });
 
-    return (
-      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        {/* Freight-style transaction header */}
-        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={15} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{editorTitle}</h1>
-                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                  {badge}
-                </span>
-                {activeRow?.doc_no != null && (
-                  <span className="text-xs text-muted-foreground">Doc No {String(activeRow.doc_no)}</span>
-                )}
-              </div>
-            </div>
-          </div>
+  const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-          {/* Actions: List / Close / Save */}
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
-              <ArrowLeft size={14} /> List
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
-              <X size={14} /> Close
-            </Button>
-            <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
-              <Save size={14} /> {saving ? "Saving" : isEdit ? "Update" : "Save"}
-            </Button>
-          </div>
-        </div>
+return (
+  <section className="relative flex h-full min-h-0 flex-col gap-2 overflow-hidden p-0">
+    {/* Title row – tight, no extra top space */}
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-0">
+      <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">
+        {title}
+      </h1>
+      <Button title={`Add ${title}`} onClick={openAdd} size="sm">
+        <Plus size={14} /> Add
+      </Button>
+    </div>
 
-        {/* Form content — ref lets the header Save trigger the form */}
-        <AddAbsentMemoPage
-          ref={formRef}
-          mode={editorMode}
-          existingData={activeRow}
-          onClose={(shouldRefetch?: boolean) => (shouldRefetch ? handleSaved() : handleCloseEditor())}
-        />
-      </section>
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────
-     LIST VIEW — Freight-style transaction header (buttons in header)
-     ───────────────────────────────────────────────────────── */
-  return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <FileText size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">HR - {title}</h1>
-              <span className="text-xs text-muted-foreground">
-                {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-          </Button>
-          <Button type="button" size="sm" onClick={() => openEditor("add")}>
-            <Plus size={14} /> Add
-          </Button>
-        </div>
-      </div>
-
+    {/* Grid fills all remaining height */}
+    <div className="min-h-0 flex-1">
       <DataTable
         columns={columns}
-        data={rows}
-        title={loading ? "Loading" : `${rows.length.toLocaleString()} Documents`}
-        subtitle="Absent Memo List"
-        searchValue={query}
-        onSearchChange={(value) => setQuery(value)}
-        searchPlaceholder="Search doc no, employee..."
-        loading={loading}
+        data={gridData || []}
+        loading={isLoading}
         emptyText={`No ${title.toLowerCase()} records found`}
-        height={560}
-        minWidth={1000}
+        height="100%"          // if DataTable supports string height
+        // OR if it only accepts number, use a large value / calc:
+        // height={window.innerHeight - 160}
         density="grid"
-        enablePagination
-        pageSize={100}
-        getRowId={(row) => String(row.doc_no)}
-        enableExport
-        exportFilename="hr-absent-memo-list.csv"
+        getRowId={(row: any) => String(row.doc_no)}
       />
-    </section>
-  );
+    </div>
+
+    {dialogStatus.open && (
+      <DocumentPageShell
+        eyebrow={dialogStatus.type === 'edit' ? 'Edit Document' : 'Add Document'}
+        title={title}
+        badges={[
+          { label: 'Doc No', value: formik.values.docNo || 'New' },
+          { label: 'Doc Date', value: formik.values.docDate || '—' },
+          { label: 'Employee', value: formik.values.employeeCode || '—' },
+        ]}
+        onClose={closeDialog}
+        onCancel={closeDialog}
+        footer={
+          <>
+            <div className="text-sm text-slate-600">
+              Total Amount{' '}
+              <span className="text-base font-semibold text-[#0e4f8f]">
+                {totalAmount.toLocaleString(undefined, {
+                  minimumFractionDigits: 3,
+                  maximumFractionDigits: 3,
+                })}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={closeDialog} disabled={isSaving}>
+                Close
+              </Button>
+              <Button
+                onClick={() => formik.submitForm()}
+                className="bg-[#0e4f8f] hover:bg-[#0c4278]"
+                disabled={isSaving}
+              >
+                <Save size={14} />{' '}
+                {isSaving ? 'Saving…' : dialogStatus.type === 'edit' ? 'Update' : 'Save'}
+              </Button>
+            </div>
+          </>
+        }
+      >
+        <AddAbsentMemoPage
+          mode={dialogStatus.type}
+          formik={formik}
+          detailRows={detailRows}
+          setDetailRows={setDetailRows}
+        />
+      </DocumentPageShell>
+    )}
+  </section>
+);
 };
 
 export default AbsentMemoMainPage;

@@ -19,7 +19,6 @@ const isLV = (x: LV | null): x is LV => !!x;
 export function parsePayslipHtml(html: string) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const root = doc.querySelector("#payslip-content") ?? doc.body;
-  if (!root) throw new Error("No data found");
   const paragraphs = Array.from(root.querySelectorAll("p"));
 
   const title = clean(root.querySelector("p")?.textContent); // "P a y s l i p ( Division : 10 )"

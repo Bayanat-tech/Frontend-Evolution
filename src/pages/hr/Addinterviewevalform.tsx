@@ -1,26 +1,12 @@
-// Interview Evaluation form — new UI (modelled on AddGradeMasterForm):
-//  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
-//  • Freight-style collapsible sections + shared Field block
-//  • toast for validation / API feedback (no inline alert banner)
-//  • No bottom Cancel/Submit row — List / Close / Save live in the page header
-
-import { ChevronDown, IdCard, ListChecks, StickyNote, UserCog } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import {
-  forwardRef, useCallback, useEffect, useImperativeHandle, useState,
-} from "react";
+import { Save, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { getDynamicLookup } from "../../api/lookups";
-import { useToast } from "../../components/ui/AlertToast";
-import { Field } from "../../components/ui/Formblocks";
+import { Button } from "../../components/ui/Button";
+import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import hrIntEvalFormServiceInstance from "./upsertHrIntEvalFormApi";
-
-/* ✅ Expose save() to the parent (header Save button) */
-export type InterviewEvalFormHandle = {
-  save: () => Promise<void>;
-};
 
 // ── Evaluation options ──────────────────────────────────────────────────────
 const EVAL_OPTIONS = [
@@ -104,304 +90,344 @@ const EMPTY: TInterviewEval = {
   sign_4: "",
 };
 
-/* ─────────────────────────────────────────────────────────────
-   CollapsibleSection — Freight panel with a clickable title bar.
-   The body stays mounted (just hidden) so form state is never lost.
-   ───────────────────────────────────────────────────────────── */
-function CollapsibleSection({
-  title,
-  icon: Icon,
-  defaultOpen = true,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
+export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
+  const { user } = useAuth();
+  const readonly = mode === "view";
+  const isEdit = mode === "edit";
 
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        title={open ? "Collapse section" : "Expand section"}
-        className={`freight-panel-title flex w-full cursor-pointer items-center justify-between gap-2 bg-muted/35 px-3 py-2 text-left transition-colors hover:bg-muted/60 ${
-          open ? "border-b" : ""
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-        </div>
-        <ChevronDown
-          size={14}
-          className={`shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-        />
-      </button>
-      <div className={`freight-panel-body p-3 ${open ? "" : "hidden"}`}>{children}</div>
-    </section>
-  );
-}
+  const [form, setForm] = useState<TInterviewEval>({ ...EMPTY });
+  const [errors, setErrors] = useState<Partial<Record<keyof TInterviewEval, string>>>({});
+  const [saving, setSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [deptList, setDeptList] = useState<DeptOption[]>([]);
 
-/* ─────────────────────────────────────────────────────────────
-   Main Form (forwardRef so parent can trigger save)
-   ───────────────────────────────────────────────────────────── */
-export const Addinterviewevalform = forwardRef<InterviewEvalFormHandle, Props>(
-  function Addinterviewevalform({ mode, existingData, onClose }, ref) {
-    const { user } = useAuth();
-    const { toast } = useToast();
-    const readonly = mode === "view";
-    const isEdit = mode === "edit";
+  // ── Load departments ────────────────────────────────────────────────────
+  const loadDepts = useCallback(async () => {
+    try {
+      const res = await getDynamicLookup({
+        parameter: "HR_CAM_DEPARTMENT_DEPTCODE",
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code ?? "",
+        code2: "",
+        code3: "",
+        code4: "",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+      });
+      const list = Array.isArray(res) ? (res as Record<string, unknown>[]) : [];
+      setDeptList(
+        list.map((d) => ({
+          dept_code: String(d.DEPT_CODE ?? d.dept_code ?? ""),
+          dept_short_name: String(d.DEPT_SHORT_NAME ?? d.dept_short_name ?? ""),
+        })),
+      );
+    } catch {
+      // non-critical; dropdown will be empty
+    }
+  }, [user?.loginid, user?.company_code]);
 
-    // The page remounts this form each time it opens, so initialise from existingData directly.
-    const [form, setForm] = useState<TInterviewEval>(() =>
-      (isEdit || readonly) && existingData
-        ? {
-            ...EMPTY,
-            ...existingData,
-            doc_date: toDate(existingData.doc_date) || today,
-            intrvw_date: toDate(existingData.intrvw_date),
-          }
-        : { ...EMPTY },
-    );
-    const [errors, setErrors] = useState<Partial<Record<keyof TInterviewEval, string>>>({});
-    const [deptList, setDeptList] = useState<DeptOption[]>([]);
+  useEffect(() => {
+    void loadDepts();
+  }, [loadDepts]);
 
-    // ── Load departments ──────────────────────────────────────────────────
-    const loadDepts = useCallback(async () => {
-      try {
-        const res = await getDynamicLookup({
-          parameter: "HR_CAM_DEPARTMENT_DEPTCODE",
-          loginid: user?.loginid ?? "",
-          code1: user?.company_code ?? "",
-          code2: "",
-          code3: "",
-          code4: "",
-          number1: 0,
-          number2: 0,
-          number3: 0,
-          number4: 0,
-          date1: null,
-          date2: null,
-          date3: null,
-          date4: null,
-        });
-        const list = Array.isArray(res) ? (res as Record<string, unknown>[]) : [];
-        setDeptList(
-          list.map((d) => ({
-            dept_code: String(d.DEPT_CODE ?? d.dept_code ?? ""),
-            dept_short_name: String(d.DEPT_SHORT_NAME ?? d.dept_short_name ?? ""),
-          })),
-        );
-      } catch {
-        // non-critical; dropdown will be empty
-      }
-    }, [user?.loginid, user?.company_code]);
+  // ── Populate form on edit / view ────────────────────────────────────────
+  useEffect(() => {
+    if ((isEdit || readonly) && existingData) {
+      setForm({
+        ...EMPTY,
+        ...existingData,
+        doc_date: toDate(existingData.doc_date) || today,
+        intrvw_date: toDate(existingData.intrvw_date),
+      });
+    }
+  }, [isEdit, readonly, existingData]);
 
-    useEffect(() => {
-      void loadDepts();
-    }, [loadDepts]);
+  const set = (field: keyof TInterviewEval, value: unknown) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
-    const set = (key: keyof TInterviewEval, value: unknown) =>
-      setForm((prev) => ({ ...prev, [key]: value }));
+  // ── Validation ──────────────────────────────────────────────────────────
+  const validate = (): boolean => {
+    const next: Partial<Record<keyof TInterviewEval, string>> = {};
+    if (!form.doc_date) next.doc_date = "Doc Date is required";
+    if (!form.cand_name?.trim()) next.cand_name = "Candidate Name is required";
+    if (!form.dept?.trim()) next.dept = "Department is required";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
-    // ── Validation ────────────────────────────────────────────────────────
-    const validate = (): string | null => {
-      const next: Partial<Record<keyof TInterviewEval, string>> = {};
-      if (!form.doc_date) next.doc_date = "Doc Date is required";
-      if (!form.cand_name?.trim()) next.cand_name = "Candidate Name is required";
-      if (!form.dept?.trim()) next.dept = "Department is required";
-      setErrors(next);
-      return Object.values(next)[0] ?? null;
-    };
+  // ── Submit (uses hrIntEvalFormServiceInstance, same as original) ─────────
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    setApiError("");
+    try {
+      const docDate = form.doc_date || today;
+      const todayStr = new Date().toISOString().slice(0, 10);
 
-    // ── Submit (called by the page header Save button) ────────────────────
-    const handleSubmit = async () => {
-      const error = validate();
-      if (error) {
-        toast.warning(error);
-        return;
-      }
-      try {
-        const docDate = form.doc_date || today;
-        const todayStr = new Date().toISOString().slice(0, 10);
+      const data = {
+        company_code: user?.company_code ?? "",
+        doc_type: form.doc_type ?? "MRF",
+        ...(isEdit && form.doc_no != null ? { doc_no: Number(form.doc_no) } : {}),
+        doc_ref_no: form.doc_ref_no || undefined,
+        cand_no: form.cand_no || undefined,
+        cand_name: form.cand_name || undefined,
+        pos_appl_for: form.pos_appl_for || undefined,
+        dept: form.dept || undefined,
+        intvr_name: form.intvr_name || undefined,
+        intrvw_date: form.intrvw_date || null,
+        doc_date: docDate,
+        hire_flag: form.hire_flag || undefined,
+        spec_job_skill: form.spec_job_skill || undefined,
+        rel_job_exp: form.rel_job_exp || undefined,
+        rel_edu_training: form.rel_edu_training || undefined,
+        initiative: form.initiative || undefined,
+        comm_skills: form.comm_skills || undefined,
+        attitude: form.attitude || undefined,
+        interest_comp_pos: form.interest_comp_pos || undefined,
+        pos_points: form.pos_points || undefined,
+        neg_points: form.neg_points || undefined,
+        obs_comment: form.obs_comment || undefined,
+        sign_4: form.sign_4 || undefined,
+        user_id: user?.loginid ?? "ADMIN",
+        user_dt: todayStr,
+      };
 
-        const data = {
-          company_code: user?.company_code ?? "",
-          doc_type: form.doc_type ?? "MRF",
-          ...(isEdit && form.doc_no != null ? { doc_no: Number(form.doc_no) } : {}),
-          doc_ref_no: form.doc_ref_no || undefined,
-          cand_no: form.cand_no || undefined,
-          cand_name: form.cand_name || undefined,
-          pos_appl_for: form.pos_appl_for || undefined,
-          dept: form.dept || undefined,
-          intvr_name: form.intvr_name || undefined,
-          intrvw_date: form.intrvw_date || null,
-          doc_date: docDate,
-          hire_flag: form.hire_flag || undefined,
-          spec_job_skill: form.spec_job_skill || undefined,
-          rel_job_exp: form.rel_job_exp || undefined,
-          rel_edu_training: form.rel_edu_training || undefined,
-          initiative: form.initiative || undefined,
-          comm_skills: form.comm_skills || undefined,
-          attitude: form.attitude || undefined,
-          interest_comp_pos: form.interest_comp_pos || undefined,
-          pos_points: form.pos_points || undefined,
-          neg_points: form.neg_points || undefined,
-          obs_comment: form.obs_comment || undefined,
-          sign_4: form.sign_4 || undefined,
-          user_id: user?.loginid ?? "ADMIN",
-          user_dt: todayStr,
-        };
+      const success = await hrIntEvalFormServiceInstance.upsertHrIntEvalFormApi({
+        data,
+        loginid: user?.loginid ?? "ADMIN",
+      });
 
-        const success = await hrIntEvalFormServiceInstance.upsertHrIntEvalFormApi({
-          data,
-          loginid: user?.loginid ?? "ADMIN",
-        });
+      if (!success) throw new Error("Save failed");
+      onClose(true);
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save interview evaluation",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        if (!success) throw new Error("Save failed");
-        toast.success(
-          isEdit ? "Interview evaluation updated successfully" : "Interview evaluation saved successfully",
-        );
-        onClose(true);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Unable to save interview evaluation");
-      }
-    };
-
-    /* ✅ Expose save() to parent */
-    useImperativeHandle(ref, () => ({
-      save: handleSubmit,
-    }));
-
-    // ── Field helpers ─────────────────────────────────────────────────────
-    const textField = (
-      label: string,
-      key: keyof TInterviewEval,
-      type: "text" | "date" = "text",
-      required = false,
-    ) => (
-      <Field label={label} required={required} error={errors[key]} key={key}>
-        <Input
-          type={type}
-          disabled={readonly}
-          value={String(form[key] ?? "")}
-          onChange={(e) => set(key, e.target.value)}
-        />
-      </Field>
-    );
-
-    const textareaField = (label: string, key: keyof TInterviewEval) => (
-      <Field label={label} key={key}>
+  // ── Field helpers ───────────────────────────────────────────────────────
+  const field = (
+    label: string,
+    key: keyof TInterviewEval,
+    type: "text" | "date" | "textarea" = "text",
+    required = false,
+    extraDisabled = false,
+  ) => (
+    <label className="field" key={key}>
+      <span>
+        {label}
+        {required && <strong className="text-destructive"> *</strong>}
+      </span>
+      {type === "textarea" ? (
         <textarea
           className="input"
           rows={3}
-          disabled={readonly}
+          disabled={readonly || extraDisabled}
           value={String(form[key] ?? "")}
           onChange={(e) => set(key, e.target.value)}
           style={{ resize: "vertical", fontFamily: "inherit" }}
         />
-      </Field>
-    );
-
-    const evalField = (label: string, key: keyof TInterviewEval) => (
-      <Field label={label} key={key}>
-        <Select
-          disabled={readonly}
+      ) : (
+        <Input
+          type={type}
+          disabled={readonly || extraDisabled}
           value={String(form[key] ?? "")}
           onChange={(e) => set(key, e.target.value)}
-        >
-          {EVAL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-    );
+        />
+      )}
+      {errors[key] && (
+        <span className="text-destructive text-xs mt-0.5">{errors[key]}</span>
+      )}
+    </label>
+  );
 
-    // ── UI ────────────────────────────────────────────────────────────────
-    return (
-      <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-        <CollapsibleSection title="Document" icon={IdCard}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Doc No">
-              <Input disabled value={form.doc_no != null ? String(form.doc_no) : "Autogenerated"} />
-            </Field>
+  const evalField = (label: string, key: keyof TInterviewEval) => (
+    <label className="field" key={key}>
+      <span>{label}</span>
+      <Select
+        disabled={readonly}
+        value={String(form[key] ?? "")}
+        onChange={(e) => set(key, e.target.value)}
+      >
+        {EVAL_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
 
-            {textField("Doc Date", "doc_date", "date", true)}
-            {textField("Ref No", "doc_ref_no")}
-            {textField("Candidate No", "cand_no")}
+  // ── UI ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="grid gap-4">
+      {apiError && <div className="alert error">{apiError}</div>}
+
+      {/* ── Document ──────────────────────────────────────────────────────── */}
+      <Card>
+        {/* <CardHeader>
+          <div>
+            <p className="eyebrow">Document</p>
+            <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
           </div>
-        </CollapsibleSection>
+        </CardHeader> */}
+       <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <label className="field">
+            <span>Doc No</span>
+            <Input
+              disabled
+              value={form.doc_no != null ? String(form.doc_no) : "Autogenerated"}
+            />
+          </label>
 
-        <CollapsibleSection title="Candidate & Interview" icon={UserCog}>
-          <div className="grid gap-3 md:grid-cols-3">
-            {textField("Candidate Name", "cand_name", "text", true)}
-            {textField("Position Applied For", "pos_appl_for")}
+          {/* <label className="field">
+            <span>Doc Type</span>
+            <Select
+              disabled={readonly}
+              value={form.doc_type ?? "MRF"}
+              onChange={(e) => set("doc_type", e.target.value)}
+            >
+              <option value="MRF">Interview Evaluation</option>
+            </Select>
+          </label> */}
 
-            <Field label="Department" required error={errors.dept}>
-              <Select
-                disabled={readonly}
-                value={
-                  deptList.some((d) => d.dept_code === String(form.dept ?? ""))
-                    ? String(form.dept ?? "")
-                    : ""
-                }
-                onChange={(e) => set("dept", e.target.value)}
-              >
-                <option value="">-- Select Department --</option>
-                {deptList.map((d) => (
-                  <option key={d.dept_code} value={d.dept_code}>
-                    {d.dept_code} - {d.dept_short_name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+          <label className="field">
+            <span>Doc Date <strong className="text-destructive">*</strong></span>
+            <Input
+              type="date"
+              disabled={readonly}
+              value={form.doc_date ?? ""}
+              onChange={(e) => set("doc_date", e.target.value)}
+            />
+            {errors.doc_date && (
+              <span className="text-destructive text-xs mt-0.5">{errors.doc_date}</span>
+            )}
+          </label>
 
-            {textField("Interviewer Name", "intvr_name")}
-            {textField("Interview Date", "intrvw_date", "date")}
+          {field("Ref No", "doc_ref_no")}
+          {field("Candidate No", "cand_no")}
+        </CardContent>
+      {/* </Card> */}
 
-            <Field label="Hired">
-              <Select
-                disabled={readonly}
-                value={form.hire_flag ?? ""}
-                onChange={(e) => set("hire_flag", e.target.value)}
-              >
-                <option value="">-- Select --</option>
-                <option value="Y">Yes</option>
-                <option value="N">No</option>
-              </Select>
-            </Field>
+      {/* ── Candidate ─────────────────────────────────────────────────────── */}
+      {/* <Card> */}
+        {/* <CardHeader>
+          <div>
+            <p className="eyebrow">Candidate</p>
+            <h2 className="m-0 text-sm font-semibold">Interview Details</h2>
           </div>
-        </CollapsibleSection>
+        </CardHeader> */}
+       <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <label className="field">
+            <span>Candidate Name <strong className="text-destructive">*</strong></span>
+            <Input
+              disabled={readonly}
+              value={form.cand_name ?? ""}
+              onChange={(e) => set("cand_name", e.target.value)}
+            />
+            {errors.cand_name && (
+              <span className="text-destructive text-xs mt-0.5">{errors.cand_name}</span>
+            )}
+          </label>
 
-        <CollapsibleSection title="Candidate Evaluation" icon={ListChecks}>
-          <div className="grid gap-3 md:grid-cols-4">
-            {evalField("Specific Job Skill", "spec_job_skill")}
-            {evalField("Relevant Job Experience", "rel_job_exp")}
-            {evalField("Relevant Edu / Training", "rel_edu_training")}
-            {evalField("Initiative", "initiative")}
-            {evalField("Communication Skills", "comm_skills")}
-            {evalField("Attitude", "attitude")}
-            {evalField("Interest in Company / Position", "interest_comp_pos")}
-          </div>
-        </CollapsibleSection>
+          {field("Position Applied For", "pos_appl_for")}
 
-        <CollapsibleSection title="Comments & Observations" icon={StickyNote}>
-          <div className="grid gap-3 md:grid-cols-3">
-            {textareaField("Positive Points", "pos_points")}
-            {textareaField("Negative Points", "neg_points")}
-            {textareaField("Overall Observation / Comment", "obs_comment")}
-            {textField("Interviewer Signature / Name", "sign_4")}
+          <label className="field">
+            <span>Department <strong className="text-destructive">*</strong></span>
+            <Select
+              disabled={readonly}
+              value={
+                deptList.some((d) => d.dept_code === String(form.dept ?? ""))
+                  ? String(form.dept ?? "")
+                  : ""
+              }
+              onChange={(e) => set("dept", e.target.value)}
+            >
+              <option value="">-- Select Department --</option>
+              {deptList.map((d) => (
+                <option key={d.dept_code} value={d.dept_code}>
+                  {d.dept_code} - {d.dept_short_name}
+                </option>
+              ))}
+            </Select>
+            {errors.dept && (
+              <span className="text-destructive text-xs mt-0.5">{errors.dept}</span>
+            )}
+          </label>
+
+          {field("Interviewer Name", "intvr_name")}
+          {field("Interview Date", "intrvw_date", "date")}
+
+          <label className="field">
+            <span>Hired</span>
+            <Select
+              disabled={readonly}
+              value={form.hire_flag ?? ""}
+              onChange={(e) => set("hire_flag", e.target.value)}
+            >
+              <option value="">-- Select --</option>
+              <option value="Y">Yes</option>
+              <option value="N">No</option>
+            </Select>
+          </label>
+        </CardContent>
+      {/* </Card> */}
+
+      {/* ── Evaluation ────────────────────────────────────────────────────── */}
+      {/* <Card> */}
+        {/* <CardHeader>
+          <div>
+            <p className="eyebrow">Evaluation</p>
+            <h2 className="m-0 text-sm font-semibold">Candidate Evaluation</h2>
           </div>
-        </CollapsibleSection>
+        </CardHeader> */}
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          {evalField("Specific Job Skill", "spec_job_skill")}
+          {evalField("Relevant Job Experience", "rel_job_exp")}
+          {evalField("Relevant Edu / Training", "rel_edu_training")}
+          {evalField("Initiative", "initiative")}
+          {evalField("Communication Skills", "comm_skills")}
+          {evalField("Attitude", "attitude")}
+          {evalField("Interest in Company / Position", "interest_comp_pos")}
+        </CardContent>
+      {/* </Card> */}
+
+      {/* ── Remarks ───────────────────────────────────────────────────────── */}
+      {/* <Card> */}
+        {/* <CardHeader>
+          <div>
+            <p className="eyebrow">Remarks</p>
+            <h2 className="m-0 text-sm font-semibold">Comments & Observations</h2>
+          </div>
+        </CardHeader> */}
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          {field("Positive Points", "pos_points", "textarea")}
+          {field("Negative Points", "neg_points", "textarea")}
+          {field("Overall Observation / Comment", "obs_comment", "textarea")}
+          {field("Interviewer Signature / Name", "sign_4")}
+        </CardContent>
+      </Card>
+
+      {/* ── Actions ───────────────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => onClose(false)}>
+          {readonly ? "Close" : "Cancel"}
+        </Button>
+        {!readonly && (
+          <Button disabled={saving} onClick={handleSubmit}>
+            <Save size={15} /> {saving ? "Saving..." : isEdit ? "Update" : "Submit"}
+          </Button>
+        )}
       </div>
-    );
-  },
-);
+    </div>
+  );
+}

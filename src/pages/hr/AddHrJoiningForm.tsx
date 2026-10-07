@@ -1,27 +1,17 @@
-// AddHrJoiningForm.tsx
-//
-// HR Joining form — Freight-style:
-//  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
-//  • SectionPanel / Field from shared Formblocks
-//  • toast for validation / API feedback (no inline notice banners)
-//  • No bottom Cancel/Submit row — Close / Save live in the page header
-
-import { Briefcase, FileText, ListChecks, Plus, Trash2, X } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
-import { getDynamicLookup } from "../../api/lookups";
-import { useToast } from "../../components/ui/AlertToast";
+import { MdAddCircleOutline } from "react-icons/md";
+import { Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getDynamicLookup, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { Card, CardContent, CardHeader } from "../../components/ui/Card";
+import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Field, SectionPanel } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import hrJoinServiceInstance from "./insUpdHrJoinRpt";
-
-/* ✅ Expose save() to the parent (header Save button) */
-export type HrJoiningFormHandle = {
-  save: () => Promise<void>;
-};
+import type { ColumnDef } from "@tanstack/react-table";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,11 +40,9 @@ export type THrJoining = {
   payComponents?: PayComponentRow[];
 };
 
-export type FormMode = "add" | "edit" | "view";
-
 type Props = {
-  mode: FormMode;
-  existingData?: Partial<THrJoining> | null;
+  mode: "add" | "edit" | "view";
+  existingData?: Partial<THrJoining>;
   onClose: (shouldRefetch?: boolean) => void;
 };
 
@@ -87,22 +75,6 @@ const EMPTY: THrJoining = {
   date_1: "",
   payComponents: [],
 };
-
-const buildInitial = (mode: FormMode, existingData?: Partial<THrJoining> | null): THrJoining =>
-  mode !== "add" && existingData
-    ? {
-        ...EMPTY,
-        ...existingData,
-        doc_date: toDate(existingData.doc_date),
-        join_date: toDate(existingData.join_date),
-        date_1: toDate(existingData.date_1),
-      }
-    : { ...EMPTY };
-
-const makeRowId = () => `row_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-const fmtAmount = (n: number) =>
-  n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ── Add Pay Component Modal ───────────────────────────────────────────────────
 
@@ -160,16 +132,19 @@ function AddPayComponentModal({
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            <X size={14} /> Cancel
+            <X size={15} /> Cancel
           </Button>
           <Button onClick={handleAdd}>
-            <Plus size={14} /> Add to List
+            <MdAddCircleOutline size={15} /> Add to List
           </Button>
         </>
       }
     >
       <div className="grid gap-3">
-        <Field label="Pay Component" required error={errors.pay_comp_id}>
+        <label className="field">
+          <span>
+            Pay Component <strong className="text-destructive">*</strong>
+          </span>
           <Select
             value={selectedId}
             disabled={loading}
@@ -185,8 +160,14 @@ function AddPayComponentModal({
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Amount" required error={errors.pay_comp_amt}>
+          {errors.pay_comp_id && (
+            <span className="text-destructive text-xs mt-0.5">{errors.pay_comp_id}</span>
+          )}
+        </label>
+        <label className="field">
+          <span>
+            Amount <strong className="text-destructive">*</strong>
+          </span>
           <Input
             type="number"
             value={amount}
@@ -195,35 +176,28 @@ function AddPayComponentModal({
               setErrors((p) => ({ ...p, pay_comp_amt: undefined }));
             }}
           />
-        </Field>
+          {errors.pay_comp_amt && (
+            <span className="text-destructive text-xs mt-0.5">{errors.pay_comp_amt}</span>
+          )}
+        </label>
       </div>
     </Dialog>
   );
 }
 
-// ── Main Form (forwardRef so parent can trigger save) ────────────────────────
+// ── Main Form ─────────────────────────────────────────────────────────────────
 
-export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function AddHrJoiningForm(
-  { mode, existingData, onClose },
-  ref,
-) {
+export function AddHrJoiningForm({ mode, existingData, onClose }: Props) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
   const readonly = mode === "view";
   const isEdit = mode === "edit";
 
-  const [form, setForm] = useState<THrJoining>(() => buildInitial(mode, existingData));
-  const [payComponents, setPayComponents] = useState<PayComponentRow[]>(() =>
-    mode !== "add"
-      ? (existingData?.payComponents || []).map((r, i) => ({
-          ...r,
-          _rowId: r._rowId || `existing_${i}`,
-        }))
-      : [],
-  );
-  const [errors, setErrors] = useState<{ doc_date?: string; cand_no?: string; cand_name?: string }>({});
+  const [form, setForm] = useState<THrJoining>({ ...EMPTY });
+  const [payComponents, setPayComponents] = useState<PayComponentRow[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
 
   const [divOptions, setDivOptions] = useState<DivisionOption[]>([]);
@@ -232,6 +206,25 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
   const [divLoading, setDivLoading] = useState(false);
   const [desigLoading, setDesigLoading] = useState(false);
   const [payCompLoading, setPayCompLoading] = useState(false);
+
+  // ── Load form data on edit/view ──────────────────────────────────────────
+  useEffect(() => {
+    if ((isEdit || readonly) && existingData) {
+      setForm({
+        ...EMPTY,
+        ...existingData,
+        doc_date: toDate(existingData.doc_date),
+        join_date: toDate(existingData.join_date),
+        date_1: toDate(existingData.date_1),
+      });
+      setPayComponents(
+        (existingData.payComponents || []).map((r, i) => ({
+          ...r,
+          _rowId: r._rowId || `existing_${i}`,
+        }))
+      );
+    }
+  }, [isEdit, readonly, existingData]);
 
   // ── Load dropdowns ───────────────────────────────────────────────────────
   const baseParams = useCallback(
@@ -251,7 +244,7 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
       date3: null,
       date4: null,
     }),
-    [loginid, companyCode],
+    [loginid, companyCode]
   );
 
   useEffect(() => {
@@ -282,14 +275,9 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
   const set = (field: keyof THrJoining, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const text = (key: keyof THrJoining, type: "text" | "date" = "text") => ({
-    type,
-    disabled: readonly,
-    value: String(form[key] ?? ""),
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(key, e.target.value),
-  });
-
   // ── Pay component row helpers ────────────────────────────────────────────
+  const makeRowId = () => `row_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
   const handleModalAdd = (data: Omit<PayComponentRow, "_rowId">) =>
     setPayComponents((prev) => [...prev, { ...data, _rowId: makeRowId() }]);
 
@@ -298,34 +286,72 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
 
   const totalAmount = payComponents.reduce((sum, r) => sum + (Number(r.pay_comp_amt) || 0), 0);
 
-  // ── Validation ───────────────────────────────────────────────────────────
-  const validate = (): string | null => {
-    const next: typeof errors = {};
-    if (!form.doc_date) next.doc_date = "Doc Date is required";
-    if (!form.cand_no?.toString().trim()) next.cand_no = "Candidate No is required";
-    if (!form.cand_name?.trim()) next.cand_name = "Candidate Name is required";
-    setErrors(next);
-    return Object.values(next)[0] ?? null;
-  };
+  // ── Pay component columns ────────────────────────────────────────────────
+  const payCompColumns = useMemo<ColumnDef<PayComponentRow>[]>(
+    () => [
+      {
+        id: "index",
+        header: "#",
+        size: 55,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-xs">{row.index + 1}</span>
+        ),
+      },
+      { accessorKey: "pay_comp_id", header: "ID", size: 120 },
+      { accessorKey: "pay_comp_desc", header: "Pay Component", size: 260 },
+      {
+        accessorKey: "pay_comp_amt",
+        header: "Amount",
+        size: 140,
+        cell: ({ getValue }) =>
+          Number(getValue<number>()).toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+      },
+      ...(readonly
+        ? []
+        : [
+            {
+              id: "remove",
+              header: "",
+              size: 60,
+              enableColumnFilter: false,
+              cell: ({ row }: { row: { original: PayComponentRow } }) => (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="Remove"
+                  onClick={() => handleDeleteRow(row.original._rowId)}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              ),
+            } as ColumnDef<PayComponentRow>,
+          ]),
+    ],
+    [readonly, handleDeleteRow]
+  );
 
-  // ── Save (called by the page header Save button) ─────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    const error = validate();
-    if (error) {
-      toast.warning(error);
-      return;
-    }
+    if (!form.doc_date) { setApiError("Doc Date is required"); return; }
+    if (!form.cand_no?.toString().trim()) { setApiError("Candidate No is required"); return; }
+    if (!form.cand_name?.trim()) { setApiError("Candidate Name is required"); return; }
 
+    setSaving(true);
+    setApiError("");
     try {
       await hrJoinServiceInstance.insUpdHrJoinRpt({
         header: {
           company_code: companyCode,
           doc_no: form.doc_no ? Number(form.doc_no) : undefined,
           doc_date: form.doc_date || undefined,
-          doc_type: form.doc_type || "MRF", // preserve existing doc_type on edit, default only on add
+          doc_type: form.doc_type || "MRF", // ★ FIXED — preserve existing doc_type on edit, default only on add
           doc_ref_no: form.doc_ref_no || undefined,
-          cand_no:
-            form.cand_no !== undefined && form.cand_no !== "" ? String(form.cand_no) : undefined,
+          cand_no: form.cand_no !== undefined && form.cand_no !== ""
+            ? String(form.cand_no)
+            : undefined,
           cand_name: form.cand_name || undefined,
           division: form.division || undefined,
           desig: form.desig || undefined,
@@ -345,44 +371,75 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
         })),
         loginid,
       });
-      toast.success(isEdit ? "Joining updated successfully" : "Joining saved successfully");
       onClose(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save joining record");
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save joining record"
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  /* ✅ Expose save() to parent */
-  useImperativeHandle(ref, () => ({
-    save: handleSubmit,
-  }));
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-      <SectionPanel title="Document Information" icon={FileText}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Doc No">
-            <Input disabled value={String(form.doc_no ?? "Autogenerated")} />
-          </Field>
-          <Field label="Doc Date" required error={errors.doc_date}>
-            <Input {...text("doc_date", "date")} />
-          </Field>
-          <Field label="Ref No">
-            <Input {...text("doc_ref_no")} />
-          </Field>
-          <Field label="Candidate No" required error={errors.cand_no}>
-            <Input {...text("cand_no")} />
-          </Field>
-          <Field label="Candidate Name" required error={errors.cand_name} className="md:col-span-2">
-            <Input {...text("cand_name")} />
-          </Field>
-        </div>
-      </SectionPanel>
+    <div className="grid gap-4 overflow-hidden">
+      <NoticeToast
+        notice={apiError ? { type: "error", message: apiError } : null}
+        onClose={() => setApiError("")}
+      />
 
-      <SectionPanel title="Employment & Bank Details" icon={Briefcase}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Division">
+      {/* ── Document ────────────────────────────────────────────────────── */}
+      <Card>
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <label className="field">
+            <span>Doc No</span>
+            <Input disabled value={form.doc_no ?? "Autogenerated"} />
+          </label>
+          <label className="field">
+            <span>
+              Doc Date <strong className="text-destructive">*</strong>
+            </span>
+            <Input
+              type="date"
+              disabled={readonly}
+              value={form.doc_date ?? ""}
+              onChange={(e) => set("doc_date", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Ref No</span>
+            <Input
+              disabled={readonly}
+              value={form.doc_ref_no ?? ""}
+              onChange={(e) => set("doc_ref_no", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>
+              Candidate No <strong className="text-destructive">*</strong>
+            </span>
+            <Input
+              disabled={readonly}
+              value={form.cand_no ?? ""}
+              onChange={(e) => set("cand_no", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>
+              Candidate Name <strong className="text-destructive">*</strong>
+            </span>
+            <Input
+              disabled={readonly}
+              value={form.cand_name ?? ""}
+              onChange={(e) => set("cand_name", e.target.value)}
+            />
+          </label>
+        </CardContent>
+
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <label className="field">
+            <span>Division</span>
             <Select
               disabled={readonly || divLoading}
               value={form.division ?? ""}
@@ -395,8 +452,9 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field label="Designation">
+          </label>
+          <label className="field">
+            <span>Designation</span>
             <Select
               disabled={readonly || desigLoading}
               value={form.desig ?? ""}
@@ -409,104 +467,121 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field label="Joining Date">
-            <Input {...text("join_date", "date")} />
-          </Field>
-          <Field label="Bank">
-            <Input {...text("bank")} />
-          </Field>
+          </label>
+          <label className="field">
+            <span>Joining Date</span>
+            <Input
+              type="date"
+              disabled={readonly}
+              value={form.join_date ?? ""}
+              onChange={(e) => set("join_date", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Bank</span>
+            <Input
+              disabled={readonly}
+              value={form.bank ?? ""}
+              onChange={(e) => set("bank", e.target.value)}
+            />
+          </label>
+        </CardContent>
 
-          <Field label="Branch">
-            <Input {...text("branch")} />
-          </Field>
-          <Field label="Account Number">
-            <Input {...text("bank_acct_number")} />
-          </Field>
-          <Field label="Signature (HR/Admin)">
-            <Input {...text("sign_1")} />
-          </Field>
-          <Field label="Approval Date">
-            <Input {...text("date_1", "date")} />
-          </Field>
-        </div>
-      </SectionPanel>
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          <label className="field">
+            <span>Branch</span>
+            <Input
+              disabled={readonly}
+              value={form.branch ?? ""}
+              onChange={(e) => set("branch", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Account Number</span>
+            <Input
+              disabled={readonly}
+              value={form.bank_acct_number ?? ""}
+              onChange={(e) => set("bank_acct_number", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Signature (HR/Admin)</span>
+            <Input
+              disabled={readonly}
+              value={form.sign_1 ?? ""}
+              onChange={(e) => set("sign_1", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Approval Date</span>
+            <Input
+              type="date"
+              disabled={readonly}
+              value={form.date_1 ?? ""}
+              onChange={(e) => set("date_1", e.target.value)}
+            />
+          </label>
+        </CardContent>
+      </Card>
 
-      <SectionPanel title={`Pay Components (${payComponents.length})`} icon={ListChecks}>
-        <div className="grid gap-2">
-          {!readonly && (
-            <div className="flex justify-end">
-              <Button type="button" size="sm" variant="outline" onClick={() => setModalOpen(true)}>
-                <Plus size={12} /> Add Row
+      {/* ── Pay Components ──────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between w-full">
+            <div>
+              <h2 className="m-0 text-sm font-semibold">
+                Pay Components
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  ({payComponents.length} row{payComponents.length !== 1 ? "s" : ""})
+                </span>
+              </h2>
+            </div>
+            {!readonly && (
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(true)}>
+                <MdAddCircleOutline size={15} /> Add Row
               </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-2">
+          <DataTable
+            columns={payCompColumns}
+            data={payComponents}
+            title={`${payComponents.length} Components`}
+            subtitle=""
+            height={220}
+            minWidth={600}
+            density="grid"
+            enablePagination={false}
+            getRowId={(row) => row._rowId}
+          />
+          {payComponents.length > 0 && (
+            <div className="flex justify-end pr-1 pt-1">
+              <span className="text-xs text-muted-foreground mr-2">Total Amount:</span>
+              <span className="text-sm font-bold text-primary">
+                {totalAmount.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          <div className="overflow-auto rounded-md border">
-            <table className="w-full min-w-[600px] text-[12px]">
-              <thead className="bg-secondary/60">
-                <tr>
-                  <th className="px-2 py-2 text-left w-16">#</th>
-                  <th className="px-2 py-2 text-left w-40">ID</th>
-                  <th className="px-2 py-2 text-left">Pay Component</th>
-                  <th className="px-2 py-2 text-right w-44">Amount</th>
-                  {!readonly && <th className="px-2 py-2 text-left w-16">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {payComponents.length === 0 ? (
-                  <tr>
-                    <td
-                      className="px-3 py-6 text-center text-muted-foreground"
-                      colSpan={readonly ? 4 : 5}
-                    >
-                      {readonly ? "No components" : "No components — click Add Row"}
-                    </td>
-                  </tr>
-                ) : (
-                  payComponents.map((row, index) => (
-                    <tr className="border-t" key={row._rowId}>
-                      <td className="px-2 py-1.5 text-xs text-muted-foreground">{index + 1}</td>
-                      <td className="px-2 py-1.5">{row.pay_comp_id}</td>
-                      <td className="px-2 py-1.5">{row.pay_comp_desc}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">
-                        {fmtAmount(Number(row.pay_comp_amt))}
-                      </td>
-                      {!readonly && (
-                        <td className="px-2 py-1">
-                          <button
-                            type="button"
-                            title="Remove row"
-                            onClick={() => handleDeleteRow(row._rowId)}
-                            className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {payComponents.length > 0 && (
-                <tfoot className="border-t bg-secondary/40">
-                  <tr>
-                    <td className="px-2 py-2 text-right font-medium" colSpan={3}>
-                      Total Amount
-                    </td>
-                    <td className="px-2 py-2 text-right font-semibold text-primary tabular-nums">
-                      {fmtAmount(totalAmount)}
-                    </td>
-                    {!readonly && <td />}
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </div>
-      </SectionPanel>
+      {/* ── Actions ─────────────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => onClose(false)}>
+          {readonly ? "Close" : "Cancel"}
+        </Button>
+        {!readonly && (
+          <Button disabled={saving} onClick={handleSubmit}>
+            <Save size={15} /> {saving ? "Saving..." : isEdit ? "Update" : "Submit"}
+          </Button>
+        )}
+      </div>
 
-      {/* ── Add Pay Component Modal ── */}
+      {/* ── Add Pay Component Modal ──────────────────────────────────────── */}
       <AddPayComponentModal
         open={modalOpen}
         options={payCompOptions}
@@ -516,4 +591,4 @@ export const AddHrJoiningForm = forwardRef<HrJoiningFormHandle, Props>(function 
       />
     </div>
   );
-});
+}

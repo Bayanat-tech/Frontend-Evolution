@@ -1,18 +1,15 @@
+// pages/hr/SalaryAdvanceRecovery.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import {
-  ArrowLeft, Banknote, ChevronDown, Edit2, FileText, IdCard, ListChecks, Loader2, Plus,
-  RefreshCw, Save, StickyNote, Trash2, UserCog, X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ColumnDef } from "@tanstack/react-table";
+import { Edit2, Plus, Trash2, X, Save, Loader2 } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
-import { getDynamicLookup, type LookupRow } from "../../api/lookups";
+import { getDynamicLookup, LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
-import { Field } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
-import { Select } from "../../components/ui/Select";
+import { DynamicDropDown } from "./api/DynamicDropDown";
+import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { useToast } from "../../components/ui/AlertToast";
 import { LookupField } from "../../components/ui/LookupField";
 
@@ -120,27 +117,26 @@ async function insUpdHrSalaryAdvDed(payload: {
   details: Record<string, unknown>[];
 }) {
   try {
-    const response = await api.post<ApiResponse>("/api/hr/advancesalaryrecovery/insUpd", payload);
+    const response = await api.post<ApiResponse>(
+      "/api/hr/advancesalaryrecovery/insUpd",
+      payload
+    );
     if (!response.data.success) {
       throw new Error(
-        response.data.details || response.data.message || "Unable to save salary advance recovery",
+        response.data.details ||
+          response.data.message ||
+          "Unable to save salary advance recovery"
       );
     }
     return response.data;
   } catch (error) {
-    throw new Error(extractApiErrorMessage(error, "Unable to save salary advance recovery"));
+    throw new Error(
+      extractApiErrorMessage(error, "Unable to save salary advance recovery")
+    );
   }
 }
 
 // ---------- Helpers ----------
-const toInputDate = (val: unknown): string => {
-  if (!val) return "";
-  const raw = String(val);
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-};
-
 const emptyHeader = (): Partial<MainRow> => ({
   doc_type: "SA",
   doc_date: new Date().toISOString().slice(0, 10),
@@ -182,7 +178,7 @@ const emptyDetailRow = (
   companyCode: string,
   docType: string,
   docNo: string | number,
-  serial: number,
+  serial: number
 ): DetailRow => ({
   company_code: companyCode,
   doc_type: docType || "SA",
@@ -232,9 +228,10 @@ function buildSavePayload(
   header: Partial<MainRow>,
   details: DetailRow[],
   companyCode: string,
-  userId: string | null | undefined,
+  userId: string | null | undefined
 ) {
-  const isNew = !header.doc_no || header.doc_no === "" || Number(header.doc_no) === 0;
+  const isNew =
+    !header.doc_no || header.doc_no === "" || Number(header.doc_no) === 0;
 
   const headerPayload: Record<string, unknown> = {
     company_code: companyCode,
@@ -251,7 +248,10 @@ function buildSavePayload(
     remarks_2: header.remarks_2 || null,
     remarks_3: header.remarks_3 || null,
     curr_code: header.curr_code || null,
-    ex_rate: header.ex_rate != null && String(header.ex_rate) !== "" ? Number(header.ex_rate) : 1,
+    ex_rate:
+      header.ex_rate != null && String(header.ex_rate) !== ""
+        ? Number(header.ex_rate)
+        : 1,
     amount: header.amount != null ? Number(header.amount) : 0,
     signatory_name: header.signatory_name || null,
     signatory_position: header.signatory_position || null,
@@ -260,13 +260,17 @@ function buildSavePayload(
     employee_id: header.employee_id || null,
     employee_code: header.employee_code || null,
     pay_comp_id: header.pay_comp_id || null,
-    recover_mth_amt: header.recover_mth_amt != null ? Number(header.recover_mth_amt) : 0,
+    recover_mth_amt:
+      header.recover_mth_amt != null ? Number(header.recover_mth_amt) : 0,
     recover_from_dt: header.recover_from_dt || null,
-    allocated_amt: header.allocated_amt != null ? Number(header.allocated_amt) : 0,
+    allocated_amt:
+      header.allocated_amt != null ? Number(header.allocated_amt) : 0,
     balance_amt: header.balance_amt != null ? Number(header.balance_amt) : 0,
     deduct_from_leave: header.deduct_from_leave || "N",
     deduct_noof_leavedays:
-      header.deduct_noof_leavedays != null ? Number(header.deduct_noof_leavedays) : 0,
+      header.deduct_noof_leavedays != null
+        ? Number(header.deduct_noof_leavedays)
+        : 0,
     ref_hdr_lve_slno:
       header.ref_hdr_lve_slno != null && header.ref_hdr_lve_slno !== ""
         ? Number(header.ref_hdr_lve_slno)
@@ -275,7 +279,8 @@ function buildSavePayload(
     cancel_by: header.cancel_by || null,
     cancel_date: header.cancel_date || null,
     doc_status: header.doc_status || "N",
-    recovery_period: header.recovery_period != null ? Number(header.recovery_period) : null,
+    recovery_period:
+      header.recovery_period != null ? Number(header.recovery_period) : null,
     sys_gen: "N",
     pay_month: null,
     pay_year: null,
@@ -287,25 +292,37 @@ function buildSavePayload(
     doc_no: isNew ? 0 : Number(header.doc_no),
     serial_no: d.serial_no != null ? Number(d.serial_no) : idx + 1,
     employee_id: d.employee_id || header.employee_id || null,
-    emplyee_code: d.emplyee_code || d.employee_code || header.employee_code || null,
+    emplyee_code:
+      d.emplyee_code || d.employee_code || header.employee_code || null,
     pay_comp_id: d.pay_comp_id || null,
-    recover_mth_amt: d.recover_mth_amt != null ? Number(d.recover_mth_amt) : 0,
+    recover_mth_amt:
+      d.recover_mth_amt != null ? Number(d.recover_mth_amt) : 0,
     recover_from_dt: d.recover_from_dt || null,
-    amount: d.amount != null ? Number(d.amount) : Number(d.recover_mth_amt || 0),
+    amount:
+      d.amount != null
+        ? Number(d.amount)
+        : Number(d.recover_mth_amt || 0),
     allocated_amt: d.allocated_amt != null ? Number(d.allocated_amt) : 0,
     balance_amt: d.balance_amt != null ? Number(d.balance_amt) : 0,
     deduct_from_leave: d.deduct_from_leave || "N",
-    deduct_noof_leavedays: d.deduct_noof_leavedays != null ? Number(d.deduct_noof_leavedays) : 0,
+    deduct_noof_leavedays:
+      d.deduct_noof_leavedays != null
+        ? Number(d.deduct_noof_leavedays)
+        : 0,
     ref_leave_doc_no: d.ref_leave_doc_no || null,
     ref_hdr_lve_slno:
-      d.ref_hdr_lve_slno != null && d.ref_hdr_lve_slno !== "" ? Number(d.ref_hdr_lve_slno) : null,
-    last_posted_month: d.last_posted_month != null ? Number(d.last_posted_month) : null,
+      d.ref_hdr_lve_slno != null && d.ref_hdr_lve_slno !== ""
+        ? Number(d.ref_hdr_lve_slno)
+        : null,
+    last_posted_month:
+      d.last_posted_month != null ? Number(d.last_posted_month) : null,
     post_payroll: d.post_payroll || null,
     post_date: d.post_date || null,
     cancel_by: d.cancel_by || null,
     cancel_date: d.cancel_date || null,
     cancel_status: d.cancel_status || "N",
-    leave_days_paid: d.leave_days_paid != null ? Number(d.leave_days_paid) : null,
+    leave_days_paid:
+      d.leave_days_paid != null ? Number(d.leave_days_paid) : null,
     sal_type_flag: d.sal_type_flag || "N",
     sr_no: null, // generated by procedure
     payroll_closed: d.payroll_closed || "N",
@@ -317,47 +334,6 @@ function buildSavePayload(
   }));
 
   return { header: headerPayload, details: detailPayload };
-}
-
-// ---------- UI building block: collapsible Freight panel ----------
-function CollapsibleSection({
-  title,
-  icon: Icon,
-  defaultOpen = true,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        title={open ? "Collapse section" : "Expand section"}
-        className={`freight-panel-title flex w-full cursor-pointer items-center justify-between gap-2 bg-muted/35 px-3 py-2 text-left transition-colors hover:bg-muted/60 ${
-          open ? "border-b" : ""
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-        </div>
-        <ChevronDown
-          size={14}
-          className={`shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-        />
-      </button>
-      <div className={`freight-panel-body p-3 ${open ? "" : "hidden"}`}>{children}</div>
-    </section>
-  );
 }
 
 // ---------- Main Component ----------
@@ -380,8 +356,6 @@ export default function SalaryAdvanceRecoveryPage() {
   const [details, setDetails] = useState<DetailRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const patchHeader = (patch: Partial<MainRow>) => setHeader((prev) => ({ ...prev, ...patch }));
-
   const fetchMain = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
@@ -394,14 +368,16 @@ export default function SalaryAdvanceRecoveryPage() {
     } catch (err) {
       console.error(err);
       setMainData([]);
-      toast.error(err instanceof Error ? err.message : "Unable to load records");
+      toast.error(
+        err instanceof Error ? err.message : "Unable to load records"
+      );
     } finally {
       setLoading(false);
     }
   }, [companyCode, toast]);
 
   useEffect(() => {
-    void fetchMain();
+    fetchMain();
   }, [fetchMain]);
 
   const fetchDetail = useCallback(
@@ -414,22 +390,18 @@ export default function SalaryAdvanceRecoveryPage() {
           code1: companyCode,
           code2: String(docNo),
         });
-        // native date inputs need YYYY-MM-DD
-        setDetails(
-          ((rows as DetailRow[]) || []).map((r) => ({
-            ...r,
-            recover_from_dt: toInputDate(r.recover_from_dt) || null,
-          })),
-        );
+        setDetails((rows as DetailRow[]) || []);
       } catch (err) {
         console.error(err);
         setDetails([]);
-        toast.error(err instanceof Error ? err.message : "Unable to load detail lines");
+        toast.error(
+          err instanceof Error ? err.message : "Unable to load detail lines"
+        );
       } finally {
         setDetailLoading(false);
       }
     },
-    [companyCode, toast],
+    [companyCode, toast]
   );
 
   const openAdd = () => {
@@ -446,15 +418,16 @@ export default function SalaryAdvanceRecoveryPage() {
     setHeader({
       ...row,
       doc_type: "SA",
-      doc_date: toInputDate(row.doc_date),
-      recover_from_dt: toInputDate(row.recover_from_dt),
+      doc_date: row.doc_date ? String(row.doc_date).slice(0, 10) : "",
+      recover_from_dt: row.recover_from_dt
+        ? String(row.recover_from_dt).slice(0, 10)
+        : "",
     });
     setMode("edit");
-    void fetchDetail(row.doc_no);
+    fetchDetail(row.doc_no);
   };
 
   const closeForm = () => {
-    if (saving) return;
     setMode("list");
     setHeader(emptyHeader());
     setDetails([]);
@@ -478,175 +451,220 @@ export default function SalaryAdvanceRecoveryPage() {
       toast.success(
         mode === "edit"
           ? "Salary advance recovery updated successfully"
-          : "Salary advance recovery saved successfully",
+          : "Salary advance recovery saved successfully"
       );
-      setMode("list");
-      setHeader(emptyHeader());
-      setDetails([]);
       await fetchMain();
+      closeForm();
     } catch (err: unknown) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(
+        err instanceof Error ? err.message : "Save failed"
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const loadEmployeeOptions = useCallback(async (): Promise<LookupRow[]> => {
-    if (!companyCode) return [];
-    const rows = await getDynamicLookup({
-      parameter: "HR_ADDITION_DEDUCTION_EMPLOYEE_DROP_DOWN",
-      code1: companyCode,
-    });
-    return (rows as LookupRow[]) || [];
-  }, [companyCode]);
+    const loadEmployeeOptions = useCallback(
+    async (): Promise<LookupRow[]> => {
+        if (!companyCode) return [];
+        const rows = await getDynamicLookup({
+        parameter: "HR_ADDITION_DEDUCTION_EMPLOYEE_DROP_DOWN",
+        code1: companyCode,
+        });
+        return (rows as LookupRow[]) || [];
+    },
+    [companyCode]
+    );
 
-  const loadPayComponentOptions = useCallback(async (): Promise<LookupRow[]> => {
-    if (!companyCode || !header.employee_id) return [];
-    const rows = await getDynamicLookup({
-      parameter: "PAY_COMPONENT_DependentPayCompId",
-      code1: companyCode,
-      code2: header.employee_id,
-    });
-    return (rows as LookupRow[]) || [];
-  }, [companyCode, header.employee_id]);
+    const loadPayComponentOptions = useCallback(
+    async (): Promise<LookupRow[]> => {
+        if (!companyCode || !header.employee_id) return [];
+        const rows = await getDynamicLookup({
+        parameter: "PAY_COMPONENT_DependentPayCompId",
+        code1: companyCode,
+        code2: header.employee_id,
+        });
+        return (rows as LookupRow[]) || [];
+    },
+    [companyCode, header.employee_id]
+    );
 
   const addDetailRow = () => {
     setDetails((prev) => [
       ...prev,
-      emptyDetailRow(companyCode, header.doc_type || "SA", header.doc_no || "", prev.length + 1),
+      emptyDetailRow(
+        companyCode,
+        header.doc_type || "SA",
+        header.doc_no || "",
+        prev.length + 1
+      ),
     ]);
   };
 
-  const removeDetailRow = useCallback((index: number) => {
+  const removeDetailRow = (index: number) => {
     setDetails((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  };
 
-  const updateDetail = useCallback((index: number, field: keyof DetailRow, value: unknown) => {
+  const updateDetail = (
+    index: number,
+    field: keyof DetailRow,
+    value: unknown
+  ) => {
     setDetails((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
       return next;
     });
-  }, []);
+  };
 
   const mainColumns = useMemo<ColumnDef<MainRow>[]>(
     () => [
-      { accessorKey: "doc_no", header: "Doc No", size: 90, enableSorting: false },
+      { accessorKey: "doc_no", header: "Doc No", size: 90 },
       {
         accessorKey: "doc_date",
         header: "Doc Date",
         size: 110,
-        enableSorting: false,
         cell: ({ getValue }) => formatDisplayDate(getValue() as string),
       },
       {
         accessorKey: "doc_type",
         header: "Doc Type",
-        size: 120,
-        enableSorting: false,
+        size: 110,
         cell: () => "Salary Advance",
       },
-      { accessorKey: "employee_code", header: "Emp Code", size: 100, enableSorting: false },
-      { accessorKey: "employee_name", header: "Employee Name", size: 170, enableSorting: false },
+      { accessorKey: "employee_code", header: "Emp Code", size: 100 },
+      { accessorKey: "employee_name", header: "Employee Name", size: 160 },
       {
         accessorKey: "amount",
         header: "Amount",
         size: 110,
-        enableSorting: false,
         cell: ({ getValue }) => Number(getValue() || 0).toFixed(3),
       },
       {
         accessorKey: "recover_mth_amt",
         header: "Mth Amt",
-        size: 100,
-        enableSorting: false,
+        size: 90,
         cell: ({ getValue }) => Number(getValue() || 0).toFixed(3),
       },
       {
         accessorKey: "recover_from_dt",
         header: "Effective From",
         size: 120,
-        enableSorting: false,
         cell: ({ getValue }) => formatDisplayDate(getValue() as string),
       },
-      { accessorKey: "recovery_period", header: "Period", size: 80, enableSorting: false },
-      { accessorKey: "name_from", header: "Name From", size: 140, enableSorting: false },
-      { accessorKey: "signatory_name", header: "Signatory", size: 140, enableSorting: false },
-      { accessorKey: "doc_status", header: "Status", size: 80, enableSorting: false },
+      { accessorKey: "recovery_period", header: "Period", size: 80 },
+      { accessorKey: "name_from", header: "Name From", size: 140 },
+      { accessorKey: "signatory_name", header: "Signatory", size: 130 },
+      { accessorKey: "doc_status", header: "Status", size: 80 },
       {
         id: "actions",
         header: "Actions",
-        size: 80,
+        size: 100,
         enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-[#00378C] hover:bg-[#00378C]/10"
               onClick={(e) => {
                 e.stopPropagation();
                 openEdit(row.original);
               }}
               title="Edit"
             >
-              <Edit2 size={13} />
-            </button>
+              <Edit2 size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log("Delete", row.original.doc_no);
+              }}
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </Button>
           </div>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    []
   );
 
-  const detailColumns = useMemo<ColumnDef<DetailRow>[]>(
-    () => [
+
+const detailColumns = useMemo<ColumnDef<DetailRow>[]>(
+  () => [
       {
-        id: "sno",
-        header: "SNo",
-        size: 55,
+        id: "actions",
+        header: "",
+        size: 40,
         enableSorting: false,
-        cell: ({ row }) => <span className="text-xs font-medium text-muted-foreground">{row.index + 1}</span>,
-      },
-      {
-        accessorKey: "pay_comp_id",
-        header: "Pay Unit",
-        size: 170,
-        enableSorting: false,
+        enableColumnFilter: false,
         cell: ({ row }) => (
-          <LookupField
-            value={row.original.pay_comp_id ?? ""}
-            displayValue={row.original.pay_comp_id ?? ""}
-            columns={[
-              { field: "value_code", header: "Code" },
-              { field: "value_desc", header: "Description" },
-            ]}
-            valueField="value_code"
-            displayFields={["value_code"]}
-            loadOptions={loadPayComponentOptions}
-            onChange={(val, selected) => {
-              updateDetail(row.index, "pay_comp_id", selected?.value_code || val || "");
-              updateDetail(row.index, "description", selected?.value_desc || "");
-            }}
-            disabled={!header.employee_id}
-            compact
-            dense
-            placeholder="Select pay unit"
-          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-destructive hover:bg-destructive/10"
+            onClick={() => removeDetailRow(row.index)}
+            title="Remove row"
+          >
+            <Trash2 size={13} />
+          </Button>
         ),
       },
       {
+        id: "sno",
+        header: "SNo",
+        size: 48,
+        cell: ({ row }) => (
+          <span className="text-[11px] font-medium text-slate-600">
+            {row.index + 1}
+          </span>
+        ),
+      },
+    {
+      accessorKey: "pay_comp_id",
+      header: "Pay Unit",
+      size: 140,
+      cell: ({ row }) => (
+        <LookupField
+          value={row.original.pay_comp_id ?? ""}
+          displayValue={row.original.pay_comp_id ?? ""}
+          columns={[
+            { field: "value_code", header: "Code" },
+            { field: "value_desc", header: "Description" },
+          ]}
+          valueField="value_code"          // ← fixed: matches actual row field
+          displayFields={["value_code"]}
+          loadOptions={loadPayComponentOptions}
+          onChange={(val, selected) => {
+            updateDetail(row.index, "pay_comp_id", selected?.value_code || val || "");
+            updateDetail(row.index, "description", selected?.value_desc || "");
+          }}
+          disabled={!header.employee_id}
+          compact
+          dense
+          placeholder="Select pay unit"
+        />
+      ),
+    },
+      {
         accessorKey: "description",
         header: "Description",
-        size: 220,
-        enableSorting: false,
+        size: 200,
         cell: ({ row }) => (
           <Input
-            className="h-7 px-2 text-sm"
             value={row.original.description ?? ""}
-            onChange={(e) => updateDetail(row.index, "description", e.target.value)}
+            onChange={(e) =>
+              updateDetail(row.index, "description", e.target.value)
+            }
+            className="h-6 border-slate-300 text-[11px] px-1.5"
             placeholder="Enter description"
           />
         ),
@@ -654,332 +672,480 @@ export default function SalaryAdvanceRecoveryPage() {
       {
         accessorKey: "recover_mth_amt",
         header: "Month Amount",
-        size: 130,
-        enableSorting: false,
+        size: 115,
         cell: ({ row }) => (
           <Input
             type="number"
             step="0.001"
-            className="h-7 px-2 text-right font-mono text-sm"
             value={row.original.recover_mth_amt ?? 0}
-            onChange={(e) => updateDetail(row.index, "recover_mth_amt", Number(e.target.value) || 0)}
+            onChange={(e) =>
+              updateDetail(
+                row.index,
+                "recover_mth_amt",
+                Number(e.target.value) || 0
+              )
+            }
+            className="h-6 border-slate-300 text-right text-[11px] px-1.5"
           />
         ),
       },
       {
         accessorKey: "recover_from_dt",
         header: "Effective From",
-        size: 150,
-        enableSorting: false,
+        size: 135,
         cell: ({ row }) => (
-          <Input
-            type="date"
-            className="h-7 px-2 text-sm"
+          <BiscDatePicker
             value={row.original.recover_from_dt ?? ""}
-            onChange={(e) => updateDetail(row.index, "recover_from_dt", e.target.value)}
+            onChange={(val) =>
+              updateDetail(row.index, "recover_from_dt", val)
+            }
+            className="!h-6"
           />
         ),
       },
       {
         accessorKey: "cancel_status",
         header: "Cancel",
-        size: 100,
-        enableSorting: false,
+        size: 85,
         cell: ({ row }) => (
-          <Select
+          <select
             value={row.original.cancel_status ?? "N"}
-            onChange={(e) => updateDetail(row.index, "cancel_status", e.target.value)}
+            onChange={(e) =>
+              updateDetail(row.index, "cancel_status", e.target.value)
+            }
+            className="h-6 w-full rounded border border-slate-300 bg-white px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-[#00378C]"
           >
-            <option value="N">No</option>
-            <option value="Y">Yes</option>
-          </Select>
+            <option value="N">NO</option>
+            <option value="Y">YES</option>
+          </select>
         ),
       },
-      {
-        id: "actions",
-        header: "",
-        size: 50,
-        enableSorting: false,
-        enableColumnFilter: false,
-        cell: ({ row }) => (
-          <div className="flex justify-center">
-            <button
-              type="button"
-              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-              onClick={() => removeDetailRow(row.index)}
-              title="Remove row"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        ),
-      },
-    ],
-    [loadPayComponentOptions, header.employee_id, updateDetail, removeDetailRow],
-  );
+  ],
+  [loadPayComponentOptions, header.employee_id] // ← was [], now correctly reactive
+);
 
-  /* ─────────────────────────────────────────────────────────
-     LIST VIEW — Freight-style transaction header
-     ───────────────────────────────────────────────────────── */
   if (mode === "list") {
     return (
-      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <Banknote size={15} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                  HR Salary Advance Recovery
-                </h1>
-                <span className="text-xs text-muted-foreground">
-                  {mainData.length.toLocaleString()} Row{mainData.length === 1 ? "" : "s"}
-                </span>
-              </div>
-            </div>
+      <div className="flex h-full min-h-0 flex-col gap-4 bg-slate-50 p-4 font-sans">
+        <div className="flex shrink-0 items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
+          <div>
+            <h1 className="text-lg font-bold text-slate-800">
+              HR Salary Advance Recovery
+            </h1>
+            <p className="text-xs text-slate-500">
+              Manage salary advance recovery documents
+            </p>
           </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={() => void fetchMain()} disabled={loading}>
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-            </Button>
-            <Button type="button" size="sm" onClick={openAdd}>
-              <Plus size={14} /> Add
-            </Button>
-          </div>
+          <Button
+            className="bg-[#00378C] hover:bg-[#002d73] text-white shadow-sm"
+            onClick={openAdd}
+          >
+            <Plus size={16} />
+            Add New
+          </Button>
         </div>
 
-        <DataTable
-          columns={mainColumns}
-          data={mainData}
-          title={loading ? "Loading" : `${mainData.length.toLocaleString()} Documents`}
-          subtitle="Manage salary advance recovery documents"
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search by Doc No, Employee, Signatory..."
-          loading={loading}
-          emptyText="No salary advance recovery records found"
-          height={560}
-          minWidth={1300}
-          density="grid"
-          enablePagination
-          pageSize={25}
-          getRowId={(row) => String(row.doc_no)}
-          onRowClick={openEdit}
-        />
-      </section>
+        <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <DataTable
+            columns={mainColumns}
+            data={mainData}
+            loading={loading}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by Doc No, Employee, Signatory..."
+            enablePagination
+            pageSize={25}
+            height="100%"
+            stickyFirstColumn
+            stickyLastColumn
+            density="comfortable"
+            emptyText="No salary advance recovery records found"
+            onRowClick={openEdit}
+          />
+        </div>
+      </div>
     );
   }
 
-  /* ─────────────────────────────────────────────────────────
-     EDITOR — full-page, Freight-style header (List / Close / Save)
-     ───────────────────────────────────────────────────────── */
   const isEdit = mode === "edit";
-  const totalAmount = details.reduce((sum, r) => sum + Number(r.recover_mth_amt || 0), 0);
+  const totalAmount = details.reduce(
+    (sum, r) => sum + Number(r.recover_mth_amt || 0),
+    0
+  );
 
   return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <FileText size={15} />
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-100 font-sans">
+      {/* Top bar */}
+      <div className="flex shrink-0 items-center justify-between gap-3 bg-[#00378C] px-4 py-2 text-white shadow">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-sm font-semibold tracking-wide">
+            {isEdit
+              ? "EDIT SALARY ADVANCE RECOVERY"
+              : "NEW SALARY ADVANCE RECOVERY"}
+          </span>
+          <div className="flex items-center gap-1.5 rounded border border-white/30 bg-white/15 px-2.5 py-0.5 text-xs">
+            <span className="opacity-80">DOC</span>
+            <span className="font-semibold">{header.doc_no ?? "New"}</span>
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                {isEdit ? "Edit Salary Advance Recovery" : "New Salary Advance Recovery"}
-              </h1>
-              <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                {isEdit ? "Editing" : "Draft"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Doc {header.doc_no ? String(header.doc_no) : "New"} · Amount{" "}
-                {Number(header.amount || 0).toFixed(3)}
-                {header.doc_status ? ` · Status ${header.doc_status}` : ""}
-              </span>
+          <div className="flex items-center gap-1.5 rounded border border-white/30 bg-white/15 px-2.5 py-0.5 text-xs">
+            <span className="opacity-80">AMT</span>
+            <span className="font-semibold">
+              {Number(header.amount || 0).toFixed(3)}
+            </span>
+          </div>
+          {header.doc_status && (
+            <div className="flex items-center gap-1.5 rounded border border-white/30 bg-white/15 px-2.5 py-0.5 text-xs">
+              <span className="opacity-80">STS</span>
+              <span className="font-semibold">{header.doc_status}</span>
             </div>
-          </div>
+          )}
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 border-white/40 bg-white/10 px-2.5 text-white hover:bg-white/20"
+          onClick={closeForm}
+        >
+          <X size={14} />
+          Close
+        </Button>
+      </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
-            <ArrowLeft size={14} /> List
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
-            <X size={14} /> Close
-          </Button>
-          <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-            {saving ? "Saving" : isEdit ? "Update" : "Save"}
-          </Button>
+      {/* Body */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-2 overflow-hidden p-3">
+          {/* HEADER */}
+          <section className="shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
+            <div className="flex items-center border-b border-slate-200 bg-slate-50 px-3 py-1">
+              <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#00378C]">
+                Header Information
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-12 gap-x-3 gap-y-1.5 p-2.5">
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Doc No
+                </label>
+                <Input
+                  value={header.doc_no ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, doc_no: e.target.value }))
+                  }
+                  disabled={isEdit}
+                  placeholder="Auto"
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Doc Date
+                </label>
+                <BiscDatePicker
+                  value={header.doc_date ?? ""}
+                  onChange={(val) =>
+                    setHeader((p) => ({ ...p, doc_date: val }))
+                  }
+                  className="!h-7"
+                />
+              </div>
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Doc Type
+                </label>
+                <Input
+                  value="Salary Advance"
+                  disabled
+                  className="h-7 border-slate-300 text-[11px] bg-slate-50"
+                />
+              </div>
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Ref No
+                </label>
+                <Input
+                  value={header.ref_no ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, ref_no: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+            <div className="col-span-4 space-y-0">
+            <label className="text-[9px] font-medium text-slate-500">
+                Employee
+            </label>
+            <LookupField
+                value={header.employee_id ?? ""}
+                displayValue={header.employee_name ?? header.employee_code ?? ""}
+                columns={[
+                { field: "employee_code", header: "Code" },
+                { field: "rpt_name", header: "Name" },
+                ]}
+                valueField="employee_id"
+                displayFields={["employee_code", "rpt_name"]}
+                loadOptions={loadEmployeeOptions}
+                onChange={(val, row) => {
+                const id = (row?.employee_id as string | undefined) ?? "";
+                const code = (row?.employee_code as string | undefined) ?? "";
+                const name = (row?.rpt_name as string | undefined) ?? "";
+                setHeader((p) => ({
+                    ...p,
+                    employee_id: id,
+                    employee_code: code,
+                    employee_name: name,
+                }));
+                }}
+                compact
+                dense
+                placeholder="Select employee"
+            />
+            </div>
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Effective From
+                </label>
+                <BiscDatePicker
+                  value={header.recover_from_dt ?? ""}
+                  onChange={(val) =>
+                    setHeader((p) => ({ ...p, recover_from_dt: val }))
+                  }
+                  className="!h-7"
+                />
+              </div>
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Amount
+                </label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  value={header.amount ?? 0}
+                  onChange={(e) =>
+                    setHeader((p) => ({
+                      ...p,
+                      amount: Number(e.target.value),
+                    }))
+                  }
+                  className="h-7 border-slate-300 text-right text-[11px]"
+                />
+              </div>
+              <div className="col-span-1 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Period
+                </label>
+                <Input
+                  type="number"
+                  value={header.recovery_period ?? 0}
+                  onChange={(e) =>
+                    setHeader((p) => ({
+                      ...p,
+                      recovery_period: Number(e.target.value),
+                    }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+
+              <div className="col-span-2 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Name From
+                </label>
+                <Input
+                  value={header.name_from ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, name_from: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-2 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Name To
+                </label>
+                <Input
+                  value={header.name_to ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, name_to: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-2 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Addr From
+                </label>
+                <Input
+                  value={header.addr_from ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, addr_from: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-2 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Addr To
+                </label>
+                <Input
+                  value={header.addr_to ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, addr_to: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-2 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Signatory Name
+                </label>
+                <Input
+                  value={header.signatory_name ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({
+                      ...p,
+                      signatory_name: e.target.value,
+                    }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-2 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Signatory Position
+                </label>
+                <Input
+                  value={header.signatory_position ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({
+                      ...p,
+                      signatory_position: e.target.value,
+                    }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+
+              <div className="col-span-4 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Letter Subject
+                </label>
+                <Input
+                  value={header.lettr_subject ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({
+                      ...p,
+                      lettr_subject: e.target.value,
+                    }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-4 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Remarks 1
+                </label>
+                <Input
+                  value={header.remarks_1 ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, remarks_1: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+              <div className="col-span-4 space-y-0">
+                <label className="text-[9px] font-medium text-slate-500">
+                  Remarks 2
+                </label>
+                <Input
+                  value={header.remarks_2 ?? ""}
+                  onChange={(e) =>
+                    setHeader((p) => ({ ...p, remarks_2: e.target.value }))
+                  }
+                  className="h-7 border-slate-300 text-[11px]"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* DETAIL */}
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+              <div className="flex items-center gap-3">
+                <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#00378C]">
+                  Detail Lines
+                </h2>
+                <Button
+                  size="sm"
+                  className="h-6 gap-1 bg-[#00378C] px-2 text-xs text-white hover:bg-[#002d73]"
+                  onClick={addDetailRow}
+                >
+                  <Plus size={12} />
+                  Add Row
+                </Button>
+              </div>
+              <div className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-600">
+                Total Month Amount:{" "}
+                <span className="font-semibold text-[#00378C]">
+                  {totalAmount.toFixed(3)}
+                </span>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 p-2">
+              <DataTable
+                columns={detailColumns}
+                data={details}
+                loading={detailLoading}
+                enablePagination={false}
+                height="100%"
+                density="compact"
+                stickyFirstColumn={false}
+                stickyLastColumn={false}
+                emptyText="No recovery lines. Click Add Row to start."
+                truncateCellText
+              />
+            </div>
+          </section>
         </div>
       </div>
 
-      <CollapsibleSection title="Document" icon={FileText}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Doc No">
-            <Input
-              value={header.doc_no ?? ""}
-              onChange={(e) => patchHeader({ doc_no: e.target.value })}
-              disabled={isEdit}
-              placeholder="Auto"
-            />
-          </Field>
-
-          <Field label="Doc Date" required>
-            <Input
-              type="date"
-              value={header.doc_date ?? ""}
-              onChange={(e) => patchHeader({ doc_date: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Doc Type">
-            <Input value="Salary Advance" readOnly disabled />
-          </Field>
-
-          <Field label="Ref No">
-            <Input value={header.ref_no ?? ""} onChange={(e) => patchHeader({ ref_no: e.target.value })} />
-          </Field>
+      {/* Bottom bar */}
+      <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-4 py-2.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
+        <div className="text-xs text-slate-500">
+          {isEdit
+            ? `Editing document ${header.doc_no}`
+            : "Creating new document"}
         </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Employee & Recovery" icon={UserCog}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Employee" className="md:col-span-2">
-            <LookupField
-              value={header.employee_id ?? ""}
-              displayValue={header.employee_name ?? header.employee_code ?? ""}
-              columns={[
-                { field: "employee_code", header: "Code" },
-                { field: "rpt_name", header: "Name" },
-              ]}
-              valueField="employee_id"
-              displayFields={["employee_code", "rpt_name"]}
-              loadOptions={loadEmployeeOptions}
-              onChange={(_val, row) => {
-                patchHeader({
-                  employee_id: (row?.employee_id as string | undefined) ?? "",
-                  employee_code: (row?.employee_code as string | undefined) ?? "",
-                  employee_name: (row?.rpt_name as string | undefined) ?? "",
-                });
-              }}
-              compact
-              dense
-              placeholder="Select employee"
-            />
-          </Field>
-
-          <Field label="Effective From">
-            <Input
-              type="date"
-              value={header.recover_from_dt ?? ""}
-              onChange={(e) => patchHeader({ recover_from_dt: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Amount">
-            <Input
-              type="number"
-              step="0.001"
-              className="text-right"
-              value={header.amount ?? 0}
-              onChange={(e) => patchHeader({ amount: Number(e.target.value) })}
-            />
-          </Field>
-
-          <Field label="Period">
-            <Input
-              type="number"
-              value={header.recovery_period ?? 0}
-              onChange={(e) => patchHeader({ recovery_period: Number(e.target.value) })}
-            />
-          </Field>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={closeForm}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="min-w-[100px] bg-[#00378C] text-white hover:bg-[#002d73]"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save size={14} />
+                {isEdit ? "Update" : "Save"}
+              </>
+            )}
+          </Button>
         </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Letter & Signatory" icon={IdCard}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Name From">
-            <Input value={header.name_from ?? ""} onChange={(e) => patchHeader({ name_from: e.target.value })} />
-          </Field>
-
-          <Field label="Name To">
-            <Input value={header.name_to ?? ""} onChange={(e) => patchHeader({ name_to: e.target.value })} />
-          </Field>
-
-          <Field label="Addr From">
-            <Input value={header.addr_from ?? ""} onChange={(e) => patchHeader({ addr_from: e.target.value })} />
-          </Field>
-
-          <Field label="Addr To">
-            <Input value={header.addr_to ?? ""} onChange={(e) => patchHeader({ addr_to: e.target.value })} />
-          </Field>
-
-          <Field label="Letter Subject" className="md:col-span-2">
-            <Input
-              value={header.lettr_subject ?? ""}
-              onChange={(e) => patchHeader({ lettr_subject: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Signatory Name">
-            <Input
-              value={header.signatory_name ?? ""}
-              onChange={(e) => patchHeader({ signatory_name: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Signatory Position">
-            <Input
-              value={header.signatory_position ?? ""}
-              onChange={(e) => patchHeader({ signatory_position: e.target.value })}
-            />
-          </Field>
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Remarks" icon={StickyNote}>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Remarks 1">
-            <Input value={header.remarks_1 ?? ""} onChange={(e) => patchHeader({ remarks_1: e.target.value })} />
-          </Field>
-
-          <Field label="Remarks 2">
-            <Input value={header.remarks_2 ?? ""} onChange={(e) => patchHeader({ remarks_2: e.target.value })} />
-          </Field>
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection title={`Detail Lines (${details.length})`} icon={ListChecks}>
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs text-muted-foreground">
-              Total Month Amount{" "}
-              <span className="text-sm font-semibold text-foreground tabular-nums">
-                {totalAmount.toFixed(3)}
-              </span>
-            </div>
-            <Button type="button" size="sm" variant="outline" onClick={addDetailRow}>
-              <Plus size={14} /> Add Row
-            </Button>
-          </div>
-
-          <DataTable
-            columns={detailColumns}
-            data={details}
-            loading={detailLoading}
-            emptyText="No recovery lines. Click Add Row to start."
-            height={280}
-            minWidth={950}
-            density="grid"
-            getRowId={(_row, index) => String(index)}
-          />
-        </div>
-      </CollapsibleSection>
-    </section>
+      </div>
+    </div>
   );
 }

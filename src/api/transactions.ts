@@ -157,8 +157,6 @@ export type Division = {
 export type CompanyInfo = {
   company_code?: string;
   ac_fy_period?: string;
-  setup_required?: boolean;
-  message?: string;
 };
 
 export type FinanceOutstandingBalance = {
@@ -175,15 +173,6 @@ export async function getCompanyInfo() {
   const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
   return response.data.data || {};
-}
-
-export async function initializeCompanyFinance(companyCode?: string) {
-  const response = await api.post<ApiResponse<Record<string, unknown>>>(
-    "/api/finance/transactions/initialize_company_finance",
-    { company_code: companyCode }
-  );
-  if (!response.data.success) throw new Error(response.data.message || "Failed to initialize company finance setup");
-  return response.data;
 }
 
 export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {

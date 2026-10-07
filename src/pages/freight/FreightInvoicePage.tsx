@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Briefcase,
   Calculator,
-  CheckCircle,
   Eye,
   Layers,
   Pencil,
@@ -118,6 +117,52 @@ export function FreightInvoicePage() {
     void loadRows();
   }, [loadRows]);
 
+  const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
+    {
+      accessorKey: "invoice_no",
+      header: "Invoice No",
+      size: 150,
+      cell: ({ row }) => (
+        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original, "view")}>
+          {text(row.original.invoice_no)}
+        </button>
+      ),
+    },
+    { accessorKey: "invoice_date", header: "Date", size: 120, cell: ({ row }) => formatDate(text(row.original.invoice_date)) },
+    { accessorKey: "from_date", header: "From Date", size: 120, cell: ({ row }) => formatDate(text(row.original.from_date)) },
+    { accessorKey: "to_date", header: "To Date", size: 120, cell: ({ row }) => formatDate(text(row.original.to_date)) },
+    { accessorKey: "prin_code", header: "Principal", size: 100 },
+    { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => text(row.original.prin_name) || "-" },
+    { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => text(row.original.job_no) || "-" },
+    { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => text(row.original.cust_code) || "-" },
+    { accessorKey: "job_count", header: "Jobs", size: 80, cell: ({ row }) => centered(text(row.original.job_count) || "0") },
+    { accessorKey: "line_count", header: "Lines", size: 80, cell: ({ row }) => centered(text(row.original.line_count) || "0") },
+    { accessorKey: "curr_code", header: "Currency", size: 90 },
+    { accessorKey: "inv_amount", header: "Amount", size: 130, cell: ({ row }) => money(number(row.original, "inv_amount")) },
+    {
+      accessorKey: "inv_status",
+      header: "Status",
+      size: 100,
+      cell: ({ row }) => {
+        const val = text(row.original.inv_status).toUpperCase();
+        if (val === "C" || val === "CONFIRMED") return <StatusChip tone="green" label="Confirmed" />;
+        return <StatusChip tone="slate" label={val === "N" ? "Draft" : val || "Draft"} />;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      size: 80,
+      enableColumnFilter: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
+          <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={13} /></Button>
+        </div>
+      ),
+    },
+  ], []);
+
   function openNew() {
     setEditorMode("add");
     setForm(emptyForm());
@@ -157,87 +202,6 @@ export function FreightInvoicePage() {
       setSaving(false);
     }
   }
-
-  async function confirmExistingInvoice(invoiceNo: string) {
-    if (!invoiceNo) return;
-    if (!window.confirm(`Are you sure you want to confirm Invoice ${invoiceNo}? Once confirmed, the invoice is finalized.`)) {
-      return;
-    }
-    setSaving(true);
-    try {
-      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/invoice/confirm", {
-        company_code: companyCode,
-        invoice_no: invoiceNo,
-        user_id: loginId,
-      });
-      if (!response.data.success) throw new Error(response.data.message || "Unable to confirm freight invoice.");
-      toast.success(response.data.message || `Freight invoice ${invoiceNo} confirmed successfully.`);
-      if (editorOpen) {
-        setEditorOpen(false);
-      }
-      await loadRows();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.details || error?.response?.data?.message || error?.message || "Unable to confirm freight invoice.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    {
-      accessorKey: "invoice_no",
-      header: "Invoice No",
-      size: 150,
-      cell: ({ row }) => (
-        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original, "view")}>
-          {text(row.original.invoice_no)}
-        </button>
-      ),
-    },
-    { accessorKey: "invoice_date", header: "Date", size: 120, cell: ({ row }) => formatDate(text(row.original.invoice_date)) },
-    { accessorKey: "from_date", header: "From Date", size: 120, cell: ({ row }) => formatDate(text(row.original.from_date)) },
-    { accessorKey: "to_date", header: "To Date", size: 120, cell: ({ row }) => formatDate(text(row.original.to_date)) },
-    { accessorKey: "prin_code", header: "Principal", size: 100 },
-    { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => text(row.original.prin_name) || "-" },
-    { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => text(row.original.job_no) || "-" },
-    { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => text(row.original.cust_code) || "-" },
-    { accessorKey: "job_count", header: "Jobs", size: 80, cell: ({ row }) => centered(text(row.original.job_count) || "0") },
-    { accessorKey: "line_count", header: "Lines", size: 80, cell: ({ row }) => centered(text(row.original.line_count) || "0") },
-    { accessorKey: "curr_code", header: "Currency", size: 90 },
-    { accessorKey: "inv_amount", header: "Amount", size: 130, cell: ({ row }) => money(number(row.original, "inv_amount")) },
-    {
-      accessorKey: "inv_status",
-      header: "Status",
-      size: 100,
-      cell: ({ row }) => {
-        const val = text(row.original.inv_status).toUpperCase();
-        if (val === "C" || val === "CONFIRMED") return <StatusChip tone="green" label="Confirmed" />;
-        return <StatusChip tone="slate" label={val === "N" ? "Draft" : val || "Draft"} />;
-      },
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      size: 96,
-      enableColumnFilter: false,
-      cell: ({ row }) => {
-        const invStatus = text(row.original.inv_status).toUpperCase();
-        const isConfirmed = invStatus === "C" || invStatus === "CONFIRMED";
-        const invNo = text(row.original.invoice_no);
-        return (
-          <div className="flex items-center gap-1">
-            <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={13} /></Button>
-            {!isConfirmed && (
-              <>
-                <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={13} /></Button>
-                <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Confirm invoice" onClick={() => void confirmExistingInvoice(invNo)}><CheckCircle size={13} /></Button>
-              </>
-            )}
-          </div>
-        );
-      },
-    },
-  ], [companyCode, loginId, loadRows]);
 
   // async function loadCandidateJobs(search = candidateSearch, prinCode = form.prin_code) {
   //   try {
@@ -306,7 +270,7 @@ export function FreightInvoicePage() {
     setSelectedRows((prev) => prev.filter((item) => lineKey(item) !== lineKey(row)));
   }
 
-  async function saveInvoice(action: "draft" | "confirm" = "draft") {
+  async function saveInvoice() {
     if (!selectedRows.length) {
       toast.error("Select at least one confirmed freight job activity.");
       return;
@@ -315,8 +279,6 @@ export function FreightInvoicePage() {
       toast.error("Principal is required.");
       return;
     }
-
-    const nextStatus = action === "confirm" ? "C" : (form.inv_status || "N");
 
     setSaving(true);
     try {
@@ -331,7 +293,7 @@ export function FreightInvoicePage() {
         cust_code: form.prin_code,
         inv_amount: selectedTotal,
         curr_code: form.curr_code || "OMR",
-        inv_status: nextStatus,
+        inv_status: form.inv_status || "N",
         user_id: loginId,
       }];
 
@@ -362,7 +324,7 @@ export function FreightInvoicePage() {
       });
 
       if (!response.data.success) throw new Error(response.data.message || "Unable to save freight invoice.");
-      toast.success(action === "confirm" ? `Freight invoice ${response.data.data?.invoice_no || form.invoice_no} confirmed successfully.` : `Freight invoice ${response.data.data?.invoice_no || ""} saved.`);
+      toast.success(`Freight invoice ${response.data.data?.invoice_no || ""} saved.`);
       setEditorOpen(false);
       await loadRows();
     } catch (error: any) {
@@ -374,7 +336,6 @@ export function FreightInvoicePage() {
 
   const selectedKeys = useMemo(() => new Set(selectedRows.map(lineKey)), [selectedRows]);
   const readOnly = editorMode === "view";
-  const isFormConfirmed = text(form.inv_status).toUpperCase() === "C" || text(form.inv_status).toUpperCase() === "CONFIRMED";
 
   async function printInvoice(reportType: "grouped" | "activitywise") {
     if (!form.prin_code || !form.invoice_no) return;
@@ -461,22 +422,8 @@ export function FreightInvoicePage() {
           <div className="flex w-full items-center justify-between">
             {form.invoice_no ? <Button type="button" variant="outline" onClick={() => setPrintDialogOpen(true)}><Printer size={14} /> Print</Button> : <span />}
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
-              {readOnly && form.invoice_no && !isFormConfirmed && (
-                <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void confirmExistingInvoice(form.invoice_no)} disabled={saving}>
-                  <CheckCircle size={14} />Confirm Invoice
-                </Button>
-              )}
-              {!readOnly && (
-                <>
-                  <Button type="button" variant="outline" onClick={() => void saveInvoice("draft")} disabled={saving || !selectedRows.length}>
-                    <Save size={14} />{saving ? "Saving..." : "Save Draft"}
-                  </Button>
-                  <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void saveInvoice("confirm")} disabled={saving || !selectedRows.length}>
-                    <CheckCircle size={14} />{saving ? "Confirming..." : "Confirm Invoice"}
-                  </Button>
-                </>
-              )}
+            <Button type="button" variant="outline" onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
+            {!readOnly && <Button type="button" onClick={() => void saveInvoice()} disabled={saving || !selectedRows.length}><Save size={14} />{saving ? "Saving" : "Save Invoice"}</Button>}
             </div>
           </div>
         }
@@ -488,7 +435,7 @@ export function FreightInvoicePage() {
             <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />
             <MetricCard label="Tax" value={`${selectedTax.toFixed(3)} ${form.curr_code || "OMR"}`} />
             <MetricCard icon={TrendingUp} label="Invoice Total" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
-            <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
+            <MetricCard label="Status" value={readOnly ? "View" : "Draft"} tone={readOnly ? "emerald" : "amber"} />
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">

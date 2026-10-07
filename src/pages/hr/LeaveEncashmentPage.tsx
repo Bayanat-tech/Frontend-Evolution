@@ -1,19 +1,14 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import {
-  Eraser, FileText, FilePlus, History, ListChecks, Loader2, Pencil, Plus, RefreshCw, Save,
-  Trash2, UserRound, Wallet, X,
-} from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { getDynamicLookup, type LookupRow } from "../../api/lookups";
-import { useToast } from "../../components/ui/AlertToast";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Pencil, Plus, RefreshCw, Save, Trash2, X, FilePlus, Eraser } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { Field, SectionPanel } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
-import { Select } from "../../components/ui/Select";
+import NoticeToast, { ToastNotice } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
+import { getDynamicLookup, LookupRow } from "../../api/lookups";
 import { saveLeaveEncashment } from "./api/Leaveencashmentapi";
 import {
   buildLeaveEncashmentPayload,
@@ -22,9 +17,9 @@ import {
   emptyHeader,
   findBalanceForType,
   HALF_DAY_OPTIONS,
-  type LeaveBalanceRow,
-  type LeaveDetailRow,
-  type LeaveHeader,
+  LeaveBalanceRow,
+  LeaveDetailRow,
+  LeaveHeader,
   STATUS_OPTIONS,
   toDateInputValue,
   toHalfDayDisplay,
@@ -90,6 +85,7 @@ const emptyFilters: FilterState = {
 function formatDateDisplay(value: unknown): string {
   if (value == null || value === "") return "";
   const str = String(value).trim();
+  // ISO / SQL datetime → date part only
   if (str.includes("T")) return str.split("T")[0];
   if (str.includes(" ")) return str.split(" ")[0];
   return str;
@@ -97,7 +93,6 @@ function formatDateDisplay(value: unknown): string {
 
 export function LeaveEncashmentPage() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const loginid = user?.loginid || "";
   const companyCode = user?.company_code || "";
 
@@ -114,6 +109,7 @@ export function LeaveEncashmentPage() {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [loadingDoc, setLoadingDoc] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<ToastNotice>(null);
 
   const [lineEditorOpen, setLineEditorOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -177,7 +173,10 @@ export function LeaveEncashmentPage() {
       });
       setBalances(data as LeaveBalanceRow[]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to load leave balance");
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load leave balance",
+      });
     } finally {
       setLoadingBalance(false);
     }
@@ -193,7 +192,10 @@ export function LeaveEncashmentPage() {
       });
       setDocNoOptions(data);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to load document list");
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load document list",
+      });
     }
   };
 
@@ -209,7 +211,10 @@ export function LeaveEncashmentPage() {
       setHistory(data);
       return data;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to load encashment history");
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load encashment history",
+      });
       return [];
     }
   };
@@ -241,6 +246,7 @@ export function LeaveEncashmentPage() {
   const loadDocument = async (hdrLveSlno: string) => {
     if (!hdrLveSlno || !filters.employeeId) return;
     setLoadingDoc(true);
+    setNotice(null);
     setConfirmDeleteIndex(null);
     try {
       const [headerRows, detailRows] = await Promise.all([
@@ -284,12 +290,14 @@ export function LeaveEncashmentPage() {
             {
               id: `seeded-${hdrLveSlno}`,
               leave_type: String(historyRow.leave_type ?? ""),
-              leave_days: historyRow.leave_days != null ? Number(historyRow.leave_days) : 0,
+              leave_days:
+                historyRow.leave_days != null ? Number(historyRow.leave_days) : 0,
               leave_reason: toLeaveReasonDisplay(String(historyRow.leave_reason ?? "")),
               half_day: toHalfDayDisplay(String(historyRow.half_day ?? "")),
               status: toStatusDisplay(String(historyRow.status ?? historyRow.approval_status ?? "")),
               remarks: String(historyRow.remarks ?? ""),
-              lve_doc_no: historyRow.lve_doc_no != null ? String(historyRow.lve_doc_no) : null,
+              lve_doc_no:
+                historyRow.lve_doc_no != null ? String(historyRow.lve_doc_no) : null,
               leave_start_date: String(historyRow.leave_start_date ?? ""),
               leave_end_date: String(historyRow.leave_end_date ?? ""),
               company_code: companyCode,
@@ -305,7 +313,10 @@ export function LeaveEncashmentPage() {
         setDetails(mappedDetails);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to load encashment document");
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load encashment document",
+      });
     } finally {
       setLoadingDoc(false);
     }
@@ -336,9 +347,10 @@ export function LeaveEncashmentPage() {
     }
     const hdrLveSlno = docNoToHdrLveSlno.get(value);
     if (!hdrLveSlno) {
-      toast.error(
-        "Unable to locate document details for the selected Doc No. Please refresh and try again.",
-      );
+      setNotice({
+        type: "error",
+        message: "Unable to locate document details for the selected Doc No. Please refresh and try again.",
+      });
       return;
     }
     void loadDocument(hdrLveSlno);
@@ -438,16 +450,10 @@ export function LeaveEncashmentPage() {
       { accessorKey: "status", header: "Status" },
       { accessorKey: "remarks", header: "Remarks" },
       { accessorKey: "lve_doc_no", header: "Doc No" },
-      {
-        accessorKey: "leave_start_date",
-        header: "Start Date",
-        cell: ({ getValue }) => formatDateDisplay(getValue()),
-      },
-      {
-        accessorKey: "leave_end_date",
-        header: "End Date",
-        cell: ({ getValue }) => formatDateDisplay(getValue()),
-      },
+      { accessorKey: "leave_start_date", header: "Start Date",
+        cell: ({ getValue }) => formatDateDisplay(getValue()) },
+      { accessorKey: "leave_end_date", header: "End Date",
+        cell: ({ getValue }) => formatDateDisplay(getValue()) },
       { accessorKey: "doc_approval_status", header: "Doc Status" },
       {
         id: "actions",
@@ -467,23 +473,23 @@ export function LeaveEncashmentPage() {
             );
           }
           return (
-            <div className="flex items-center justify-center gap-1">
-              <button
-                type="button"
-                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                onClick={() => openEditLine(row.index)}
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
                 title="Edit line"
+                onClick={() => openEditLine(row.index)}
               >
-                <Pencil size={13} />
-              </button>
-              <button
-                type="button"
-                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                onClick={() => setConfirmDeleteIndex(row.index)}
+                <Pencil size={14} />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
                 title="Remove line"
+                onClick={() => setConfirmDeleteIndex(row.index)}
               >
-                <Trash2 size={13} />
-              </button>
+                <Trash2 size={14} />
+              </Button>
             </div>
           );
         },
@@ -499,6 +505,7 @@ export function LeaveEncashmentPage() {
   const saveDocument = async () => {
     if (!canSave) return;
     setSaving(true);
+    setNotice(null);
     try {
       const payload = buildLeaveEncashmentPayload(
         {
@@ -511,7 +518,10 @@ export function LeaveEncashmentPage() {
         loginid,
       );
       const result = (await saveLeaveEncashment(payload)) as SaveLeaveEncashmentResult;
-      toast.success(result?.message || "Leave encashment saved successfully");
+      setNotice({
+        type: "success",
+        message: result?.message || "Leave encashment saved successfully",
+      });
 
       // Refresh lists, then try to land on the saved document if we can resolve it
       await loadDocNoOptions(filters.employeeId);
@@ -544,7 +554,10 @@ export function LeaveEncashmentPage() {
         resetDocument();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save leave encashment");
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to save leave encashment",
+      });
     } finally {
       setSaving(false);
     }
@@ -556,11 +569,13 @@ export function LeaveEncashmentPage() {
     setDocNoOptions([]);
     setHistory([]);
     resetDocument();
+    setNotice(null);
   };
 
   const startNewDocument = () => {
     if (!employeeSelected) return;
     resetDocument();
+    setNotice(null);
   };
 
   // Header status: prefer live document status, fall back to history for selected doc
@@ -574,224 +589,183 @@ export function LeaveEncashmentPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
-      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <Wallet size={15} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                HR Transactions - Leave Encashment
-              </h1>
-              {employeeSelected && (
-                <>
-                  <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
-                    {headerStatusDisplay}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {filters.employeeName
-                      ? `${filters.employeeName} (${filters.employeeId})`
-                      : filters.employeeId}
-                    {selectedDocNo ? ` · Doc ${selectedDocNo}` : " · New document"}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {(filters.divCode || filters.employeeId) && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={clearFilters}
-              disabled={saving}
-              title="Clear employee selection"
-            >
-              <Eraser size={14} /> Clear
-            </Button>
+    <section className="grid gap-2">
+      {/* Page title + actions */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="m-0 text-lg font-semibold tracking-tight">Leave Encashment</h1>
+          {employeeSelected && (
+            <p className="m-0 text-xs text-muted-foreground">
+              {filters.employeeName
+                ? `${filters.employeeName} (${filters.employeeId})`
+                : filters.employeeId}
+              {selectedDocNo ? ` · Doc ${selectedDocNo}` : " · New document"}
+            </p>
           )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
-            type="button"
             size="sm"
             variant="outline"
-            disabled={!employeeSelected || loadingBalance || saving}
-            onClick={() => employeeSelected && void loadBalance(filters.employeeId)}
+            disabled={!filters.employeeId || loadingBalance}
+            onClick={() => filters.employeeId && void loadBalance(filters.employeeId)}
             title="Refresh leave balance"
           >
-            {loadingBalance ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <RefreshCw size={14} />
-            )}{" "}
-            Refresh
+            <RefreshCw size={13} className={loadingBalance ? "animate-spin" : undefined} /> Refresh
           </Button>
           <Button
-            type="button"
             size="sm"
             variant="outline"
-            disabled={!employeeSelected || loadingDoc || saving}
+            disabled={!employeeSelected || loadingDoc}
             onClick={startNewDocument}
             title="Start a new encashment document"
           >
-            <FilePlus size={14} /> New
+            <FilePlus size={13} /> New
           </Button>
+          {canAddLine && (
+            <Button size="sm" onClick={openAddLine} title="Add encashment line">
+              <Plus size={13} /> Add
+            </Button>
+          )}
           <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={!canAddLine || saving}
-            onClick={openAddLine}
-            title="Add encashment line"
-          >
-            <Plus size={14} /> Add
-          </Button>
-          <Button
-            type="button"
             size="sm"
             disabled={!canSave || saving}
             onClick={() => void saveDocument()}
             title="Save document"
           >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
-            {saving ? "Saving" : "Save"}
+            <Save size={13} /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
 
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+
       {/* Org-structure filter cascade */}
-      <SectionPanel title="Employee Selection" icon={UserRound}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Division" required>
-            <LookupField
-              compact
-              label="Division"
-              value={filters.divCode}
-              displayValue={filters.divName}
-              columns={[
-                { field: "div_code", header: "Code" },
-                { field: "div_name", header: "Name" },
-              ]}
-              valueField="div_code"
-              displayFields={["div_code", "div_name"]}
-              loadOptions={loadDivisions}
-              onChange={(value, row) =>
-                setFilters({
-                  ...emptyFilters,
-                  divCode: value,
-                  divName: row ? String(row.div_name ?? "") : "",
-                })
-              }
-            />
-          </Field>
-          <Field label="Department" required>
-            <LookupField
-              compact
-              key={`department-${filters.divCode}`}
-              label="Department"
-              value={filters.deptCode}
-              displayValue={filters.deptName}
-              columns={[
-                { field: "dept_code", header: "Code" },
-                { field: "dept_name", header: "Name" },
-              ]}
-              valueField="dept_code"
-              displayFields={["dept_code", "dept_name"]}
-              loadOptions={loadDepartments}
-              onChange={(value, row) =>
-                setFilters((current) => ({
-                  ...current,
-                  deptCode: value,
-                  deptName: row ? String(row.dept_name ?? "") : "",
-                  sectionCode: "",
-                  sectionName: "",
-                  employeeId: "",
-                  employeeName: "",
-                }))
-              }
-              disabled={!filters.divCode}
-            />
-          </Field>
-          <Field label="Section" required>
-            <LookupField
-              compact
-              key={`section-${filters.divCode}-${filters.deptCode}`}
-              label="Section"
-              value={filters.sectionCode}
-              displayValue={filters.sectionName}
-              columns={[
-                { field: "section_code", header: "Code" },
-                { field: "section_name", header: "Name" },
-              ]}
-              valueField="section_code"
-              displayFields={["section_code", "section_name"]}
-              loadOptions={loadSections}
-              onChange={(value, row) =>
-                setFilters((current) => ({
-                  ...current,
-                  sectionCode: value,
-                  sectionName: row ? String(row.section_name ?? "") : "",
-                  employeeId: "",
-                  employeeName: "",
-                }))
-              }
-              disabled={!filters.divCode}
-            />
-          </Field>
-          <Field label="Employee" required>
-            <LookupField
-              compact
-              key={`employee-${filters.divCode}-${filters.deptCode}-${filters.sectionCode}`}
-              label="Employee"
-              value={filters.employeeId}
-              displayValue={filters.employeeName}
-              columns={[
-                { field: "employee_id", header: "ID" },
-                { field: "employee_code", header: "Code" },
-                { field: "div_code", header: "Division" },
-                { field: "dept_code", header: "Department" },
-                { field: "section_code", header: "Section" },
-                { field: "rpt_name", header: "Name" },
-              ]}
-              valueField="employee_id"
-              displayFields={["employee_id", "rpt_name"]}
-              loadOptions={loadEmployees}
-              onChange={(value, row) =>
-                setFilters((current) => {
-                  if (!row) {
-                    return { ...current, employeeId: value, employeeName: "" };
-                  }
-                  const divCode = String(row.div_code ?? current.divCode ?? "");
-                  const deptCode = String(row.dept_code ?? current.deptCode ?? "");
-                  const sectionCode = String(row.section_code ?? current.sectionCode ?? "");
-                  return {
-                    ...current,
-                    employeeId: value,
-                    employeeName: String(row.rpt_name ?? ""),
-                    divCode,
-                    divName: divCode
-                      ? String(row.div_name ?? (current.divName || divCode))
-                      : current.divName,
-                    deptCode,
-                    deptName: deptCode
-                      ? String(row.dept_name ?? (current.deptName || deptCode))
-                      : current.deptName,
-                    sectionCode,
-                    sectionName: sectionCode
-                      ? String(row.section_name ?? (current.sectionName || sectionCode))
-                      : current.sectionName,
-                  };
-                })
-              }
-            />
-          </Field>
+      <div className="rounded-md border bg-white p-2">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="eyebrow m-0 text-xs">Employee Selection</p>
+          {(filters.divCode || filters.employeeId) && (
+            <Button size="sm" variant="ghost" onClick={clearFilters} title="Clear all filters">
+              <Eraser size={12} /> Clear
+            </Button>
+          )}
         </div>
-      </SectionPanel>
+        <div className="grid gap-2 md:grid-cols-4">
+          <LookupField
+            label="Division"
+            value={filters.divCode}
+            displayValue={filters.divName}
+            columns={[
+              { field: "div_code", header: "Code" },
+              { field: "div_name", header: "Name" },
+            ]}
+            valueField="div_code"
+            displayFields={["div_code", "div_name"]}
+            loadOptions={loadDivisions}
+            onChange={(value, row) =>
+              setFilters({
+                ...emptyFilters,
+                divCode: value,
+                divName: row ? String(row.div_name ?? "") : "",
+              })
+            }
+            required
+          />
+          <LookupField
+            key={`department-${filters.divCode}`}
+            label="Department"
+            value={filters.deptCode}
+            displayValue={filters.deptName}
+            columns={[
+              { field: "dept_code", header: "Code" },
+              { field: "dept_name", header: "Name" },
+            ]}
+            valueField="dept_code"
+            displayFields={["dept_code", "dept_name"]}
+            loadOptions={loadDepartments}
+            onChange={(value, row) =>
+              setFilters((current) => ({
+                ...current,
+                deptCode: value,
+                deptName: row ? String(row.dept_name ?? "") : "",
+                sectionCode: "",
+                sectionName: "",
+                employeeId: "",
+                employeeName: "",
+              }))
+            }
+            disabled={!filters.divCode}
+            required
+          />
+          <LookupField
+            key={`section-${filters.divCode}-${filters.deptCode}`}
+            label="Section"
+            value={filters.sectionCode}
+            displayValue={filters.sectionName}
+            columns={[
+              { field: "section_code", header: "Code" },
+              { field: "section_name", header: "Name" },
+            ]}
+            valueField="section_code"
+            displayFields={["section_code", "section_name"]}
+            loadOptions={loadSections}
+            onChange={(value, row) =>
+              setFilters((current) => ({
+                ...current,
+                sectionCode: value,
+                sectionName: row ? String(row.section_name ?? "") : "",
+                employeeId: "",
+                employeeName: "",
+              }))
+            }
+            disabled={!filters.divCode}
+            required
+          />
+          <LookupField
+            key={`employee-${filters.divCode}-${filters.deptCode}-${filters.sectionCode}`}
+            label="Employee"
+            value={filters.employeeId}
+            displayValue={filters.employeeName}
+            columns={[
+              { field: "employee_id", header: "ID" },
+              { field: "employee_code", header: "Code" },
+              { field: "div_code", header: "Division" },
+              { field: "dept_code", header: "Department" },
+              { field: "section_code", header: "Section" },
+              { field: "rpt_name", header: "Name" },
+            ]}
+            valueField="employee_id"
+            displayFields={["employee_id", "rpt_name"]}
+            loadOptions={loadEmployees}
+            onChange={(value, row) =>
+              setFilters((current) => {
+                if (!row) {
+                  return { ...current, employeeId: value, employeeName: "" };
+                }
+                const divCode = String(row.div_code ?? current.divCode ?? "");
+                const deptCode = String(row.dept_code ?? current.deptCode ?? "");
+                const sectionCode = String(row.section_code ?? current.sectionCode ?? "");
+                return {
+                  ...current,
+                  employeeId: value,
+                  employeeName: String(row.rpt_name ?? ""),
+                  divCode,
+                  divName: divCode ? String(row.div_name ?? (current.divName || divCode)) : current.divName,
+                  deptCode,
+                  deptName: deptCode
+                    ? String(row.dept_name ?? (current.deptName || deptCode))
+                    : current.deptName,
+                  sectionCode,
+                  sectionName: sectionCode
+                    ? String(row.section_name ?? (current.sectionName || sectionCode))
+                    : current.sectionName,
+                };
+              })
+            }
+            required
+          />
+        </div>
+      </div>
 
       {!employeeSelected && (
         <div className="rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
@@ -802,10 +776,12 @@ export function LeaveEncashmentPage() {
       {employeeSelected && (
         <>
           {/* Document header */}
-          <SectionPanel title="Document Information" icon={FileText}>
-            <div className="grid gap-3 md:grid-cols-4">
-              <Field label="Doc No">
-                <Select
+          <div className="rounded-md border bg-white p-2">
+            <div className="grid gap-2 md:grid-cols-4">
+              <label className="field">
+                <span className="text-xs">Doc No</span>
+                <select
+                  className="ui-input h-8 rounded-md border px-2 text-sm"
                   value={selectedDocNo}
                   disabled={loadingDoc || saving}
                   onChange={(event) => handleDocNoChange(event.target.value)}
@@ -816,49 +792,55 @@ export function LeaveEncashmentPage() {
                       {String(row.lve_doc_no)}
                     </option>
                   ))}
-                </Select>
-              </Field>
-              <Field label="Request Date">
+                </select>
+              </label>
+              <label className="field">
+                <span className="text-xs">Request Date</span>
                 <Input
                   type="date"
+                  className="h-8 text-sm"
                   value={toDateInputValue(header.leave_request_date)}
                   disabled={loadingDoc || saving}
                   onChange={(event) =>
                     setHeader((current) => ({ ...current, leave_request_date: event.target.value }))
                   }
                 />
-              </Field>
-              <Field label="Leave Status">
-                <Input value={headerStatusDisplay} disabled />
-              </Field>
-              <Field label="Remarks">
+              </label>
+              <label className="field">
+                <span className="text-xs">Leave Status</span>
+                <Input className="h-8 text-sm" value={headerStatusDisplay} disabled />
+              </label>
+              <label className="field">
+                <span className="text-xs">Remarks</span>
                 <Input
+                  className="h-8 text-sm"
                   value={header.leave_remarks || ""}
                   disabled={loadingDoc || saving}
                   onChange={(event) =>
                     setHeader((current) => ({ ...current, leave_remarks: event.target.value }))
                   }
                 />
-              </Field>
+              </label>
             </div>
-          </SectionPanel>
+          </div>
 
           {/* Leave detail lines */}
-          <SectionPanel title={`Encashment Lines (${details.length})`} icon={ListChecks}>
-            <DataTable
-              columns={detailColumns}
-              data={detailsForGrid}
-              loading={loadingDoc}
-              height={220}
-              density="compact"
-              emptyText="No leave encashment lines yet — use Add to apply against available balance"
-              getRowId={(row, index) => String(row.id ?? index)}
-            />
-          </SectionPanel>
+          <DataTable
+            columns={detailColumns}
+            data={detailsForGrid}
+            loading={loadingDoc}
+            height={200}
+            density="compact"
+            emptyText="No leave encashment lines yet — use Add to apply against available balance"
+            getRowId={(row, index) => String(row.id ?? index)}
+          />
 
           {/* Leave balance + history */}
           <div className="grid gap-2 md:grid-cols-2">
-            <SectionPanel title="Leave Balance" icon={Wallet}>
+            <div className="rounded-md border bg-white">
+              <div className="border-b px-3 py-1.5">
+                <p className="eyebrow m-0 text-xs">Leave Balance</p>
+              </div>
               <DataTable
                 columns={[
                   { accessorKey: "leave_type", header: "Leave Type" },
@@ -870,13 +852,15 @@ export function LeaveEncashmentPage() {
                 ]}
                 data={balances}
                 loading={loadingBalance}
-                height={220}
+                height={200}
                 density="compact"
                 emptyText="No leave balance found"
               />
-            </SectionPanel>
-
-            <SectionPanel title="Leave Encash History" icon={History}>
+            </div>
+            <div className="rounded-md border bg-white">
+              <div className="border-b px-3 py-1.5">
+                <p className="eyebrow m-0 text-xs">Leave Encash History</p>
+              </div>
               <DataTable
                 columns={[
                   {
@@ -895,30 +879,21 @@ export function LeaveEncashmentPage() {
                       );
                     },
                   },
-                  {
-                    accessorKey: "leave_request_date",
-                    header: "Request Date",
-                    cell: ({ getValue }) => formatDateDisplay(getValue()),
-                  },
-                  {
-                    accessorKey: "leave_start_date",
-                    header: "Start Date",
-                    cell: ({ getValue }) => formatDateDisplay(getValue()),
-                  },
-                  {
-                    accessorKey: "leave_end_date",
-                    header: "End Date",
-                    cell: ({ getValue }) => formatDateDisplay(getValue()),
-                  },
+                  { accessorKey: "leave_request_date", header: "Request Date",
+                    cell: ({ getValue }) => formatDateDisplay(getValue()) },
+                  { accessorKey: "leave_start_date", header: "Start Date",
+                    cell: ({ getValue }) => formatDateDisplay(getValue()) },
+                  { accessorKey: "leave_end_date", header: "End Date",
+                    cell: ({ getValue }) => formatDateDisplay(getValue()) },
                   { accessorKey: "approval_status", header: "Status" },
                 ]}
                 data={history}
-                height={220}
+                height={200}
                 density="compact"
                 emptyText="No encashment history found"
                 onRowClick={(row) => handleDocNoChange(String(row.lve_doc_no ?? ""))}
               />
-            </SectionPanel>
+            </div>
           </div>
         </>
       )}
@@ -931,6 +906,7 @@ export function LeaveEncashmentPage() {
         onSave={saveDetailRow}
         employeeId={filters.employeeId}
         companyCode={companyCode}
+        loginid={loginid}
         hdrLveSlno={header.hdr_lve_slno || ""}
       />
     </section>
@@ -947,6 +923,7 @@ function LeaveLineEditor({
   onSave,
   employeeId,
   companyCode,
+  loginid,
   hdrLveSlno,
 }: {
   open: boolean;
@@ -956,12 +933,15 @@ function LeaveLineEditor({
   onSave: (row: DetailGridRow) => void;
   employeeId: string;
   companyCode: string;
+  loginid: string;
   hdrLveSlno: string | number;
 }) {
   const isEditing = Boolean(editingRow);
 
   const [form, setForm] = useState<DetailGridRow>(() =>
-    editingRow ? { ...editingRow } : { ...emptyDetailRow(companyCode, employeeId, hdrLveSlno) },
+    editingRow
+      ? { ...editingRow }
+      : { ...emptyDetailRow(companyCode, employeeId, hdrLveSlno) },
   );
   const [error, setError] = useState("");
 
@@ -979,17 +959,22 @@ function LeaveLineEditor({
   const selectedBalance = findBalanceForType(balances, form.leave_type || "");
 
   const availableDays = selectedBalance
-    ? Number(selectedBalance.leave_balance ?? selectedBalance.no_of_leaves_available ?? 0)
+    ? Number(
+        selectedBalance.leave_balance ??
+          selectedBalance.no_of_leaves_available ??
+          0,
+      )
     : 0;
 
   // Only leave types that appear in the balance table (no extra API call needed).
-  const loadLeaveTypes = async () =>
-    balances
+  const loadLeaveTypes = async () => {
+    return balances
       .filter((b) => String(b.leave_type ?? "").trim() !== "")
       .map((b) => ({
         leave_type: String(b.leave_type),
         leave_type_desc: String(b.leave_type_desc ?? b.leave_type),
       }));
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1045,13 +1030,13 @@ function LeaveLineEditor({
     >
       <form
         id="leave-encashment-line-form"
-        className="freight-dense-form grid grid-cols-2 gap-x-4 gap-y-3"
+        className="grid grid-cols-2 gap-x-4 gap-y-2"
         onSubmit={submit}
       >
-        <Field label="Leave Type" required>
+        <label className="field">
+          <span className="text-xs font-medium">Leave Type *</span>
           <LookupField
-            compact
-            label="Leave Type"
+            label=""
             value={form.leave_type || ""}
             displayValue={form.leave_type || ""}
             columns={[
@@ -1069,12 +1054,15 @@ function LeaveLineEditor({
                 leave_days: c.leave_type === value ? c.leave_days : 0,
               }))
             }
+            required
           />
-        </Field>
+        </label>
 
-        <Field label="Days" required>
+        <label className="field">
+          <span className="text-xs font-medium">Days *</span>
           <Input
             type="number"
+            className="h-8 text-sm"
             min={0}
             max={availableDays > 0 ? availableDays : undefined}
             step={0.5}
@@ -1086,34 +1074,40 @@ function LeaveLineEditor({
             }}
             required
           />
-        </Field>
+        </label>
 
         {form.leave_type && (
-          <p className="col-span-2 -mt-1 m-0 text-[11px] text-muted-foreground">
+          <p className="col-span-2 -mt-1 m-0 text-xs text-muted-foreground">
             {!selectedBalance
               ? `No balance found for "${form.leave_type}"`
               : `${selectedBalance.leave_type_desc || selectedBalance.leave_type} — available: ${availableDays} day(s)`}
           </p>
         )}
 
-        <Field label="Start Date">
+        <label className="field">
+          <span className="text-xs font-medium">Start Date</span>
           <Input
             type="date"
+            className="h-8 text-sm"
             value={toDateInputValue(form.leave_start_date)}
             onChange={(e) => setForm((c) => ({ ...c, leave_start_date: e.target.value }))}
           />
-        </Field>
+        </label>
 
-        <Field label="End Date">
+        <label className="field">
+          <span className="text-xs font-medium">End Date</span>
           <Input
             type="date"
+            className="h-8 text-sm"
             value={toDateInputValue(form.leave_end_date)}
             onChange={(e) => setForm((c) => ({ ...c, leave_end_date: e.target.value }))}
           />
-        </Field>
+        </label>
 
-        <Field label="Half Day">
-          <Select
+        <label className="field">
+          <span className="text-xs font-medium">Half Day</span>
+          <select
+            className="ui-input h-8 rounded-md border px-2 text-sm"
             value={form.half_day || "No"}
             onChange={(e) => setForm((c) => ({ ...c, half_day: e.target.value }))}
           >
@@ -1122,11 +1116,13 @@ function LeaveLineEditor({
                 {opt}
               </option>
             ))}
-          </Select>
-        </Field>
+          </select>
+        </label>
 
-        <Field label="Status">
-          <Select
+        <label className="field">
+          <span className="text-xs font-medium">Status</span>
+          <select
+            className="ui-input h-8 rounded-md border px-2 text-sm"
             value={form.status || STATUS_OPTIONS[0]}
             onChange={(e) => setForm((c) => ({ ...c, status: e.target.value }))}
           >
@@ -1135,32 +1131,48 @@ function LeaveLineEditor({
                 {opt}
               </option>
             ))}
-          </Select>
-        </Field>
+          </select>
+        </label>
 
-        <Field label="Doc No">
-          <Input value={form.lve_doc_no || ""} disabled placeholder="Auto-assigned on save" />
-        </Field>
-
-        <Field label="Doc Status">
-          <Input value={form.doc_approval_status || ""} disabled placeholder="Set on approval" />
-        </Field>
-
-        <Field label="Reason">
+        <label className="field">
+          <span className="text-xs font-medium">Doc No</span>
           <Input
+            className="h-8 text-sm"
+            value={form.lve_doc_no || ""}
+            disabled
+            placeholder="Auto-assigned on save"
+          />
+        </label>
+
+        <label className="field">
+          <span className="text-xs font-medium">Doc Status</span>
+          <Input
+            className="h-8 text-sm"
+            value={form.doc_approval_status || ""}
+            disabled
+            placeholder="Set on approval"
+          />
+        </label>
+
+        <label className="field">
+          <span className="text-xs font-medium">Reason</span>
+          <Input
+            className="h-8 text-sm"
             value={form.leave_reason || ""}
             onChange={(e) => setForm((c) => ({ ...c, leave_reason: e.target.value }))}
           />
-        </Field>
+        </label>
 
-        <Field label="Remarks">
+        <label className="field">
+          <span className="text-xs font-medium">Remarks</span>
           <Input
+            className="h-8 text-sm"
             value={form.remarks || ""}
             onChange={(e) => setForm((c) => ({ ...c, remarks: e.target.value }))}
           />
-        </Field>
+        </label>
 
-        {error && <p className="col-span-2 m-0 text-[12px] text-destructive">{error}</p>}
+        {error && <div className="alert error col-span-2 text-sm">{error}</div>}
       </form>
     </Dialog>
   );

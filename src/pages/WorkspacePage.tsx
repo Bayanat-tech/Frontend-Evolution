@@ -181,7 +181,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       focusMenuSearch.current = false;
     }
   }, [displayCollapsed]);
-  const companyName = user?.company_name || user?.COMPANY_NAME || (user?.tenant_name && user.tenant_name !== "WMSDEV_TENANT" ? user.tenant_name : "Bayanat India");
+  const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "PURSHOTTAM KANJI & CO.";
   const companyCode = user?.company_code || user?.COMPANY_CODE || "01";
   const fallbackUserName = (user as { name?: string } | null)?.name;
   const displayName = user?.username || user?.loginid || fallbackUserName || "User";
@@ -271,8 +271,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               </div>
               <div className="hidden md:block text-left">
                 <p className="text-foreground text-xs font-semibold leading-tight">{displayName}</p>
-                <p className="text-muted-foreground text-[10.5px] leading-tight truncate max-w-[180px]" title={companyName}>
-                  {companyName}
+                <p className="text-muted-foreground text-[10.5px] leading-tight">
+                  {companyCode} &middot; {moduleSubtitle}
                 </p>
               </div>
               <ChevronDown
@@ -283,7 +283,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 py-1">
                 <div className="px-3 py-2 border-b border-border/60 md:hidden">
                   <p className="text-foreground text-xs font-semibold truncate">{displayName}</p>
-                  <p className="text-muted-foreground text-[10.5px] truncate" title={companyName}>{companyName}</p>
+                  <p className="text-muted-foreground text-[10.5px]">{companyCode} &middot; {moduleSubtitle}</p>
                 </div>
                 <button
                   type="button"
