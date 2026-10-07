@@ -2,18 +2,25 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useFormik } from 'formik';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Edit2, Plus, Save } from 'lucide-react';
+import { Edit2, Plus, Printer, Save } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { DataTable } from '../../../components/ui/DataTable';
 import { useToast } from '../../../components/ui/AlertToast';
 import { DocumentPageShell } from '../../../components/ui/DocumentPageShell';
+import { NewReportDialog } from '../../../components/new_report_format';
 import AddSalaryAdditionDeductionPage from './AddUpdate/AddSalaryAdditionDeductionPage';
 import type { SalaryAdditionDeductionDetailRow } from './AddUpdate/types';
 import hrSalaryAdvDedServiceInstance from '../../../api/hr/upsertHrSalaryAdvDed';
 import { getDynamicLookup } from '../../../api/lookups';
+import { api } from '../../../api/client';
 import { useAuth } from '../../../state/AuthContext';
 
 const gridDataParameter = 'HR_ADDITION_DEDUCTION_MAIN_PAGE';
+
+// print=false stops the backend HTML from auto-opening a print dialog inside the preview.
+const SALARY_ADV_DED_REPORT_URL = '/api/wms/reports/salary-adv-ded/html?print=false';
+
+const PRINT_IFRAME_ID = 'salary-adv-ded-print-iframe';
 
 const columnDef: ColumnDef<any>[] = [
   { accessorKey: 'doc_no', header: 'Doc No' },
@@ -75,6 +82,31 @@ const mapDetailApiRow = (
   };
 };
 
+// ── Backend report fetch (full HTML with company header/footer) ──────────────
+const fetchSalaryAdvDedReportHtml = async (docNo: number): Promise<string> => {
+  try {
+    const res = await api.post(
+      SALARY_ADV_DED_REPORT_URL,
+      { doc_no: docNo },
+      { responseType: 'text' },
+    );
+    return res.data;
+  } catch (e: any) {
+    let message = 'Failed to load report. Please try again.';
+    const data = e?.response?.data;
+    try {
+      // responseType 'text' leaves the JSON error body as a string
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      if (parsed?.message) {
+        message = parsed.code ? `${parsed.code}: ${parsed.message}` : parsed.message;
+      }
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
+  }
+};
+
 const SalaryAdditionDeductionMainPage = () => {
   const title = 'Salary Addition/Deduction';
   const { user } = useAuth();
@@ -88,6 +120,13 @@ const SalaryAdditionDeductionMainPage = () => {
     type: '' | 'add' | 'edit';
   }>({ open: false, type: '' });
   const [isSaving, setIsSaving] = useState(false);
+
+  // ── Report preview dialog state (NewReportDialog: raw HTML) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportTitle, setReportTitle] = useState(title);
 
   const fetchDetailRowsByDocNo = async (docNo: number | string | undefined) => {
     const parsedDocNo = Number(docNo);
@@ -204,6 +243,85 @@ const SalaryAdditionDeductionMainPage = () => {
     }
   };
 
+  // ── Row-level print: fetch full report HTML from backend, open dialog ──
+  const handlePrintSalaryAdditionDeduction = async (row: any) => {
+    const docNo = Number(row?.doc_no ?? row?.docNo);
+    if (!docNo || Number.isNaN(docNo)) return;
+
+    setReportTitle(`${title} ${docNo}`.trim());
+    setReportHtml(null);
+    setReportPreviewError('');
+    setReportPreviewOpen(true);
+    setReportLoading(true);
+
+    try {
+      setReportHtml(await fetchSalaryAdvDedReportHtml(docNo));
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : 'Failed to load report. Please try again.',
+      );
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError('');
+  };
+
+  // Open report HTML in a new tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Print dialog (Save as PDF)
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-modals');
+      iframe.style.cssText =
+        'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === 'complete') {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
       ...columnDef,
@@ -220,12 +338,20 @@ const SalaryAdditionDeductionMainPage = () => {
             >
               <Edit2 size={14} />
             </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => void handlePrintSalaryAdditionDeduction(row.original)}
+              title="Print / PDF"
+            >
+              <Printer size={14} />
+            </Button>
           </div>
         ),
-        size: 80,
+        size: 110,
       },
     ],
-    [],
+    [user?.company_code, user?.loginid],
   );
 
   const {
@@ -322,7 +448,20 @@ const SalaryAdditionDeductionMainPage = () => {
             setDetailRows={setDetailRows}
           />
         </DocumentPageShell>
+        
       )}
+
+      {/* ── Report preview dialog ── */}
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportPreviewError || null}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
     </section>
   );
 };
