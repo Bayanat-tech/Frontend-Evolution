@@ -194,6 +194,7 @@ export function PurchaseQuotationEditor({
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),

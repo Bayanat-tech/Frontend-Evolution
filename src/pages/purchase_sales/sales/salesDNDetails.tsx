@@ -1,5 +1,4 @@
-
-import { Columns3, List, Plus, Search, X } from "lucide-react";
+import { Columns3, List, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -13,16 +12,6 @@ import { computePoQuantity, computeQuantity, formatAmount, isSamePoUom, isSameUo
 import { useMemo, useState } from "react";
 
 
-const STICKY_COLS = {
-    sno: { width: 50, left: 0 },
-    div: { width: 90, left: 50 },
-    product: {
-        width: 260,
-        left: 140,
-    },
-} as const;
-
-
 
 function hasExtraStickyColumn(docType?: string | null): boolean {
     const code = String(docType ?? "").trim().toUpperCase();
@@ -30,16 +19,29 @@ function hasExtraStickyColumn(docType?: string | null): boolean {
 }
 
 
-const plainHeaderStyle = (width?: number): React.CSSProperties => ({
+const plainHeaderStyle = (width?: number, top: number = 0): React.CSSProperties => ({
     position: "sticky",
-    top: 0,
+    top,
     zIndex: 1,
     backgroundColor: "var(--primary, #1d4ed8)",
     width,
     minWidth: width,
 });
 
-const TABLE_COLUMN_COUNT = 24;
+// Group header (SO Primary / SO Lowest / Rvd Primary / Rvd Lowest) - coloured band above the column titles
+const GROUP_ROW_HEIGHT = 10;
+const groupHeaderStyle = (bg: string): React.CSSProperties => ({
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+    height: GROUP_ROW_HEIGHT,
+    backgroundColor: bg,
+    color: "#1e293b",
+    border: "1px solid #94a3b8",
+});
+
+const TABLE_COLUMN_COUNT = 16;
+const UOM_LABEL = "bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500";
 
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: SalesOrderLineRow): number {
@@ -93,18 +95,18 @@ export function SalesDnDetailsTable({
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     const grandTotal = totalAmount - totalDiscPrice - discAmt;
     const finalTotal = grandTotal + totalTaxAmount;
-     const [lineSearch, setLineSearch] = useState("");
-      const [showAllColumns, setShowAllColumns] = useState(false);
-      const filteredRows = useMemo(() => {
+    const [lineSearch, setLineSearch] = useState("");
+    const [showAllColumns, setShowAllColumns] = useState(false);
+    const filteredRows = useMemo(() => {
         const q = lineSearch.trim().toLowerCase();
         if (!q) return rows;
         return rows.filter((r) =>
-          r.prod_name?.toLowerCase().includes(q) ||
-          r.prod_code?.toLowerCase().includes(q) ||
-          r.line_remarks?.toLowerCase().includes(q) ||
-          r.job_no?.toLowerCase().includes(q)
+            r.prod_name?.toLowerCase().includes(q) ||
+            r.prod_code?.toLowerCase().includes(q) ||
+            r.line_remarks?.toLowerCase().includes(q) ||
+            r.job_no?.toLowerCase().includes(q)
         );
-      }, [rows, lineSearch]);
+    }, [rows, lineSearch]);
 
 
     // Quantity is always derived, never typed directly:
@@ -112,83 +114,98 @@ export function SalesDnDetailsTable({
     // - different UOM: quantity = (qty_puom * uppp) + qty_luom
 
     return (
-      <div className="commercial-lines-card rounded-md border bg-card">
-           <div className="finance-line-actions">
-        <div className="finance-line-actions-left">
-          <span className="finance-line-actions-icon"><List size={14} /></span>
-          <span className="finance-line-actions-title">Accounting Lines</span>
-          <span className="finance-line-actions-badge">
-            {lineSearch.trim()
-              ? `${filteredRows.length} of ${rows.length} lines`
-              : `${rows.length} ${rows.length === 1 ? "line" : "lines"}`}
-          </span>
-          {lineSearch.trim() && (
-            <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              Filtered ({filteredRows.length})
-            </span>
-          )}
-        </div>
-                 <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAllColumns(!showAllColumns)}
-            className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
-              ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
-              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
-          >
-            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
-          </button>
+        <div className="commercial-lines-card rounded-md border bg-card">
+            <div className="finance-line-actions">
+                <div className="finance-line-actions-left">
+                    <span className="finance-line-actions-icon"><List size={14} /></span>
+                    <span className="finance-line-actions-title">Accounting Lines</span>
+                    <span className="finance-line-actions-badge">
+                        {lineSearch.trim()
+                            ? `${filteredRows.length} of ${rows.length} lines`
+                            : `${rows.length} ${rows.length === 1 ? "line" : "lines"}`}
+                    </span>
+                    {lineSearch.trim() && (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Filtered ({filteredRows.length})
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowAllColumns(!showAllColumns)}
+                        className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${showAllColumns
+                            ? "bg-blue-50 text-[#00378C] border-[#00378C]/40 shadow-xs"
+                            : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                            }`}
+                        title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
+                    >
+                        <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+                        <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+                    </button>
 
-          <div className="bisc-table-search">
-            <Search size={13} className="bisc-table-search-icon" />
-            <input
-              className="bisc-search-input"
-              type="text"
-              value={lineSearch}
-              onChange={(e) => setLineSearch(e.target.value)}
-              placeholder="Search lines..."
-            />
-            {lineSearch && (
-              <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
-                <X size={11} />
-              </button>
-            )}
-          </div>
-          {/* <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
+                    <div className="bisc-table-search">
+                        <Search size={13} className="bisc-table-search-icon" />
+                        <input
+                            className="bisc-search-input"
+                            type="text"
+                            value={lineSearch}
+                            onChange={(e) => setLineSearch(e.target.value)}
+                            placeholder="Search lines..."
+                        />
+                        {lineSearch && (
+                            <button type="button" onClick={() => setLineSearch("")} className="bisc-table-search-clear" title="Clear">
+                                <X size={11} />
+                            </button>
+                        )}
+                    </div>
+                    {/* <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
             <Plus size={14} /> Add Line
           </Button> */}
+                </div>
             </div>
-               </div>
-             <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-        <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
-          <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+            <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
+                <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
+                    <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                        {/* Row 1: group bands only. Ungrouped columns get an empty cell here - nothing is merged. */}
                         <tr>
-                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(0.5)}>SNo</th>
-                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(1)}>Div</th>
-                            <th className="finance-sticky-col px-2 py-2 text-center" style={plainHeaderStyle(50)}>Product Code</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-64" style={plainHeaderStyle(5)}>P Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Qty Puom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>L Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-20" style={plainHeaderStyle(10)}>Qty Luom</th>
-                            <th className="px-2 py-2 text-center w-24 sticky top-0 z-[3] bg-primary" style={plainHeaderStyle(10)}>Uppp</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-28" style={plainHeaderStyle(10)}>Unit Price</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-28" style={plainHeaderStyle(20)}>Quantity</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-64" style={plainHeaderStyle(10)}>Recevied P Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Recevied Qty Puom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Recevied L Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-20" style={plainHeaderStyle(10)}>Recevied Qty Luom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-28" style={plainHeaderStyle(10)}>Delivered Quantity</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center w-40" style={plainHeaderStyle(40)}>Remarks</th>
-                            <th className="px-2 py-2 text-center w-16" style={plainHeaderStyle(10)}>Action</th>
+                            <th style={plainHeaderStyle(undefined, 0)}></th>
+                            <th style={plainHeaderStyle(undefined, 0)}></th>
+                            <th style={plainHeaderStyle(undefined, 0)}></th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>SO Primary</th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>SO Lowest</th>
+                            {/* Unit Price, Quantity */}
+                            <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Rvd Primary</th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Rvd Lowest</th>
+                            {/* Delivered Quantity, Remarks, Action */}
+                            <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
+                        </tr>
+                        {/* Row 2: every column title */}
+                        <tr>
+                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(30, GROUP_ROW_HEIGHT)}>Sr No</th>
+                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Div</th>
+                            <th className="finance-sticky-col px-2 py-2 text-center" style={plainHeaderStyle(200, GROUP_ROW_HEIGHT)}>Product</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
+                            {/* <th className="px-1 py-2 text-center whitespace-normal leading-tight" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Unit Per Primary</th> */}
+                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100, GROUP_ROW_HEIGHT)}>Unit Price</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Quantity</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Delivered Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160, GROUP_ROW_HEIGHT)}>Remarks</th>
+                            <th className="px-2 py-2 text-center" style={plainHeaderStyle(60, GROUP_ROW_HEIGHT)}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {rows.length === 0 ? (
                             <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-                        ) : rows.map((row, index) => {
+                        ) : filteredRows.map((row, index) => {
                             const qtyPuomNum = numberOrZero(row.qty_puom);
                             const qtyLuomNum = numberOrZero(row.qty_luom);
                             const qtyPoLuomNum = numberOrZero(row.so_qty_luom);
@@ -205,11 +222,11 @@ export function SalesDnDetailsTable({
                                 <tr className="border-t odd:bg-muted/20" key={row.id}>
                                     <td className="finance-sticky-col bg-card px-2 py-1 text-xs" >{index + 1}</td>
                                     <td className="finance-sticky-col bg-card px-2 py-1 text-xs">
-                                        <Input disabled={headerAndLineDisabled} value={row.so_div_code} onChange={(event) => updateRow(row.id, { so_div_code: event.target.value })} />
+                                        <Input className="w-12" disabled={headerAndLineDisabled} value={row.so_div_code} onChange={(event) => updateRow(row.id, { so_div_code: event.target.value })} />
                                     </td>
 
 
-                                    <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" >
+                                    <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20">
                                         <LookupField
                                             label=""
                                             value={row.prod_code || ""}
@@ -239,17 +256,13 @@ export function SalesDnDetailsTable({
                                                 updateRow(row.id, patch);
                                             }}
                                         />
+                                        <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                                            Unit Per Primary: {row.uppp}
+                                        </span>
                                     </td>
 
+                                    {/* SO Primary: Qty */}
                                     <td className="px-2 py-1">
-                                        <Input
-                                            className="finance-money-input w-full"
-                                            disabled
-                                            value={row.so_p_uom || ""}
-                                            readOnly
-                                        />
-                                    </td>
-                                    <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
                                             disabled={headerAndLineDisabled}
@@ -265,7 +278,7 @@ export function SalesDnDetailsTable({
                                                     so_qty_puom: newQtyPuom,
                                                 };
 
-                                                patch.so_quantity = computeQuantity({
+                                                patch.so_quantity = computePoQuantity({
                                                     ...row,
                                                     ...patch,
                                                 });
@@ -274,15 +287,13 @@ export function SalesDnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="px-2 py-1">
-                                        <Input
-                                            className="finance-money-input w-full"
-                                            disabled
-                                            value={row.so_l_uom || ""}
-                                            readOnly
-                                        />
+                                    {/* SO Primary: Uom */}
+                                    <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                                        {row.so_p_uom || ""}
                                     </td>
-                                    <td className="finance-amount-cell w-24 px-2 py-1">
+
+                                    {/* SO Lowest: Qty */}
+                                    <td className="px-2 py-1">
                                         <Input
                                             className="finance-money-input"
                                             disabled={headerAndLineDisabled || samePoUom}
@@ -306,33 +317,34 @@ export function SalesDnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="finance-amount-cell px-2 py-1">
+                                    {/* SO Lowest: Uom */}
+                                    <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                                        {row.so_l_uom || ""}
+                                    </td>
+
+                                    {/* Unit Per Primary */}
+                                    {/* <td className="px-1 py-1" style={{ width: 30, minWidth: 30, maxWidth: 30 }}>
                                         <Input
                                             className="finance-money-input"
                                             disabled
                                             readOnly
                                             type="number"
-                                            style={{ textAlign: "right" }}
+                                            style={{ textAlign: "right", width: "100%", paddingLeft: 4, paddingRight: 4 }}
                                             step="0.001"
                                             value={row.uppp}
                                         />
-                                    </td>
-                                    <td className="finance-amount-cell w-28 px-2 py-1">
+                                    </td> */}
+                                    {/* Unit Price */}
+                                    <td className="px-2 py-1">
                                         <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.so_unit_price} onChange={(event) => updateRow(row.id, { so_unit_price: Number(event.target.value || 0) })} />
                                     </td>
-                                    <td className="finance-amount-cell px-2 py-1 text-right">
+                                    {/* SO Quantity */}
+                                    <td className="px-2 py-1 text-right bg-slate-200">
                                         {formatAmount(so_quantity)}
                                     </td>
 
+                                    {/* Rvd Primary: Qty */}
                                     <td className="px-2 py-1">
-                                        <Input
-                                            className="finance-money-input w-full"
-                                            disabled
-                                            value={row.so_p_uom || ""}
-                                            readOnly
-                                        />
-                                    </td>
-                                    <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
                                             disabled={headerAndLineDisabled}
@@ -357,15 +369,13 @@ export function SalesDnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="px-2 py-1">
-                                        <Input
-                                            className="finance-money-input w-full"
-                                            disabled
-                                            value={row.so_l_uom || ""}
-                                            readOnly
-                                        />
+                                    {/* Rvd Primary: Uom */}
+                                    <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                                        {row.so_p_uom || ""}
                                     </td>
-                                    <td className="finance-amount-cell w-24 px-2 py-1">
+
+                                    {/* Rvd Lowest: Qty */}
+                                    <td className="px-2 py-1">
                                         <Input
                                             className="finance-money-input"
                                             disabled={headerAndLineDisabled || samePoUom}
@@ -389,14 +399,28 @@ export function SalesDnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="finance-amount-cell px-2 py-1 text-right">
+                                    {/* Rvd Lowest: Uom */}
+                                    <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                                        {row.so_l_uom || ""}
+                                    </td>
+
+                                    {/* Delivered Quantity */}
+                                    <td className="px-2 py-1 text-right bg-slate-200">
                                         {formatAmount(quantity)}
                                     </td>
                                     <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
                                         <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
                                     </td>
-                                    <td className="px-2 py-1">
-                                        <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>
+                                    <td className="finance-sticky-col-right px-1 py-1 text-center">
+                                        <button
+                                            type="button"
+                                            disabled={headerAndLineDisabled}
+                                            title="Delete row"
+                                            className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                                            onClick={() => removeRow(row.id)}
+                                        >
+                                            <Trash2 size={13} />
+                                        </button>
                                     </td>
                                 </tr>
                             )

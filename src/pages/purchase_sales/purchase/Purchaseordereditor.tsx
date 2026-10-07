@@ -192,6 +192,7 @@ export function PurchaseOrderEditor({
           address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           credit_period: Number(headerRaw.credit_period || acRow?.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
           party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),

@@ -108,6 +108,7 @@ export interface PurchaseOrderForm {
   prin_code: string;
   prin_name: string;
   credit_period: number;
+  credit_amount: number;
   party_name: string;
   dept_code: string;
   dept_name: string;
