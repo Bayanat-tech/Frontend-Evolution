@@ -665,6 +665,18 @@ function JVDocument({
     }));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
+
   const removeDetailRow = (id: string) => {
     setForm((current) => ({
       ...current,
@@ -817,6 +829,17 @@ function JVDocument({
     const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
     if (diff > 0.001) {
       return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    }
+
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
+        if (Math.abs(childSum - lineAmt) > 0.001) {
+          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
     }
 
     setSaving(true);
@@ -1059,8 +1082,8 @@ function JVDocument({
                       </button>
                     )}
                   </div>
-                  <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn">
-                    <Plus size={14} /> Add Line
+                  <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line (Shortcut: Insert or Alt+A)">
+                    <Plus size={14} /> Add Line <span className="opacity-60 text-[10px] font-mono ml-0.5">(Insert)</span>
                   </Button>
                 </div>
               </div>

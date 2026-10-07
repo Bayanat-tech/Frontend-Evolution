@@ -673,6 +673,18 @@ function CommercialEditor({
       return { ...current, detail: [...current.detail, withTax] };
     });
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isCancelled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addLine();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCancelled, form.div_code, form.curr_code, form.detail.length, docType]);
   const removeLine = (id: string) => {
     setForm((current) => ({ ...current, detail: current.detail.filter((line) => line.id !== id).map((line, index) => ({ ...line, serial_no: index + 1 })) }));
   };
@@ -1454,8 +1466,9 @@ function CommercialEditor({
                     variant="outline"
                     onClick={addLine}
                     className="commercial-add-line-btn"
+                    title="Add detail line (Shortcut: Insert or Alt+A)"
                   >
-                    <Plus size={14} /> Add Line
+                    <Plus size={14} /> Add Line <span className="opacity-60 text-[10px] font-mono ml-0.5">(Insert)</span>
                   </Button>
                 </div>
               </div>
