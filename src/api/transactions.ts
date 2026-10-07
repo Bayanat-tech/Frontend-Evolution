@@ -214,6 +214,8 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
       { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_payee", field_value: search.trim(), operator: "contains" },
+      { field_name: "cheque_no", field_value: search.trim(), operator: "contains" },
     ]);
   }
 

@@ -160,6 +160,12 @@ function formatHeaderText(text: string): string {
 const includesText: FilterFn<unknown> = (row, columnId, filterValue) => {
   const search = String(filterValue ?? "").trim().toLowerCase();
   if (!search) return true;
+  if (columnId === "canceled" || columnId === "status") {
+    const rowVal = String(row.getValue(columnId) || "N").toUpperCase();
+    if (search === "y" || search === "cancelled" || search === "canceled") return rowVal === "Y";
+    if (search === "n" || search === "active") return rowVal !== "Y";
+    return true;
+  }
   return String(row.getValue(columnId) ?? "").toLowerCase().includes(search);
 };
 
@@ -479,11 +485,22 @@ export function DataTable<TData, TValue>({
                   .filter((f) => hasFilterValue(f.value))
                   .map((f) => {
                     const col = table.getColumn(f.id);
-                    const headerTitle = typeof col?.columnDef.header === "string" ? formatHeaderText(col.columnDef.header) : f.id;
+                    const isStatus = isStatusColumn(f.id, typeof col?.columnDef.header === "string" ? col.columnDef.header : undefined);
+                    const headerTitle = isStatus
+                      ? "Status"
+                      : typeof col?.columnDef.header === "string"
+                        ? formatHeaderText(col.columnDef.header)
+                        : f.id;
                     const val = f.value as any;
-                    const displayVal = typeof val === "object" && val
-                      ? `${val.from || "Any"} → ${val.to || "Any"}`
-                      : String(val);
+                    const displayVal = isStatus
+                      ? String(val).toUpperCase() === "Y" || String(val).toLowerCase() === "cancelled" || String(val).toLowerCase() === "canceled"
+                        ? "Cancelled"
+                        : String(val).toUpperCase() === "N" || String(val).toLowerCase() === "active"
+                          ? "Active"
+                          : String(val)
+                      : typeof val === "object" && val
+                        ? `${val.from || "Any"} → ${val.to || "Any"}`
+                        : String(val);
                     return (
                       <span
                         key={f.id}
@@ -936,6 +953,7 @@ function ColumnFilterButton<TData, TValue>({
         <ColumnFilterPopup
           value={rawValue}
           isDate={isDateColumn(column.id)}
+          isStatus={isStatusColumn(column.id, typeof column.columnDef.header === "string" ? column.columnDef.header : undefined)}
           position={position}
           onChange={(nextValue) => column.setFilterValue(nextValue)}
           onClose={() => onOpenChange(false)}
@@ -948,12 +966,14 @@ function ColumnFilterButton<TData, TValue>({
 function ColumnFilterPopup({
   value,
   isDate,
+  isStatus,
   position,
   onChange,
   onClose,
 }: {
   value: unknown;
   isDate: boolean;
+  isStatus?: boolean;
   position: { left: number; top: number };
   onChange: (value: unknown) => void;
   onClose: () => void;
@@ -962,6 +982,7 @@ function ColumnFilterPopup({
   const textValue = typeof value === "string" ? value : "";
   const dateValue = (typeof value === "object" && value ? value : {}) as { from?: string; to?: string };
   const [tempText, setTempText] = useState(textValue);
+  const [tempStatus, setTempStatus] = useState(textValue || "");
   const [tempFrom, setTempFrom] = useState(dateValue.from || "");
   const [tempTo, setTempTo] = useState(dateValue.to || "");
 
@@ -989,7 +1010,88 @@ function ColumnFilterPopup({
         if (event.key === "Escape") onClose();
       }}
     >
-      {isDate ? (
+      {isStatus ? (
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[12px] font-semibold text-slate-700">
+                Filter Status
+              </label>
+              {tempStatus && (
+                <span className="text-[10px] text-muted-foreground font-medium">1 selected</span>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              {[
+                { label: "All Statuses", val: "", badge: null, desc: "Show both active & cancelled" },
+                { label: "Active", val: "N", badge: "bg-emerald-500", desc: "Active documents only" },
+                { label: "Cancelled", val: "Y", badge: "bg-rose-500", desc: "Cancelled documents only" },
+              ].map((opt) => {
+                const isSelected =
+                  (!tempStatus && !opt.val) ||
+                  (tempStatus.toUpperCase() === opt.val) ||
+                  (opt.val === "N" && tempStatus.toLowerCase() === "active") ||
+                  (opt.val === "Y" && (tempStatus.toLowerCase() === "cancelled" || tempStatus.toLowerCase() === "canceled"));
+                return (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setTempStatus(opt.val)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left cursor-pointer transition-all",
+                      isSelected
+                        ? "border-[#00378C] bg-[#00378C]/5 text-[#00378C] ring-1 ring-[#00378C]"
+                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={cn(
+                          "w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors",
+                          isSelected ? "border-[#00378C] bg-[#00378C]" : "border-slate-300 bg-white"
+                        )}
+                      >
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-[12px] font-semibold leading-none">{opt.label}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</div>
+                      </div>
+                    </div>
+                    {opt.badge && (
+                      <span className={cn("w-2 h-2 rounded-full ring-2 ring-white shrink-0", opt.badge)} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
+              onClick={() => {
+                setTempStatus("");
+                onChange(undefined);
+                onClose();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
+              onClick={() => {
+                onChange(tempStatus || undefined);
+                onClose();
+              }}
+            >
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      ) : isDate ? (
         <div className="space-y-2.5">
           <div className="space-y-1">
             <label className="text-[12px] font-medium text-slate-500">
@@ -1095,6 +1197,12 @@ function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
 
 function isDateColumn(columnId: string) {
   return /(^|_)(date|dt)(_|$)/i.test(columnId);
+}
+
+function isStatusColumn(columnId: string, headerText?: string) {
+  if (/^(canceled|cancelled|status|doc_status)$/i.test(columnId)) return true;
+  if (headerText && /status/i.test(headerText)) return true;
+  return false;
 }
 
 function hasFilterValue(value: unknown): boolean {
