@@ -45,10 +45,10 @@ export function FinanceDocumentIdentity({
       )}
       <div className="flex items-center gap-2 text-xs flex-wrap">
         {/* Highlighted Doc No - Increased font size */}
-        <div className="finance-identity-docno rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+        <div className="finance-identity-docno rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-3 py-1 shadow-xs flex items-center gap-1.5">
           <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Doc No</span>
           <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
-          <strong className="text-[14px] font-black text-[#78350f] font-mono tracking-tight">
+          <strong className="text-[16px] font-black text-[#78350f] font-mono tracking-tight leading-none">
             {documentNo && documentNo !== "New" && documentNo !== "0"
               ? String(documentNo).trim()
               : "NEW"}
