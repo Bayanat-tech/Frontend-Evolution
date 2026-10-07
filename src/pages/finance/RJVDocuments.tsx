@@ -94,7 +94,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -1192,8 +1192,8 @@ function JVDocument({
                       </button>
                     )}
                   </div>
-                  <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line (Shortcut: Insert or Alt+A)">
-                    <Plus size={14} /> Add Line <span className="opacity-60 text-[10px] font-mono ml-0.5">(Insert)</span>
+                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line">
+                    <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>

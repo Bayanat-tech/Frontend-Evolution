@@ -119,10 +119,10 @@ export function SmartInlineAllocationTable({
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <div className="finance-allocation-panel my-0.5 w-fit max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
+    <div className="finance-allocation-panel my-0.5 w-fit min-w-[520px] max-w-full overflow-hidden rounded border border-[#bfd1e8] bg-[#f8fbff] text-xs shadow-2xs">
       {/* Sub-toolbar: Ultra-compact, no unwanted verbose titles */}
-      <div className="finance-allocation-toolbar flex flex-wrap items-center justify-between gap-1 border-b px-1.5 py-0.5 text-xs">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="finance-allocation-toolbar flex items-center justify-between gap-2 border-b px-2 py-1 text-xs">
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* Compact Child Type Badge */}
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1e293b] text-white text-[10px] font-semibold uppercase tracking-wide shadow-2xs">
             {childTable === "invoice" ? (
@@ -183,13 +183,13 @@ export function SmartInlineAllocationTable({
         </div>
 
         {/* Right-side actions: Add, Reload, Collapse */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
           {!childTable && onSetChildTable && (
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-500">Attach:</span>
+            <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+              <span className="text-[10px] text-slate-500 font-semibold">Attach:</span>
               <button
                 type="button"
-                className="h-5 px-1.5 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                className="h-5 px-2 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
                 onClick={() => onSetChildTable("job")}
                 disabled={disabled}
               >
@@ -197,7 +197,7 @@ export function SmartInlineAllocationTable({
               </button>
               <button
                 type="button"
-                className="h-5 px-1.5 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                className="h-5 px-2 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
                 onClick={() => onSetChildTable("expense")}
                 disabled={disabled}
               >
@@ -205,7 +205,7 @@ export function SmartInlineAllocationTable({
               </button>
               <button
                 type="button"
-                className="h-5 px-1.5 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
+                className="h-5 px-2 text-[10px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
                 onClick={() => onSetChildTable("invoice")}
                 disabled={disabled}
               >

@@ -390,6 +390,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           </div>
         }
         initialSorting={[{ id: "doc_date", desc: true }]}
+        initialColumnFilters={[{ id: "canceled", value: "N" }]}
         pageIndex={pageIndex}
         pageSize={pageSize}
         totalRows={totalRows}
@@ -1459,12 +1460,11 @@ function CommercialEditor({
                     disabled={isCancelled}
                     size="sm"
                     type="button"
-                    variant="outline"
                     onClick={addLine}
                     className="commercial-add-line-btn"
-                    title="Add detail line (Shortcut: Insert or Alt+A)"
+                    title="Add detail line"
                   >
-                    <Plus size={14} /> Add Line <span className="opacity-60 text-[10px] font-mono ml-0.5">(Insert)</span>
+                    <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>

@@ -53,6 +53,7 @@ export type DataTableProps<TData, TValue> = {
   onPageChange?: (pageIndex: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
   columnFilters?: ColumnFiltersState;
+  initialColumnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
   manualFiltering?: boolean;
   enableColumnFilters?: boolean;
@@ -209,6 +210,7 @@ export function DataTable<TData, TValue>({
   onPageChange,
   onPageSizeChange,
   columnFilters: controlledColumnFilters,
+  initialColumnFilters = [],
   onColumnFiltersChange,
   manualFiltering = false,
   enableColumnFilters = true,
@@ -226,7 +228,7 @@ export function DataTable<TData, TValue>({
   truncateCellText = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
-  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
+  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>(initialColumnFilters);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);

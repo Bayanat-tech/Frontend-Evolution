@@ -1201,39 +1201,61 @@
   color: #ffffff !important;
 }
 
-/* BISC Add Line Footer Button */
+/* BISC Add Line Button - matches Save / Files button primary royal blue (#00378C) */
+.commercial-lines-header .commercial-add-line-btn,
 .commercial-lines-footer .commercial-add-line-btn,
+button.commercial-add-line-btn,
 .commercial-lines-footer button:has(.lucide-plus),
 .commercial-lines-footer button:has(.lucide-plus-circle) {
-  background: #ffffff !important;
-  border: 1.5px solid #00378c !important;
-  color: #00378c !important;
+  background: #00378C !important;
+  border: 1px solid #002d72 !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
   font-size: 12px !important;
-  padding: 4px 12px !important;
+  padding: 4px 14px !important;
   border-radius: 6px !important;
   display: inline-flex !important;
   align-items: center !important;
   gap: 6px !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.2) !important;
   transition: all 140ms ease !important;
   cursor: pointer !important;
 }
 
+.commercial-lines-header .commercial-add-line-btn:hover,
 .commercial-lines-footer .commercial-add-line-btn:hover,
+button.commercial-add-line-btn:hover,
 .commercial-lines-footer button:has(.lucide-plus):hover,
 .commercial-lines-footer button:has(.lucide-plus-circle):hover {
-  background: #eff6ff !important;
-  border-color: #002b70 !important;
-  color: #002b70 !important;
-  box-shadow: 0 1px 3px rgba(0, 55, 140, 0.15) !important;
+  background: #002d72 !important;
+  border-color: #002050 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 55, 140, 0.3) !important;
 }
 
-.commercial-lines-footer .commercial-add-line-btn svg {
-  color: #00378c !important;
+.commercial-lines-header .commercial-add-line-btn svg,
+.commercial-lines-footer .commercial-add-line-btn svg,
+button.commercial-add-line-btn svg {
+  color: #ffffff !important;
 }
 
-.commercial-lines-footer .commercial-add-line-btn:hover svg {
-  color: #002b70 !important;
+.commercial-lines-header .commercial-add-line-btn:hover svg,
+.commercial-lines-footer .commercial-add-line-btn:hover svg,
+button.commercial-add-line-btn:hover svg {
+  color: #ffffff !important;
+}
+
+/* Prominent Doc No font size across all Finance modules */
+.doc-no-link {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  letter-spacing: -0.01em !important;
+}
+
+.finance-identity-docno strong {
+  font-size: 16px !important;
+  font-weight: 900 !important;
 }
 
 :where(.finance-document-ui, .finance-document-editor) .finance-line-actions-title {
@@ -1464,6 +1486,7 @@
 .finance-document-editor .commercial-lines-scroll { container-type: inline-size; }
 .finance-document-editor .finance-allocation-panel {
   width: fit-content !important;
+  min-width: 520px !important;
   max-width: 100% !important;
   border: 1.5px solid #9fcfc4 !important;
   border-radius: 8px !important;
@@ -1473,12 +1496,12 @@
   overflow: hidden !important;
 }
 .finance-document-editor .finance-allocation-panel > .finance-allocation-toolbar {
-  min-height: 24px !important;
-  height: 24px !important;
+  min-height: 28px !important;
+  height: auto !important;
   background: linear-gradient(180deg, #f1faf8 0%, #e6f5f1 100%) !important;
   border-bottom: 1.5px solid #b8ddd5 !important;
-  padding: 2px 8px !important;
-  gap: 4px !important;
+  padding: 3px 8px !important;
+  gap: 6px !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-table {
   table-layout: fixed !important;
@@ -1537,7 +1560,12 @@
   height: 22px !important;
   font-size: 10px !important;
   border-radius: 4px !important;
-  padding: 0 6px !important;
+  padding: 0 7px !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
 }
 .finance-document-editor .finance-allocation-panel .finance-allocation-grid {
   max-height: 200px !important;

@@ -89,7 +89,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const loadLookups = async () => {
     const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
@@ -1136,8 +1136,8 @@ function PettyCashPaymentDocument({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line (Shortcut: Insert or Alt+A)">
-                    <Plus size={14} /> Add Line <span className="opacity-60 text-[10px] font-mono ml-0.5">(Insert)</span>
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
+                    <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
