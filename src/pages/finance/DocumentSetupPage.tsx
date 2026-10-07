@@ -571,7 +571,8 @@ function AddAccountDialog({
           valueField="div_code"
           displayFields={["div_code", "div_name"]}
           loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-          onChange={(value, row) => setDivision({ div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" })}
+          // onChange={(value, row) => setDivision({ div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" })}
+          onChange={(value, row) => setDivision({ div_code: value, div_name: row ? String(getLookupValue(row, "div_name") || getLookupValue(row, "division_name") || "") : "" })}
         />
         <LookupField
           label="Account"
@@ -584,7 +585,7 @@ function AddAccountDialog({
           valueField="ac_code"
           displayFields={["ac_code", "ac_name"]}
           loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-          onChange={(value, row) => setAccount({ ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "" })}
+          onChange={(value, row) => setAccount({ ac_code: value, ac_name: row ? String(getLookupValue(row, "ac_name") || getLookupValue(row, "account_name") || "") : "" })}
         />
       </div>
     </Dialog>
