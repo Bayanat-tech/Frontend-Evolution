@@ -302,7 +302,7 @@ export function BudgetVersionPage() {
       : "Budget Version";
 
   return (
-    <section className="grid gap-2 p-1">
+    <section className="finance-list-page finance-utility-page grid gap-2 p-1">
       {/* ---------- Top Header (compact) ---------- */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">

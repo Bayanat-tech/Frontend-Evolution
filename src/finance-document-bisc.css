@@ -726,11 +726,11 @@
 }
 
 /* ── Finance Listing Screen: BISC & Freight aligned table styles ──────────── */
-.finance-list-page {
+:where(.finance-list-page, .finance-utility-page, .finance-page) {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
 }
 
-.finance-list-page .data-table-shell {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-shell {
   border: 1.5px solid #94a3b8 !important;
   border-radius: 10px !important;
   box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06) !important;
@@ -738,7 +738,7 @@
   overflow: hidden !important;
 }
 
-.finance-list-page .data-table-header {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-header {
   padding: 8px 14px !important;
   border: 1.5px solid #94a3b8 !important;
   border-radius: 10px !important;
@@ -747,8 +747,8 @@
   margin-bottom: 2px !important;
 }
 
-.finance-list-page .data-table-search,
-.finance-list-page .data-table-search-input {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-search,
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-search-input {
   height: 34px !important;
   border: 1.5px solid #cbd5e1 !important;
   border-radius: 8px !important;
@@ -758,14 +758,14 @@
   transition: all 0.15s ease-in-out !important;
 }
 
-.finance-list-page .data-table-search:focus-within,
-.finance-list-page .data-table-search-input:focus {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-search:focus-within,
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-search-input:focus {
   border-color: #00378C !important;
   box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.12) !important;
 }
 
 /* Hide duplicate top scrollbar on finance tables (same as freight) */
-.finance-list-page .data-table-x-scrollbar {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-x-scrollbar {
   display: none !important;
   height: 0 !important;
   max-height: 0 !important;
@@ -775,7 +775,7 @@
 }
 
 /* Crisp BISC Inter typography and compact 28px row height */
-.finance-list-page .data-table-scroll tbody td {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody td {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
   font-size: 11.5px !important;
   color: #1a1a2e !important;
@@ -787,32 +787,32 @@
   border-right: 1px solid #ecf0f5 !important;
 }
 
-.finance-list-page .data-table-scroll tbody tr:hover td {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody tr:hover td {
   background-color: #eff6ff !important;
 }
 
 /* Light red / soft rose background for cancelled rows */
-.finance-list-page .data-table-scroll tbody tr.finance-row-cancelled td {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody tr.finance-row-cancelled td {
   background-color: #fff1f2 !important;
   color: #64748b !important;
 }
 
-.finance-list-page .data-table-scroll tbody tr.finance-row-cancelled:hover td {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody tr.finance-row-cancelled:hover td {
   background-color: #ffe4e6 !important;
 }
 
 /* Cancelled Doc No link has subtle strike / rose tone */
-.finance-list-page .data-table-scroll tbody tr.finance-row-cancelled button.doc-no-link {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody tr.finance-row-cancelled button.doc-no-link {
   color: #e11d48 !important;
   text-decoration: line-through;
   text-decoration-color: #fda4af;
 }
-.finance-list-page .data-table-scroll tbody tr.finance-row-cancelled button.doc-no-link:hover {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll tbody tr.finance-row-cancelled button.doc-no-link:hover {
   color: #be123c !important;
   text-decoration: none;
 }
 
-.finance-list-page .data-table-scroll thead th {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-scroll thead th {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
   font-size: 11.5px !important;
   font-weight: 750 !important;
@@ -825,12 +825,49 @@
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
 }
 
-.finance-list-page .data-table-pagination {
+:where(.finance-list-page, .finance-utility-page, .finance-page) .data-table-pagination {
   border-top: 1.5px solid #94a3b8 !important;
   background: #f8fafc !important;
   padding: 8px 14px !important;
   font-size: 12px !important;
   color: #475569 !important;
+}
+
+/* Universal tactile micro-buttons for table actions across all finance pages */
+:where(.finance-list-page, .finance-utility-page, .finance-page) td[data-column-id="actions"] button:not(.group),
+:where(.finance-list-page, .finance-utility-page, .finance-page) td:last-child .flex button:not(.group) {
+  height: 23px !important;
+  width: 23px !important;
+  min-height: 23px !important;
+  min-width: 23px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 5px !important;
+  border: 1px solid #cbd5e1 !important;
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  transition: all 0.15s ease-in-out !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  cursor: pointer !important;
+}
+
+:where(.finance-list-page, .finance-utility-page, .finance-page) td[data-column-id="actions"] button:not(.group):hover,
+:where(.finance-list-page, .finance-utility-page, .finance-page) td:last-child .flex button:not(.group):hover {
+  border-color: #00378C !important;
+  background-color: #eff6ff !important;
+  color: #00378C !important;
+  box-shadow: 0 1px 3px rgba(0, 55, 140, 0.15) !important;
+}
+
+:where(.finance-list-page, .finance-utility-page, .finance-page) td[data-column-id="actions"] button:not(.group):has(svg.lucide-trash-2):hover,
+:where(.finance-list-page, .finance-utility-page, .finance-page) td:last-child .flex button:not(.group):has(svg.lucide-trash-2):hover,
+:where(.finance-list-page, .finance-utility-page, .finance-page) td[data-column-id="actions"] button:not(.group):has(svg.lucide-ban):hover,
+:where(.finance-list-page, .finance-utility-page, .finance-page) td:last-child .flex button:not(.group):has(svg.lucide-ban):hover {
+  border-color: #e11d48 !important;
+  background-color: #fff1f2 !important;
+  color: #e11d48 !important;
 }
 
 /* BISC Sidebar Switch Module button styling */
