@@ -765,7 +765,7 @@ export function KpiGroupPage() {
     <section className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Groups</h1>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Item</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Select division, department, and manage items group-wise by designation.
           </p>
