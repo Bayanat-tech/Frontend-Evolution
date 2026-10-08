@@ -91,7 +91,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [editor, setEditor] = useState<EditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -665,6 +665,18 @@ function JVDocument({
     }));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
+
   const removeDetailRow = (id: string) => {
     setForm((current) => ({
       ...current,
@@ -803,13 +815,31 @@ function JVDocument({
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
-    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+    // Character limit validations
+    if (form.ref_no && form.ref_no.length > 30) {
+      return setError("You have exceeded the character limit for Ref No.");
+    }
+    if (form.cheque_no && form.cheque_no.length > 20) {
+      return setError("You have exceeded the character limit for Cheque No.");
+    }
+    if (form.remarks && form.remarks.length > 250) {
+      return setError("You have exceeded the character limit for Remarks.");
+    }
 
-    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
-    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+    if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
 
-    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
-    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+    // Check line character limits
+    for (const d of form.detail) {
+      if (d.remarks && d.remarks.length > 250) {
+        return setError("You have exceeded the character limit for Remarks.");
+      }
+    }
+
+    // Missing field validation on lines (new row without details / missing account or zero amount)
+    const invalidLine = form.detail.find((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLine) {
+      return setError("Kindly fill in the missing fields.");
+    }
 
     const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
     if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
@@ -817,6 +847,17 @@ function JVDocument({
     const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
     if (diff > 0.001) {
       return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    }
+
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
+        if (Math.abs(childSum - lineAmt) > 0.001) {
+          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
     }
 
     setSaving(true);
@@ -1059,7 +1100,7 @@ function JVDocument({
                       </button>
                     )}
                   </div>
-                  <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn">
+                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
@@ -1099,7 +1140,7 @@ function JVDocument({
                               placeholder="A/c code"
                               value={detail.ac_code}
                               displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                               valueField="ac_code"
                               displayFields={["ac_code", "ac_name", "curr_code"]}
                               loadOptions={() => getDynamicLookup({

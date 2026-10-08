@@ -106,7 +106,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [editor, setEditor] = useState<EditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const [setupRequired, setSetupRequired] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -211,7 +211,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     { accessorKey: "ac_name", header: "Account Name" },
     ...(docType === "BP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...(docType === "BP" || docType === "BR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
@@ -453,6 +453,7 @@ function PaymentDocumentEditor({
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
   const [showPartyDetails, setShowPartyDetails] = useState(false);
+  const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
 
   const toggleRowExpanded = (id: string) => {
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -621,12 +622,24 @@ function PaymentDocumentEditor({
   };
 
   const updateDetail = (id: string, patch: Partial<TransactionDetail>) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => ({
       ...current,
       detail: current.detail.map((row) => row.id === id ? { ...row, ...patch } : row),
     }));
   };
   const updateDetailAmount = (id: string, newAmount: number) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => {
       const detail = current.detail.find((d) => d.id === id);
       if (!detail || detail.child_table !== "invoice") {
@@ -747,7 +760,25 @@ function PaymentDocumentEditor({
     }));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
+
   const removeDetailRow = (id: string) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => ({
       ...current,
       detail: current.detail.filter((row) => row.id !== id).map((row, index) => ({ ...row, serial_no: index + 1 })),
@@ -893,8 +924,57 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
-    if (docType !== "CR" && !form.cheque_no?.trim()) return setError("Cheque No is required");
-    if (docType !== "CR" && !form.cheque_date) return setError("Cheque Date is required");
+
+    const isBankDoc = docType === "BP" || docType === "BR";
+    if (isBankDoc && !form.cheque_no?.trim()) return setError("Cheque No is required for bank documents");
+    if (isBankDoc && !form.cheque_date) return setError("Cheque Date is required for bank documents");
+
+    // Character limit validations
+    if (form.ac_payee && form.ac_payee.length > 70) {
+      return setError("You have exceeded the character limit for Account Payee.");
+    }
+    if (form.cheque_no && form.cheque_no.length > 20) {
+      return setError("You have exceeded the character limit for Cheque No.");
+    }
+    if (form.ref_no && form.ref_no.length > 30) {
+      return setError("You have exceeded the character limit for Ref No.");
+    }
+    if (form.cheque_bank && form.cheque_bank.length > 50) {
+      return setError("You have exceeded the character limit for Cheque Bank.");
+    }
+    if (form.remarks && form.remarks.length > 250) {
+      return setError("You have exceeded the character limit for Remarks.");
+    }
+
+    if (!form.detail || form.detail.length === 0) {
+      return setError("Kindly fill in the missing fields: Add at least one detail line.");
+    }
+
+    // Check line character limits
+    for (const d of form.detail) {
+      if (d.remarks && d.remarks.length > 250) {
+        return setError("You have exceeded the character limit for Remarks.");
+      }
+    }
+
+    // Missing field validation on lines (new row without details / missing account or zero amount)
+    const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLines.length > 0) {
+      setInvalidLineIds(new Set(invalidLines.map((d) => d.id)));
+      return setError("Kindly fill in the missing fields.");
+    }
+
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
+        if (Math.abs(childSum - lineAmt) > 0.001) {
+          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -1082,11 +1162,62 @@ function PaymentDocumentEditor({
 
                       <Field label="Doc Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
-                      {docType !== "CR" && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
-                      {docType !== "CR" && <Field label="Cheque Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.cheque_date)} onChange={(val) => updateField("cheque_date", val)} /></Field>}
-                      {docType === "BR" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
-                      {docType === "BP" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
-                      <Field label="Ref No"><Input disabled={disabled} value={form.ref_no || ""} onChange={(event) => updateField("ref_no", event.target.value)} /></Field>
+                      {(docType === "BP" || docType === "BR") && (
+                        <>
+                          <Field
+                            label="Cheque No"
+                            required
+                            error={form.cheque_no && form.cheque_no.length > 20 ? `Max 20 (${form.cheque_no.length})` : undefined}
+                          >
+                            <Input
+                              disabled={disabled}
+                              required
+                              value={form.cheque_no || ""}
+                              className={form.cheque_no && form.cheque_no.length > 20 ? "!border-rose-500 !ring-rose-400" : ""}
+                              onChange={(event) => updateField("cheque_no", event.target.value)}
+                            />
+                          </Field>
+                          <Field label="Cheque Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.cheque_date)} onChange={(val) => updateField("cheque_date", val)} /></Field>
+                        </>
+                      )}
+                      {docType === "BR" && (
+                        <Field
+                          label="Cheque Bank"
+                          error={form.cheque_bank && form.cheque_bank.length > 50 ? `Max 50 (${form.cheque_bank.length})` : undefined}
+                        >
+                          <Input
+                            disabled={disabled}
+                            value={form.cheque_bank || ""}
+                            className={form.cheque_bank && form.cheque_bank.length > 50 ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(event) => updateField("cheque_bank", event.target.value)}
+                          />
+                        </Field>
+                      )}
+                      {docType === "BP" && (
+                        <Field
+                          label="Account Payee"
+                          error={form.ac_payee && form.ac_payee.length > 70 ? `Exceeded limit (${form.ac_payee.length}/70)` : undefined}
+                        >
+                          <Input
+                            disabled={disabled}
+                            value={form.ac_payee || ""}
+                            className={form.ac_payee && form.ac_payee.length > 70 ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(event) => updateField("ac_payee", event.target.value)}
+                            placeholder="Account Payee"
+                          />
+                        </Field>
+                      )}
+                      <Field
+                        label="Ref No"
+                        error={form.ref_no && form.ref_no.length > 30 ? `Max 30 (${form.ref_no.length})` : undefined}
+                      >
+                        <Input
+                          disabled={disabled}
+                          value={form.ref_no || ""}
+                          className={form.ref_no && form.ref_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("ref_no", event.target.value)}
+                        />
+                      </Field>
                       <Field label="Ref Date"><BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} /></Field>
                     </div>
                   </div>
@@ -1103,7 +1234,7 @@ function PaymentDocumentEditor({
                           label="Account *"
                           value={form.ac_code}
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
                           loadOptions={() => getDocAccounts(form.doc_type, "H", form.div_code)}
@@ -1188,8 +1319,16 @@ function PaymentDocumentEditor({
                         />
                       </Field>
                       <div className="col-span-2 max-md:col-span-1">
-                        <Field label="Remarks">
-                          <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
+                        <Field
+                          label="Remarks"
+                          error={form.remarks && form.remarks.length > 250 ? `Max 250 (${form.remarks.length})` : undefined}
+                        >
+                          <Input
+                            disabled={disabled}
+                            value={form.remarks || ""}
+                            className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(event) => updateField("remarks", event.target.value)}
+                          />
                         </Field>
                       </div>
                     </div>
@@ -1287,7 +1426,7 @@ function PaymentDocumentEditor({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow} className="commercial-add-line-btn">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
@@ -1329,17 +1468,17 @@ function PaymentDocumentEditor({
 
                       return (
                         <Fragment key={detail.id}>
-                          <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`}>
+                          <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : invalidLineIds.has(detail.id) ? "bg-rose-50/40 border-l-4 border-l-rose-500" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`}>
                           <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
                           <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
-                            <div className="w-full max-w-[460px] truncate">
+                            <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
                               <LookupField
                                 label="Detail Account"
                                 compact
                                 placeholder="A/c code"
                                 value={detail.ac_code}
                                 displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
                                 loadOptions={() => getDocAccounts(form.doc_type, "D", form.div_code)}
@@ -1435,7 +1574,7 @@ function PaymentDocumentEditor({
                               <Input
                                 disabled={disabled}
                                 type="number"
-                                className="commercial-number-input finance-money-input w-24"
+                                className={`commercial-number-input finance-money-input w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
                                 step="0.001"
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
@@ -1925,12 +2064,19 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({ label, required, children, error, hint }: { label: string; required?: boolean; children: ReactNode; error?: string; hint?: string }) {
   return (
     <label className="field">
-      <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+      <span className="flex items-center justify-between gap-1">
+        <span>
+          {label}
+          {required && <span className="ml-1 text-destructive">*</span>}
+        </span>
+        {error ? (
+          <span className="text-[10px] text-destructive font-semibold tracking-tight">{error}</span>
+        ) : hint ? (
+          <span className="text-[10px] text-muted-foreground">{hint}</span>
+        ) : null}
       </span>
       {children}
     </label>

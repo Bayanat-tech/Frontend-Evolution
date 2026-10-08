@@ -221,7 +221,7 @@ export function AccountWiseBudgetPage() {
   };
 
   return (
-    <section className="grid gap-2 p-1">
+    <section className="finance-list-page finance-utility-page grid gap-2 p-1">
       {editor ? (
         <BudgetEditor
           editor={editor}

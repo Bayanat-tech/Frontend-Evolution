@@ -1,182 +1,3 @@
-// // import { useCallback, useEffect, useState } from "react";
-// // import { MonthlyAmount, PurchaseSalesDashboardData } from "./types";
-// // import { getPurchaseSalesDashboard } from "../../../api/purchaseSales";
-// // import DashboardHeader from "./Dashboardheader";
-// // import { ErrorState, Skeleton } from "./UiPage";
-// // import { PurchaseCard, SalesCard, SplitCard } from "./FlowCard";
-// // import PurchaseSalesChart from "./Purchasesaleschart";
-// // import StageChart from "./Stagechart";
-// // import TopParties from "./Topparties";
-// // import { PurchaseWorkflow, SalesWorkflow } from "./Workflow";
-
-
-// // const sum = (rows: MonthlyAmount[]) => rows.reduce((a, r) => a + (r.totalAmount || 0), 0);
-
-// // export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { companyCode?: string }) {
-// //   const [data, setData] = useState<PurchaseSalesDashboardData | null>(null);
-// //   const [loading, setLoading] = useState(true);
-// //   const [error, setError] = useState<string | null>(null);
-// //   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-
-// //   const load = useCallback(
-// //     async (signal?: AbortSignal) => {
-// //       setLoading(true);
-// //       setError(null);
-// //       try {
-// //         setData(await getPurchaseSalesDashboard(companyCode, signal));
-// //         setUpdatedAt(new Date());
-// //       } catch (e: any) {
-// //         if (e?.name === "CanceledError" || e?.name === "AbortError") return;
-// //         setError(e?.response?.data?.message || e?.message || "Unexpected error");
-// //       } finally {
-// //         setLoading(false);
-// //       }
-// //     },
-// //     [companyCode]
-// //   );
-
-// //   useEffect(() => {
-// //     const ctrl = new AbortController();
-// //     load(ctrl.signal);
-// //     return () => ctrl.abort();
-// //   }, [load]);
-
-// //   return (
-// //     <div className="space-y-5 p-4 md:p-6">
-// //       <DashboardHeader companyCode={companyCode} data={data} loading={loading} updatedAt={updatedAt} onRefresh={() => load()} />
-
-// //       {error && !data ? (
-// //         <ErrorState message={error} onRetry={() => load()} />
-// //       ) : loading && !data ? (
-// //         <>
-// //           <div className="grid gap-5 lg:grid-cols-3">
-// //             {[0, 1, 2].map((i) => <Skeleton key={i} className="h-64" />)}
-// //           </div>
-// //           <div className="grid gap-5 lg:grid-cols-4">
-// //             <Skeleton className="h-96 lg:col-span-2" />
-// //             <Skeleton className="h-96" />
-// //             <Skeleton className="h-96" />
-// //           </div>
-// //           <Skeleton className="h-40" />
-// //           <Skeleton className="h-40" />
-// //         </>
-// //       ) : data ? (
-// //         <>
-// //           <div className="grid gap-5 lg:grid-cols-4">
-// //             <PurchaseCard s={data.summary} amount={sum(data.monthlyPurchase)} />
-// //             <SalesCard s={data.summary} amount={sum(data.monthlySales)} />
-// //             {/* <SplitCard purchase={data.monthlyPurchase} sales={data.monthlySales} /> */}
-// //           </div>
-// //           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-// //             <div className="md:col-span-2">
-// //               <PurchaseSalesChart purchase={data.monthlyPurchase} sales={data.monthlySales} />
-// //             </div>
-// //             <StageChart summary={data.summary} />
-// //             <TopParties suppliers={data.topSuppliers} customers={data.topCustomers} />
-// //           </div>
-// //             <div className="grid gap-3 lg:grid-cols-5">
-// //             <div className="lg:col-span-3"><PurchaseWorkflow summary={data.summary} /></div>
-// //             <div className="lg:col-span-2"><SalesWorkflow summary={data.summary} /></div>
-// //           </div>
-// //         </>
-// //       ) : null}
-// //     </div>
-// //   );
-// // }
-
-// import { useCallback, useEffect, useState } from "react";
-// import { MonthlyAmount, PurchaseSalesDashboardData } from "./types";
-// import { getPurchaseSalesDashboard } from "../../../api/purchaseSales";
-// import DashboardHeader from "./Dashboardheader";
-// import { ErrorState, Skeleton } from "./UiPage";
-// import { PurchaseCard, SalesCard } from "./FlowCard";
-// import PurchaseSalesChart from "./Purchasesaleschart";
-// import StageChart from "./Stagechart";
-// import TopParties from "./Topparties";
-// import { PurchaseWorkflow, SalesWorkflow } from "./Workflow";
-
-// const sum = (rows: MonthlyAmount[]) => rows.reduce((a, r) => a + (r.totalAmount || 0), 0);
-
-// export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { companyCode?: string }) {
-//   const [data, setData] = useState<PurchaseSalesDashboardData | null>(null);
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState<string | null>(null);
-//   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-
-//   const load = useCallback(
-//     async (signal?: AbortSignal) => {
-//       setLoading(true);
-//       setError(null);
-//       try {
-//         setData(await getPurchaseSalesDashboard(companyCode, signal));
-//         setUpdatedAt(new Date());
-//       } catch (e: any) {
-//         if (e?.name === "CanceledError" || e?.name === "AbortError") return;
-//         setError(e?.response?.data?.message || e?.message || "Unexpected error");
-//       } finally {
-//         setLoading(false);
-//       }
-//     },
-//     [companyCode]
-//   );
-
-//   useEffect(() => {
-//     const ctrl = new AbortController();
-//     load(ctrl.signal);
-//     return () => ctrl.abort();
-//   }, [load]);
-
-//   // The page fills the visible area: the chart row takes whatever height the other rows leave.
-//   // 7.5rem = app header + breadcrumb above this page. Adjust if your shell differs.
-//   return (
-//     <div className="flex min-h-[calc(100vh-7.5rem)] flex-col gap-3 p-3 md:p-4">
-//       <DashboardHeader companyCode={companyCode} data={data} loading={loading} updatedAt={updatedAt} onRefresh={() => load()} />
-
-//       {error && !data ? (
-//         <ErrorState message={error} onRetry={() => load()} />
-//       ) : loading && !data ? (
-//         <>
-//           <div className="grid shrink-0 gap-3 lg:grid-cols-4">
-//             <Skeleton className="h-44" />
-//             <Skeleton className="h-44" />
-//             <Skeleton className="h-44 lg:col-span-2" />
-//           </div>
-//           <div className="grid min-h-[230px] flex-1 gap-3 lg:grid-cols-3">
-//             <Skeleton className="h-full lg:col-span-2" />
-//             <Skeleton className="h-full" />
-//           </div>
-//           <div className="grid shrink-0 gap-3 lg:grid-cols-5">
-//             <Skeleton className="h-44 lg:col-span-3" />
-//             <Skeleton className="h-44 lg:col-span-2" />
-//           </div>
-//         </>
-//       ) : data ? (
-//         <>
-//           <div className="grid shrink-0 gap-3 md:grid-cols-2 lg:grid-cols-4">
-//             <PurchaseCard s={data.summary} amount={sum(data.monthlyPurchase)} />
-//             <SalesCard s={data.summary} amount={sum(data.monthlySales)} />
-//             <div className="md:col-span-2">
-//               <TopParties suppliers={data.topSuppliers} customers={data.topCustomers} />
-//             </div>
-//           </div>
-//           <div className="grid min-h-[230px] flex-1 gap-3 lg:grid-cols-3">
-//             <div className="min-h-0 lg:col-span-2">
-//               <PurchaseSalesChart purchase={data.monthlyPurchase} sales={data.monthlySales} />
-//             </div>
-//             <div className="min-h-0">
-//               <StageChart summary={data.summary} />
-//             </div>
-//           </div>
-//           <div className="grid shrink-0 gap-3 lg:grid-cols-5">
-//             <div className="lg:col-span-3"><PurchaseWorkflow summary={data.summary} /></div>
-//             <div className="lg:col-span-2"><SalesWorkflow summary={data.summary} /></div>
-//           </div>
-//         </>
-//       ) : null}
-//     </div>
-//   );
-// }
-
 import { useCallback, useEffect, useState } from "react";
 import { MonthlyAmount, PurchaseSalesDashboardData } from "./types";
 import { getPurchaseSalesDashboard } from "../../../api/purchaseSales";
@@ -197,7 +18,8 @@ const MONTHS = [
 
 const selectCls =
   "h-10 w-full cursor-pointer appearance-none rounded-lg border border-slate-200 bg-slate-50 pl-3 pr-9 text-sm font-medium text-slate-800 outline-none transition hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
-const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-500";
+// label is light so it reads on the blue banner
+const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wider text-white/80";
 
 function FilterSelect({
   label,
@@ -279,24 +101,29 @@ export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { compan
   // 7.5rem = app header + breadcrumb above this page. Adjust if your shell differs.
   return (
     <div className="flex h-[calc(100vh-7.5rem)] flex-col gap-3 overflow-y-auto p-3 md:p-4">
-      {/* CHANGED: banner + filter card share one row and the same height */}
-      <div className="flex shrink-0 flex-wrap items-stretch gap-3">
-        <div className="min-w-0 flex-1 [&>*]:h-full">
-          <DashboardHeader companyCode={companyCode} data={data} loading={loading} updatedAt={updatedAt} onRefresh={() => load()} />
-        </div>
-
-        <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-gray-100 px-4 py-3 shadow-sm">
-          <FilterSelect label="Financial Year" value={year} onChange={setYear} disabled>
-            {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </FilterSelect>
-          <FilterSelect label="Month" value={month} onChange={setMonth}>
-            {MONTHS.map((m, i) => (
-              <option key={m} value={i}>{m}</option>
-            ))}
-          </FilterSelect>
-        </div>
+      {/* CHANGED: filters passed into the banner via the filters prop */}
+      <div className="shrink-0">
+        <DashboardHeader
+          companyCode={companyCode}
+          data={data}
+          loading={loading}
+          updatedAt={updatedAt}
+          onRefresh={() => load()}
+          filters={
+            <>
+              <FilterSelect label="Financial Year" value={year} onChange={setYear} disabled>
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </FilterSelect>
+              <FilterSelect label="Month" value={month} onChange={setMonth}>
+                {MONTHS.map((m, i) => (
+                  <option key={m} value={i}>{m}</option>
+                ))}
+              </FilterSelect>
+            </>
+          }
+        />
       </div>
 
       {error && !data ? (
