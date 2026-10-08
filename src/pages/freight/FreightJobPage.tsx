@@ -27,6 +27,8 @@ import { freightSelect, freightTaxCategories } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
@@ -206,12 +208,22 @@ export function FreightJobPage({
 
   const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
+  const [activeListTab, setActiveListTab] = useState<"active" | "cancelled" | "all">("active");
   const [query, setQuery] = useState("");
   const [job, setJob] = useState<JobForm>(() => emptyJob(companyCode, userId, mode.code, direction.code));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const isC = lookupText(r, "canceled") === "Y";
+      if (activeListTab === "active") return !isC;
+      if (activeListTab === "cancelled") return isC;
+      return true;
+    });
+  }, [rows, activeListTab]);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -315,6 +327,28 @@ export function FreightJobPage({
     event.preventDefault();
     if (isEditLocked) {
       notify({ type: "error", text: editLockMessage });
+      return;
+    }
+    // Missing required field validation
+    if (!job.prin_code || !job.dept_code || !job.div_code || !job.job_category || !job.port_code || !job.destination_port) {
+      notify({ type: "error", text: "Kindly fill in the missing fields." });
+      return;
+    }
+    // Character limit validations
+    if (job.remarks && job.remarks.length > 250) {
+      notify({ type: "error", text: "You have exceeded the character limit for Operational Remarks & Instructions." });
+      return;
+    }
+    if (job.description1 && job.description1.length > 250) {
+      notify({ type: "error", text: "You have exceeded the character limit for Cargo Description." });
+      return;
+    }
+    if (job.description2 && job.description2.length > 250) {
+      notify({ type: "error", text: "You have exceeded the character limit for Cargo Specifications." });
+      return;
+    }
+    if (job.driver_remarks && job.driver_remarks.length > 250) {
+      notify({ type: "error", text: "You have exceeded the character limit for Driver Remarks / Contact." });
       return;
     }
     setSaving(true);
@@ -422,26 +456,70 @@ export function FreightJobPage({
 
   if (view === "list") {
     return (
-    <section className="freight-list-screen grid gap-3">
+      <section className="freight-list-screen grid gap-3">
         <Header title={`${mode.label} ${direction.label} Jobs`} subtitle="Freight operations job listing" icon={Icon}>
           {notice && <NoticeChip notice={notice} />}
         </Header>
+        {/* Filter Tabs Bar */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          {(
+            [
+              { id: "active", label: "Active", count: rows.filter((r) => lookupText(r, "canceled") !== "Y").length },
+              { id: "cancelled", label: "Cancelled", count: rows.filter((r) => lookupText(r, "canceled") === "Y").length },
+              { id: "all", label: "All", count: rows.length },
+            ] as const
+          ).map((tab) => {
+            const active = activeListTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveListTab(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-xs font-semibold ring-2 ring-[#00378C]/20"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          data={rows}
+          data={filteredRows}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                title="Add Job"
+                onClick={openAdd}
+              >
+                <Plus size={14} /> Add Job
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() => exportToCsv(filteredRows, columns, `freight-${modeKey}-${directionKey}-jobs.csv`)}
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search job, principal, BL/AWB..."
-          title={`${rows.length} Jobs`}
+          title={`${filteredRows.length} Jobs`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
           minWidth={1280}
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
-          exportFilename={`freight-${modeKey}-${directionKey}-jobs.csv`}
+          enableExport={false}
           onRowClick={openJob}
         />
       </section>
@@ -453,6 +531,14 @@ export function FreightJobPage({
       {!embeddedInWorkspace && (
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors cursor-pointer"
+              title="Back to List"
+            >
+              <ArrowLeft size={16} />
+            </button>
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
               <Icon size={16} />
             </div>
@@ -461,16 +547,27 @@ export function FreightJobPage({
                 Freight Job &bull; {mode.label} {direction.label}
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-base font-bold leading-tight text-foreground">
-                  {job.job_no || "New Freight Job"}
-                </h1>
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-1 font-mono text-base font-bold text-[#78350f] shadow-xs">
+                  {job.job_no || "NEW"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+                  {toDisplayDate(job.job_date) || today()}
+                </span>
+                {isCanceled ? (
+                  <span className="inline-flex items-center rounded border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Cancelled</span>
+                ) : isTruthyFlag(job.invoiced) ? (
+                  <span className="inline-flex items-center rounded border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Invoiced</span>
+                ) : isTruthyFlag(job.completed) ? (
+                  <span className="inline-flex items-center rounded border border-blue-300 bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">Completed</span>
+                ) : isTruthyFlag(job.confirmed) ? (
+                  <span className="inline-flex items-center rounded border border-sky-300 bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">Confirmed</span>
+                ) : (
+                  <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Open</span>
+                )}
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button type="button" size="sm" onClick={() => setView("list")}>
-              <ArrowLeft size={14} /> List
-            </Button>
             {notice && (
               <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
                 {notice.text}
@@ -1015,19 +1112,19 @@ function SectionPanel({
   className?: string;
 }) {
   return (
-    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
+    <section className={`freight-panel overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-100/90 to-slate-50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={12} />
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-blue-50 text-[#00378C]">
+            <Icon size={13} />
           </span>
           <div className="min-w-0">
-            <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-foreground">{title}</h3>
-
+            <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3>
           </div>
         </div>
+        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
       </div>
-      <div className="freight-panel-body p-2">{children}</div>
+      <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
 }
@@ -1051,12 +1148,12 @@ function Field({
 }) {
   const safeValue = type === "date" ? dateInputValue(value) : value;
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-rose-500 font-bold">*</span>}
       </span>
       <Input
-        className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
+        className={`h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C] ${type === "number" ? "text-right tabular-nums" : ""}`}
         type={type}
         value={safeValue}
         required={required}
@@ -1085,12 +1182,12 @@ function SelectField({
   className?: string;
 }) {
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-rose-500 font-bold">*</span>}
       </span>
       <select
-        className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground font-normal"
+        className="h-7.5 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 font-medium focus:border-[#00378C]"
         value={value}
         required={required}
         onChange={(event) => onChange(event.target.value)}
@@ -1124,12 +1221,12 @@ function DateField({
 }) {
   const inputValue = dateInputValue(value);
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-rose-500 font-bold">*</span>}
       </span>
       <Input
-        className="h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground"
+        className="h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C]"
         type="date"
         value={inputValue}
         required={required}
@@ -1155,12 +1252,12 @@ function DateTimeField({
   className?: string;
 }) {
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-rose-500 font-bold">*</span>}
       </span>
       <Input
-        className="h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground"
+        className="h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C]"
         type="datetime-local"
         value={dateTimeInputValue(value)}
         required={required}
@@ -1178,19 +1275,29 @@ function Textarea({
   onChange,
   className = "",
   rows = 2,
+  maxLength = 250,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
   rows?: number;
+  maxLength?: number;
 }) {
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span>{label}</span>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
+      <div className="flex items-center justify-between">
+        <span>{label}</span>
+        {maxLength && (
+          <span className={`text-[10px] font-mono ${value?.length > maxLength ? "text-red-500 font-bold" : "text-slate-400 font-normal"}`}>
+            {value?.length || 0} / {maxLength}
+          </span>
+        )}
+      </div>
       <textarea
         rows={rows}
-        className="min-h-[44px] rounded-md border border-input bg-background px-2 py-1 text-xs font-normal text-foreground shadow-none"
+        maxLength={maxLength}
+        className="min-h-[44px] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-none focus:border-[#00378C]"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -1200,9 +1307,9 @@ function Textarea({
 
 function ReadOnlyField({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span className="text-muted-foreground">{label}</span>
-      <div className="flex h-7 items-center rounded-md border border-border bg-muted/40 px-2 text-xs font-semibold text-foreground">
+    <div className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
+      <span className="text-slate-600 dark:text-slate-400">{label}</span>
+      <div className="flex h-7.5 items-center rounded-md border border-slate-300 bg-slate-50/80 px-2 text-xs font-bold text-slate-800">
         {value || "-"}
       </div>
     </div>
@@ -1236,14 +1343,23 @@ function Lookup({
   placeholder?: string;
   className?: string;
 }) {
+  const formattedDisplayValue = useMemo(() => {
+    if (!value) return displayValue || "";
+    if (!displayValue) return value;
+    const trimmedVal = String(value).trim();
+    const trimmedDisp = String(displayValue).trim();
+    if (trimmedDisp.startsWith(trimmedVal)) return trimmedDisp;
+    return `${trimmedVal} - ${trimmedDisp}`;
+  }, [value, displayValue]);
+
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-rose-500 font-bold">*</span>}
       </span>
       <LookupField
         value={value}
-        displayValue={displayValue}
+        displayValue={formattedDisplayValue}
         compact
         valueField={valueField}
         displayFields={displayFields}

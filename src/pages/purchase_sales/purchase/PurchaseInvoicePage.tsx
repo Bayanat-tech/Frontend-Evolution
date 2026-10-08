@@ -388,7 +388,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
             );
           })}
       </div>
-      <TabStrip
+      {/* <TabStrip
         value={tab}
         onChange={(value) => setTab(value as RequestTab)}
         tabs={
@@ -406,7 +406,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
               { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
             ]
         }
-      />
+      /> */}
 
       <div className="min-h-[650px]">
         <DataTable

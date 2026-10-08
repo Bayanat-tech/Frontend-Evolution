@@ -150,6 +150,22 @@ export function PurchaseInvoiceEditor({
           fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -180,6 +196,13 @@ export function PurchaseInvoiceEditor({
           po_party_address: text(headerRaw.po_party_address),
           po_party_phone: text(headerRaw.po_party_phone),
           po_party_fax: text(headerRaw.po_party_fax),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           po_dlvr_contact: text(headerRaw.po_dlvr_contact),
           po_dlvr_email: text(headerRaw.po_dlvr_email),
           po_dlvr_mobile: text(headerRaw.po_dlvr_mobile),
@@ -267,8 +290,8 @@ export function PurchaseInvoiceEditor({
   const amountBeforeTax = baseTotalAmount - totalDiscountAmt;
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
-    const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-      const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
 
   const updateField = (
     field: keyof PurchaseOrderForm,
@@ -823,7 +846,7 @@ export function PurchaseInvoiceEditor({
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
         title="Purchase Invoice Attachments"
         module="PI"
-        type="Purchase Invoice" 
+        type="Purchase Invoice"
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
