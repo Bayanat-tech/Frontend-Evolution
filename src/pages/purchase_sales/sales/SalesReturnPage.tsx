@@ -1,7 +1,7 @@
 import { Download, Edit2, Eye, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions, getSoOrderReportExcel, getSOrderReportHtml } from "../../../api/transactions";
+import { Division, getDivisions, getPoOrderReportExcel, getPoOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -12,49 +12,70 @@ import { NewReportDialog } from "../../../components/new_report_format";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
-import { SalesOrderEditor } from "./SalesOrdereditor";
-import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
+import { PurchaseOrderEditor, PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
+import { LPO_CONFIG, PO_DOC_TYPE } from "../../purchase_sales/purchase/Purchaseordertypes";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { SalesReturnEditor } from "./SalesReturnEditor";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
-export interface SalesOrderRow {
-  doc_type: string;
+export interface PurchaseOrderRow {
+  doc_type: "LPO";
   doc_no: string;
   doc_date: string;
   quotn_no?: string;
+  purchase_actype?: any;
   quotn_date?: string;
+  ref_no?: string;
+  ref_date?: string;
+  dept_name?: string;
+  uppp?: number;
   div_code: string;
   div_name?: string;
   ac_code: string;
   ac_name?: string;
+  party_address?: string;
   address?: string;
   credit_period?: number;
   dept_code?: string;
+  party_phone?: string;
+  party_fax?: string;
+  buyer?: string;
   tel?: string;
   fax?: string;
-  buyer?: string;
-  wo_no?: string;
-  curr_code?: string;
-  curr_name?: string;
-  ex_rate?: number;
   pay_terms?: string;
   delivery_term?: string;
   delivery_contact?: string;
   delivery_tel?: string;
   delivery_email?: string;
+  party_name?: string;
+  wo_no?: string;
+  curr_code?: string;
+  curr_name?: string;
+  ex_rate?: number;
+  payment_terms?: string;
+  dlvr_term?: string;
+  dlvr_contact?: string;
+  dlvr_mobile?: string;
+  dlvr_email?: string;
   remarks?: string;
-  disc_amt?: number;
+  disc_hdr_price?: number;
+  disc_hdr_percent?: number;
+  tx_cat_code?: string;
+  tx_cat_name?: string;
+  disc_price?: number;
   disc_pct?: number;
   tax_category?: string;
   tax_code?: string;
+  tx_compntcat_code_1?: string;
+  tax_code_name?: string;
   expense_ac_post?: string;
   print_on_letterhead?: string;
   project_name?: string;
   pr_no?: string;
   scope_of_work?: string;
+  disc_percent?: number;
   status?: string;
   canceled?: string;
   flow_level_running?: number;
@@ -62,6 +83,7 @@ export interface SalesOrderRow {
   sentback_reason?: string;
   reject_reason?: string; // added for reject action
   last_action?: "SENTBACK" | "REJECTED" | "APPROVED" | "CANCELED" | "PENDING" | string;
+  wo_number?: string;
 }
 
 // TODO: swap for a real API call, e.g. cancelPurchaseOrderApi(docNo)
@@ -71,9 +93,11 @@ async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
 
 type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
 
-export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
+
+
+export function SalesReturnPage({ onClose , }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
-  const [rows, setRows] = useState<SalesOrderRow[]>([]);
+  const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -87,19 +111,19 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
-  const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // ── Row-level report preview dialog state (now backed by NewReportDialog: raw HTML, no blob URL) ──
+  // ── Row-level report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL) ──
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportPreviewError, setReportPreviewError] = useState("");
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false);
   const [reportPreviewDocNo, setReportPreviewDocNo] = useState("");
-  const [reportPreviewRow, setReportPreviewRow] = useState<SalesOrderRow | null>(null);
+  const [reportPreviewRow, setReportPreviewRow] = useState<PurchaseOrderRow | null>(null);
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
-    const [tabCounts, setTabCounts] = useState<Record<string, number>>({
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({
   PENDING: 0,
   INPROGRESS: 0,
   CLOSED: 0,
@@ -112,8 +136,6 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     const divisionData = await getDivisions();
     setDivisions(divisionData);
   };
-
-  
 
   const purchaseOrderTabs = [
   { value: "PENDING", label: "Pending" },
@@ -153,74 +175,73 @@ const loadRows = async (clearNotice = true) => {
     setLoading(false);
   }
 };
-
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_SORDER_ENTRY_TAB_List",
+      parameter: "PS_POORDER_ENTRY_TAB_List",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
-       code4: SO_DOC_TYPE.SO
+      code4: PO_DOC_TYPE.SOR
     });
 
-    return response as unknown as SalesOrderRow[];
+    return response as unknown as PurchaseOrderRow[];
   };
 
-    const loadTabCounts = async () => {
-    const visibleTabs: RequestTab[] =
-      approvalLevel === 0
-        ? ["PENDING", "CLOSED", "CANCELED"]
-        : [
-            "PENDING",
-            "INPROGRESS",
-            "CLOSED",
-            ...(canViewCanceledTab ? ["CANCELED" as RequestTab] : []),
-            "REJECTED",
-          ];
-  
-    const results = await Promise.all(
-      visibleTabs.map(async (tabValue) => {
-        const response = await getDynamicLookup({
-          parameter: "PS_SORDER_ENTRY_TAB_List",
-          code1: user?.company_code,
-          code2: user?.loginid || user?.username || "ADMIN",
-          code3: tabValue,
-           code4: SO_DOC_TYPE.SO
-        });
-  
-        return {
-          tab: tabValue,
-          count: response.length,
-        };
-      })
-    );
-  
-    setTabCounts((prev) => {
-      const next = { ...prev };
-  
-      results.forEach(({ tab, count }) => {
-        next[tab] = count;
+  const loadTabCounts = async () => {
+  const visibleTabs: RequestTab[] =
+    approvalLevel === 0
+      ? ["PENDING", "CLOSED", "CANCELED"]
+      : [
+          "PENDING",
+          "INPROGRESS",
+          "CLOSED",
+          ...(canViewCanceledTab ? ["CANCELED" as RequestTab] : []),
+          "REJECTED",
+        ];
+
+  const results = await Promise.all(
+    visibleTabs.map(async (tabValue) => {
+      const response = await getDynamicLookup({
+        parameter: "PS_POORDER_ENTRY_TAB_List",
+        code1: user?.company_code,
+        code2: user?.loginid || user?.username || "ADMIN",
+        code3: tabValue,
+        code4: PO_DOC_TYPE.SOR
       });
-  
-      return next;
+
+      return {
+        tab: tabValue,
+        count: response.length,
+      };
+    })
+  );
+
+  setTabCounts((prev) => {
+    const next = { ...prev };
+
+    results.forEach(({ tab, count }) => {
+      next[tab] = count;
     });
-  };
-  
-  useEffect(() => {
-    if (!user?.company_code || approvalLevel === undefined) return;
-  
-    void loadTabCounts();
-  }, [
-    user?.company_code,
-    user?.loginid,
-    user?.username,
-    approvalLevel,
-    canViewCanceledTab,
-  ]);
+
+    return next;
+  });
+};
+
+useEffect(() => {
+  if (!user?.company_code || approvalLevel === undefined) return;
+
+  void loadTabCounts();
+}, [
+  user?.company_code,
+  user?.loginid,
+  user?.username,
+  approvalLevel,
+  canViewCanceledTab,
+]);
 
   // ── Row-level print handler ───────────────────────────────────────────────
-  const handlePrintSalesOrder = async (row: SalesOrderRow) => {
+ const handlePrintPurchaseOrder = async (row: PurchaseOrderRow) => {
   if (!row.doc_no) return;
 
   const params = {
@@ -228,16 +249,16 @@ const loadRows = async (clearNotice = true) => {
     doc_type: row.doc_type,
     doc_no: row.doc_no,
   };
-  const preview = openPurchaseReport(`Sales Order ${row.doc_no}`.trim());
+  const preview = openPurchaseReport(`Purchase Order ${row.doc_no}`.trim());
 
   try {
-    const html = await getSOrderReportHtml(params);
+    const html = await getPoOrderReportHtml(params);
     preview.ready({
       html,
-      filename: `sales_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+      filename: `purchase_order_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
       orientation: "portrait",
       onExcel: async () => {
-        await getSoOrderReportExcel(params);
+        await getPoOrderReportExcel(params);
       },
     });
   } catch (error) {
@@ -245,9 +266,19 @@ const loadRows = async (clearNotice = true) => {
   }
 };
 
+ 
 
-
-  
+  const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
+    try {
+      await getPoOrderReportExcel({
+        company_code: user?.company_code,
+        doc_type: row.doc_type,
+        doc_no: row.doc_no,
+      });
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+    }
+  };
 
   useEffect(() => {
     if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
@@ -288,7 +319,7 @@ const loadRows = async (clearNotice = true) => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
-  const columns = useMemo<ColumnDef<SalesOrderRow>[]>(() => [
+  const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
       header: "Doc No",
@@ -317,28 +348,23 @@ const loadRows = async (clearNotice = true) => {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title={isViewOnlyTab ? "View" : "Edit"}>
-            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
-          </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintSalesOrder(row.original)}>
-            <Printer size={15} />
-          </Button>
+          {/* <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+            <Edit2 size={15} />
+          </Button> */}
+
+
           <Button
             size="icon"
             variant="ghost"
-            title="Excel"
-            onClick={async () => {
-              try {
-                await getSoOrderReportExcel({
-                  company_code: user?.company_code,
-                  doc_type: row.original.doc_type,
-                  doc_no: row.original.doc_no,
-                });
-              } catch (error) {
-                setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
-              }
-            }}
+            onClick={() => setEditor({ mode: "edit", row: row.original })}
+            title={isViewOnlyTab ? "View" : "Edit"}
           >
+            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+          </Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintPurchaseOrder(row.original)}>
+            <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
             <Download size={15} />
           </Button>
         </div>
@@ -355,8 +381,8 @@ const loadRows = async (clearNotice = true) => {
     <section className="finance-list-page grid gap-4">
       {/* <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Sales Order</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Sales order document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Order</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase order document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
@@ -369,13 +395,16 @@ const loadRows = async (clearNotice = true) => {
           )}
         </div>
       </div> */}
-      
-      <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Sales Order</h6>
+            <div className="finance-list-title">
+          <h6 className="m-0 text-xl font-semibold tracking-tight">Sales Return</h6>
         </div>
 
-      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-   <div className="flex flex-wrap items-center gap-1.5 pb-1">
+   <AutoDismissAlert
+  notice={notice}
+  onClose={() => setNotice(null)}
+/>
+
+<div className="flex flex-wrap items-center gap-1.5 pb-1">
   {purchaseOrderTabs
     .filter((item) => {
       if (approvalLevel === 0) {
@@ -425,15 +454,15 @@ const loadRows = async (clearNotice = true) => {
         <DataTable
           columns={columns}
           data={rows}
-              toolbar={
+          toolbar={
             tab === "PENDING" && (
               <button
-                title="Add Sales Order"
+                title="Add Sales Return"
                 onClick={() => setDivisionPicker(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
                 <Plus size={14} />
-                Add Order
+                Add Return
               </button>
             )
           }
@@ -442,16 +471,17 @@ const loadRows = async (clearNotice = true) => {
             setQuery(value);
             setPageIndex(0);
           }}
+
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No sales order found"
+          emptyText="No sales returns found"
           height={620}
           minWidth={1000}
           density="grid"
           enablePagination
           manualPagination
           enableExport
-          exportFilename="purchase-orders.csv"
+          exportFilename="sales-returns.csv"
           initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -472,9 +502,9 @@ const loadRows = async (clearNotice = true) => {
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <SalesOrderEditor
+          <SalesReturnEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={SO_CONFIG}
+            config={LPO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -492,7 +522,7 @@ const loadRows = async (clearNotice = true) => {
       <DivisionPickerDialog
         open={divisionPicker}
         divisions={divisions}
-        description="Choose the division before opening the sales order form."
+        description="Choose the division before opening the purchase order form."
         onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
       />
