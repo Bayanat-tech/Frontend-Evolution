@@ -828,8 +828,8 @@ function CommercialEditor({
                 onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "", META[form.doc_type]?.title)}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
               </>
             )}
@@ -1420,8 +1420,13 @@ function CommercialEditor({
 
   {/* ── Remarks ── */}
   <Field label="Remarks" className="col-span-1">
-    <Input disabled={isCancelled} value={form.remarks || ""}
-      onChange={(e) => update("remarks", e.target.value)} />
+    <Input
+      disabled={isCancelled}
+      value={form.remarks || ""}
+      maxLength={250}
+      placeholder="Remarks"
+      onChange={(e) => update("remarks", e.target.value)}
+    />
   </Field>
 
   {/* ── HSE Compliant + Letter Head checkboxes — PO only ── */}

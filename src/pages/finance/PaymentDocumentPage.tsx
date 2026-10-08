@@ -1064,8 +1064,8 @@ function PaymentDocumentEditor({
                 <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
                 {form.canceled !== "Y" && (
                   <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
@@ -1201,6 +1201,7 @@ function PaymentDocumentEditor({
                           <Input
                             disabled={disabled}
                             value={form.ac_payee || ""}
+                            maxLength={70}
                             className={form.ac_payee && form.ac_payee.length > 70 ? "!border-rose-500 !ring-rose-400" : ""}
                             onChange={(event) => updateField("ac_payee", event.target.value)}
                             placeholder="Account Payee"
@@ -1326,6 +1327,8 @@ function PaymentDocumentEditor({
                           <Input
                             disabled={disabled}
                             value={form.remarks || ""}
+                            maxLength={250}
+                            placeholder="Remarks"
                             className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
                             onChange={(event) => updateField("remarks", event.target.value)}
                           />

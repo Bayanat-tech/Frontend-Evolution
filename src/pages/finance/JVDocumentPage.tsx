@@ -942,8 +942,8 @@ function JVDocument({
                 <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
                 {form.canceled !== "Y" && (
                   <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
@@ -1047,7 +1047,13 @@ function JVDocument({
                     </Field>
                     <label className="field col-span-2 max-md:col-span-1">
                       <span>Remarks</span>
-                      <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
+                      <Input
+                        disabled={disabled}
+                        value={form.remarks || ""}
+                        maxLength={250}
+                        placeholder="Remarks"
+                        onChange={(event) => updateField("remarks", event.target.value)}
+                      />
                     </label>
                   </div>
                 </div>
