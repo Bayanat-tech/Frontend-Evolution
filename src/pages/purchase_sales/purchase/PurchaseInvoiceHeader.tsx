@@ -123,6 +123,12 @@ export function PurchaseInvoiceHeaderForm({
                                         curr_code: text(
                                             getLookupValue(row || {}, "curr_code")
                                         ),
+                                        curr_name: text(
+                                            getLookupValue(row || {}, "curr_name")
+                                        ),
+                                        dept_name: text(
+                                            getLookupValue(row || {}, "dept_name")
+                                        ),
 
                                         dept_code: text(
                                             getLookupValue(row || {}, "dept_code")

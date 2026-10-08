@@ -7,7 +7,7 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 
 import { PurchaseOrderForm, SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
-import { numberOrZero, text } from "./SalesOrderutils";
+import { lowerRecord, numberOrZero, text } from "./SalesOrderutils";
 import { EXPENSE_AC_OPTIONS, PODocType } from "../purchase/Purchaseordertypes";
 import { DiscAmountPercentage, TotalDiscAmount } from "../purchase/Purchaseorderutils";
 
@@ -103,14 +103,42 @@ export function SalesInvoiceHeaderForm({
                                 displayFields={["ac_code", "ac_name"]}
                                 loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                                 disabled={headerAndLineDisabled}
-                                onChange={(value, row) => setForm((current) => ({
-                                    ...current,
-                                    ac_code: value,
-                                    ac_name: text(getLookupValue(row || {}, "ac_name")),
-                                    party_address: text(getLookupValue(row || {}, "address")) || current.party_address,
-                                    party_phone: text(getLookupValue(row || {}, "tel")) || current.party_phone,
-                                    party_fax: text(getLookupValue(row || {}, "fax")) || current.party_fax,
-                                }))}
+                                onChange={(value, row) =>
+                                    setForm((current) => ({
+                                        ...current,
+
+                                        ac_code: value,
+                                        ac_name: text(getLookupValue(row || {}, "ac_name")),
+                                        address1: text(getLookupValue(row || {}, "address1")),
+                                        address2: text(getLookupValue(row || {}, "address2")),
+                                        address3: text(getLookupValue(row || {}, "address3")),
+                                        party_phone: text(
+                                            getLookupValue(row || {}, "party_phone")
+                                        ),
+
+                                        party_fax: text(
+                                            getLookupValue(row || {}, "party_fax")
+                                        ),
+
+                                        curr_code: text(
+                                            getLookupValue(row || {}, "curr_code")
+                                        ),
+                                        curr_name:text(
+                                            getLookupValue(row || {}, "curr_name")
+                                        ),
+
+                                        dept_code: text(
+                                            getLookupValue(row || {}, "dept_code")
+                                        ),
+                                         dept_name: text(
+                                            getLookupValue(row || {}, "dept_name")
+                                        ),
+                                        e_mail: text(getLookupValue(row || {}, "e_mail")),
+                                        prin_name: text(getLookupValue(row || {}, "prin_name")),
+                                        credit_period: numberOrZero(getLookupValue(row || {}, "credit_period")),
+                                        credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")),
+                                    }))
+                                }
                             />
                         </div>
 
@@ -182,6 +210,22 @@ export function SalesInvoiceHeaderForm({
                                     disabled={disabled}
                                     onChange={async (value, row) => {
                                         // Populate header fields immediately from the selected row
+                                        const selectedAcCode = text(getLookupValue(row || {}, "ac_code"));
+                                        let accountRow: Record<string, unknown> | undefined;
+                                        if (selectedAcCode) {
+                                            try {
+                                                const accountRows = await getDynamicLookup({
+                                                    parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+                                                    code1: companyCode,
+                                                    loginid: loginIdOrAdmin,
+                                                });
+                                                accountRow = (accountRows || [])
+                                                    .map((account) => lowerRecord(account as Record<string, unknown>))
+                                                    .find((account) => text(account.ac_code).trim().toUpperCase() === selectedAcCode.trim().toUpperCase());
+                                            } catch {
+                                                accountRow = undefined;
+                                            }
+                                        }
                                         setForm((current) => ({
                                             ...current,
                                             sdn_doc_no: value,
