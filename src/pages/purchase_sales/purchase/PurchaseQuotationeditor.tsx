@@ -159,6 +159,22 @@ export function PurchaseQuotationEditor({
           ),
 
         ]);
+             let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -172,7 +188,13 @@ export function PurchaseQuotationEditor({
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
+            address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),

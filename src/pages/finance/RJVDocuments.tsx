@@ -49,6 +49,7 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
@@ -93,7 +94,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -175,7 +176,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -184,7 +185,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center">Date</div>,
+      header: () => <div className="text-center font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name" },
@@ -194,55 +195,45 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     {
       accessorKey: "amount",
-      header: () => <div className="text-right">Amount</div>,
+      header: () => <div className="text-right font-bold">Amount</div>,
       cell: ({ getValue }) => {
         const val = Number(getValue() || 0);
-        return <div className="text-right font-mono font-medium">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
+        return <div className="text-right font-mono tabular-nums font-semibold text-slate-800">{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
       },
     },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center">Div</div>,
+      header: () => <div className="text-center font-bold">Div</div>,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
-      size: 30,
+      size: 40,
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center">Status</div>,
+      header: () => <div className="text-center font-bold">Status</div>,
       cell: ({ getValue }) => (
         <div className="flex justify-center">
-          {String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive font-semibold">Cancelled</Badge>
-          ) : (
-            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Active</Badge>
-          )}
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
         </div>
       ),
     },
     {
       id: "actions",
-      header: () => <div className="text-center">Actions</div>,
+      header: () => <div className="text-center font-bold">Actions</div>,
       enableSorting: false,
+      size: 155,
+      minSize: 155,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
-            <Trash2 size={15} />
-          </Button>
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          onDelete={() => setDeleteTarget(row.original)}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType, columnFilters]);
@@ -314,6 +305,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
               enablePagination
               manualPagination
               manualFiltering
+              enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
                   <Button
@@ -350,6 +342,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
                 setPageSize(nextPageSize);
                 setPageIndex(0);
               }}
+              rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
               getRowId={(row, index) => `${row.doc_no}_${index}`}
             />
           </div>
@@ -762,6 +755,18 @@ function JVDocument({
     }));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
+
   const removeDetailRow = (id: string) => {
     setForm((current) => ({
       ...current,
@@ -915,6 +920,17 @@ function JVDocument({
       return setError(`Reverse Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
     }
 
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
+        if (Math.abs(childSum - lineAmt) > 0.001) {
+          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -969,7 +985,7 @@ function JVDocument({
 
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={DOCUMENT_META[docType].title}
@@ -1176,7 +1192,7 @@ function JVDocument({
                       </button>
                     )}
                   </div>
-                  <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn">
+                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
@@ -1216,7 +1232,7 @@ function JVDocument({
                               placeholder="A/c code"
                               value={detail.ac_code}
                               displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                               valueField="ac_code"
                               displayFields={["ac_code", "ac_name", "curr_code"]}
                               loadOptions={() => getDynamicLookup({

@@ -47,6 +47,7 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
@@ -92,7 +93,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   const [editor, setEditor] = useState<EditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -164,7 +165,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
       accessorKey: "doc_no",
-      header: "Doc No",
+      header: () => <div className="font-bold">Doc No</div>,
       cell: ({ row }) => (
         <button
           type="button"
@@ -172,7 +173,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -181,7 +182,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center w-full">Date</div>,
+      header: () => <div className="text-center w-full font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name", size: 320 },
@@ -189,61 +190,49 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     { accessorKey: "remarks", header: "Description" },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center w-full">Div</div>,
-      size: 70,
+      header: () => <div className="text-center w-full font-bold">Div</div>,
+      size: 50,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
     },
     {
       id: "amount",
-      header: () => <div className="text-right w-full">Amount</div>,
+      header: () => <div className="text-right w-full font-bold">Amount</div>,
       accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
       cell: ({ row }) => (
-        <div className="text-right font-mono font-medium">
+        <div className="text-right font-mono tabular-nums font-semibold text-slate-800">
           {formatAmount(Number(row.original.net_amount ?? row.original.amount ?? 0))}
         </div>
       ),
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center w-full">Status</div>,
+      header: () => <div className="text-center w-full font-bold">Status</div>,
       cell: ({ getValue }) => {
         const isCanceled = String(getValue() || "N") === "Y";
         return (
           <div className="flex justify-center">
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                isCanceled
-                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              }`}
-            >
-              {isCanceled ? "Cancelled" : "Active"}
-            </span>
+            <FinanceStatusBadge isCancelled={isCanceled} />
           </div>
         );
       },
     },
     {
       id: "actions",
-      header: () => <div className="text-center w-full">Actions</div>,
+      header: () => <div className="text-center w-full font-bold">Actions</div>,
       enableSorting: false,
+      size: 130,
+      minSize: 130,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType, columnFilters]);
@@ -302,6 +291,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               enablePagination
               manualPagination
               manualFiltering
+              enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
                   <Button
@@ -338,6 +328,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
                 setPageSize(nextPageSize);
                 setPageIndex(0);
               }}
+              rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
               getRowId={(row, index) => `${row.doc_no}_${index}`}
             />
           </div>
@@ -720,6 +711,18 @@ function PaymentDocumentEditor({
     }));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
+
   const removeDetailRow = (id: string) => {
     setForm((current) => ({
       ...current,
@@ -860,13 +863,39 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
-    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+    // Character limit validations
+    if (form.ref_no && form.ref_no.length > 30) {
+      return setError("You have exceeded the character limit for Ref No.");
+    }
+    if (form.remarks && form.remarks.length > 250) {
+      return setError("You have exceeded the character limit for Remarks.");
+    }
 
-    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
-    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+    if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
 
-    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
-    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+    // Check line character limits
+    for (const d of form.detail) {
+      if (d.remarks && d.remarks.length > 250) {
+        return setError("You have exceeded the character limit for Remarks.");
+      }
+    }
+
+    // Missing field validation on lines (new row without details / missing account or zero amount)
+    const invalidLine = form.detail.find((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLine) {
+      return setError("Kindly fill in the missing fields.");
+    }
+
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
+        if (Math.abs(childSum - lineAmt) > 0.001) {
+          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
+    }
 
     setSaving(true);
     setError("");
@@ -923,7 +952,7 @@ function PaymentDocumentEditor({
 
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={DOCUMENT_META[docType].title}
@@ -1093,7 +1122,7 @@ function PaymentDocumentEditor({
                           label={docType === "CN" ? "Customer *" : "Supplier *"}
                           value={form.ac_code}
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
                           loadOptions={() => getDynamicLookup({
@@ -1280,7 +1309,7 @@ function PaymentDocumentEditor({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow} className="commercial-add-line-btn">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
@@ -1323,7 +1352,7 @@ function PaymentDocumentEditor({
                                 placeholder="A/c code"
                                 value={detail.ac_code}
                                 displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
                                 loadOptions={() => getDynamicLookup({

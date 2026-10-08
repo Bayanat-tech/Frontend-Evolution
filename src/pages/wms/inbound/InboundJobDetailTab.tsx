@@ -1,13 +1,12 @@
 import { 
   FileText, MapPin, Ship, PackageCheck, Pencil, Save, X 
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { type LookupRow } from "../../../api/lookups";
-import { jobClassLabels } from "../../../config/staticData";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
 import { useToast } from "../../../components/ui/AlertToast";
@@ -269,6 +268,9 @@ export function InboundJobDetailsTab({ job, loadingJob, companyCode, jobNo, onSa
   const [saving,    setSaving]    = useState(false);
   const [formData,  setFormData]  = useState<EditableForm>(emptyForm);
 
+  // Guards against double-clicks firing two PUTs
+  const savingRef = useRef(false);
+
   useEffect(() => {
     if (loadingJob || !job || !companyCode) return;
     let cancelled = false;
@@ -333,6 +335,8 @@ export function InboundJobDetailsTab({ job, loadingJob, companyCode, jobNo, onSa
   const cancelEdit = () => setIsEditing(false);
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const blankToNull = (v: string) => (v.trim() === "" ? null : v);
@@ -355,8 +359,10 @@ export function InboundJobDetailsTab({ job, loadingJob, companyCode, jobNo, onSa
       setIsEditing(false);
       if (onSaved) await onSaved();
     } catch (error) {
+      console.error("[InboundJobDetailsTab] save failed", error);
       toast.error(error instanceof Error ? error.message : "Unable to update job details");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -364,25 +370,53 @@ export function InboundJobDetailsTab({ job, loadingJob, companyCode, jobNo, onSa
   const setField = (key: keyof EditableForm) => (v: string) =>
     setFormData((cur) => ({ ...cur, [key]: v }));
 
+  // NOTE: every button inside the <form> MUST be type="button".
+  // Otherwise the browser treats it as a submit button and does a native
+  // form submit (full page reload), which cancels the in-flight API call.
   const editControls = isEditing ? (
     <div className="flex items-center gap-1.5">
-      <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving} className="h-6 text-[10px] px-2 bg-white border-gray-300">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={cancelEdit}
+        disabled={saving}
+        className="h-6 text-[10px] px-2 bg-white border-gray-300"
+      >
         <X size={12} className="mr-1" /> Cancel
       </Button>
-      <Button size="sm" onClick={handleSave} disabled={saving} className="h-6 text-[10px] px-2 bg-blue-600 hover:bg-blue-700 text-white">
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => void handleSave()}
+        disabled={saving}
+        className="h-6 text-[10px] px-2 bg-blue-600 hover:bg-blue-700 text-white"
+      >
         <Save size={12} className="mr-1" /> {saving ? "Saving…" : "Save"}
       </Button>
     </div>
   ) : (
-    <Button size="sm" variant="outline" onClick={startEdit} className="h-6 text-[10px] px-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-white">
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={startEdit}
+      className="h-6 text-[10px] px-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-white"
+    >
       <Pencil size={12} className="mr-1" /> Edit Details
     </Button>
   );
 
-  const lookupLabel = "Select";
-
   return (
-    <form className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5">
+    <form
+      className="freight-dense-form freight-ui-standard freight-enquiry-editor grid gap-2.5"
+      noValidate
+      onSubmit={(event) => {
+        // Never allow a native submit/reload; Enter key inside an input also lands here.
+        event.preventDefault();
+        if (isEditing) void handleSave();
+      }}
+    >
       
       {/* ── 1. Job Information ── */}
       <SectionPanel 

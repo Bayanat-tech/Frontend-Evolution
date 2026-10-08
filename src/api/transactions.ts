@@ -157,6 +157,8 @@ export type Division = {
 export type CompanyInfo = {
   company_code?: string;
   ac_fy_period?: string;
+  setup_required?: boolean;
+  message?: string;
 };
 
 export type FinanceOutstandingBalance = {
@@ -173,6 +175,15 @@ export async function getCompanyInfo() {
   const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
   return response.data.data || {};
+}
+
+export async function initializeCompanyFinance(companyCode?: string) {
+  const response = await api.post<ApiResponse<Record<string, unknown>>>(
+    "/api/finance/transactions/initialize_company_finance",
+    { company_code: companyCode }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Failed to initialize company finance setup");
+  return response.data;
 }
 
 export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {
@@ -203,6 +214,8 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
       { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_payee", field_value: search.trim(), operator: "contains" },
+      { field_name: "cheque_no", field_value: search.trim(), operator: "contains" },
     ]);
   }
 

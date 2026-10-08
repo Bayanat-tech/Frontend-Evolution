@@ -81,10 +81,10 @@ export function LookupField({
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
-      const minIdealWidth = columns.length >= 3 ? 340 : 280;
+      const minIdealWidth = 520;
       const width = Math.min(
         Math.max(rect.width, minIdealWidth),
-        Math.min(600, viewportWidth - 24),
+        Math.min(720, viewportWidth - 24),
       );
 
       const belowSpace = viewportHeight - rect.bottom - 10;
@@ -333,9 +333,10 @@ export function LookupField({
                   <tr className="h-7.5 bg-[#00378C]">
                     {columns.map((column, columnIndex) => (
                       <th
-                        className="px-2.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap"
+                        className={`px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap ${
+                          columnIndex === 0 ? "w-[125px] min-w-[110px]" : "w-auto"
+                        }`}
                         key={column.field}
-                        style={columnIndex === 0 ? { width: columns.length > 2 ? "25%" : "35%" } : undefined}
                         title={column.header}
                       >
                         {column.header}
@@ -372,7 +373,7 @@ export function LookupField({
                         <tr
                           key={`${rowValue || index}`}
                           onClick={() => selectRow(row)}
-                          className={`h-7.5 cursor-pointer transition-colors ${
+                          className={`min-h-[30px] cursor-pointer transition-colors ${
                             selected
                               ? "bg-[#E8F0FE] text-[#00378C] font-semibold"
                               : "hover:bg-[#E8F0FE]/60 text-slate-800"
@@ -382,8 +383,10 @@ export function LookupField({
                             const cellText = formatLookupDisplayValue(column.field, getLookupValue(row, column.field));
                             return (
                               <td
-                                className={`px-2.5 py-1 text-xs truncate whitespace-nowrap max-w-[220px] ${
-                                  columnIndex === 0 ? "font-semibold text-[#00378C] text-[11.5px]" : "text-slate-700 text-[11.5px]"
+                                className={`px-3 py-1.5 text-xs ${
+                                  columnIndex === 0
+                                    ? "font-mono font-semibold text-[#00378C] text-[11.5px] whitespace-nowrap w-[125px] min-w-[110px]"
+                                    : "text-slate-800 font-medium text-[11.5px] whitespace-normal break-words leading-snug"
                                 }`}
                                 key={column.field}
                                 title={cellText}

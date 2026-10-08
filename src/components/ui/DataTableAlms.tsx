@@ -13,17 +13,14 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Filter, Loader2, Search } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Filter, Loader2, Search, X } from "lucide-react";
 import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
-import { Button } from "./Button";
 import { ExportCSVButton } from "./ExportCSVButton";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
 import { BiscDatePicker } from "./BiscDatePicker";
-import { formatDate } from "../../utils/date";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
@@ -33,12 +30,11 @@ export type DataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   title?: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   toolbar?: ReactNode;
-  actionButton?: ReactNode;
   loading?: boolean;
   loaderType?: DataTableLoaderType; 
   emptyText?: string;
@@ -53,7 +49,6 @@ export type DataTableProps<TData, TValue> = {
   onPageChange?: (pageIndex: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
   columnFilters?: ColumnFiltersState;
-  initialColumnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
   manualFiltering?: boolean;
   enableColumnFilters?: boolean;
@@ -64,7 +59,7 @@ export type DataTableProps<TData, TValue> = {
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
   /** Called whenever row selection changes; receives array of selected row originals */
-  onRowSelectionChange?: (selectedRows: TData[]) => void;
+   onRowSelectionChange?: (selectedRows: TData[]) => void;
   initialSorting?: SortingState;
   /**
    * STANDARD WIDE-TABLE PATTERN — on by default for every table using this
@@ -98,9 +93,6 @@ export type DataTableProps<TData, TValue> = {
   truncateCellText?: boolean;
 };
 
-// Density presets — "grid" is the most compact (used everywhere in WMS).
-// Header text is intentionally LARGER and bolder than body text so column
-// titles read clearly while data stays dense.
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
   grid: { row: "h-[27px]", cell: "px-2 py-0 text-[11.5px] leading-tight" },
   compact: { row: "h-7", cell: "px-2 py-0.5 text-[11.5px] leading-tight" },
@@ -134,39 +126,9 @@ const GRID_OUTLINE = "border-[#878787]"; // shell's outer border — a touch str
 const GRID_LINE = "border-[#ecf0f5]"; // internal rules — header/row/column dividers
 const CELL_DIVIDER = `border-r ${GRID_LINE} last:border-r-0`;
 
-// Header text formatter — "First letter big, rest small" per word, so
-// "SKU CODE" / "sku code" / "Sku Code" all render as "Sku Code". CSS
-// `capitalize` can't do this (it never lowercases the rest), hence JS.
-// Words in HEADER_ACRONYMS stay fully uppercase (e.g. "UOM", "GRN").
-// Add to this set as you hit more WMS acronyms.
-// Only applies to plain-string headers — custom header renderers (JSX /
-// functions) are left untouched.
-const HEADER_ACRONYMS = new Set(["ID", "SKU", "UOM", "GRN", "ASN", "EDI", "PO", "UPC", "EAN", "SN"]);
-
-// Descriptive values must not determine the width of an operational grid.
-// These columns receive a predictable reading width and expose their full
-// value through the shared overflow tooltip below.
-const LONG_TEXT_COLUMN = /(^|_)(description|remarks?|notes?|comments?)$/i;
-
-function formatHeaderText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[a-z][a-z0-9']*/g, (word) =>
-      HEADER_ACRONYMS.has(word.toUpperCase())
-        ? word.toUpperCase()
-        : word.charAt(0).toUpperCase() + word.slice(1),
-    );
-}
-
 const includesText: FilterFn<unknown> = (row, columnId, filterValue) => {
   const search = String(filterValue ?? "").trim().toLowerCase();
   if (!search) return true;
-  if (columnId === "canceled" || columnId === "status") {
-    const rowVal = String(row.getValue(columnId) || "N").toUpperCase();
-    if (search === "y" || search === "cancelled" || search === "canceled") return rowVal === "Y";
-    if (search === "n" || search === "active") return rowVal !== "Y";
-    return true;
-  }
   return String(row.getValue(columnId) ?? "").toLowerCase().includes(search);
 };
 
@@ -195,7 +157,6 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   searchPlaceholder = "Search...",
   toolbar,
-  actionButton,
   loading,
   loaderType = "skeleton",
   emptyText = "No records found",
@@ -210,7 +171,6 @@ export function DataTable<TData, TValue>({
   onPageChange,
   onPageSizeChange,
   columnFilters: controlledColumnFilters,
-  initialColumnFilters = [],
   onColumnFiltersChange,
   manualFiltering = false,
   enableColumnFilters = true,
@@ -228,7 +188,7 @@ export function DataTable<TData, TValue>({
   truncateCellText = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
-  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>(initialColumnFilters);
+  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
@@ -246,24 +206,7 @@ export function DataTable<TData, TValue>({
   const enhancedColumns = useMemo(
     () => columns.map((column) => {
       const id = "id" in column && column.id ? column.id : "accessorKey" in column ? String(column.accessorKey) : "";
-      const isDate = isDateColumn(id) || (typeof column.header === "string" && /(^|_|\s)(date|dt)(_|\s|$)/i.test(column.header));
-      const isLongText = LONG_TEXT_COLUMN.test(id);
-      const widthDefaults = isLongText
-        ? {
-            size: column.size ?? 340,
-            minSize: column.minSize ?? 220,
-            maxSize: column.maxSize ?? 420,
-          }
-        : {};
-      if (isDate) {
-        return {
-          ...column,
-          ...widthDefaults,
-          filterFn: column.filterFn || (dateBetween as FilterFn<TData>),
-          ...(!column.cell ? { cell: ({ getValue }: { getValue: () => unknown }) => formatDate(getValue()) } : {}),
-        };
-      }
-      return { ...column, ...widthDefaults };
+      return isDateColumn(id) && !column.filterFn ? { ...column, filterFn: dateBetween as FilterFn<TData> } : column;
     }),
     [columns],
   );
@@ -331,9 +274,6 @@ export function DataTable<TData, TValue>({
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
   const totalPages = Math.max(pageCount, 1);
-  // STANDARD WIDE-TABLE PATTERN — condensed page-number list (1 2 3 … 42)
-  // instead of only first/prev/next/last controls, so pagination reads the
-  // same regardless of how many pages there are.
   const pageNumbers = useMemo(() => {
     const pages: number[] = [];
     if (totalPages <= 5) {
@@ -362,6 +302,10 @@ export function DataTable<TData, TValue>({
       table.setPageSize(nextPageSize);
     }
   };
+  // STANDARD WIDE-TABLE PATTERN — condensed page-number list (1 2 3 … 42)
+  // instead of only first/prev/next/last controls, so pagination reads the
+  // same regardless of how many pages there are.
+  // const pageNumbers = useMemo(() => getPaginationRange(currentPageIndex, pageCount), [currentPageIndex, pageCount]);
 
   useEffect(() => {
     if (!manualPagination) table.setPageSize(pageSize);
@@ -475,19 +419,23 @@ export function DataTable<TData, TValue>({
                   filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
                 />
               )}
-              {actionButton}
+              {Boolean(_subtitle || (_title && !_title.includes("Records") && !_title.includes("Loading"))) && (
+                <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1 rounded-lg border border-[#00378C] text-white bg-[#00378C] shadow-sm select-none shrink-0 font-medium text-[13px]">
+                  <span>{_subtitle || _title}</span>
+                </div>
+              )}
             </div>
             {!onSearchChange && !toolbar && !showExport && !(_subtitle || _title) && <span className="min-h-1 flex-1" />}
-            {table.getState().columnFilters.filter((f) => hasFilterValue(f.value) && !isStatusColumn(f.id)).length > 0 && (
+            {table.getState().columnFilters.filter((f) => hasFilterValue(f.value)).length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 w-full pt-2 border-t border-border/50 text-xs">
                 <span className="text-[#64748b] font-semibold text-[11px] uppercase tracking-wide">
                   Filtered by:
                 </span>
                 {table.getState().columnFilters
-                  .filter((f) => hasFilterValue(f.value) && !isStatusColumn(f.id))
+                  .filter((f) => hasFilterValue(f.value))
                   .map((f) => {
                     const col = table.getColumn(f.id);
-                    const headerTitle = typeof col?.columnDef.header === "string" ? formatHeaderText(col.columnDef.header) : f.id;
+                    const headerTitle = typeof col?.columnDef.header === "string" ? col.columnDef.header : f.id;
                     const val = f.value as any;
                     const displayVal = typeof val === "object" && val
                       ? `${val.from || "Any"} → ${val.to || "Any"}`
@@ -512,11 +460,7 @@ export function DataTable<TData, TValue>({
                   })}
                 <button
                   type="button"
-                  onClick={() => {
-                    const currentFilters = table.getState().columnFilters;
-                    const statusOnly = currentFilters.filter((f) => isStatusColumn(f.id));
-                    table.setColumnFilters(statusOnly);
-                  }}
+                  onClick={() => table.resetColumnFilters()}
                   className="text-xs font-semibold text-[#00378C] hover:underline cursor-pointer ml-1"
                 >
                   Clear all
@@ -572,8 +516,7 @@ export function DataTable<TData, TValue>({
           <Table style={{ minWidth: minWidthValue === "100%" ? undefined : minWidthValue, width: "100%" }}>
             {/* STANDARD WIDE-TABLE PATTERN — sticky header stays visible on
                 vertical scroll. z-20 so it sits above sticky body columns
-                (z-10) at the header/body seam. Header text is larger and
-                bolder than body cells. */}
+                (z-10) at the header/body seam. */}
             <TableHeader className={cn("sticky top-0 z-20 border-b bg-white", GRID_LINE)}>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="border-b border-[#8e97a8]">
@@ -591,10 +534,8 @@ export function DataTable<TData, TValue>({
                         style={{
                           width: header.column.columnDef.size ? `${header.column.columnDef.size}px` : undefined,
                           minWidth: header.column.columnDef.minSize ? `${header.column.columnDef.minSize}px` : undefined,
-                          maxWidth: header.column.columnDef.maxSize ? `${header.column.columnDef.maxSize}px` : undefined,
                           boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                         }}
-                        data-column-id={header.column.id}
                         className={cn(
                           "relative transition-colors border-r border-[#8e97a8] last:border-r-0",
                           isFilterActive && "bg-[#00378C]/[0.06] border-b-2 border-b-[#00378C]",
@@ -606,16 +547,11 @@ export function DataTable<TData, TValue>({
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <div className="flex min-h-7 items-center justify-between gap-1">
-                          {/* Header: capitalize, bold, bigger than body */}
                           <span className={cn(
-                            "flex min-w-0 items-center gap-1 truncate capitalize text-[13px] font-bold tracking-wide",
-                            isFilterActive ? "text-[#00378C]" : "text-[#334155]"
+                            "flex min-w-0 items-center gap-1 truncate transition-colors text-[11px] uppercase tracking-wider font-semibold",
+                            isFilterActive ? "text-[#00378C] font-bold" : "text-[#64748b]"
                           )}>
-                            {header.isPlaceholder
-                              ? null
-                              : typeof header.column.columnDef.header === "string"
-                                ? formatHeaderText(header.column.columnDef.header)
-                                : flexRender(header.column.columnDef.header, header.getContext())}
+                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                             {header.column.getCanSort() && (
                               <SortIcon sorted={header.column.getIsSorted()} />
                             )}
@@ -635,85 +571,81 @@ export function DataTable<TData, TValue>({
               ))}
             </TableHeader>
             <TableBody>
-              {loading ? (
-                loaderType === "circle" ? (
-                  <TableRow>
-                    <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
-                      <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-                        <Loader2 className="animate-spin text-primary" size={22} />
-                        <span className="text-xs font-medium">Loading...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  skeletonRows.map((_, index) => (
-                    <TableRow className={cn(rowStyle.row, "border-b", GRID_LINE)} key={index}>
-                      <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
-                    </TableRow>
-                  ))
-                )
-              ) : visibleRows.length ? (
-                visibleRows.map((row) => (
-                  <TableRow
-                    className={cn(rowStyle.row, "border-b", GRID_LINE, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
-                    data-state={row.getIsSelected() && "selected"}
-                    key={row.id}
-                    onClick={() => onRowClick?.(row.original)}
-                  >
-                    {row.getVisibleCells().map((cell, colIndex) => {
-                      const cells = row.getVisibleCells();
-                      const rawCellValue = cell.getValue();
-                      const cellTitle =
-                        typeof rawCellValue === "string" || typeof rawCellValue === "number"
-                          ? String(rawCellValue)
-                          : undefined;
-                      const isFirst = colIndex === 0;
-                      const isLast = colIndex === cells.length - 1;
-                      const stickLeft = stickyFirstColumn && isFirst;
-                      const stickRight = stickyLastColumn && isLast && cells.length > 1;
-                      // Actions-style columns (buttons/icons) render their own
-                      // layout — truncating those would clip controls rather
-                      // than text, so they're left alone.
-                      const skipTruncate = cell.column.id === "actions";
-                      return (
-                        <TableCell
-                          className={cn(
-                            rowStyle.cell,
-                            "overflow-hidden",
-                            CELL_DIVIDER,
-                            (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
-                            stickLeft && "left-0",
-                            stickRight && "right-0",
-                          )}
-                          style={{
-                            width: cell.column.columnDef.size ? `${cell.column.columnDef.size}px` : undefined,
-                            minWidth: cell.column.columnDef.minSize ? `${cell.column.columnDef.minSize}px` : undefined,
-                            maxWidth: cell.column.columnDef.maxSize ? `${cell.column.columnDef.maxSize}px` : undefined,
-                            boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
-                          }}
-                          key={cell.id}
-                          data-column-id={cell.column.id}
-                        >
-                          {truncateCellText && !skipTruncate ? (
-                            <OverflowCellText text={getCellTitle(cell) ?? cellTitle}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </OverflowCellText>
-                          ) : (
-                            flexRender(cell.column.columnDef.cell, cell.getContext())
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
-                    {emptyText}
-                  </TableCell>
+    {loading ? (
+      loaderType === "circle" ? (
+        <TableRow>
+          <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
+            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+              <Loader2 className="animate-spin text-primary" size={22} />
+              <span className="text-xs font-medium">Loading...</span>
+            </div>
+          </TableCell>
+        </TableRow>
+      ) : (
+        skeletonRows.map((_, index) => (
+          <TableRow className={cn(rowStyle.row, "border-b", GRID_LINE)} key={index}>
+            <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
+          </TableRow>
+        ))
+      )
+    ) : visibleRows.length ? (
+              visibleRows.map((row) => (
+                <TableRow
+                  className={cn(rowStyle.row, "border-b", GRID_LINE, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
+                  data-state={row.getIsSelected() && "selected"}
+                  key={row.id}
+                  onClick={() => onRowClick?.(row.original)}
+                >
+                  {row.getVisibleCells().map((cell, colIndex) => {
+                    const cells = row.getVisibleCells();
+                    const rawCellValue = cell.getValue();
+                    const cellTitle =
+                      typeof rawCellValue === "string" || typeof rawCellValue === "number"
+                        ? String(rawCellValue)
+                        : undefined;
+                    const isFirst = colIndex === 0;
+                    const isLast = colIndex === cells.length - 1;
+                    const stickLeft = stickyFirstColumn && isFirst;
+                    const stickRight = stickyLastColumn && isLast && cells.length > 1;
+                    // Actions-style columns (buttons/icons) render their own
+                    // layout — truncating those would clip controls rather
+                    // than text, so they're left alone.
+                    const skipTruncate = cell.column.id === "actions";
+                    return (
+                      <TableCell
+                        className={cn(
+                          rowStyle.cell,
+                          CELL_DIVIDER,
+                          (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
+                          stickLeft && "left-0",
+                          stickRight && "right-0",
+                        )}
+                        style={{
+                          boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
+                        }}
+                        key={cell.id}
+                        title={cellTitle}
+                      >
+                        {truncateCellText && !skipTruncate ? (
+                          <div className="truncate" title={getCellTitle(cell)}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </div>
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
-              )}
-            </TableBody>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
+                  {emptyText}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
           </Table>
         </div>
       </div>
@@ -738,26 +670,29 @@ export function DataTable<TData, TValue>({
               <li>
                 <button
                   type="button"
-                  className="data-table-page-button"
+                  className="px-2 py-1 text-xs rounded-md border border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   disabled={!canPreviousPage}
                   onClick={() => goToPage(currentPageIndex - 1)}
                   title="Previous Page"
-                  aria-label="Previous page"
                 >
-                  <ChevronLeft size={14} />
+                  {"<"}
                 </button>
               </li>
 
               {pageNumbers.map((page, idx) => (
                 <li key={`${page}-${idx}`}>
                   {page === -1 ? (
-                    <span className="data-table-page-ellipsis">...</span>
+                    <span className="px-2 py-1 text-xs text-[#94a3b8]">...</span>
                   ) : (
                     <button
                       type="button"
-                      className={cn("data-table-page-button", currentPageIndex === page && "is-active")}
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-md border font-medium transition-colors cursor-pointer min-w-[28px]",
+                        currentPageIndex === page
+                          ? "bg-[#00378C] text-white border-[#00378C] shadow-sm font-semibold"
+                          : "border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9]",
+                      )}
                       onClick={() => goToPage(page)}
-                      aria-current={currentPageIndex === page ? "page" : undefined}
                     >
                       {page + 1}
                     </button>
@@ -768,20 +703,19 @@ export function DataTable<TData, TValue>({
               <li>
                 <button
                   type="button"
-                  className="data-table-page-button"
+                  className="px-2 py-1 text-xs rounded-md border border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   disabled={!canNextPage}
                   onClick={() => goToPage(currentPageIndex + 1)}
                   title="Next Page"
-                  aria-label="Next page"
                 >
-                  <ChevronRight size={14} />
+                  {">"}
                 </button>
               </li>
             </ul>
 
             <label className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
               <select
-                className="data-table-page-size"
+                className="h-7 rounded-md border border-[#cbd5e1] bg-white px-2 text-xs font-medium text-[#1e293b] focus:outline-none focus:ring-1 focus:ring-[#00378C] cursor-pointer"
                 value={currentPageSize}
                 onChange={(event) => changePageSize(Number(event.target.value))}
               >
@@ -798,69 +732,34 @@ export function DataTable<TData, TValue>({
   );
 }
 
-function OverflowCellText({ children, text }: { children: ReactNode; text?: string }) {
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [tooltip, setTooltip] = useState<{ left: number; top: number; width: number } | null>(null);
-
-  const showTooltip = () => {
-    const element = contentRef.current;
-    if (!element || !text || element.scrollWidth <= element.clientWidth + 1) {
-      setTooltip(null);
-      return;
-    }
-
-    const rect = element.getBoundingClientRect();
-    const width = Math.min(420, Math.max(220, window.innerWidth - 32));
-    const left = Math.min(Math.max(16, rect.left), Math.max(16, window.innerWidth - width - 16));
-    const placeAbove = rect.bottom + 110 > window.innerHeight;
-    setTooltip({
-      left,
-      top: placeAbove ? Math.max(12, rect.top - 8) : rect.bottom + 7,
-      width,
-    });
-  };
-
-  useEffect(() => {
-    if (!tooltip) return undefined;
-    const hideTooltip = () => setTooltip(null);
-    window.addEventListener("resize", hideTooltip);
-    window.addEventListener("scroll", hideTooltip, true);
-    return () => {
-      window.removeEventListener("resize", hideTooltip);
-      window.removeEventListener("scroll", hideTooltip, true);
-    };
-  }, [tooltip]);
-
-  return (
-    <>
-      <div ref={contentRef} className="data-table-cell-text truncate" onMouseEnter={showTooltip} onMouseLeave={() => setTooltip(null)}>
-        {children}
-      </div>
-      {tooltip && createPortal(
-        <div
-          className="data-table-overflow-tooltip"
-          role="tooltip"
-          style={{
-            left: tooltip.left,
-            top: tooltip.top,
-            width: tooltip.width,
-            transform: tooltip.top < (contentRef.current?.getBoundingClientRect().top ?? 0) ? "translateY(-100%)" : undefined,
-          }}
-        >
-          {text}
-        </div>,
-        document.body,
-      )}
-    </>
-  );
-}
-
 function slugifyFilename(value: string) {
   return value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "table";
+}
+
+// STANDARD WIDE-TABLE PATTERN — condensed pagination range, e.g.
+// [0, "ellipsis", 4, 5, 6, "ellipsis", 41] for page 5 of 42. Always keeps
+// the first page, the last page, and one page on either side of current.
+function getPaginationRange(currentPageIndex: number, pageCount: number): (number | "ellipsis")[] {
+  const totalPages = Math.max(pageCount, 1);
+  const keep = new Set<number>();
+  keep.add(0);
+  keep.add(totalPages - 1);
+  for (let page = currentPageIndex - 1; page <= currentPageIndex + 1; page++) {
+    if (page >= 0 && page < totalPages) keep.add(page);
+  }
+  const sorted = Array.from(keep).sort((a, b) => a - b);
+  const range: (number | "ellipsis")[] = [];
+  let previous = -2;
+  for (const page of sorted) {
+    if (page - previous > 1) range.push("ellipsis");
+    range.push(page);
+    previous = page;
+  }
+  return range;
 }
 
 // STANDARD WIDE-TABLE PATTERN — best-effort tooltip text for a truncated
@@ -948,7 +847,6 @@ function ColumnFilterButton<TData, TValue>({
         <ColumnFilterPopup
           value={rawValue}
           isDate={isDateColumn(column.id)}
-          isStatus={isStatusColumn(column.id, typeof column.columnDef.header === "string" ? column.columnDef.header : undefined)}
           position={position}
           onChange={(nextValue) => column.setFilterValue(nextValue)}
           onClose={() => onOpenChange(false)}
@@ -961,14 +859,12 @@ function ColumnFilterButton<TData, TValue>({
 function ColumnFilterPopup({
   value,
   isDate,
-  isStatus,
   position,
   onChange,
   onClose,
 }: {
   value: unknown;
   isDate: boolean;
-  isStatus?: boolean;
   position: { left: number; top: number };
   onChange: (value: unknown) => void;
   onClose: () => void;
@@ -977,7 +873,6 @@ function ColumnFilterPopup({
   const textValue = typeof value === "string" ? value : "";
   const dateValue = (typeof value === "object" && value ? value : {}) as { from?: string; to?: string };
   const [tempText, setTempText] = useState(textValue);
-  const [tempStatus, setTempStatus] = useState(textValue || "");
   const [tempFrom, setTempFrom] = useState(dateValue.from || "");
   const [tempTo, setTempTo] = useState(dateValue.to || "");
 
@@ -1005,88 +900,7 @@ function ColumnFilterPopup({
         if (event.key === "Escape") onClose();
       }}
     >
-      {isStatus ? (
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[12px] font-semibold text-slate-700">
-                Filter Status
-              </label>
-              {tempStatus && (
-                <span className="text-[10px] text-muted-foreground font-medium">1 selected</span>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              {[
-                { label: "All Statuses", val: "", badge: null, desc: "Show both active & cancelled" },
-                { label: "Active", val: "N", badge: "bg-emerald-500", desc: "Active documents only" },
-                { label: "Cancelled", val: "Y", badge: "bg-rose-500", desc: "Cancelled documents only" },
-              ].map((opt) => {
-                const isSelected =
-                  (!tempStatus && !opt.val) ||
-                  (tempStatus.toUpperCase() === opt.val) ||
-                  (opt.val === "N" && tempStatus.toLowerCase() === "active") ||
-                  (opt.val === "Y" && (tempStatus.toLowerCase() === "cancelled" || tempStatus.toLowerCase() === "canceled"));
-                return (
-                  <button
-                    key={opt.val}
-                    type="button"
-                    onClick={() => setTempStatus(opt.val)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left cursor-pointer transition-all",
-                      isSelected
-                        ? "border-[#00378C] bg-[#00378C]/5 text-[#00378C] ring-1 ring-[#00378C]"
-                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className={cn(
-                          "w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors",
-                          isSelected ? "border-[#00378C] bg-[#00378C]" : "border-slate-300 bg-white"
-                        )}
-                      >
-                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                      <div>
-                        <div className="text-[12px] font-semibold leading-none">{opt.label}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</div>
-                      </div>
-                    </div>
-                    {opt.badge && (
-                      <span className={cn("w-2 h-2 rounded-full ring-2 ring-white shrink-0", opt.badge)} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-            <button
-              type="button"
-              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
-              onClick={() => {
-                setTempStatus("");
-                onChange(undefined);
-                onClose();
-              }}
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
-              onClick={() => {
-                onChange(tempStatus || undefined);
-                onClose();
-              }}
-            >
-              Apply Filter
-            </button>
-          </div>
-        </div>
-      ) : isDate ? (
+      {isDate ? (
         <div className="space-y-2.5">
           <div className="space-y-1">
             <label className="text-[12px] font-medium text-slate-500">
@@ -1192,12 +1006,6 @@ function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
 
 function isDateColumn(columnId: string) {
   return /(^|_)(date|dt)(_|$)/i.test(columnId);
-}
-
-function isStatusColumn(columnId: string, headerText?: string) {
-  if (/^(canceled|cancelled|status|doc_status)$/i.test(columnId)) return true;
-  if (headerText && /status/i.test(headerText)) return true;
-  return false;
 }
 
 function hasFilterValue(value: unknown): boolean {
