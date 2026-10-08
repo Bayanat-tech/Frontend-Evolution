@@ -208,6 +208,9 @@ export interface PurchaseOrderForm {
   so_ex_rate?: number;
   so_dlvr_contact?: string;
   so_dlvr_mobile?: string;
+  warranty_period?: number;
+  warranty_uom?: "D" | "M" | "Y";
+  warranty_desc?: string;
   so_dlvr_email?: string;
   so_remarks?: string;
   so_disc_hdr_price?: number;
@@ -309,6 +312,8 @@ export const SO_DOC_TYPE = {
   STR: "STR",
   SAJ :"SAJ",
   SIN: "SIN",
+  LPR: "LPR",
+  MIS: "MIS",
 } as const;
 export const PROCESSSO ='sales_order'
 export const PROCESSSDN ='sales_dn'

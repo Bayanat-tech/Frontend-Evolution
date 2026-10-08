@@ -6989,10 +6989,29 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   padding: 6px;
 }
 
-.commercial-header-block-doc .commercial-header-block-fields,
+/* .commercial-header-block-doc .commercial-header-block-fields,
 .commercial-header-block-tax .commercial-header-block-fields,
 .commercial-header-block-extra .commercial-header-block-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+} */
+
+.commercial-header-block-doc .commercial-header-block-fields {
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.commercial-header-block-tax .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(180px, 1.2fr)
+    minmax(80px, 0.5fr)
+    minmax(110px, 0.65fr)
+    minmax(240px, 1.5fr);
+  gap: 5px;
+}
+
+.commercial-header-block-extra .commercial-header-block-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .commercial-header-block-tax .commercial-header-block-fields {
@@ -7173,9 +7192,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .commercial-header-block-tax .commercial-header-block-fields {
+  /* .commercial-header-block-tax .commercial-header-block-fields {
     grid-template-columns: minmax(220px, 1.1fr) minmax(110px, 0.45fr) minmax(145px, 0.6fr) minmax(220px, 1fr);
-  }
+  } */
 
   .commercial-header-panel.is-collapsed .commercial-header-block-doc .commercial-header-block-fields {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -11293,4 +11312,23 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .lookup-popover .lookup-search-input {
   height: 36px !important;
   min-height: 36px !important;
+}
+
+/* Document Details: fixed column widths so date pickers never wrap */
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(140px, 1.15fr)   /* Doc Date */
+    minmax(100px, 1fr)      /* Ref No */
+    minmax(140px, 1.15fr)   /* Ref Date / INV Date */
+    minmax(120px, 1fr)      /* APP Ref No */
+    minmax(140px, 1fr);     /* LPO Category */
+}
+
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .field,
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > div {
+  min-width: 0;
+}
+
+.commercial-document-workbench .commercial-header-block-doc :where(button, input, select, span) {
+  white-space: nowrap;
 }

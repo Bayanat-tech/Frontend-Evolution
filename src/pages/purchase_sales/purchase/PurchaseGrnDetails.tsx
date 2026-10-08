@@ -123,6 +123,9 @@ export function PurchaseGrnDetailsTable({
     // Quantity is always derived, never typed directly:
     // - same UOM: quantity mirrors qty_luom
     // - different UOM: quantity = (qty_puom * uppp) + qty_luom
+    //
+    // EDITABLE: only Rvd Primary Qty and Rvd Lowest Qty (controlled by headerAndLineDisabled).
+    // Every other field is display only (always disabled).
 
     return (
         <div className="commercial-lines-card rounded-md border bg-card">
@@ -231,11 +234,13 @@ export function PurchaseGrnDetailsTable({
                                 <tr className="border-t odd:bg-muted/20" key={row.id}>
                                     <td className="finance-sticky-col bg-card px-2 py-1 text-xs" >{index + 1}</td>
                                     <td className="finance-sticky-col bg-card px-2 py-1 text-xs" >
-                                        <Input className="w-12" disabled={headerAndLineDisabled} value={row.po_div_code} onChange={(event) => updateRow(row.id, { po_div_code: event.target.value })} />
+                                        {/* DISPLAY ONLY */}
+                                        <Input className="w-12" disabled readOnly value={row.po_div_code} />
                                     </td>
 
 
                                     <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20">
+                                        {/* DISPLAY ONLY */}
                                         <LookupField
                                             label=""
                                             value={row.prod_code || ""}
@@ -244,56 +249,24 @@ export function PurchaseGrnDetailsTable({
                                             valueField="prod_code"
                                             displayFields={["prod_code", "prod_name"]}
                                             loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
-                                            disabled={headerAndLineDisabled}
-                                            onChange={(value, selectedRow) => {
-                                                const newPUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.po_p_uom;
-                                                const newLUom = text(getLookupValue(selectedRow || {}, "l_uom")) || row.po_l_uom;
-                                                const newUppp = numberOrZero(getLookupValue(selectedRow || {}, "uppp")) || row.uppp;
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    prod_code: value,
-                                                    prod_name: text(getLookupValue(selectedRow || {}, "prod_name")),
-                                                    po_p_uom: newPUom,
-                                                    po_l_uom: newLUom,
-                                                    uppp: newUppp,
-                                                    po_unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
-                                                };
-                                                const merged = { ...row, ...patch };
-                                                if (isSamePoUom(merged)) {
-                                                    patch.po_qty_puom = row.po_qty_luom;
-                                                }
-                                                patch.po_quantity = computePoQuantity({ ...row, ...patch });
-                                                updateRow(row.id, patch);
-                                            }}
+                                            disabled
+                                            onChange={() => { }}
                                         />
                                         <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                                             Unit Per Primary: {row.uppp}
                                         </span>
                                     </td>
 
-                                    {/* PO Primary: Qty */}
+                                    {/* PO Primary: Qty — DISPLAY ONLY */}
                                     <td className="px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled}
+                                            disabled
+                                            readOnly
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
                                             value={row.po_qty_puom}
-
-                                            onChange={(event) => {
-                                                const newQtyPuom = Number(event.target.value || 0);
-
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_qty_puom: newQtyPuom,
-                                                };
-
-                                                patch.po_quantity = computePoQuantity({
-                                                    ...row,
-                                                    ...patch,
-                                                });
-
-                                                updateRow(row.id, patch);
-                                            }}
                                         />
                                     </td>
                                     {/* PO Primary: Uom */}
@@ -301,29 +274,16 @@ export function PurchaseGrnDetailsTable({
                                         {row.po_p_uom || ""}
                                     </td>
 
-                                    {/* PO Lowest: Qty */}
+                                    {/* PO Lowest: Qty — DISPLAY ONLY */}
                                     <td className="px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || samePoUom}
+                                            disabled
+                                            readOnly
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
                                             value={samePoUom ? 0 : row.po_qty_luom}
-                                            onChange={(event) => {
-                                                const newQtyLuom = Number(event.target.value || 0);
-
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_qty_luom: newQtyLuom,
-                                                };
-
-                                                patch.po_quantity = computePoQuantity({
-                                                    ...row,
-                                                    ...patch,
-                                                });
-
-                                                updateRow(row.id, patch);
-                                            }}
                                         />
                                     </td>
                                     {/* PO Lowest: Uom */}
@@ -343,16 +303,16 @@ export function PurchaseGrnDetailsTable({
                                             value={row.uppp}
                                         />
                                     </td> */}
-                                    {/* Unit Price */}
+                                    {/* Unit Price — DISPLAY ONLY */}
                                     <td className="px-2 py-1">
-                                        <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.po_unit_price} onChange={(event) => updateRow(row.id, { po_unit_price: Number(event.target.value || 0) })} />
+                                        <Input className="finance-money-input" disabled readOnly type="number" style={{ textAlign: "right" }} step="0.0001" value={row.po_unit_price} />
                                     </td>
                                     {/* PO Quantity */}
                                     <td className="px-2 py-1 text-right bg-slate-200">
                                         {formatAmount(po_quantity)}
                                     </td>
 
-                                    {/* Rvd Primary: Qty */}
+                                    {/* Rvd Primary: Qty — EDITABLE */}
                                     <td className="px-2 py-1">
                                         <Input
                                             className="finance-money-input"
@@ -379,11 +339,11 @@ export function PurchaseGrnDetailsTable({
                                         />
                                     </td>
                                     {/* Rvd Primary: Uom */}
-                                      <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                                    <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
                                         {row.po_p_uom || ""}
                                     </td>
 
-                                    {/* Rvd Lowest: Qty */}
+                                    {/* Rvd Lowest: Qty — EDITABLE */}
                                     <td className="px-2 py-1">
                                         <Input
                                             className="finance-money-input"
@@ -417,8 +377,9 @@ export function PurchaseGrnDetailsTable({
                                     <td className="px-2 py-1 text-right bg-slate-200">
                                         {formatAmount(quantity)}
                                     </td>
+                                    {/* Remarks — DISPLAY ONLY */}
                                     <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
-                                        <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
+                                        <textarea disabled readOnly value={row.line_remarks} />
                                     </td>
                                     <td className="finance-sticky-col-right px-1 py-1 text-center">
                                         <button
