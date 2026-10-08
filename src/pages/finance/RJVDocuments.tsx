@@ -1098,7 +1098,7 @@ function JVDocument({
                     <span>Document & Reversal Details</span>
                   </div>
                   <div className="finance-payment-header-fields">
-                    <Field label="Doc Date">
+                    <Field label="Doc Date" required>
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                     </Field>
                     <Field label="Source JV No (To Reverse)">
@@ -1125,6 +1125,7 @@ function JVDocument({
                     </Field>
                     <LookupField
                       label="Currency"
+                      required
                       value={form.curr_code}
                       displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
                       columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1134,7 +1135,7 @@ function JVDocument({
                       disabled={disabled}
                       onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
                     />
-                    <Field label="Exchange Rate">
+                    <Field label="Exchange Rate" required>
                       <Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
                     </Field>
                     <label className="field col-span-2 max-md:col-span-1">
@@ -1447,12 +1448,15 @@ function JVDocument({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({ label, required, children, className }: { label: string; required?: boolean; children: ReactNode; className?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
   return (
-    <label className="field">
+    <label className={`field ${className || ""}`}>
       <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+        {cleanLabel}
+        {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       {children}
     </label>

@@ -2236,13 +2236,17 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children, error, hint }: { label: string; required?: boolean; children: ReactNode; error?: string; hint?: string }) {
+function Field({ label, required, children, error, hint, className }: { label: string; required?: boolean; children: ReactNode; error?: string; hint?: string; className?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
+
   return (
-    <label className="field">
+    <label className={`field ${className || ""}`}>
       <span className="flex items-center justify-between gap-1">
         <span>
-          {label}
-          {required && <span className="ml-1 text-destructive">*</span>}
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
         </span>
         {error ? (
           <span className="text-[10px] text-destructive font-semibold tracking-tight">{error}</span>

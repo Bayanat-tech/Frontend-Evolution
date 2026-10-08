@@ -1785,10 +1785,14 @@ const reqProps = (label: string) => ({
 });
 
 function Field({ label, children, error, required, className }: { label: string; children: React.ReactNode; error?: string; required?: boolean; className?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
   return (
     <label className={`field ${className || ""}`}>
       <span>
-        {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
+        {cleanLabel}
+        {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       {children}
       {error && (
