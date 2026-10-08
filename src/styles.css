@@ -8249,6 +8249,24 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   cursor: not-allowed;
 }
 
+.lookup-popover ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.lookup-popover ::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.lookup-popover ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.lookup-popover ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .data-table-x-scrollbar {
   display: none;
 }
