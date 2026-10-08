@@ -739,12 +739,12 @@ function CommercialEditor({
     return;
   }
   for (const line of form.detail) {
-    if (line.description && line.description.length > 250) {
+    if (line.remarks && line.remarks.length > 250) {
       setError("You have exceeded the character limit for Remarks.");
       return;
     }
-    if (line.ref_no && line.ref_no.length > 30) {
-      setError("You have exceeded the character limit for Ref No.");
+    if (line.l4_description && line.l4_description.length > 250) {
+      setError("You have exceeded the character limit for Remarks.");
       return;
     }
   }
