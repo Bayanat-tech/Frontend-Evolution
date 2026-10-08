@@ -211,6 +211,10 @@ import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 import PostDateCheque from "../pages/finance/PostDateCheque";
+import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
+import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
+import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseReturnPage";
+import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
 
 
 type WorkspaceRouteContext = {
@@ -1037,11 +1041,39 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       throw new Error("Function not implemented.");
     }} />
   },
+   {
+    name: "Purchase Return Setup",
+    match: ({ pathname }) => isPurchaseReturnSetupRoute(pathname),
+    element: () => <PurchaseReturnPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
 
   {
     name: "Purchase Quotation Setup",
     match: ({ pathname }) => isPProductionJoborderSetupRoute(pathname),
     element: () => <ProductionJobOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
+     {
+    name: "Material Return Setup",
+    match: ({ pathname }) => isMaterialReturnSetupRoute(pathname),
+    element: () => <MateriaLReturnPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
+       {
+    name: "Material Issues Setup",
+    match: ({ pathname }) => isMaterialIssuesSetupRoute(pathname),
+    element: () => <MaterialIssuesPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
+   {
+    name: "Sales Return Setup",
+    match: ({ pathname }) => isSalesReturnSetupRoute(pathname),
+    element: () => <SalesReturnPage onClose={function (): void {
       throw new Error("Function not implemented.");
     }} />
   },
@@ -1613,10 +1645,28 @@ function isPurchaseGRNSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (normalized.includes("purchase_sales/purchase/purchase_grn"))
 }
+function isPurchaseReturnSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/purchase/purchase_return"))
+}
+function isSalesReturnSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/sales/sales_return"))
+}
+
 
 function isPProductionJoborderSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (normalized.includes("purchase_sales/production/job_order"))
+}
+
+function isMaterialReturnSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/production/material_return"))
+}
+function isMaterialIssuesSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/production/material_issues"))
 }
 
 function isSalesorderSetupRoute(pathname: string) {
@@ -2834,12 +2884,8 @@ function isProductBomRoute(pathname: string) {
 }
 
 function isPnSRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
-
-  return (
-    normalized.includes("/purchase_sales/purchase_sales") 
-   
-  );
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/purchase_sales/purchase_sales";
 }
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");

@@ -43,7 +43,7 @@ export interface PurchaseOrderLineRow {
   tx_compnt_1_expmt: string,
   tx_cat_name?: string
   tx_compntcat_name?: string
-
+  
   po_p_uom?: string;
   po_qty_puom?: number;
   po_l_uom?: string;
@@ -70,18 +70,18 @@ export interface PurchaseOrderLineRow {
   porder_zone_code?: string;
   porder_zone_name?: string;
   porder_doc_no?: string,
-   porder_disc_percent?: number;
-   porder_disc_price?: number;
-     porder_tx_cat_code?: string,
-   tx_compntcat_code_1?: string,
-   porder_tx_compnt_perc_1?: number,
-   porder_tx_compnt_amt_1?: number,
-   porder_tx_compnt_1_expmt?: string,
-   porder_tx_cat_name?: string
-   porder_tx_compntcat_name_1?: string,
-   porder_required_dt?: string;
-   serial_no?: number;
-   porder_remarks?: string
+  porder_disc_percent?: number;
+  porder_disc_price?: number;
+  porder_tx_cat_code?: string,
+  tx_compntcat_code_1?: string,
+  porder_tx_compnt_perc_1?: number,
+  porder_tx_compnt_amt_1?: number,
+  porder_tx_compnt_1_expmt?: string,
+  porder_tx_cat_name?: string
+  porder_tx_compntcat_name_1?: string,
+  porder_required_dt?: string;
+  serial_no?: number;
+  porder_remarks?: string
 
 
 
@@ -89,6 +89,15 @@ export interface PurchaseOrderLineRow {
 }
 
 export interface PurchaseOrderForm {
+warranty_period?: number;
+  warranty_uom?: "D" | "M" | "Y";
+  warranty_desc?: string;
+  salesman_name?: string;
+  salesman_code?: string;
+  job_no?: string;
+  job_name?: string;
+  job_type?: string;
+  order_details?: string;
   doc_no: string;
   doc_type?: string
   doc_date: string;
@@ -129,6 +138,7 @@ export interface PurchaseOrderForm {
   payment_terms: string;
   dlvr_term: string;
   dlvr_contact: string;
+  dlvr_date?: string;
   dlvr_mobile: string;
   dlvr_email: string;
   remarks: string;
@@ -283,7 +293,7 @@ export interface PurchaseOrderForm {
   discount_scoope: "PO" | "ITEM";
   tx_compntcat_name_1: string;
   tx_cat_name_1: string;
-  detail:PurchaseOrderLineRow[]
+  detail: PurchaseOrderLineRow[]
 
 }
 
@@ -379,6 +389,8 @@ export const PO_DOC_TYPE = {
   JO: "JO",
   FGP: "FGP",
   PIN: "PIN",
+  SOR: "SOR",
+  MRT: "MRT",
 
 } as const;
 export const PROCESS = "purchase_order";
@@ -389,6 +401,11 @@ export const PROCESSJP = 'job_production'
 export const EXPENSE_AC_OPTIONS = [
   { label: "Inventory A/c", value: "I" },
   { label: "Direct Expense A/c", value: "D" },
+];
+export const WARRANT_OPTIONS = [
+  { label: "Days", value: "D" },
+  { label: "Months", value: "M" },
+  { label: "Years", value: "Y" },
 ];
 export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
 

@@ -365,6 +365,9 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
         sentback_reason: form.sentback_reason || undefined,
         reject_reason: form.reject_reason || undefined,
         flow_level_running: form.flow_level_running || 0,
+        warranty_period: form.warranty_period,
+        warranty_uom: form.warranty_uom,
+        warranty_desc: form.warranty_desc,
     };
 }
 
