@@ -518,7 +518,7 @@ function FormField({
     <div className="flex flex-col">
       <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         type={type}
