@@ -1,4 +1,4 @@
-import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { AlertCircle, Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { getDynamicLookup, getLookupText, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
@@ -257,18 +257,12 @@ export function DocumentSetupPage() {
   ], []);
 
   return (
-    <section className="finance-utility-page finance-list-page grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="eyebrow">Finance Master</p>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Document Setup</h1>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {dirtyCount > 0 && <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{dirtyCount} unsaved</span>}
-          <Button variant="outline" onClick={() => void loadDocs()}><RefreshCw size={15} /> Refresh</Button>
-          <Button disabled={!selected || dirtyCount === 0 || saving} type="submit" form="document-setup-form">{saving ? <span className="spinner small" /> : <Save size={15} />} Save Changes</Button>
-        </div>
-      </div>
+    <section className="finance-list-page grid gap-0.1">
+     <div className="finance-list-heading sticky top-0 z-20 bg-background flex items-center justify-between gap-1">
+      <div className="finance-list-title flex items-center gap-2">
+         <h1 className="m-0 text-xl font-bold tracking-tight text-foreground">Document Setup</h1>
+       </div>
+    </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
@@ -278,12 +272,27 @@ export function DocumentSetupPage() {
 
       <form id="document-setup-form" onSubmit={(event) => void saveChanges(event)} />
 
-      <div className="grid gap-4">
-        <DataTable
+      {/* <div className="grid gap-4"> */}
+      <div className="grid gap-4 mt-3">
+        {/* <DataTable
           columns={docColumns}
           data={filteredDocs}
           title={loadingDocs ? "Loading" : `${filteredDocs.length} Documents`}
-          subtitle="Documents"
+          subtitle="Documents" */}
+          <DataTable
+            columns={docColumns}
+             data={filteredDocs}
+             title={loadingDocs ? "Loading" : `${filteredDocs.length} Documents`}
+             subtitle="Documents"
+            actionButton={
+            <div className="flex items-center gap-2">
+            {dirtyCount > 0 && <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{dirtyCount} unsaved</span>}
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadDocs()}><RefreshCw size={14} /> Refresh</Button>
+            <Button size="sm" disabled={!selected || dirtyCount === 0 || saving} type="submit" form="document-setup-form">
+              {saving ? <span className="spinner small" /> : <Save size={14} />} Save Changes
+            </Button>
+          </div>
+         }
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search document..."
@@ -295,8 +304,7 @@ export function DocumentSetupPage() {
           onRowClick={(doc) => void loadDetails(doc)}
           rowClassName={(doc) => doc.doc_id === selected?.doc_id ? "bg-[#eaf2ff] font-semibold" : ""}
         />
-
-        {selected ? (
+      {selected ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
             <div className="min-w-0">
               <p className="eyebrow m-0">Selected Document</p>
@@ -314,6 +322,7 @@ export function DocumentSetupPage() {
         ) : (
           <div className="rounded-md border bg-secondary/30 px-3 py-2 text-sm text-muted-foreground">Select a document to manage header and detail accounts.</div>
         )}
+
 
         <div className="grid min-h-[360px] grid-cols-2 gap-4 max-xl:grid-cols-1">
           <DocAccountTable
@@ -540,6 +549,7 @@ function AddAccountDialog({
   const [division, setDivision] = useState({ div_code: "", div_name: "" });
   const [account, setAccount] = useState({ ac_code: "", ac_name: "" });
   const canAdd = Boolean(division.div_code && account.ac_code);
+  const [touched, setTouched] = useState(false);
 
   return (
     <Dialog
@@ -561,7 +571,7 @@ function AddAccountDialog({
     >
       <div className="grid gap-4">
         <LookupField
-          label="Division"
+          label="Division" required enforceRequired
           value={division.div_code}
           displayValue={division.div_code ? `${division.div_code}${division.div_name ? ` - ${division.div_name}` : ""}` : ""}
           columns={[
@@ -571,10 +581,16 @@ function AddAccountDialog({
           valueField="div_code"
           displayFields={["div_code", "div_name"]}
           loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-          onChange={(value, row) => setDivision({ div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" })}
+          // onChange={(value, row) => setDivision({ div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" })}
+          onChange={(value, row) => setDivision({ div_code: value, div_name: row ? String(getLookupValue(row, "div_name") || getLookupValue(row, "division_name") || "") : "" })}
         />
+        {touched && !division.div_code && (
+          <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+            <AlertCircle size={11} /> Division is required
+          </span>
+        )}
         <LookupField
-          label="Account"
+          label="Account" required enforceRequired
           value={account.ac_code}
           displayValue={account.ac_code ? `${account.ac_code}${account.ac_name ? ` - ${account.ac_name}` : ""}` : ""}
           columns={[
@@ -584,8 +600,13 @@ function AddAccountDialog({
           valueField="ac_code"
           displayFields={["ac_code", "ac_name"]}
           loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-          onChange={(value, row) => setAccount({ ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "" })}
+          onChange={(value, row) => setAccount({ ac_code: value, ac_name: row ? String(getLookupValue(row, "ac_name") || getLookupValue(row, "account_name") || "") : "" })}
         />
+        {touched && !account.ac_code && (
+          <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+            <AlertCircle size={11} /> Account is required
+          </span>
+        )}
       </div>
     </Dialog>
   );

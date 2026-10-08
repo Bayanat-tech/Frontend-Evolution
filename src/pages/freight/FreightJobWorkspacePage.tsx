@@ -247,14 +247,24 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
               <WorkspaceModeIcon size={30} strokeWidth={1.5} />
             </div>
             <div className="freight-workspace-title-block">
-            {/* <p className="m-0 text-xs bold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
-            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1> */}
-            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">
-              {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
-            </h1>
-            <p className="m-0 text-xs font-semibold text-slate-600 freight-workspace-mode-subtitle">
-              {modeLabel[targetMode]} Freight &bull; {directionLabel[targetDirection]}
-            </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-[20px] font-bold leading-tight text-foreground">
+                  {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
+                </h1>
+                {selectedJob && (
+                  <>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+                      {text(selectedJob, "job_no")}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-xs font-bold text-[#78350f] shadow-xs">
+                      {formatDate(text(selectedJob, "job_date"))}
+                    </span>
+                  </>
+                )}
+              </div>
+              <p className="m-0 text-xs font-semibold text-slate-600 freight-workspace-mode-subtitle">
+                {modeLabel[targetMode]} Freight &bull; {directionLabel[targetDirection]}
+              </p>
             </div>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>

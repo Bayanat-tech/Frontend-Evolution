@@ -30,10 +30,13 @@ import type { LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
+import { formatDate } from "../../utils/date";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
 type QuotationHeader = {
@@ -187,9 +190,10 @@ const tabs: { key: FreightQuotationInitialTab; label: string; icon: typeof Packa
   { key: "terms", label: "Terms", icon: FileText },
 ];
 
-type ListStatusTab = "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
+type ListStatusTab = "active" | "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
 
 const listStatusTabs: { key: ListStatusTab; label: string }[] = [
+  { key: "active", label: "Active" },
   { key: "draft", label: "Draft" },
   { key: "in_progress", label: "In Progress" },
   { key: "approved", label: "Approved" },
@@ -207,10 +211,11 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target), [target, userInfo]);
   const [header, setHeader] = useState<QuotationHeader>(initialHeader);
   const [details, setDetails] = useState<QuotationDetail[]>([buildInitialDetail(initialHeader, 1)]);
+  const [invalidLineIndices, setInvalidLineIndices] = useState<Set<number>>(new Set());
   const [terms, setTerms] = useState<QuotationTerm[]>([]);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
-  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("draft");
+  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("active");
   const [view, setView] = useState<ViewMode>("list");
   const [activeTab, setActiveTab] = useState<FreightQuotationInitialTab>(initialTab);
   const [loading, setLoading] = useState(false);
@@ -495,10 +500,24 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const setDetailField = (index: number, field: keyof QuotationDetail, value: string) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
     setDetails((current) => current.map((row, rowIndex) => (rowIndex === index ? recalcDetail({ ...row, [field]: value }, field) : row)));
   };
 
   const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
     setDetails((current) =>
       current.map((line, rowIndex) => {
         if (rowIndex !== index) return line;
@@ -925,8 +944,17 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const addDetail = () => setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
-  const removeDetail = (index: number) => setDetails((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, srno: rowIndex + 1 })));
-  // const addTerm = () => setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
+  const removeDetail = (index: number) => {
+    setInvalidLineIndices((prev) => {
+      const next = new Set<number>();
+      for (const i of prev) {
+        if (i < index) next.add(i);
+        else if (i > index) next.add(i - 1);
+      }
+      return next;
+    });
+    setDetails((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, srno: rowIndex + 1 })));
+  };
   const addTerm = () => {
     focusNewTermRef.current = true;
     setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
@@ -964,17 +992,61 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       return;
     }
 
-  const failedCheck = requiredFieldChecks.find((check) => !check.test());
-  if (failedCheck) {
-    if (activeTab !== failedCheck.tab) {
-      setActiveTab(failedCheck.tab);
-      setPendingValidateTab(failedCheck.tab);
-    } else {
-      formRef.current?.reportValidity();
+    // Character limit validations
+    if (header.remarks && header.remarks.length > 250) {
+      setActiveTab("cargo");
+      setNotice({ type: "error", text: "You have exceeded the character limit for Remarks." });
+      return;
     }
-    setNotice({ type: "error", text: `${failedCheck.label} is required` });
-    return;
-  }
+    if (header.spl_instructions && header.spl_instructions.length > 250) {
+      setActiveTab("payment");
+      setNotice({ type: "error", text: "You have exceeded the character limit for Special Instructions." });
+      return;
+    }
+    if (header.cargo_detail && header.cargo_detail.length > 250) {
+      setActiveTab("cargo");
+      setNotice({ type: "error", text: "You have exceeded the character limit for Cargo Detail." });
+      return;
+    }
+    // Check line remarks limit
+    for (const d of details) {
+      const lineRem = d.activity_remarks || d.rate_remarks;
+      if (lineRem && lineRem.length > 250) {
+        setActiveTab("charges");
+        setNotice({ type: "error", text: "You have exceeded the character limit for Line Remarks." });
+        return;
+      }
+    }
+
+    // Missing field validation on lines (activities)
+    if (!details || details.length === 0) {
+      setActiveTab("charges");
+      setNotice({ type: "error", text: "Kindly fill in the missing fields: Add at least one activity line." });
+      return;
+    }
+
+    const invalidRows = details
+      .map((d, idx) => (!d.act_code?.trim() || !d.quantity || Number(d.quantity) <= 0 ? idx : -1))
+      .filter((idx) => idx >= 0);
+    if (invalidRows.length > 0) {
+      setInvalidLineIndices(new Set(invalidRows));
+      setActiveTab("charges");
+      setNotice({ type: "error", text: "Kindly fill in the missing fields." });
+      return;
+    }
+    setInvalidLineIndices(new Set());
+
+    const failedCheck = requiredFieldChecks.find((check) => !check.test());
+    if (failedCheck) {
+      if (activeTab !== failedCheck.tab) {
+        setActiveTab(failedCheck.tab);
+        setPendingValidateTab(failedCheck.tab);
+      } else {
+        formRef.current?.reportValidity();
+      }
+      setNotice({ type: "error", text: `${failedCheck.label} is required` });
+      return;
+    }
 
     setSaving(true);
     setNotice(null);
@@ -982,6 +1054,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       await persistQuotation();
       await loadRows();
       setNotice({ type: "success", text: "Quotation saved" });
+      setView("list");
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
     } finally {
@@ -1033,14 +1106,22 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         <DataTable
           columns={columns}
           data={filteredRows}
-          toolbar={<button
-              type="button"
-              onClick={startNew}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              Add Quotation
-            </button>}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                title="Add Quotation"
+                onClick={startNew}
+              >
+                <Plus size={14} /> Add Quotation
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() => exportToCsv(filteredRows, columns, "freight-quotation-list.csv")}
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search quotation, principal, port..."
@@ -1049,8 +1130,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
-          exportFilename="freight-quotation-list.csv"
+          enableExport={false}
           getRowId={(row, index) => `${lookupText(row, "company_code")}-${lookupText(row, "quotation_nr") || index}`}
           rowClassName={statusRowClassName}
           onRowClick={openQuotation}
@@ -1062,22 +1142,54 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   return (
     <>
       <form ref={formRef} className="freight-dense-form freight-ui-standard freight-quotation-form" onSubmit={saveQuotation}>
-        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
-            <div className="min-w-0">
-              <p className="eyebrow mb-0.5">Freight Quotation</p>
-               {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr || "New Freight Quotation"}</h1>
-                {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
-                {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
-                <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors cursor-pointer"
+              title="Back to List"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="flex items-center gap-2 mr-1">
+              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#00378C]/10 text-[#00378C]">
+                <FileText size={16} />
               </div>
+              <h2 className="m-0 text-sm font-bold tracking-tight text-slate-900 whitespace-nowrap">
+                Freight Quotation
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              {/* Highlighted Doc No - Increased font size matching Finance */}
+              <div className="rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-3 py-1 shadow-xs flex items-center gap-1.5">
+                <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Doc No</span>
+                <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
+                <strong className="text-[16px] font-black text-[#78350f] font-mono tracking-tight leading-none">
+                  {header.quotation_nr && header.quotation_nr !== "0"
+                    ? String(header.quotation_nr).trim()
+                    : "NEW"}
+                </strong>
+              </div>
+
+              {/* Highlighted Date - Same amber background & bold font matching Finance */}
+              <div className="rounded-md bg-[#fef3c7] text-[#78350f] border border-[#f59e0b] px-2.5 py-0.5 shadow-xs flex items-center gap-1.5">
+                <span className="text-[12px] uppercase font-black text-[#78350f] tracking-wide">Date</span>
+                <span className="text-[#78350f] font-extrabold select-none opacity-70">-</span>
+                <strong className="text-[14px] font-black text-[#78350f] font-mono tracking-tight">
+                  {formatDate(header.quotation_date) || "—"}
+                </strong>
+              </div>
+
+              {/* Status Badge */}
+              <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>
+                {statusLabel(header.indstatus, header.last_action, header.final_approved)}
+              </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             {notice && <NoticeChip notice={notice} />}
             <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)}><Sparkles size={14} />Check{checkCount > 0 && <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{checkCount}</span>}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)}><Paperclip size={14} />Files</Button>
@@ -1111,6 +1223,18 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               </>
             )}
             {!isApprovalInProgress && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="!bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]"
+                onClick={() => setView("list")}
+                disabled={isReadOnly}
+              >
+                Close
+              </Button>
+            )}
+            {!isApprovalInProgress && (
               <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}><RotateCcw size={14} />Reset</Button>
             )}
           </div>
@@ -1119,42 +1243,48 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
         <fieldset disabled={isReadOnly} className="contents">
-        <section className="freight-form-card freight-quotation-header-card rounded-md border bg-card shadow-sm">
-          <div className="freight-quotation-header-grid grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
-            <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
-            <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-2" />
-            {/* {!header.quotation_nr ? (
-              <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            ) : (
-              <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
-            )} */}
-            <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
-            <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-            <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
-            {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
-            <FormInput label="Quotation Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
-            <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
-            {!header.quotation_nr ? (
-              <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            ) : (
-              <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
-            )}
-            <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "" }))} />
-            <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
-            {/* <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} /> */}
-            <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} className="sm:col-span-2 xl:col-span-2" />
-            <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} className="sm:col-span-2 xl:col-span-2" />
+        <div className="freight-form-card freight-quotation-header-card rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs overflow-hidden mb-2">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-50/70 via-slate-50 to-white px-3.5 py-2">
+            <div className="flex items-center gap-2">
+              <FileText size={14} className="text-[#00378C]" />
+              <span className="font-bold text-xs uppercase tracking-wide text-slate-800">
+                Quotation Header Information
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-500">
+              Principal &amp; Commercial Terms
+            </span>
           </div>
-        </section>
+          <div className="p-3">
+            <div className="freight-quotation-header-grid grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
+              <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
+              <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
+              <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-2" />
+              <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
+              <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
+              <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
+              <FormInput label="Quotation Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
+              <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
+              {!header.quotation_nr ? (
+                <FormLookup label="Source Enquiry" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
+              ) : (
+                <ReadOnlyField label="Source Enquiry" value={header.enquiry_no || "-"} />
+              )}
+              <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "" }))} />
+              <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
+              <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} className="sm:col-span-2 xl:col-span-2" />
+              <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} className="sm:col-span-2 xl:col-span-2" />
+            </div>
+          </div>
+        </div>
         </fieldset>
 
-        <div className="freight-tabs-shell freight-quotation-tabs grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
+        <div className="freight-tabs-shell freight-quotation-tabs grid min-h-0 gap-0 rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs overflow-hidden">
           <div className="freight-tabs-list flex">
             {tabs.map((tab) => <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />)}
           </div>
           <fieldset disabled={isReadOnly} className="contents">
-          <div className="freight-tabs-panel min-h-0 border-t">
+          <div className="freight-tabs-panel min-h-0 border-t border-slate-200 p-2.5">
             {activeTab === "cargo" && (
                <section className="grid gap-1.5 xl:grid-cols-12">
 
@@ -1256,47 +1386,58 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                       <HeaderChip label="Profit" value={formatAmount(totals.profit)} />
                     </div>
                   </div>
-                  <Button type="button" size="sm" variant="outline" onClick={addDetail}><Plus size={14} />Add Line</Button>
+                  <Button type="button" size="sm" onClick={addDetail} className="cursor-pointer font-semibold shadow-xs"><Plus size={14} />Add Line</Button>
                 </div>
 
-                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner" style={{ maxWidth: "100%", overflowY: "hidden" }}>
-                  <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
-                    <thead>
-                      <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Act</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "180px" }}>Activity</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>UOC</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>MOC</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Mode</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Origin</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Dest</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Qty</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Cost Curr</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Cost Ex</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost Rate</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost Amt</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Bill Curr</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Bill Ex</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill Rate</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill Amt</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent FC</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Agent Amt</th>
-                        <th className="px-1.5 py-1.5" style={{ width: "300px" }}>Remarks</th>
-                        <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
+                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner max-h-[50vh]" style={{ maxWidth: "100%" }}>
+                  <table className="border-collapse text-xs w-full min-w-[1550px]">
+                    <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs">
+                      <tr>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "140px" }}>Activity Code</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "200px" }}>Activity</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>UOC</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>MOC</th>
+                        <th className="px-2 py-2 text-center text-white font-semibold" style={{ width: "80px" }}>Mode</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>Origin</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>Dest</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "70px" }}>Qty</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>UOM</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>Cost Curr</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "80px" }}>Cost Ex</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Rate</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Amt</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>Bill Curr</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "80px" }}>Bill Ex</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Rate</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Amt</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent FC</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent Amt</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "250px" }}>Remarks</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "45px" }}/>
                       </tr>
                     </thead>
-                    <tbody>
-                      {details.map((row, index) => (
-                        <tr key={`${row.srno}-main`} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
+                    <tbody className="divide-y divide-slate-200">
+                      {details.map((row, index) => {
+                        const isInvalid = invalidLineIndices.has(index);
+                        return (
+                        <tr
+                          key={`${row.srno}-main`}
+                          className={`border-b border-slate-200 transition last:border-0 hover:bg-blue-50/40 ${
+                            isInvalid
+                              ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400"
+                              : index % 2 === 1
+                              ? "bg-slate-50/40"
+                              : "bg-white"
+                          }`}
+                        >
                           <td className="px-1.5 py-1.5 align-middle">
                            <LookupField
                               compact
                               label="Activity"
                               value={row.act_code}
-                              displayValue={row.act_code || ""}
+                              displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
                               valueField="activity_code"
-                              displayFields={["activity_code"]}
+                              displayFields={["activity_code", "activity"]}
                               columns={[
                                { field: "activity_code", header: "Code" },
                                { field: "activity", header: "Activity" },
@@ -1304,6 +1445,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                              loadOptions={() => loadActivityLookup(header.company_code)}
                              onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
                              placeholder="Activity"
+                             disabled={isReadOnly}
                              />
                             </td>
                           <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-[150px]" />
@@ -1357,7 +1499,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                             <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}><Trash2 size={12} /></Button>
                           </td>
                         </tr>
-                      ))}
+                      );
+                    })}
                     </tbody>
                   </table>
                 </div>
@@ -1483,14 +1626,15 @@ function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
 
 function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta?: string; icon: typeof PackageCheck; children?: React.ReactNode; className?: string }) {
   return (
-    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35">
+    <section className={`freight-panel overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-100/90 to-slate-50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="freight-section-icon"><Icon size={12} /></span>
-          <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3></div>
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-blue-50 text-[#00378C]"><Icon size={13} /></span>
+          <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3></div>
         </div>
+        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
       </div>
-      <div className="freight-panel-body">{children}</div>
+      <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
 }
@@ -1535,6 +1679,7 @@ function matchesListStatusTab(row: LookupRow, tab: ListStatusTab) {
   const status = lookupText(row, "indstatus");
   const action = lookupText(row, "last_action");
   const finalApproved = lookupText(row, "final_approved");
+  if (tab === "active") return status !== "C";
   if (tab === "approved") return status === "A" || finalApproved === "Y";
   if (tab === "cancelled") return status === "C";
   if (tab === "rejected") return status === "R" || action === "REJECTED";
@@ -1557,9 +1702,9 @@ function statusRowClassName(row: LookupRow) {
 
 function StatusField({ status, action = "", finalApproved = "" }: { status: string; action?: string; finalApproved?: string }) {
   return (
-    <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+    <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
       Status
-      <div className="flex h-6 items-center rounded-md border border-input bg-muted/40 px-2">
+      <div className="flex h-7 items-center rounded-md border border-slate-300 bg-slate-50/80 px-2">
         <span className={statusBadgeClass(status, action, finalApproved)}>{statusLabel(status, action, finalApproved)}</span>
       </div>
     </div>
@@ -1568,9 +1713,9 @@ function StatusField({ status, action = "", finalApproved = "" }: { status: stri
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+    <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
       {label}
-      <div className="flex h-6 items-center rounded-md border border-input bg-muted/40 px-2 text-[11px] font-semibold normal-case text-foreground">
+      <div className="flex h-7 items-center rounded-md border border-slate-300 bg-slate-50/80 px-2 text-[11px] font-bold normal-case text-slate-800">
         <span className="truncate">{value || "-"}</span>
       </div>
     </div>
@@ -1814,17 +1959,29 @@ function buildSmartChecks(header: QuotationHeader, details: QuotationDetail[], t
   ];
 }
 
-function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "",disabled }: { label: string; value: string; displayValue?: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean }) {
+function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "", disabled, maxLength }: { label: string; value: string; displayValue?: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean; maxLength?: number }) {
+  const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
+  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
   return (
-    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
-      <span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+    <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
+      <span className="flex items-center justify-between">
+        <span className="flex items-center gap-0.5">
+          {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        </span>
+        {maxLength !== undefined && value && value.length > 0 && (
+          <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
+            {value.length}/{maxLength}
+          </span>
+        )}
+      </span>
       <Input
-        className={fieldClassName}
+        className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white ${isOverLimit ? "border-red-500 focus-visible:ring-red-500" : "focus:border-[#00378C]"}`}
         type={type}
         value={value}
         required={required}
         placeholder={placeholder}
         disabled={disabled}
+        maxLength={maxLength ? maxLength + 15 : undefined}
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
@@ -1838,12 +1995,18 @@ function FormLookup({ label, value, displayValue, valueField, displayFields, col
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string;
   }) {
+  const formattedDisplay = value && displayValue && !displayValue.startsWith(value)
+    ? `${value} - ${displayValue}`
+    : displayValue || value;
+
   return (
-    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
-      <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+    <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
+      <span className="flex items-center gap-0.5">
+        {label}{required && <span className="text-rose-500 font-bold">*</span>}
+      </span>
       <LookupField
         value={value}
-        displayValue={displayValue}
+        displayValue={formattedDisplay}
         valueField={valueField}
         displayFields={displayFields}
         columns={columns}
@@ -1858,12 +2021,40 @@ function FormLookup({ label, value, displayValue, valueField, displayFields, col
   );
 }
 
-function FormSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label">{label}<select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+function FormSelect({ label, value, onChange, options, required }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; required?: boolean }) {
+  return (
+    <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+      <span className="flex items-center gap-0.5">
+        {label}{required && <span className="text-rose-500 font-bold">*</span>}
+      </span>
+      <select className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white focus:border-[#00378C]`} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
 }
 
-function FormTextarea({ label, value, onChange, compact, className = "" }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>{label}<textarea className={`${fieldClassName} ${compact ? "min-h-7" : "min-h-10"} py-0.5`} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function FormTextarea({ label, value, onChange, compact, className = "", maxLength }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean; className?: string; maxLength?: number }) {
+  const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
+  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
+  return (
+    <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
+      <span className="flex items-center justify-between">
+        <span>{label}</span>
+        {maxLength !== undefined && value && value.length > 0 && (
+          <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
+            {value.length}/{maxLength}
+          </span>
+        )}
+      </span>
+      <textarea
+        className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white ${compact ? "min-h-7" : "min-h-10"} py-0.5 ${isOverLimit ? "border-red-500 focus:border-red-500" : "focus:border-[#00378C]"}`}
+        value={value}
+        maxLength={maxLength ? maxLength + 15 : undefined}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
 }
 
 function CellInput({ value, onChange, type = "text", className = "" }: { value: string; onChange: (value: string) => void; type?: string; className?: string }) {
