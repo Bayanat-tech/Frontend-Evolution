@@ -126,7 +126,7 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [panelRect, setPanelRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [panelRect, setPanelRect] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight?: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -140,7 +140,27 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPanelRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const spaceBelow = Math.max(0, viewportHeight - r.bottom - 12);
+    const spaceAbove = Math.max(0, r.top - 12);
+    const opensAbove = spaceBelow < 280 && spaceAbove > spaceBelow;
+    const width = Math.min(Math.max(r.width, 320), viewportWidth - 24);
+
+    let left = r.left;
+    if (left + width > viewportWidth - 12) {
+      left = Math.max(12, viewportWidth - width - 12);
+    } else {
+      left = Math.max(12, left);
+    }
+
+    setPanelRect({
+      top: opensAbove ? undefined : r.bottom + 4,
+      bottom: opensAbove ? viewportHeight - r.top + 4 : undefined,
+      left,
+      width,
+      maxHeight: Math.min(380, opensAbove ? spaceAbove : spaceBelow),
+    });
   }, []);
 
   // Position the portal panel under the trigger, and keep it pinned on scroll/resize.
@@ -248,8 +268,10 @@ export const MultiSelectField: React.FC<MultiSelectFieldProps> = ({
         style={{
           position: "fixed",
           top: panelRect.top,
+          bottom: panelRect.bottom,
           left: panelRect.left,
           width: panelRect.width,
+          maxHeight: panelRect.maxHeight || 380,
           zIndex: PANEL_Z_INDEX,
           background: "#fff",
           border: "1px solid #d1d5db",
