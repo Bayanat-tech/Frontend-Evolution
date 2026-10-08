@@ -13,11 +13,12 @@ import { NewReportDialog } from "../../../components/new_report_format";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
-import { SalesOrderEditor } from "./SalesOrdereditor";
-import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { SalesOrderEditor } from "../../purchase_sales/sales/SalesOrdereditor";
+import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { PurchaseReturnEditor } from "./PurchaseReturnEditor";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -71,7 +72,7 @@ async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
 
 type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
 
-export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
+export function PurchaseReturnPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -161,7 +162,7 @@ const loadRows = async (clearNotice = true) => {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
-       code4: SO_DOC_TYPE.SO
+       code4: SO_DOC_TYPE.LPR
     });
 
     return response as unknown as SalesOrderRow[];
@@ -186,7 +187,7 @@ const loadRows = async (clearNotice = true) => {
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
-           code4: SO_DOC_TYPE.SO
+           code4: SO_DOC_TYPE.LPR
         });
   
         return {
@@ -228,7 +229,7 @@ const loadRows = async (clearNotice = true) => {
     doc_type: row.doc_type,
     doc_no: row.doc_no,
   };
-  const preview = openPurchaseReport(`Sales Order ${row.doc_no}`.trim());
+  const preview = openPurchaseReport(`Purchase Return ${row.doc_no}`.trim());
 
   try {
     const html = await getSOrderReportHtml(params);
@@ -355,8 +356,8 @@ const loadRows = async (clearNotice = true) => {
     <section className="finance-list-page grid gap-4">
       {/* <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Sales Order</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Sales order document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Return</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase Return document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
@@ -371,7 +372,7 @@ const loadRows = async (clearNotice = true) => {
       </div> */}
       
       <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Sales Order</h6>
+          <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase Return</h6>
         </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
@@ -428,7 +429,7 @@ const loadRows = async (clearNotice = true) => {
               toolbar={
             tab === "PENDING" && (
               <button
-                title="Add Sales Order"
+                title="Add Purchase Return"
                 onClick={() => setDivisionPicker(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
               >
@@ -444,7 +445,7 @@ const loadRows = async (clearNotice = true) => {
           }}
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No sales order found"
+          emptyText="No Purchase Return found"
           height={620}
           minWidth={1000}
           density="grid"
@@ -472,7 +473,7 @@ const loadRows = async (clearNotice = true) => {
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <SalesOrderEditor
+          <PurchaseReturnEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
             config={SO_CONFIG}
             editor={editor}
@@ -492,7 +493,7 @@ const loadRows = async (clearNotice = true) => {
       <DivisionPickerDialog
         open={divisionPicker}
         divisions={divisions}
-        description="Choose the division before opening the sales order form."
+        description="Choose the division before opening the Purchase Return form."
         onSelect={(division) => openCreateForDivision(division)}
         onClose={() => setDivisionPicker(false)}
       />
