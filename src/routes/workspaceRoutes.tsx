@@ -1547,6 +1547,10 @@ function isProfitLossSummaryRoute(pathname: string) {
     "/workspace/purchase_sales/purchase_sales/reports/profit_loss_summary"
   );
 }
+// function isProfitLossSummaryRoute(pathname: string) {
+//   const normalized = pathname.toLowerCase().replace(/[-\s]/g, "_");
+//   return normalized.includes("/reports/profit_loss_summary");
+// }
 
 function isPoOrderRegisterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2867,13 +2871,20 @@ function isProductBomRoute(pathname: string) {
   );
 }
 
-function isPnSRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
+// function isPnSRoute(pathname: string) {
+//   const normalized = pathname.toLowerCase();
 
-  return (
-    normalized.includes("/purchase_sales/purchase_sales") 
+//   return (
+//     normalized.includes("/purchase_sales/purchase_sales") 
    
-  );
+//   );
+// }
+
+
+
+function isPnSRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/purchase_sales/purchase_sales";
 }
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
