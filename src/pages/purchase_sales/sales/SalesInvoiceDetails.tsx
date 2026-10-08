@@ -602,14 +602,14 @@ export function SalesInvoiceLinesTable({
           fontSize: 14
         }}
       >
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Puom)</span>
           <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Luom)</span>
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
-        </div>
+        </div> */}
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Amount Before Discount</span>
           <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
