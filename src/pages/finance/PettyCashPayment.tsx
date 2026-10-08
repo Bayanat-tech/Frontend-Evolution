@@ -1687,12 +1687,15 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({ label, required, children, className }: { label: string; required?: boolean; children: ReactNode; className?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
   return (
-    <label className="field">
+    <label className={`field ${className || ""}`}>
       <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+        {cleanLabel}
+        {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       {children}
     </label>

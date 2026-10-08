@@ -116,6 +116,14 @@ export interface PurchaseOrderForm {
   dept_code: string;
   dept_name: string;
   party_phone: string;
+   address1: string;
+  address2: string;
+  address3: string;
+  e_mail: string;
+  prin_code: string;
+  prin_name: string;
+  phone: string;
+  credit_amount: number;
   party_fax: string;
   buyer: string;
   wo_no: string;

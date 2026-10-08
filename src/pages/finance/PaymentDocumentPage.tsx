@@ -454,6 +454,8 @@ function PaymentDocumentEditor({
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
   const [showPartyDetails, setShowPartyDetails] = useState(false);
   const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
+  const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
+  const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
 
   const toggleRowExpanded = (id: string) => {
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -559,15 +561,29 @@ function PaymentDocumentEditor({
   }, [docType, editMode, editor]);
 
   useEffect(() => {
-    setForm((current) => ({
-      ...current,
-      detail: current.detail.map((d) => {
-        if (d.tx_compnt_1_expmt !== "S") return d;
-        const taxAmt = (Number(d.amount) || 0) * ((Number(d.tx_compnt_perc_1) || 5) / 100);
-        return { ...d, tx_compnt_amt_1: taxAmt };
-      }),
-    }));
-  }, [form.detail.map((d) => d.amount).join(",")]);
+    setForm((current) => {
+      let changed = false;
+      const nextDetail = current.detail.map((d) => {
+        const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
+        const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+        if (!isTaxable) {
+          if (d.tx_compnt_amt_1 !== 0 && d.tx_compnt_amt_1 != null) {
+            changed = true;
+            return { ...d, tx_compnt_amt_1: 0 };
+          }
+          return d;
+        }
+        const taxPerc = perc != null && perc > 0 ? perc : 5;
+        const taxAmt = Number(((Number(d.amount) || 0) * (taxPerc / 100)).toFixed(3));
+        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === taxPerc && d.tx_compnt_1_expmt === "S") {
+          return d;
+        }
+        changed = true;
+        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: taxPerc, tx_compnt_amt_1: taxAmt };
+      });
+      return changed ? { ...current, detail: nextDetail } : current;
+    });
+  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}`).join(",")]);
 
 
   const disabled = form.canceled === "Y" || saving;
@@ -630,7 +646,34 @@ function PaymentDocumentEditor({
     });
     setForm((current) => ({
       ...current,
-      detail: current.detail.map((row) => row.id === id ? { ...row, ...patch } : row),
+      detail: current.detail.map((row) => {
+        if (row.id !== id) return row;
+        const merged = { ...row, ...patch };
+        if ("amount" in patch || "tx_compnt_perc_1" in patch || "tx_compnt_1_expmt" in patch || "tx_compntcat_code_1" in patch) {
+          const amt = Number(merged.amount) || 0;
+          let perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : null;
+          let taxType = merged.tx_compnt_1_expmt || "N";
+
+          if (perc && perc > 0 && taxType === "N") {
+            taxType = "S";
+            merged.tx_compnt_1_expmt = "S";
+          }
+          if (taxType === "S" && (perc == null || perc === 0)) {
+            perc = 5;
+            merged.tx_compnt_perc_1 = 5;
+          }
+
+          if (taxType === "S" && perc && perc > 0) {
+            merged.tx_compnt_amt_1 = Number(((amt * perc) / 100).toFixed(3));
+          } else if (taxType !== "S" && (!perc || perc === 0)) {
+            merged.tx_compnt_amt_1 = 0;
+            merged.tx_compnt_perc_1 = 0;
+          } else if ("tx_compnt_amt_1" in patch) {
+            merged.tx_compnt_amt_1 = Number(patch.tx_compnt_amt_1) || 0;
+          }
+        }
+        return merged;
+      }),
     }));
   };
   const updateDetailAmount = (id: string, newAmount: number) => {
@@ -642,11 +685,27 @@ function PaymentDocumentEditor({
     });
     setForm((current) => {
       const detail = current.detail.find((d) => d.id === id);
-      if (!detail || detail.child_table !== "invoice") {
+      if (!detail) return current;
+
+      const calcTax = (row: TransactionDetail, amt: number) => {
+        const perc = row.tx_compnt_perc_1 != null ? Number(row.tx_compnt_perc_1) : null;
+        const isTaxable = row.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+        if (!isTaxable) return { tx_compnt_amt_1: 0 };
+        const taxPerc = perc != null && perc > 0 ? perc : 5;
+        return {
+          tx_compnt_1_expmt: "S",
+          tx_compnt_perc_1: taxPerc,
+          tx_compnt_amt_1: Number(((amt * taxPerc) / 100).toFixed(3)),
+        };
+      };
+
+      const taxPatch = calcTax(detail, newAmount);
+
+      if (detail.child_table !== "invoice") {
         return {
           ...current,
           detail: current.detail.map((row) =>
-            row.id === id ? { ...row, amount: newAmount } : row
+            row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
           ),
         };
       }
@@ -666,7 +725,7 @@ function PaymentDocumentEditor({
         ...current,
         // ✅ Keep user's typed amount, don't snap it
         detail: current.detail.map((row) =>
-          row.id === id ? { ...row, amount: newAmount } : row
+          row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
         ),
         children: { ...current.children, [id]: updatedChildren },
       };
@@ -882,6 +941,18 @@ function PaymentDocumentEditor({
   const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>, targetDetailId?: string) => {
     const dId = targetDetailId || selectedDetail?.id;
     if (!dId) return;
+    setInvalidChildRowIds((prev) => {
+      if (!prev.has(childId)) return prev;
+      const next = new Set(prev);
+      next.delete(childId);
+      return next;
+    });
+    setInvalidChildFields((prev) => {
+      if (!prev[childId]) return prev;
+      const next = { ...prev };
+      delete next[childId];
+      return next;
+    });
     setForm((current) => {
       const rows = ((current.children[dId] || []) as TransactionChildRow[]).map((row) =>
         row.id === childId ? { ...row, ...patch } : row,
@@ -890,9 +961,13 @@ function PaymentDocumentEditor({
       return {
         ...current,
         children: { ...current.children, [dId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === dId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== dId) return d;
+          const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
+          const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+          const taxAmt = isTaxable ? Number(((childTotal * (perc || 5)) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
@@ -901,6 +976,18 @@ function PaymentDocumentEditor({
   const removeChildRow = (childId: string, targetDetailId?: string) => {
     const dId = targetDetailId || selectedDetail?.id;
     if (!dId) return;
+    setInvalidChildRowIds((prev) => {
+      if (!prev.has(childId)) return prev;
+      const next = new Set(prev);
+      next.delete(childId);
+      return next;
+    });
+    setInvalidChildFields((prev) => {
+      if (!prev[childId]) return prev;
+      const next = { ...prev };
+      delete next[childId];
+      return next;
+    });
     setForm((current) => {
       const rows = ((current.children[dId] || []) as TransactionChildRow[])
         .filter((row) => row.id !== childId)
@@ -909,9 +996,13 @@ function PaymentDocumentEditor({
       return {
         ...current,
         children: { ...current.children, [dId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === dId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== dId) return d;
+          const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
+          const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+          const taxAmt = isTaxable ? Number(((childTotal * (perc || 5)) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
@@ -961,15 +1052,47 @@ function PaymentDocumentEditor({
     const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
     if (invalidLines.length > 0) {
       setInvalidLineIds(new Set(invalidLines.map((d) => d.id)));
-      return setError("Kindly fill in the missing fields.");
+      const firstInvalid = invalidLines[0];
+      const missingParts: string[] = [];
+      if (!firstInvalid.ac_code?.trim()) missingParts.push("Account");
+      if (!firstInvalid.amount || Number(firstInvalid.amount) <= 0) missingParts.push("Amount");
+      return setError(`Kindly fill in the missing fields: ${missingParts.join(" and ")} on Line #${firstInvalid.serial_no || 1}.`);
     }
 
+    // Validation on child allocations (Expense, Invoice, Job)
     for (const d of form.detail) {
       const children = (form.children[d.id] || []) as TransactionChildRow[];
       if (children.length > 0) {
+        for (const [idx, c] of children.entries()) {
+          const rowNum = c.dtl_sr_no || idx + 1;
+          const missingFields: string[] = [];
+          if (d.child_table === "expense") {
+            if (!c.exp_type_code?.trim()) missingFields.push("Expense Type");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "job") {
+            if (!c.job_no?.trim()) missingFields.push("Job No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "invoice") {
+            if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Allocated Amount");
+          }
+
+          if (missingFields.length > 0) {
+            setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+            setSelectedDetailId(d.id);
+            setInvalidChildRowIds(new Set([c.id]));
+            setInvalidChildFields({ [c.id]: missingFields });
+            return setError(
+              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+            );
+          }
+        }
+
         const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
         const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
         if (Math.abs(childSum - lineAmt) > 0.001) {
+          setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+          setSelectedDetailId(d.id);
           return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
         }
       }
@@ -1064,8 +1187,8 @@ function PaymentDocumentEditor({
                 <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
                 {form.canceled !== "Y" && (
                   <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
@@ -1201,6 +1324,7 @@ function PaymentDocumentEditor({
                           <Input
                             disabled={disabled}
                             value={form.ac_payee || ""}
+                            maxLength={70}
                             className={form.ac_payee && form.ac_payee.length > 70 ? "!border-rose-500 !ring-rose-400" : ""}
                             onChange={(event) => updateField("ac_payee", event.target.value)}
                             placeholder="Account Payee"
@@ -1326,6 +1450,8 @@ function PaymentDocumentEditor({
                           <Input
                             disabled={disabled}
                             value={form.remarks || ""}
+                            maxLength={250}
+                            placeholder="Remarks"
                             className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
                             onChange={(event) => updateField("remarks", event.target.value)}
                           />
@@ -1630,7 +1756,18 @@ function PaymentDocumentEditor({
                                   loginid: user?.loginid || user?.username || "ADMIN",
                                 })}
                                 disabled={disabled}
-                                onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
+                                onChange={(value, row) => {
+                                  const r = (row || {}) as Record<string, unknown>;
+                                  const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 5);
+                                  const lineAmt = Number(detail.amount) || 0;
+                                  const taxAmt = Number(((lineAmt * perc) / 100).toFixed(3));
+                                  updateDetail(detail.id, {
+                                    tx_compntcat_code_1: value,
+                                    tx_compnt_1_expmt: "S",
+                                    tx_compnt_perc_1: perc,
+                                    tx_compnt_amt_1: taxAmt,
+                                  });
+                                }}
                               />
                             </td>
                           )}
@@ -1642,8 +1779,9 @@ function PaymentDocumentEditor({
                                 value={detail.tx_compnt_1_expmt || "N"}
                                 onChange={(event) => {
                                   const taxType = event.target.value;
-                                  const taxPerc = taxType === "S" ? 5 : 0;
-                                  const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                                  const lineAmt = Number(detail.amount) || 0;
+                                  const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : 5) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -1660,10 +1798,42 @@ function PaymentDocumentEditor({
                           )}
 
                           <td className="w-16 min-w-[62px] px-1 py-1">
-                            <Input className="commercial-number-input finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
+                            <Input
+                              className="commercial-number-input finance-money-input"
+                              disabled={disabled}
+                              type="number"
+                              step="0.001"
+                              value={detail.tx_compnt_perc_1 ?? 0}
+                              onChange={(event) => {
+                                const perc = Number(event.target.value || 0);
+                                const lineAmt = Number(detail.amount) || 0;
+                                const taxAmt = Number(((lineAmt * perc) / 100).toFixed(3));
+                                updateDetail(detail.id, {
+                                  tx_compnt_perc_1: perc,
+                                  tx_compnt_amt_1: taxAmt,
+                                  tx_compnt_1_expmt: perc > 0 ? "S" : "N",
+                                });
+                              }}
+                            />
                           </td>
                           <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
-                            <Input className="commercial-number-input finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} />
+                            <Input
+                              className="commercial-number-input finance-money-input"
+                              disabled={disabled}
+                              type="number"
+                              step="0.001"
+                              value={detail.tx_compnt_amt_1 ?? 0}
+                              onChange={(event) => {
+                                const newTaxAmt = Number(event.target.value || 0);
+                                const lineAmt = Number(detail.amount) || 0;
+                                const effectivePerc = lineAmt > 0 ? Number(((newTaxAmt / lineAmt) * 100).toFixed(2)) : detail.tx_compnt_perc_1;
+                                updateDetail(detail.id, {
+                                  tx_compnt_amt_1: newTaxAmt,
+                                  tx_compnt_perc_1: effectivePerc,
+                                  tx_compnt_1_expmt: newTaxAmt > 0 ? "S" : "N",
+                                });
+                              }}
+                            />
                           </td>
 
                           {showAllColumns && (
@@ -1719,6 +1889,8 @@ function PaymentDocumentEditor({
                                   onRefreshInvoices={() => void loadChildrenForDetail(detail)}
                                   onInvNoBlur={handleInvNoBlur}
                                   onClose={() => toggleRowExpanded(detail.id)}
+                                  invalidChildRowIds={invalidChildRowIds}
+                                  invalidChildFields={invalidChildFields}
                                 />
                               </div>
                             </td>
@@ -2064,13 +2236,17 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children, error, hint }: { label: string; required?: boolean; children: ReactNode; error?: string; hint?: string }) {
+function Field({ label, required, children, error, hint, className }: { label: string; required?: boolean; children: ReactNode; error?: string; hint?: string; className?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
+
   return (
-    <label className="field">
+    <label className={`field ${className || ""}`}>
       <span className="flex items-center justify-between gap-1">
         <span>
-          {label}
-          {required && <span className="ml-1 text-destructive">*</span>}
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
         </span>
         {error ? (
           <span className="text-[10px] text-destructive font-semibold tracking-tight">{error}</span>

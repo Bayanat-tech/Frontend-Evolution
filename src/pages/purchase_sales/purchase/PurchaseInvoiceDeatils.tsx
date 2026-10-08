@@ -34,58 +34,55 @@ import { useMemo, useState } from "react";
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
   div: { width: 50, left: 50 },
-  zone: { width: 160, left: 100 },
-  PO: { width: 180, left: 260 },
-  product: {
-    width: 260,
-    left: 260,
-  },
+  zone: { width: 140, left: 100 },
+  product: { width: 240, left: 240 },
 } as const;
-function hasGrnColumn(docType?: string | null): boolean {
-  const code = String(docType ?? "").trim().toUpperCase();
-  return code === "PIN" || code === "SIN";
+
+// Editable inputs: white. Disabled / fixed inputs: grayed.
+const INPUT_BG = "!bg-white disabled:!bg-slate-100 disabled:!text-slate-500";
+// Calculated (display-only) amount cells: grayed, green, bold.
+const AMOUNT_CELL = "px-2 py-1 text-right font-bold text-emerald-600 bg-slate-200";
+// Fixed UOM label (non-editable)
+const UOM_LABEL = "bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500";
+
+// Div column is only visible in "All Columns" view, so Zone / Product sticky offsets shift left by 50 in compact view.
+function resolveSticky(col: keyof typeof STICKY_COLS, showDiv: boolean = true) {
+  const shift = showDiv ? 0 : STICKY_COLS.div.width;
+  if (col === "zone" || col === "product") {
+    return { width: STICKY_COLS[col].width, left: STICKY_COLS[col].left - shift };
+  }
+  return STICKY_COLS[col];
 }
-function hasPoColumn(docType?: string | null): boolean {
-  const code = String(docType ?? "").trim().toUpperCase();
-  return code === "GRN";
-}
 
-function hasExtraStickyColumn(docType?: string | null): boolean {
-  const code = String(docType ?? "").trim().toUpperCase();
-  return code === "PIN" || code === "GRN" || code === "SIN";
-}
-
-function stickyStyle(col: keyof typeof STICKY_COLS, docType?: string | null): React.CSSProperties {
-  const showExtraCol = hasExtraStickyColumn(docType);
-
-  const { width, left } =
-    col === "product"
-      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 260 : STICKY_COLS.product.left }
-      : STICKY_COLS[col];
-
+function stickyStyle(col: keyof typeof STICKY_COLS, showDiv: boolean = true): React.CSSProperties {
+  const { width, left } = resolveSticky(col, showDiv);
   return { position: "sticky", left, width, minWidth: width, maxWidth: width, zIndex: 2, backgroundColor: "var(--card, #fff)" };
 }
 
-function stickyHeaderStyle(col: keyof typeof STICKY_COLS, docType?: string | null): React.CSSProperties {
-  const showExtraCol = hasExtraStickyColumn(docType);
-
-  const { width, left } =
-    col === "product"
-      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 260 : STICKY_COLS.product.left }
-      : STICKY_COLS[col];
-
-  return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
+function stickyHeaderStyle(col: keyof typeof STICKY_COLS, showDiv: boolean = true, top: number = 0): React.CSSProperties {
+  const { width, left } = resolveSticky(col, showDiv);
+  return { position: "sticky", top, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
 }
-const plainHeaderStyle = (width?: number): React.CSSProperties => ({
+const plainHeaderStyle = (width?: number, top: number = 0): React.CSSProperties => ({
   position: "sticky",
-  top: 0,
+  top,
   zIndex: 1,
   backgroundColor: "var(--primary, #1d4ed8)",
   width,
   minWidth: width,
 });
 
-const TABLE_COLUMN_COUNT = 24;
+// Group header (Primary / Lowest / Discount / TAX) - coloured band above the column titles
+const GROUP_ROW_HEIGHT = 10;
+const groupHeaderStyle = (bg: string): React.CSSProperties => ({
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
+  height: GROUP_ROW_HEIGHT,
+  backgroundColor: bg,
+  color: "#1e293b",
+  border: "1px solid #94a3b8",
+});
 
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: PurchaseOrderLineRow): number {
@@ -165,8 +162,15 @@ export function PurchaseInvoiceLinesTable({
   // - same UOM: quantity mirrors qty_luom
   // - different UOM: quantity = (qty_puom * uppp) + qty_luom
 
+  // Compact view  = columns of the reference sheet (+ Action)
+  // All Columns   = compact columns + Div, Lcurr Before Tax, Tax Type/Cat/Code, Tax Lcurr, Lcurr After Tax, Req Date, Remarks
+  const tableColSpan = showAllColumns ? 26 : 17;
+
   return (
-    <div className="commercial-lines-card rounded-md border bg-card">
+    <div
+      className="commercial-lines-card rounded-md border bg-card min-w-0"
+      style={{ height: "auto", minHeight: 0, maxHeight: "none", overflow: "visible", display: "block" }}
+    >
       <div className="finance-line-actions">
         <div className="finance-line-actions-left">
           <span className="finance-line-actions-icon"><List size={14} /></span>
@@ -216,47 +220,78 @@ export function PurchaseInvoiceLinesTable({
           </Button> */}
         </div>
       </div>
-      <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-        <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
+      <div className="commercial-lines-scroll max-h-[43vh] overflow-auto min-w-0">
+        <table className={`finance-lines-table w-full text-xs border-collapse [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${showAllColumns ? "min-w-[2300px]" : "min-w-full"}`}>
           <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+            {/* Row 1: group bands only (Primary / Lowest / Discount / TAX). Ungrouped columns get an empty cell here - nothing is merged. */}
             <tr>
-              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("sno")}>SNo</th>
-              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("div")}>Div</th>
-              <th className="finance-sticky-col px-2 py-2 text-center w-32" style={stickyHeaderStyle("zone")}>Zone</th>
-              {/* {hasGrnColumn(docType) && (
-                <th className="finance-sticky-col px-2 py-2 text-center w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
-              )} */}
-
-              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("product", docType)}>Product Code</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>P Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(20)}>Qty Puom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>L Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(70)}>Qty Luom</th>
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Uppp</th>}
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Unit Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Quantity</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Amount Before Disc</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc %</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc Amount</th>
-              {/* <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Unit price Net Amt</th> */}
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Final Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Lcurr Amount Before Tax</th>
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Tax Type</th>}
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Tax %</th>}
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Tax Amount</th>}
-              {showAllColumns && <th className="px-2 py-2 text-center" style={plainHeaderStyle(150)}>Req Date</th>}
-              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160)}>Remarks</th>
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Tax Cat</th>}
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax code</th>}
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Tax Lcurr amount</th>}
-              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128)}>Lcurr amount After Tax</th>}
-              <th className="finance-sticky-col-right px-2 py-2 text-center" style={plainHeaderStyle(64)}>Action</th>
+              <th className="finance-sticky-col" style={stickyHeaderStyle("sno", showAllColumns)}></th>
+              {showAllColumns && <th className="finance-sticky-col" style={stickyHeaderStyle("div", showAllColumns)}></th>}
+              <th className="finance-sticky-col" style={stickyHeaderStyle("zone", showAllColumns)}></th>
+              <th className="finance-sticky-col hover:!z-20" style={stickyHeaderStyle("product", showAllColumns)}></th>
+              <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>Primary</th>
+              <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>Lowest</th>
+              {/* Net Quantity, Unit Price, Amount */}
+              <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
+              <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Discount</th>
+              {/* Total Amount (E.T) */}
+              <th style={plainHeaderStyle(undefined, 0)}></th>
+              <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#f5d0fe")}>TAX</th>
+              {/* Total Amount (I.T) */}
+              <th style={plainHeaderStyle(undefined, 0)}></th>
+              {showAllColumns && <th colSpan={8} style={plainHeaderStyle(undefined, 0)}></th>}
+              <th style={plainHeaderStyle(undefined, 0)}></th>
+            </tr>
+            {/* Row 2: every column title */}
+            <tr>
+              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("sno", showAllColumns, GROUP_ROW_HEIGHT)}>Sr No</th>
+              {showAllColumns && (
+                <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("div", showAllColumns, GROUP_ROW_HEIGHT)}>Div</th>
+              )}
+              <th className="finance-sticky-col px-2 py-2 text-center w-32" style={stickyHeaderStyle("zone", showAllColumns, GROUP_ROW_HEIGHT)}>Zone</th>
+              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("product", showAllColumns, GROUP_ROW_HEIGHT)}>Product</th>
+              <th className=" px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
+              <th className=" px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
+              <th className=" px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
+              <th className=" px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Net Quantity</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110, GROUP_ROW_HEIGHT)}>Unit Price</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110, GROUP_ROW_HEIGHT)}>Amount</th>
+              <th className=" px-2 py-2 text-center" style={plainHeaderStyle(70, GROUP_ROW_HEIGHT)}>Disc %</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Disc Amount</th>
+              <th
+                className="finance-amount-cell group px-2 py-2 text-center hover:!z-20"
+                style={plainHeaderStyle(102, GROUP_ROW_HEIGHT)}
+              >
+                Total Amount(E.T)
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                  Total Amount Excluding Tax
+                </span>
+              </th>
+              <th className=" px-2 py-2 text-center" style={plainHeaderStyle(60, GROUP_ROW_HEIGHT)}>Tax %</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100, GROUP_ROW_HEIGHT)}>Tax Amount</th>
+              <th className="finance-amount-cell group px-2 py-2 text-center hover:!z-20" style={plainHeaderStyle(120, GROUP_ROW_HEIGHT)}>Total Amount(I.T)
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                  Total Amount Including Tax
+                </span>
+              </th>
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120, GROUP_ROW_HEIGHT)}>Lcurr Amount Before Tax</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100, GROUP_ROW_HEIGHT)}>Tax Type</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120, GROUP_ROW_HEIGHT)}>Tax Cat</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96, GROUP_ROW_HEIGHT)}>Tax code</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112, GROUP_ROW_HEIGHT)}>Tax Lcurr amount</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128, GROUP_ROW_HEIGHT)}>Lcurr amount After Tax</th>}
+              {showAllColumns && <th className="px-2 py-2 text-center" style={plainHeaderStyle(150, GROUP_ROW_HEIGHT)}>Req Date</th>}
+              {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160, GROUP_ROW_HEIGHT)}>Remarks</th>}
+              <th className="finance-sticky-col-right px-2 py-2 text-center" style={plainHeaderStyle(60, GROUP_ROW_HEIGHT)}>Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-          ) : filteredRows.map((row, index) => {
+              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={tableColSpan}>No lines yet</td></tr>
+            ) : filteredRows.length === 0 ? (
+              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={tableColSpan}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+            ) : filteredRows.map((row, index) => {
               const qtyPuomNum = numberOrZero(row.qty_puom);
               const qtyLuomNum = numberOrZero(row.qty_luom);
               const upppNum = numberOrZero(row.uppp);
@@ -270,11 +305,13 @@ export function PurchaseInvoiceLinesTable({
 
               return (
                 <tr className="border-t odd:bg-muted/20" key={row.id}>
-                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("sno")}>{index + 1}</td>
-                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("div")}>
-                    <Input disabled={headerAndLineDisabled} value={row.porder_div_code} onChange={(event) => updateRow(row.id, { porder_div_code: event.target.value })} />
-                  </td>
-                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs w-32" style={stickyStyle("zone")}>
+                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("sno", showAllColumns)}>{index + 1}</td>
+                  {showAllColumns && (
+                    <td className="finance-sticky-col bg-card px-2 py-1 text-xs w-16" style={stickyStyle("div", showAllColumns)}>
+                      <Input className={`w-12 ${INPUT_BG}`} disabled={headerAndLineDisabled} value={row.porder_div_code} onChange={(event) => updateRow(row.id, { porder_div_code: event.target.value })} />
+                    </td>
+                  )}
+                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs w-32" style={stickyStyle("zone", showAllColumns)}>
                     <LookupField
                       label=""
                       value={row.porder_zone_code || ""}
@@ -291,11 +328,11 @@ export function PurchaseInvoiceLinesTable({
                     />
                   </td>
 
-                  <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product", docType)}>
+                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", showAllColumns)}>
                     <LookupField
                       label=""
                       value={row.prod_code || ""}
-                      displayValue={row.prod_name ? `${row.prod_code} - ${row.prod_name}` : row.prod_code}
+                      displayValue={row.prod_name}
                       columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                       valueField="prod_code"
                       displayFields={["prod_code", "prod_name"]}
@@ -321,19 +358,15 @@ export function PurchaseInvoiceLinesTable({
                         updateRow(row.id, patch);
                       }}
                     />
+                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      Unit Per Primary: {row.uppp}
+                    </span>
                   </td>
 
+                  {/* Primary: Qty */}
                   <td className="px-2 py-1">
                     <Input
-                      className="finance-money-input w-full"
-                      disabled
-                      value={row.p_uom || ""}
-                      readOnly
-                    />
-                  </td>
-                  <td className=" px-2 py-1">
-                    <Input
-                      className="finance-money-input"
+                      className={`finance-money-input ${INPUT_BG}`}
                       disabled={headerAndLineDisabled}
                       type="number"
                       style={{ textAlign: "right" }}
@@ -356,17 +389,15 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
+                  {/* Primary: Unit of Measure */}
+                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                    {row.p_uom || ""}
+                  </td>
+
+                  {/* Lowest: Qty */}
                   <td className="px-2 py-1">
                     <Input
-                      className="finance-money-input w-full"
-                      disabled
-                      value={row.l_uom || ""}
-                      readOnly
-                    />
-                  </td>
-                  <td className=" w-24 px-2 py-1">
-                    <Input
-                      className="finance-money-input"
+                      className={`finance-money-input ${INPUT_BG}`}
                       disabled={headerAndLineDisabled || sameUom}
                       type="number"
                       style={{ textAlign: "right" }}
@@ -388,29 +419,27 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  {showAllColumns && (<td className=" px-2 py-1">
-                    <Input
-                      className="finance-money-input"
-                      disabled
-                      readOnly
-                      type="number"
-                      style={{ textAlign: "right" }}
-                      step="0.001"
-                      value={row.uppp}
-                    />
-                  </td>)}
-                  <td className="w-28 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                  {/* Lowest: Unit of Measure */}
+                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                    {row.l_uom || ""}
                   </td>
-                  <td className=" px-2 py-1 text-right">
+
+                  {/* Net Quantity */}
+                  <td className="finance-amount-cell px-2 py-1 text-right bg-slate-200">
                     {formatAmount(quantity)}
                   </td>
-                  <td className=" px-2 py-1 text-right">
+                  {/* Unit Price */}
+                  <td className="px-2 py-1">
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                  </td>
+                  {/* Amount (before discount) */}
+                  <td className={AMOUNT_CELL}>
                     {formatAmount(amountBeforeDiscPrice(row))}
                   </td>
-                  <td className=" w-24 px-2 py-1">
+                  {/* Discount: Disc % */}
+                  <td className="px-2 py-1">
                     <Input
-                      className="finance-money-input px-2 py-1"
+                      className={`finance-money-input px-2 py-1 ${INPUT_BG}`}
                       disabled={headerAndLineDisabled || discountScope !== "ITEM"}
                       type="number"
                       style={{ textAlign: "right" }}
@@ -427,10 +456,10 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  {/* <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td> */}
-                  <td className=" w-24 px-2 py-1">
+                  {/* Discount: Disc Amount */}
+                  <td className="px-2 py-1">
                     <Input
-                      className="finance-money-input px-2 py-1"
+                      className={`finance-money-input px-2 py-1 ${INPUT_BG}`}
                       disabled={headerAndLineDisabled || discountScope !== "ITEM"}
                       type="number"
                       style={{ textAlign: "right" }}
@@ -449,18 +478,27 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  <td className=" px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
-                  <td className=" w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
-                  <td className=" w-32 px-2 py-1 text-right">
-                    {formatAmount(lcurrAmountValue)}
+                  {/* Total Amount (Excl Tax) */}
+                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
+                  {/* TAX: Tax % */}
+                  <td className="px-2 py-1">
+                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
-                  {showAllColumns && (<td className="w-40 px-2 py-1">
+                  {/* TAX: Tax Amount */}
+                  <td className={AMOUNT_CELL}>{formatAmount(lineTaxpoAmount(row))}</td>
+                  {/* Total Amount (Incl Tax) = Net + Tax */}
+                  <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row) + lineTaxpoAmount(row))}</td>
+
+                  {/* ---------- All Columns view only ---------- */}
+                  {showAllColumns && (<td className={AMOUNT_CELL}>
+                    {formatAmount(lcurrAmountValue)}
+                  </td>)}
+                  {showAllColumns && (<td className="px-2 py-1">
                     <Select
                       value={row.tx_compnt_1_expmt || "N"}
                       onChange={(event) => {
                         const taxType = event.target.value;
                         const taxPerc = taxType === "S" ? 5 : 0;
-                        {/* FIX #1: call linePOAmount(row), not the bare function reference */ }
                         const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {
                           tx_compnt_1_expmt: taxType,
@@ -475,22 +513,7 @@ export function PurchaseInvoiceLinesTable({
                       <option value="E">Exempt</option>
                     </Select>
                   </td>)}
-                  {showAllColumns && (<td className=" w-24 px-2 py-1">
-                    {/* FIX #2: write to porder_tx_compnt_perc_1, matching the displayed value */}
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
-                  </td>)}
-                  {showAllColumns && (<td className=" w-28 px-2 py-1 text-right">{formatAmount(lineTaxpoAmount(row))}</td>)}
-
                   {showAllColumns && (<td className="w-32 px-2 py-1">
-                    <Input type="date" disabled={headerAndLineDisabled} value={row.porder_required_dt} onChange={(event) => updateRow(row.id, { porder_required_dt: event.target.value })} />
-                  </td>)}
-                  <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
-                    <textarea disabled={headerAndLineDisabled} value={row.porder_remarks} onChange={(event) => updateRow(row.id, { porder_remarks: event.target.value })} />
-                  </td>
-
-
-                  {showAllColumns && (<td className="w-32 px-2 py-1">
-                    {/* FIX #3: read porder_tx_cat_code so the field reflects what onChange writes */}
                     <LookupField
                       label="Tax Category"
                       compact
@@ -557,11 +580,17 @@ export function PurchaseInvoiceLinesTable({
                       }}
                     />
                   </td>)}
-                  {showAllColumns && (<td className=" w-32 px-2 py-1 text-right">
+                  {showAllColumns && (<td className={AMOUNT_CELL}>
                     {formatAmount(taxLcurrAmountValue)}
                   </td>)}
-                  {showAllColumns && (<td className=" w-32 px-2 py-1 text-right">
+                  {showAllColumns && (<td className={`w-32 ${AMOUNT_CELL}`}>
                     {formatAmount(lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate))}
+                  </td>)}
+                  {showAllColumns && (<td className="w-32 px-2 py-1">
+                    <Input className={INPUT_BG} type="date" disabled={headerAndLineDisabled} value={row.porder_required_dt} onChange={(event) => updateRow(row.id, { porder_required_dt: event.target.value })} />
+                  </td>)}
+                  {showAllColumns && (<td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
+                    <textarea className="bg-white disabled:bg-slate-100 disabled:text-slate-500" disabled={headerAndLineDisabled} value={row.porder_remarks} onChange={(event) => updateRow(row.id, { porder_remarks: event.target.value })} />
                   </td>)}
                   <td className="finance-sticky-col-right px-1 py-1 text-center">
                     <button
@@ -580,7 +609,7 @@ export function PurchaseInvoiceLinesTable({
           </tbody>
         </table>
       </div>
-       <div
+      <div
         className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
         style={{
           position: "sticky",
@@ -588,7 +617,7 @@ export function PurchaseInvoiceLinesTable({
           zIndex: 10,
           backgroundColor: "#f8fafc",
           boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
-          fontSize:14
+          fontSize: 14
         }}
       >
         <div className="flex items-center gap-2">
