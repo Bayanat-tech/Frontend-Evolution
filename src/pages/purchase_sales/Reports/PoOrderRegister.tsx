@@ -87,7 +87,7 @@ function ProductMultiSelectField({
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const selectAllRef = useRef<HTMLInputElement | null>(null);
 
-  
+
 
     const selectedValues = React.useMemo(
         () => value.split(",").map((v) => v.trim()).filter(Boolean),
@@ -300,15 +300,15 @@ export default function PoOrderRegisterPage() {
     const [toDateIso, setToDateIso] = useState("");
     const [acCode, setAcCode] = useState("");
     const [acName, setAcName] = useState("");
-     const [fromDate, setFromDate] = useState("");
+    const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
     const [poNumber, setPoNumber] = useState("");
     const [prodCodeFrom, setProdCodeFrom] = useState("");
     const [reportCriteria, setReportCriteria] = useState<"SO_REF_ONLY" | "ALL">("ALL");
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState("Select filters and run the report.");
-      const [poNumberOptions, setPoNumberOptions] = useState<string[]>([]);
-const [poNumberLoading, setPoNumberLoading] = useState(false);
+    const [poNumberOptions, setPoNumberOptions] = useState<string[]>([]);
+    const [poNumberLoading, setPoNumberLoading] = useState(false);
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
 
@@ -316,50 +316,50 @@ const [poNumberLoading, setPoNumberLoading] = useState(false);
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
 
-useEffect(() => {
-    let cancelled = false;
+    useEffect(() => {
+        let cancelled = false;
 
-    async function loadPoNumbers() {
-        if (!acCode) {
-            setPoNumberOptions([]);
-            setPoNumber("");
-            return;
-        }
-
-        setPoNumberLoading(true);
-        try {
-            const rows = await getDynamicLookup({
-                parameter: "Account_PO_Number_By_Supplier_Serach_HDR",
-                code1: companyCode,
-                code2: acCode,
-                loginid: loginId,
-            });
-
-            if (cancelled) return;
-
-            const numbers = Array.from(
-                new Set(
-                    (rows || [])
-                        .map((r: any) => String(r?.PO_NUMBER ?? r?.po_number ?? r?.DOC_NO ?? "").trim())
-                        .filter(Boolean)
-                )
-            );
-
-            setPoNumberOptions(numbers);
-            setPoNumber((current) => (current && !numbers.includes(current) ? "" : current));
-        } catch (err) {
-            if (!cancelled) {
-                console.error("Failed to load PO numbers:", err);
+        async function loadPoNumbers() {
+            if (!acCode) {
                 setPoNumberOptions([]);
+                setPoNumber("");
+                return;
             }
-        } finally {
-            if (!cancelled) setPoNumberLoading(false);
-        }
-    }
 
-    loadPoNumbers();
-    return () => { cancelled = true; };
-}, [acCode, companyCode, loginId]);
+            setPoNumberLoading(true);
+            try {
+                const rows = await getDynamicLookup({
+                    parameter: "Account_PO_Number_By_Supplier_Serach_HDR",
+                    code1: companyCode,
+                    code2: acCode,
+                    loginid: loginId,
+                });
+
+                if (cancelled) return;
+
+                const numbers = Array.from(
+                    new Set(
+                        (rows || [])
+                            .map((r: any) => String(r?.PO_NUMBER ?? r?.po_number ?? r?.DOC_NO ?? "").trim())
+                            .filter(Boolean)
+                    )
+                );
+
+                setPoNumberOptions(numbers);
+                setPoNumber((current) => (current && !numbers.includes(current) ? "" : current));
+            } catch (err) {
+                if (!cancelled) {
+                    console.error("Failed to load PO numbers:", err);
+                    setPoNumberOptions([]);
+                }
+            } finally {
+                if (!cancelled) setPoNumberLoading(false);
+            }
+        }
+
+        loadPoNumbers();
+        return () => { cancelled = true; };
+    }, [acCode, companyCode, loginId]);
 
 
     const buildRequestParams = (): PoOrderRegisterParams => ({
@@ -436,15 +436,15 @@ useEffect(() => {
                     </Field> */}
 
                     <Field label="From">
-                                            <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
-                                                <BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} />
-                                            </ClearableDate>
-                                        </Field>
-                                        <Field label="To">
-                                            <ClearableDate value={toDate} onClear={() => setToDate("")}>
-                                                <BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} />
-                                            </ClearableDate>
-                                        </Field>
+                        <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
+                            <BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} />
+                        </ClearableDate>
+                    </Field>
+                    <Field label="To">
+                        <ClearableDate value={toDate} onClear={() => setToDate("")}>
+                            <BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} />
+                        </ClearableDate>
+                    </Field>
 
                     <Field label="Supplier">
                         <LookupField
@@ -476,31 +476,31 @@ useEffect(() => {
                     </Field> */}
 
                     <Field label="PO Number">
-    <select
-        className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-        value={poNumber}
-        onChange={(e) => setPoNumber(e.target.value)}
-        disabled={!acCode || poNumberLoading}
-    >
-        <option value="">
-            {!acCode
-                ? "Select Supplier first"
-                : poNumberLoading
-                    ? "Loading..."
-                    : poNumberOptions.length === 0
-                        ? "No PO numbers found"
-                        : "All"}
-        </option>
-        {poNumberOptions.map((num) => (
-            <option key={num} value={num}>
-                {num}
-            </option>
-        ))}
-    </select>
-</Field>
+                        <select
+                            className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            value={poNumber}
+                            onChange={(e) => setPoNumber(e.target.value)}
+                            disabled={!acCode || poNumberLoading}
+                        >
+                            <option value="">
+                                {!acCode
+                                    ? "Select Supplier first"
+                                    : poNumberLoading
+                                        ? "Loading..."
+                                        : poNumberOptions.length === 0
+                                            ? "No PO numbers found"
+                                            : "All"}
+                            </option>
+                            {poNumberOptions.map((num) => (
+                                <option key={num} value={num}>
+                                    {num}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
 
 
-                    
+
 
                     <ProductMultiSelectField
                         label="Product"
