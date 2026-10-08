@@ -221,13 +221,17 @@ export function LookupField({
         : "");
 
   const totalCols = columns.length + (renderRowActions ? 1 : 0);
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || enforceRequired || hasAsterisk);
 
   return (
     <>
       <label className={`${compact ? "block w-full min-w-0" : "field"} ${className || ""}`}>
-        {(!compact || showLabelInCompact) && (
+        {(!compact || showLabelInCompact) && label && (
           <span>
-            {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
+            {cleanLabel}
+            {isRequired && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}> *</span>}
           </span>
         )}
         <div

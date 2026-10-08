@@ -5299,40 +5299,43 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   font-size: 11px;
 }
 
-.freight-dense-form .freight-form-card {
-  border-color: #94a3b8; /* darker outer box border */
+.freight-dense-form .freight-form-card,
+.freight-dense-form .enquiry-details-card,
+.freight-dense-form .freight-tabs-shell {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05) !important;
 }
 
 .freight-dense-form .freight-panel {
-  border-color: #94a3b8;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.035);
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
 }
 
 .freight-dense-form .freight-panel-title {
-  padding: 4px 7px;
+  padding: 5px 8px;
 }
 
 .freight-dense-form .freight-panel-body {
-  padding: 5px;
-}
-
-/* Equalize field heights without making Freight forms feel visually heavy. */
-.freight-dense-form .freight-form-card {
-  border-color: #dbe4f0;
+  padding: 8px;
 }
 
 .freight-dense-form .freight-field-label {
-  color: #111827; /* darker column/label text (was muted-foreground) */
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
 }
 
-.freight-dense-form .freight-form-card label > span:first-child {
-  color: #334155;
-  font-size: 10.5px;
-  font-weight: 800;
-}
-
-freight-dense-form .freight-form-card {
-  border-color: #94a3b8; /* darker outer box border */
+.freight-dense-form label > span:first-child {
+  color: #1e293b !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
 }
 
 /* .freight-dense-form .freight-form-card :where(
@@ -7508,7 +7511,8 @@ freight-dense-form .freight-form-card {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.055);
 }
 
-.commercial-command-header {
+.commercial-command-header,
+.freight-transaction-header {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
@@ -7517,7 +7521,8 @@ freight-dense-form .freight-form-card {
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 }
 
-.commercial-command-header::before {
+.commercial-command-header::before,
+.freight-transaction-header::before {
   content: "";
   position: absolute;
   top: 0;
@@ -7528,7 +7533,8 @@ freight-dense-form .freight-form-card {
   z-index: 15;
 }
 
-.commercial-command-header::after {
+.commercial-command-header::after,
+.freight-transaction-header::after {
   content: "";
   position: absolute;
   right: 0;
@@ -9373,7 +9379,7 @@ freight-dense-form .freight-form-card {
   color: #e2e8f0 !important;
 }
 
-.app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header) {
+.app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header, .freight-transaction-header) {
   border-color: #33415d !important;
   border-top-color: #2563eb !important;
   background:
@@ -9382,7 +9388,7 @@ freight-dense-form .freight-form-card {
   box-shadow: none !important;
 }
 
-.app.dark .workspace-content :where(.commercial-command-header)::before {
+.app.dark .workspace-content :where(.commercial-command-header, .freight-transaction-header)::before {
   background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #60a5fa 100%) !important;
 }
 
@@ -9390,7 +9396,7 @@ freight-dense-form .freight-form-card {
   background: linear-gradient(90deg, #4d8fda 0%, rgba(77, 143, 218, 0.35) 36%, transparent 100%) !important;
 }
 
-.app.dark .workspace-content :where(.finance-list-heading h1, .finance-list-title h1, .finance-toolbar h1, .commercial-command-header h1) {
+.app.dark .workspace-content :where(.finance-list-heading h1, .finance-list-title h1, .finance-toolbar h1, .commercial-command-header h1, .freight-transaction-header h1) {
   color: #f8fafc !important;
   text-shadow: none !important;
 }

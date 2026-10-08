@@ -528,34 +528,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isOutstandingStatementRoute(pathname),
     element: () => <OutstandingStatementPage />,
   },
-  // {
-  //   name: "Pams Dashboard",
-  //   match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
-  //   element: () => <PamsDashboard />
-  // },
 
-{
-  name: "Storage Computation",
-  match: ({ pathname }) => isStorageComputationRoute(pathname),
-  element: () => <StorageComputationPage />,
-},
-{
-  name: "Finance Outstanding Statement",
-  match: ({ pathname }) => isOutstandingStatementRoute(pathname),
-  element: () => <OutstandingStatementPage />,
-},
-// {
-//   name: "Pams Dashboard",
-//   match: ({ pathname }) => pathname.toLowerCase().includes("/ems/ems"),
-//   element: () => <PamsDashboard />
-// },
+  {
+    name: "Quotation Comparison",
+    match: ({ pathname }) => pathname.toLowerCase().includes("purchase_sales/purchase/quotation_comparison"),
+    element: () => <QuotationComparisonPage />
+  },
 
-{
-  name: "Quotation Comparison",
-  match: ({ pathname }) => pathname.toLowerCase().includes("purchase_sales/purchase/quotation_comparison"),
-  element: () => <QuotationComparisonPage />
-},
-  
   {
     name: "Finance Ageing Report",
     match: ({ pathname }) => isAgeingReportRoute(pathname),
@@ -984,31 +963,59 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <Purchase_Request_page initialTab={0} />
   },
 
-  //// PAMS Routes
-  // {
-  //   name: "PAMS Dashboard",
-  //   match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
-  //   element: () => <PamsDashboardPage />,
-  // },
+  // ============================================================
+  // ── PAMS ROUTES ─────────────────────────────────────────────
+  // ⚠️ IMPORTANT ORDERING RULE:
+  //    More specific routes MUST come before generic ones.
+  //    "Appraisal List" matcher uses substring `activityrequestappraisal`
+  //    which would also match `appraisal_listing` URLs. Therefore all
+  //    summary / listing report routes MUST appear before it.
+  // ============================================================
 
-  // ✅ NEW: PAMS Appraisal List — matches "/activity/request/appraisal"
-  //     Uses compact-token matching (no hardcoded URL)
+  // ✅ PAMS Reporting pages — MUST come BEFORE "PAMS Appraisal List"
   {
-    name: "PAMS Appraisal List",
-    match: (context) =>
-      isPamsToken(
-        context,
-        "activityrequestappraisal",
-        "activityrequestappraisals",
-        "activityrequestappraiselist"
-      ),
-    element: () => <MyTaskPage initialTab={0} />,
+    name: "PAMS Appraisal Summary Report",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
+    element: () => <AppraisalSummaryReportDesign required_values={{
+      loginid: undefined,
+      company_code: undefined,
+      period_label: undefined,
+    }} />,
+  },
+  {
+    name: "PAMS Appraisal Division Summary Report",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalDivisionSummaryRoute(pathname),
+    element: () => <AppraisalDivisionSummaryReport />,
   },
 
   {
     name: "PAMS Bulk Appraisal",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
     element: () => <PamsBulkAppraisalPage />,
+  },
+
+  // ✅ NEW: PAMS Appraisal List — now runs AFTER the summary reports,
+  //    and additionally excludes `*_listing` / `*listing*` paths defensively.
+  {
+    name: "PAMS Appraisal List",
+    match: (context) => {
+      const compact = getPamsCompact(context);
+      // Guard: never claim listing-summary URLs (they belong to reports above)
+      if (
+        compact.includes("appraisallisting") ||
+        compact.includes("appraisallistingsummary") ||
+        compact.includes("appraisalsummary")
+      ) {
+        return false;
+      }
+      return isPamsToken(
+        context,
+        "activityrequestappraisal",
+        "activityrequestappraisals",
+        "activityrequestappraiselist"
+      );
+    },
+    element: () => <MyTaskPage initialTab={0} />,
   },
 
   {
@@ -1185,29 +1192,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       isPamsToken(context, "kpiassignment", "departmentkpi", "deptkpi"),
     element: () => <PamsBulkAppraisalPage />,
   },
-
-  //// reporting pages
-  {
-    name: "PAMS Appraisal Summary Report",
-    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
-    element: () => <AppraisalSummaryReportDesign required_values={{
-      loginid: undefined,
-      company_code: undefined,
-      period_label: undefined,
-    }} />,
-  },
-  {
-    name: "PAMS Appraisal Division Summary Report",
-    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalDivisionSummaryRoute(pathname),
-    element: () => <AppraisalDivisionSummaryReport />,
-  },
-
-  // ── PAMS KPI Group — compact-token matching ──
-  // {
-  //   name: "PAMS KPI Group",
-  //   match: (context) => isPamsToken(context, "kpigroups"),
-  //   element: () => <KpiGroupPage />,
-  // },
 
   // ── PAMS KPI Item — compact-token matching ──
   {
@@ -1445,16 +1429,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockInquiryRoute(pathname),
     element: () => <StockInquiryPage />,
   },
-{
-  name: "Purchase Request Register(old) Report",
-  match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
-  element: () => <PrRegisterOldPage />,
-},
+  {
+    name: "Purchase Request Register(old) Report",
+    match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
+    element: () => <PrRegisterOldPage />,
+  },
 
   {
-  name: "Purchase & Sales Dashboard",
-  match: ({ pathname }) => isPnSRoute(pathname),
-  element: () => <PurchaseSalesDashboard />},
+    name: "Purchase & Sales Dashboard",
+    match: ({ pathname }) => isPnSRoute(pathname),
+    element: () => <PurchaseSalesDashboard />},
 
   {
     name: "Purchase Sales Stock Inquiry",

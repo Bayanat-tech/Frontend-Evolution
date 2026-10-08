@@ -972,8 +972,8 @@ function PaymentDocumentEditor({
                 <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
                 {form.canceled !== "Y" && (
                   <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
@@ -1077,7 +1077,7 @@ function PaymentDocumentEditor({
                       <span>Document Details</span>
                     </div>
                     <div className="commercial-header-block-fields">
-                      <Field label="Doc Date">
+                      <Field label="Doc Date" required>
                         <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                       </Field>
                       {(docType === "CN" || docType === "DN") && (
@@ -1255,7 +1255,13 @@ function PaymentDocumentEditor({
                       </label>
                       <label className="field col-span-2 max-md:col-span-1">
                         <span>Remarks</span>
-                        <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
+                        <Input
+                          disabled={disabled}
+                          value={form.remarks || ""}
+                          maxLength={250}
+                          placeholder="Remarks"
+                          onChange={(event) => updateField("remarks", event.target.value)}
+                        />
                       </label>
                     </div>
                   </section>
@@ -1859,12 +1865,16 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({ label, required, children, className }: { label: string; required?: boolean; children: ReactNode; className?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
+
   return (
-    <label className="field">
+    <label className={`field ${className || ""}`}>
       <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+        {cleanLabel}
+        {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       {children}
     </label>

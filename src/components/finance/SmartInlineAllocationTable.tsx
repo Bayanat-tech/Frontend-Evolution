@@ -32,6 +32,8 @@ interface SmartInlineAllocationTableProps {
   onRefreshInvoices?: () => void;
   onInvNoBlur?: (childId: string, invNo: string, parentId?: string) => void;
   onClose: () => void;
+  invalidChildRowIds?: Set<string>;
+  invalidChildFields?: Record<string, string[]>;
 }
 
 export function SmartInlineAllocationTable({
@@ -47,6 +49,8 @@ export function SmartInlineAllocationTable({
   onRefreshInvoices,
   onInvNoBlur,
   onClose,
+  invalidChildRowIds,
+  invalidChildFields,
 }: SmartInlineAllocationTableProps) {
   const { user } = useAuth();
   const childTable = detail.child_table;
@@ -95,7 +99,7 @@ export function SmartInlineAllocationTable({
           { key: "inv_amt", header: "Invoice Amount", width: 110, align: "right" },
           { key: "outstanding", header: "Outstanding", width: 110, align: "right" },
           { key: "allocated", header: "Allocated", width: 135, align: "right" },
-          { key: "action", header: "", width: 28, align: "center" },
+          { key: "action", header: "Action", width: 48, align: "center" },
         ]
       : childTable === "job"
         ? [
@@ -104,7 +108,7 @@ export function SmartInlineAllocationTable({
             { key: "doc_refno", header: "Doc Ref", width: 115, align: "left" },
             { key: "doc_refno_2", header: "Doc Ref 2", width: 115, align: "left" },
             { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "", width: 28, align: "center" },
+            { key: "action", header: "Action", width: 48, align: "center" },
           ]
         : [
             { key: "sr", header: "#", width: 28, align: "center" },
@@ -113,7 +117,7 @@ export function SmartInlineAllocationTable({
             { key: "description", header: "Description", width: 135, align: "left" },
             { key: "job_no", header: "Job No", width: 95, align: "left" },
             { key: "amount", header: "Amount", width: 110, align: "right" },
-            { key: "action", header: "", width: 28, align: "center" },
+            { key: "action", header: "Action", width: 48, align: "center" },
           ];
 
   const totalTableWidth = colConfigs.reduce((sum, col) => sum + col.width, 0);
@@ -308,10 +312,20 @@ export function SmartInlineAllocationTable({
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+            rows.map((row) => {
+              const isRowInvalid = Boolean(invalidChildRowIds?.has(row.id));
+              const missingList = invalidChildFields?.[row.id] || [];
+              const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
+              const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
+              const isExpTypeMissing = isRowInvalid && (missingList.includes("exp_type_code") || missingList.includes("Expense Type") || !text(row.exp_type_code).trim());
+              const isAmtMissing = isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || Number(row.amount || 0) <= 0);
+
+              return (
                 <tr
                   key={row.id}
-                  className="border-b border-[#dce7f2] bg-white hover:bg-[#f1f7fd] transition-colors"
+                  className={`border-b border-[#dce7f2] transition-colors ${
+                    isRowInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
+                  }`}
                 >
                   {/* # Column */}
                   <td className="px-1 py-1 text-center font-mono text-xs text-slate-500">
@@ -323,7 +337,9 @@ export function SmartInlineAllocationTable({
                       {/* Invoice No */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 font-mono text-xs font-semibold text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className={`h-[25px] w-full rounded border bg-white px-2 py-0 font-mono text-xs font-semibold text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
+                            isInvNoMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
+                          }`}
                           disabled={disabled}
                           placeholder="Invoice No"
                           value={text(row.inv_no)}
@@ -371,7 +387,9 @@ export function SmartInlineAllocationTable({
                       <td className="px-1 py-0.5">
                         <div className="flex items-center gap-1">
                           <input
-                            className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none"
+                            className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
+                              isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
+                            }`}
                             disabled={disabled}
                             type="number"
                             step="0.001"
@@ -406,30 +424,32 @@ export function SmartInlineAllocationTable({
                     <>
                       {/* Job No */}
                       <td className="px-1 py-0.5">
-                        <LookupField
-                          label="Job No"
-                          compact
-                          placeholder="Job No"
-                          value={text(row.job_no)}
-                          displayValue={text(row.job_no)}
-                          columns={[
-                            { field: "job_no", header: "Job No" },
-                            { field: "job_date", header: "Job Date" },
-                            { field: "confrim_date", header: "Confirm Date" },
-                            { field: "prin_code", header: "Principal Code" },
-                          ]}
-                          valueField="job_no"
-                          displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
-                          loadOptions={() =>
-                            getDynamicLookup({
-                              parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
-                              loginid: user?.loginid ?? "",
-                              code1: user?.company_code ?? "",
-                            })
-                          }
-                          disabled={disabled}
-                          onChange={(value) => onChange(row.id, { job_no: value })}
-                        />
+                        <div className={isJobNoMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/30 rounded" : ""}>
+                          <LookupField
+                            label="Job No"
+                            compact
+                            placeholder="Job No"
+                            value={text(row.job_no)}
+                            displayValue={text(row.job_no)}
+                            columns={[
+                              { field: "job_no", header: "Job No" },
+                              { field: "job_date", header: "Job Date" },
+                              { field: "confrim_date", header: "Confirm Date" },
+                              { field: "prin_code", header: "Principal Code" },
+                            ]}
+                            valueField="job_no"
+                            displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
+                            loadOptions={() =>
+                              getDynamicLookup({
+                                parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
+                                loginid: user?.loginid ?? "",
+                                code1: user?.company_code ?? "",
+                              })
+                            }
+                            disabled={disabled}
+                            onChange={(value) => onChange(row.id, { job_no: value })}
+                          />
+                        </div>
                       </td>
 
                       {/* Doc Ref */}
@@ -467,7 +487,9 @@ export function SmartInlineAllocationTable({
                       {/* Amount */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
+                            isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
+                          }`}
                           disabled={disabled}
                           type="number"
                           step="0.001"
@@ -486,41 +508,43 @@ export function SmartInlineAllocationTable({
                     <>
                       {/* Expense Type */}
                       <td className="px-1 py-0.5">
-                        <LookupField
-                          label="Expense Type"
-                          compact
-                          placeholder="Expense type"
-                          value={text(row.exp_type_code)}
-                          displayValue={
-                            text(row.exp_type_code)
-                              ? `${row.exp_type_code} - ${row.exp_type_description}`
-                              : ""
-                          }
-                          columns={[
-                            { field: "exp_type_code", header: "Expense Type Code" },
-                            { field: "exp_description", header: "Expense Type Description" },
-                          ]}
-                          valueField="exp_type_code"
-                          displayFields={["exp_type_code", "exp_description"]}
-                          loadOptions={() =>
-                            getDynamicLookup({
-                              parameter: "AC_BP_BR_EXP_TYPE_CODE",
-                              loginid: user?.loginid ?? "",
-                              code1: user?.company_code ?? "",
-                            })
-                          }
-                          disabled={disabled}
-                          onChange={(value, lookupRow) =>
-                            onChange(row.id, {
-                              exp_type_code: value,
-                              exp_type_description: value
-                                ? text(getLookupValue(lookupRow || {}, "exp_type_description"))
-                                : "",
-                              exp_subtype_code: "",
-                              exp_subtype_description: "",
-                            })
-                          }
-                        />
+                        <div className={isExpTypeMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/30 rounded" : ""}>
+                          <LookupField
+                            label="Expense Type"
+                            compact
+                            placeholder="Expense type"
+                            value={text(row.exp_type_code)}
+                            displayValue={
+                              text(row.exp_type_code)
+                                ? `${row.exp_type_code} - ${row.exp_type_description}`
+                                : ""
+                            }
+                            columns={[
+                              { field: "exp_type_code", header: "Expense Type Code" },
+                              { field: "exp_description", header: "Expense Type Description" },
+                            ]}
+                            valueField="exp_type_code"
+                            displayFields={["exp_type_code", "exp_description"]}
+                            loadOptions={() =>
+                              getDynamicLookup({
+                                parameter: "AC_BP_BR_EXP_TYPE_CODE",
+                                loginid: user?.loginid ?? "",
+                                code1: user?.company_code ?? "",
+                              })
+                            }
+                            disabled={disabled}
+                            onChange={(value, lookupRow) =>
+                              onChange(row.id, {
+                                exp_type_code: value,
+                                exp_type_description: value
+                                  ? text(getLookupValue(lookupRow || {}, "exp_type_description"))
+                                  : "",
+                                exp_subtype_code: "",
+                                exp_subtype_description: "",
+                              })
+                            }
+                          />
+                        </div>
                       </td>
 
                       {/* Expense Subtype */}
@@ -599,7 +623,9 @@ export function SmartInlineAllocationTable({
                       {/* Amount */}
                       <td className="px-1 py-0.5">
                         <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none"
+                          className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
+                            isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
+                          }`}
                           disabled={disabled}
                           type="number"
                           step="0.001"
@@ -626,14 +652,15 @@ export function SmartInlineAllocationTable({
                         e.stopPropagation();
                         onRemove(row.id);
                       }}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                      title="Remove allocation row"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all cursor-pointer shadow-2xs"
+                      title="Delete allocation row"
                     >
-                      <Trash2 size={11} />
+                      <Trash2 size={13} />
                     </button>
                   </td>
                 </tr>
-              ))
+              );
+            })
             )}
           </tbody>
         </table>
