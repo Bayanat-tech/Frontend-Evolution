@@ -1,6 +1,6 @@
 import { AlignCenter, Ban, ChevronDown, ChevronUp, Columns3, Download, Edit2, List, Paperclip, Plus, Printer, RefreshCw, Save, Search, Trash2, X, FileText, Building2, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
@@ -560,30 +560,68 @@ function PaymentDocumentEditor({
     };
   }, [docType, editMode, editor]);
 
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+
+  const loadTaxOptions = useCallback(async () => {
+    try {
+      const rows = await getDynamicLookup({
+        parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+        code1: user?.company_code,
+        loginid: user?.loginid || user?.username || "ADMIN",
+      });
+      const map: Record<string, number> = {};
+      rows.forEach((r) => {
+        const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+        const rate = Number(getLookupValue(r, "tx_percnt") ?? getLookupValue(r, "tx_compnt_perc_1") ?? getLookupValue(r, "perc") ?? 0);
+        if (code) map[code] = rate;
+      });
+      setTaxRateMap((prev) => ({ ...prev, ...map }));
+      return rows;
+    } catch {
+      return [];
+    }
+  }, [user?.company_code, user?.loginid, user?.username]);
+
+  useEffect(() => {
+    if (user?.company_code) {
+      void loadTaxOptions();
+    }
+  }, [user?.company_code, loadTaxOptions]);
+
+  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
+    const trimmed = String(taxCode || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    if (fallbackPerc != null && !isNaN(Number(fallbackPerc)) && Number(fallbackPerc) > 0) {
+      return Number(fallbackPerc);
+    }
+    return 0;
+  }, [taxRateMap]);
+
   useEffect(() => {
     setForm((current) => {
       let changed = false;
       const nextDetail = current.detail.map((d) => {
-        const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
-        const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+        const dynamicRate = getTaxPercForCode(d.tx_compntcat_code_1, d.tx_compnt_perc_1);
+        const isTaxable = d.tx_compnt_1_expmt === "S";
         if (!isTaxable) {
           if (d.tx_compnt_amt_1 !== 0 && d.tx_compnt_amt_1 != null) {
             changed = true;
-            return { ...d, tx_compnt_amt_1: 0 };
+            return { ...d, tx_compnt_amt_1: 0, tx_compnt_perc_1: 0 };
           }
           return d;
         }
-        const taxPerc = perc != null && perc > 0 ? perc : 5;
-        const taxAmt = Number(((Number(d.amount) || 0) * (taxPerc / 100)).toFixed(3));
-        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === taxPerc && d.tx_compnt_1_expmt === "S") {
+        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
+        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
           return d;
         }
         changed = true;
-        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: taxPerc, tx_compnt_amt_1: taxAmt };
+        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: dynamicRate, tx_compnt_amt_1: taxAmt };
       });
       return changed ? { ...current, detail: nextDetail } : current;
     });
-  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}`).join(",")]);
+  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
 
 
   const disabled = form.canceled === "Y" || saving;
@@ -651,24 +689,22 @@ function PaymentDocumentEditor({
         const merged = { ...row, ...patch };
         if ("amount" in patch || "tx_compnt_perc_1" in patch || "tx_compnt_1_expmt" in patch || "tx_compntcat_code_1" in patch) {
           const amt = Number(merged.amount) || 0;
-          let perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : null;
-          let taxType = merged.tx_compnt_1_expmt || "N";
+          const dynamicRate = getTaxPercForCode(merged.tx_compntcat_code_1, merged.tx_compnt_perc_1);
+          let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
 
-          if (perc && perc > 0 && taxType === "N") {
+          if (dynamicRate > 0 && taxType === "N") {
             taxType = "S";
             merged.tx_compnt_1_expmt = "S";
           }
-          if (taxType === "S" && (perc == null || perc === 0)) {
-            perc = 5;
-            merged.tx_compnt_perc_1 = 5;
-          }
 
-          if (taxType === "S" && perc && perc > 0) {
-            merged.tx_compnt_amt_1 = Number(((amt * perc) / 100).toFixed(3));
-          } else if (taxType !== "S" && (!perc || perc === 0)) {
-            merged.tx_compnt_amt_1 = 0;
+          if (taxType === "S") {
+            merged.tx_compnt_perc_1 = dynamicRate;
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+          } else {
             merged.tx_compnt_perc_1 = 0;
-          } else if ("tx_compnt_amt_1" in patch) {
+            merged.tx_compnt_amt_1 = 0;
+          }
+          if ("tx_compnt_amt_1" in patch) {
             merged.tx_compnt_amt_1 = Number(patch.tx_compnt_amt_1) || 0;
           }
         }
@@ -688,14 +724,13 @@ function PaymentDocumentEditor({
       if (!detail) return current;
 
       const calcTax = (row: TransactionDetail, amt: number) => {
-        const perc = row.tx_compnt_perc_1 != null ? Number(row.tx_compnt_perc_1) : null;
-        const isTaxable = row.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-        if (!isTaxable) return { tx_compnt_amt_1: 0 };
-        const taxPerc = perc != null && perc > 0 ? perc : 5;
+        const dynamicRate = getTaxPercForCode(row.tx_compntcat_code_1, row.tx_compnt_perc_1);
+        const isTaxable = row.tx_compnt_1_expmt === "S";
+        if (!isTaxable) return { tx_compnt_amt_1: 0, tx_compnt_perc_1: 0 };
         return {
           tx_compnt_1_expmt: "S",
-          tx_compnt_perc_1: taxPerc,
-          tx_compnt_amt_1: Number(((amt * taxPerc) / 100).toFixed(3)),
+          tx_compnt_perc_1: dynamicRate,
+          tx_compnt_amt_1: Number(((amt * dynamicRate) / 100).toFixed(3)),
         };
       };
 
@@ -965,7 +1000,8 @@ function PaymentDocumentEditor({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * (perc || 5)) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const effectivePerc = perc != null ? perc : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+          const taxAmt = isTaxable ? Number(((childTotal * effectivePerc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1000,7 +1036,8 @@ function PaymentDocumentEditor({
           if (d.id !== dId) return d;
           const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : null;
           const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
-          const taxAmt = isTaxable ? Number(((childTotal * (perc || 5)) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          const effectivePerc = perc != null ? perc : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+          const taxAmt = isTaxable ? Number(((childTotal * effectivePerc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
           return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
         }),
       };
@@ -1750,20 +1787,17 @@ function PaymentDocumentEditor({
                                 ]}
                                 valueField="tx_compntcat_code"
                                 displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                                loadOptions={() => getDynamicLookup({
-                                  parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                                  code1: user?.company_code,
-                                  loginid: user?.loginid || user?.username || "ADMIN",
-                                })}
+                                loadOptions={loadTaxOptions}
                                 disabled={disabled}
                                 onChange={(value, row) => {
                                   const r = (row || {}) as Record<string, unknown>;
-                                  const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 5);
+                                  const lookupPerc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
+                                  const perc = lookupPerc || getTaxPercForCode(value);
                                   const lineAmt = Number(detail.amount) || 0;
                                   const taxAmt = Number(((lineAmt * perc) / 100).toFixed(3));
                                   updateDetail(detail.id, {
                                     tx_compntcat_code_1: value,
-                                    tx_compnt_1_expmt: "S",
+                                    tx_compnt_1_expmt: perc > 0 ? "S" : "N",
                                     tx_compnt_perc_1: perc,
                                     tx_compnt_amt_1: taxAmt,
                                   });
@@ -1780,7 +1814,7 @@ function PaymentDocumentEditor({
                                 onChange={(event) => {
                                   const taxType = event.target.value;
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : 5) : 0;
+                                  const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
                                   const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
@@ -2311,12 +2345,12 @@ function emptyDetailRow({
     ex_rate: 1,
     amount: 0,
     sign_ind: docType === "BP" || docType === "CP" ? 1 : -1,
-    tx_compntcat_code_1: "N/A",
+    tx_compntcat_code_1: "",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
     tx_compnt_lcuramt_1: null,
-    tx_compnt_perc_1: null,
-    tx_compnt_amt_1: null,
+    tx_compnt_perc_1: 0,
+    tx_compnt_amt_1: 0,
     job_no: "",
     dept_code: "",
     child_table: "",

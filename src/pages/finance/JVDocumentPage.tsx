@@ -422,6 +422,38 @@ function JVDocument({
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+
+  const loadTaxOptions = async () => {
+    const rows = await getDynamicLookup({
+      parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+      code1: user?.company_code,
+      loginid: user?.loginid || user?.username || "ADMIN",
+    });
+    const map: Record<string, number> = {};
+    for (const r of rows) {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
+      if (code) {
+        map[code] = perc;
+      }
+    }
+    setTaxRateMap((prev) => ({ ...prev, ...map }));
+    return rows;
+  };
+
+  const getTaxPercForCode = (code: string): number => {
+    const trimmed = (code || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
+    if (defaultPerc !== undefined) return defaultPerc;
+    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
+    return firstNonZero ?? 0;
+  };
+
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -513,6 +545,7 @@ function JVDocument({
         if (mounted) setLoading(false);
       }
     }
+    void loadTaxOptions();
     void loadForm();
     return () => {
       mounted = false;
@@ -524,11 +557,12 @@ function JVDocument({
       ...current,
       detail: current.detail.map((d) => {
         if (d.tx_compnt_1_expmt !== "S") return d;
-        const taxAmt = (Number(d.amount) || 0) * ((Number(d.tx_compnt_perc_1) || 5) / 100);
+        const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+        const taxAmt = Number((((Number(d.amount) || 0) * perc) / 100).toFixed(3));
         return { ...d, tx_compnt_amt_1: taxAmt };
       }),
     }));
-  }, [form.detail.map((d) => d.amount).join(",")]);
+  }, [form.detail.map((d) => d.amount).join(","), taxRateMap]);
 
   const disabled = form.canceled === "Y" || saving;
   const isCancelled = form.canceled === "Y";
@@ -571,9 +605,22 @@ function JVDocument({
   };
 
   const updateDetail = (id: string, patch: Partial<TransactionDetail>) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => ({
       ...current,
-      detail: current.detail.map((row) => row.id === id ? { ...row, ...patch } : row),
+      detail: current.detail.map((row) => {
+        if (row.id !== id) return row;
+        const merged = { ...row, ...patch };
+        const isTaxable = merged.tx_compnt_1_expmt === "S" || (merged.tx_compnt_perc_1 != null && Number(merged.tx_compnt_perc_1) > 0);
+        const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
+        const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(3)) : (Number(merged.tx_compnt_amt_1) || 0);
+        return { ...merged, tx_compnt_amt_1: taxAmt };
+      }),
     }));
   };
 
@@ -782,9 +829,13 @@ function JVDocument({
       return {
         ...current,
         children: { ...current.children, [dId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === dId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== dId) return d;
+          const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+          const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
@@ -801,9 +852,13 @@ function JVDocument({
       return {
         ...current,
         children: { ...current.children, [dId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === dId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== dId) return d;
+          const perc = d.tx_compnt_perc_1 != null ? Number(d.tx_compnt_perc_1) : getTaxPercForCode(d.tx_compntcat_code_1 || "");
+          const isTaxable = d.tx_compnt_1_expmt === "S" || (perc != null && perc > 0);
+          const taxAmt = isTaxable ? Number(((childTotal * perc) / 100).toFixed(3)) : (Number(d.tx_compnt_amt_1) || 0);
+          return { ...d, amount: childTotal, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [dId]: true }));
@@ -836,9 +891,14 @@ function JVDocument({
     }
 
     // Missing field validation on lines (new row without details / missing account or zero amount)
-    const invalidLine = form.detail.find((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
-    if (invalidLine) {
-      return setError("Kindly fill in the missing fields.");
+    const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLines.length > 0) {
+      setInvalidLineIds(new Set(invalidLines.map((d) => d.id)));
+      const firstInvalid = invalidLines[0];
+      const missingParts: string[] = [];
+      if (!firstInvalid.ac_code?.trim()) missingParts.push("Account");
+      if (!firstInvalid.amount || Number(firstInvalid.amount) <= 0) missingParts.push("Amount");
+      return setError(`Kindly fill in the missing fields: ${missingParts.join(" and ")} on Line #${firstInvalid.serial_no || 1}.`);
     }
 
     const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
@@ -1141,25 +1201,27 @@ function JVDocument({
                         <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
                           <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
                           <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
-                            <LookupField
-                              label="Detail Account"
-                              compact
-                              placeholder="A/c code"
-                              value={detail.ac_code}
-                              displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
-                              valueField="ac_code"
-                              displayFields={["ac_code", "ac_name", "curr_code"]}
-                              loadOptions={() => getDynamicLookup({
-                                parameter: "Account_AC_CODE_Serach_HDR",
-                                code1: user?.company_code,
-                                code2: "D",
-                                code3: form.doc_type,
-                                code4: form.div_code
-                              })}
-                              disabled={disabled}
-                              onChange={(value, row) => void selectDetailAccount(detail, value, row)}
-                            />
+                            <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
+                              <LookupField
+                                label="Detail Account"
+                                compact
+                                placeholder="A/c code"
+                                value={detail.ac_code}
+                                displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                                valueField="ac_code"
+                                displayFields={["ac_code", "ac_name", "curr_code"]}
+                                loadOptions={() => getDynamicLookup({
+                                  parameter: "Account_AC_CODE_Serach_HDR",
+                                  code1: user?.company_code,
+                                  code2: "D",
+                                  code3: form.doc_type,
+                                  code4: form.div_code
+                                })}
+                                disabled={disabled}
+                                onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                              />
+                            </div>
                           </td>
                           <td className="px-2 py-1 text-center whitespace-nowrap">
                             {detail.ac_code ? (
@@ -1230,7 +1292,7 @@ function JVDocument({
                           {showAllColumns && (
                             <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
                           )}
-                          <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell w-36 px-2 py-1"><Input className={`finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`} disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                           <td className="w-28 px-2 py-1">
                             <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                               <option value={1}>Dr</option>
@@ -1244,8 +1306,9 @@ function JVDocument({
                                 value={detail.tx_compnt_1_expmt || "N"}
                                 onChange={(event) => {
                                   const taxType = event.target.value;
-                                  const taxPerc = taxType === "S" ? 5 : 0;
-                                  const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                                  const lineAmt = Number(detail.amount) || 0;
+                                  const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
+                                  const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
                                     tx_compnt_perc_1: taxPerc,
@@ -1688,7 +1751,7 @@ function emptyDetailRow({
     ex_rate: 1,
     amount: 0,
     sign_ind: docType === "CP" ? 1 : -1,
-    tx_compntcat_code_1: "11100",
+    tx_compntcat_code_1: "",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
     tx_compnt_lcuramt_1: null,
@@ -1883,7 +1946,7 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         ex_rate: Number(row.ex_rate || form.ex_rate || 1),
         amount: Math.abs(Number(row.amount || 0)),
         sign_ind: row.sign_ind,
-        tx_compntcat_code_1: row.tx_compntcat_code_1 || "11100",
+        tx_compntcat_code_1: row.tx_compntcat_code_1 || "",
         tx_compnt_1_expmt: row.tx_compnt_1_expmt || "N",
         tx_compnt_perc_1: row.tx_compnt_perc_1 ?? null,
         tx_compnt_amt_1: row.tx_compnt_amt_1 ?? null,
