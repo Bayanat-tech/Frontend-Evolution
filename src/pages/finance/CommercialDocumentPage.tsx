@@ -490,6 +490,46 @@ function CommercialEditor({
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+
+  const loadTaxOptions = async () => {
+    let rows: LookupRow[] = [];
+    try {
+      rows = await getDynamicFinanceLookup({
+        parameter: "Account_Tax_Search",
+        code1: user?.company_code || "",
+        loginid: user?.loginid || user?.username || "ADMIN",
+      });
+    } catch {
+      rows = await getDynamicFinanceLookup({
+        parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+        code1: user?.company_code || "",
+        loginid: user?.loginid || user?.username || "ADMIN",
+      });
+    }
+    const map: Record<string, number> = {};
+    for (const r of rows) {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
+      if (code) {
+        map[code] = perc;
+      }
+    }
+    setTaxRateMap((prev) => ({ ...prev, ...map }));
+    return rows;
+  };
+
+  const getTaxPercForCode = (code: string): number => {
+    const trimmed = (code || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
+    if (defaultPerc !== undefined) return defaultPerc;
+    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
+    return firstNonZero ?? 0;
+  };
+
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -576,6 +616,7 @@ function CommercialEditor({
         if (mounted) setLoading(false);
       }
     }
+    void loadTaxOptions();
     void load();
     return () => {
       mounted = false;
@@ -1346,13 +1387,12 @@ function CommercialEditor({
 
  onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
-  const perc = Number(getLookupValue(r, "tx_percnt") || 0);
+  const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
   const code = text(getLookupValue(r, "tx_cat_code"));
 
   setForm((c) => {
-    const resolvedPerc = perc !== 0 ? perc: c.tx_compnt_perc_1 !== 0 && c.tx_compnt_perc_1 != null? c.tx_compnt_perc_1
-    : (c.tx_compnt_1_expmt || c.tax_type) === "S" ? 5 : 0;
-    const resolvedExpmt = c.tx_compnt_1_expmt || c.tax_type || "N";
+    const resolvedPerc = perc !== 0 ? perc : getTaxPercForCode(value);
+    const resolvedExpmt = resolvedPerc > 0 ? "S" : (c.tx_compnt_1_expmt || c.tax_type || "N");
 
     const updatedDetail = c.detail.map((line) => ({
       ...line,
@@ -1387,7 +1427,7 @@ function CommercialEditor({
       disabled={isCancelled}
  onChange={(e) => {
   const v    = e.target.value;
-  const perc = v === "S" ? 5 : 0;
+  const perc = v === "S" ? (form.tx_compnt_perc_1 && form.tx_compnt_perc_1 > 0 ? form.tx_compnt_perc_1 : getTaxPercForCode(form.tx_compntcat_code_1 || "")) : 0;
 
   setForm((c) => {
     const catCode = c.tx_compntcat_code_1 || "";
@@ -1620,7 +1660,7 @@ function CommercialEditor({
                         <td className="w-24 max-w-[100px] px-1 py-1">
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
-  const perc = v === "S" ? 5 : 0;
+  const perc = v === "S" ? (line.tx_compnt_perc_1 && line.tx_compnt_perc_1 > 0 ? line.tx_compnt_perc_1 : getTaxPercForCode(line.tx_compntcat_code_1 || form.tx_compntcat_code_1 || "")) : 0;
   const taxAmt = (Number(line.amount || 0) * perc) / 100;
   updateLine(line.id, {
     tx_compnt_1_expmt:   v,
@@ -1889,7 +1929,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     // tx_cat_code:         text(header.tx_cat_code),
     tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
-    tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
+    tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || 0,
     print_letter_head: !!header.print_letter_head,
     detail: (detailRaw.filter((raw) => {
       const sn = Number(lowerRecord(raw).serial_no || 0);
