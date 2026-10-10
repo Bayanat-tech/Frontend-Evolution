@@ -463,7 +463,7 @@ function PrepaidEditor({
           <div className="freight-master-form-body">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="freight-master-field">
-                <label className="freight-master-label">Credit A/C <span className="text-red-500 font-bold ml-0.5">*</span></label>
+                <label className="freight-master-label">Credit A/C <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span></label>
                 <LookupField
                   compact
                   value={form.credit_ac}
@@ -485,7 +485,7 @@ function PrepaidEditor({
                 />
               </div>
               <div className="freight-master-field">
-                <label className="freight-master-label">Debit A/C <span className="text-red-500 font-bold ml-0.5">*</span></label>
+                <label className="freight-master-label">Debit A/C <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span></label>
                 <LookupField
                   compact
                   value={form.debit_ac}
@@ -537,7 +537,7 @@ function PrepaidEditor({
           </div>
           <div className="freight-master-form-body">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
-              <Field label="Amount *" value={form.amount} onChange={(value) => setField("amount", value)} onBlur={(value) => setAmount("amount", value)} disabled={readOnly} numeric required />
+              <Field label="Amount" value={form.amount} onChange={(value) => setField("amount", value)} onBlur={(value) => setAmount("amount", value)} disabled={readOnly} numeric required />
               <Field label="Daily Rate" value={form.daily_rate} onChange={(value) => setField("daily_rate", value)} onBlur={(value) => setAmount("daily_rate", value)} disabled={readOnly} numeric />
               <Field label="LCur Amount" value={form.lcur_amount} onChange={(value) => setField("lcur_amount", value)} disabled numeric />
               <Field label="Monthly Amount" value={form.monthly_amount} onChange={(value) => setField("monthly_amount", value)} onBlur={(value) => setAmount("monthly_amount", value)} disabled={readOnly} numeric />
@@ -683,7 +683,7 @@ function Field({
     <div className={`freight-master-field ${className || ""}`}>
       <label className="freight-master-label">
         <span>{label}</span>
-        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}

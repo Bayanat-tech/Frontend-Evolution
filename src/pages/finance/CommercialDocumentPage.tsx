@@ -11,6 +11,7 @@ import {
   getDivisions,
   getDocAccounts,
   getFyPeriods,
+  getTransactionDefaultData,
   getTransactionDetail,
   getTransactionDocuments,
   // getTransactionHeader,
@@ -490,6 +491,46 @@ function CommercialEditor({
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+
+  const loadTaxOptions = async () => {
+    let rows: LookupRow[] = [];
+    try {
+      rows = await getDynamicFinanceLookup({
+        parameter: "Account_Tax_Search",
+        code1: user?.company_code || "",
+        loginid: user?.loginid || user?.username || "ADMIN",
+      });
+    } catch {
+      rows = await getDynamicFinanceLookup({
+        parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+        code1: user?.company_code || "",
+        loginid: user?.loginid || user?.username || "ADMIN",
+      });
+    }
+    const map: Record<string, number> = {};
+    for (const r of rows) {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
+      if (code) {
+        map[code] = perc;
+      }
+    }
+    setTaxRateMap((prev) => ({ ...prev, ...map }));
+    return rows;
+  };
+
+  const getTaxPercForCode = (code: string): number => {
+    const trimmed = (code || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
+    if (defaultPerc !== undefined) return defaultPerc;
+    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
+    return firstNonZero ?? 0;
+  };
+
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -533,7 +574,65 @@ function CommercialEditor({
   useEffect(() => {
     let mounted = true;
     async function load() {
-      if (!editMode || editor.mode !== "edit") return;
+      if (!editMode || editor.mode !== "edit") {
+        try {
+          const defaults = await getTransactionDefaultData(docType, false);
+          if (!mounted) return;
+          const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
+          const defaultDiv = editor.mode === "create" && editor.div?.div_code ? editor.div.div_code : text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          
+          let accountRow: Record<string, unknown> | undefined;
+          if (defaultAcCode) {
+            try {
+              const headerAccounts = await getDocAccounts(docType, "H", defaultDiv);
+              accountRow = (headerAccounts || []).find((r: Record<string, unknown>) => {
+                const code = text(r.ac_code ?? r.AC_CODE ?? "");
+                return code.toUpperCase() === defaultAcCode.toUpperCase();
+              });
+            } catch {
+              // Ignore lookup failures for optional account row
+            }
+          }
+
+          const getVal = (k: string) => accountRow ? text(accountRow[k] ?? accountRow[k.toUpperCase()] ?? accountRow[k.toLowerCase()] ?? "") : "";
+          const resolvedCurrCode = getVal("curr_code") || text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
+          let resolvedExRate = Number(defaults.ex_rate ?? 1);
+          if (accountRow && getVal("curr_code")) {
+            try {
+              const currRows = await getDynamicFinanceLookup({
+                parameter: "Account_Currency_CODE_Search",
+                code1: user?.company_code || "",
+              });
+              const match = currRows.find(
+                (r: Record<string, unknown>) =>
+                  String(r["curr_code"] ?? "").toUpperCase() === resolvedCurrCode.toUpperCase()
+              );
+              if (match) resolvedExRate = Number(match["ex_rate"] ?? 1) || 1;
+            } catch {}
+          }
+
+          setForm((current) => ({
+            ...current,
+            ac_code: defaultAcCode || current.ac_code,
+            ac_name: getVal("ac_name") || text(defaults.Account?.ac_name ?? (defaults as any).ac_name ?? current.ac_name),
+            curr_code: resolvedCurrCode || current.curr_code,
+            curr_name: text(defaults.Currency?.curr_name ?? (defaults as any).curr_name ?? current.curr_name),
+            ex_rate: resolvedExRate || current.ex_rate || 1,
+            div_code: current.div_code || defaultDiv,
+            div_name: current.div_name || (editor.mode === "create" && editor.div?.div_name ? editor.div.div_name : text(defaults.Division?.div_name ?? "")),
+            party_address: getVal("address") || current.party_address,
+            party_phone: getVal("phone") || current.party_phone,
+            party_fax: getVal("fax") || current.party_fax,
+            dlvr_contact: getVal("contact_person") || current.dlvr_contact,
+            dlvr_mobile: getVal("mobile_no") || current.dlvr_mobile,
+            dlvr_email: getVal("e_mail") || current.dlvr_email,
+            remarks: getVal("l4_description") || current.remarks,
+          }));
+        } catch {
+          // Defaults are optional; use empty form if no setup row is found
+        }
+        return;
+      }
       setLoading(true);
       try {
         const [header, detail, docAccounts] = await Promise.all([
@@ -576,6 +675,7 @@ function CommercialEditor({
         if (mounted) setLoading(false);
       }
     }
+    void loadTaxOptions();
     void load();
     return () => {
       mounted = false;
@@ -1514,13 +1614,12 @@ function CommercialEditor({
 
  onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
-  const perc = Number(getLookupValue(r, "tx_percnt") || 0);
+  const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
   const code = text(getLookupValue(r, "tx_cat_code"));
 
   setForm((c) => {
-    const resolvedPerc = perc !== 0 ? perc: c.tx_compnt_perc_1 !== 0 && c.tx_compnt_perc_1 != null? c.tx_compnt_perc_1
-    : (c.tx_compnt_1_expmt || c.tax_type) === "S" ? 5 : 0;
-    const resolvedExpmt = c.tx_compnt_1_expmt || c.tax_type || "N";
+    const resolvedPerc = perc !== 0 ? perc : getTaxPercForCode(value);
+    const resolvedExpmt = resolvedPerc > 0 ? "S" : (c.tx_compnt_1_expmt || c.tax_type || "N");
 
     const updatedDetail = c.detail.map((line) => ({
       ...line,
@@ -1555,7 +1654,7 @@ function CommercialEditor({
       disabled={isCancelled}
  onChange={(e) => {
   const v    = e.target.value;
-  const perc = v === "S" ? 5 : 0;
+  const perc = v === "S" ? (form.tx_compnt_perc_1 && form.tx_compnt_perc_1 > 0 ? form.tx_compnt_perc_1 : getTaxPercForCode(form.tx_compntcat_code_1 || "")) : 0;
 
   setForm((c) => {
     const catCode = c.tx_compntcat_code_1 || "";
@@ -1789,7 +1888,7 @@ function CommercialEditor({
                         <td className="w-24 max-w-[100px] px-1 py-1">
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
-  const perc = v === "S" ? 5 : 0;
+  const perc = v === "S" ? (line.tx_compnt_perc_1 && line.tx_compnt_perc_1 > 0 ? line.tx_compnt_perc_1 : getTaxPercForCode(line.tx_compntcat_code_1 || form.tx_compntcat_code_1 || "")) : 0;
   const taxAmt = (Number(line.amount || 0) * perc) / 100;
   updateLine(line.id, {
     tx_compnt_1_expmt:   v,
@@ -2058,7 +2157,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     // tx_cat_code:         text(header.tx_cat_code),
     tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
-    tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
+    tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || 0,
     print_letter_head: !!header.print_letter_head,
     detail: (detailRaw.filter((raw) => {
       const sn = Number(lowerRecord(raw).serial_no || 0);

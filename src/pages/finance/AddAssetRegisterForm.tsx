@@ -115,7 +115,7 @@ function Field({
     <div className={`freight-master-field ${className || ""}`}>
       <label className="freight-master-label">
         <span>{label}</span>
-        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}
@@ -419,7 +419,7 @@ export function AddAssetRegisterForm({
             <div className="freight-master-field col-span-1 sm:col-span-2">
               <label className="freight-master-label">
                 <span>Asset Group</span>
-                <span className="text-red-500 font-bold ml-0.5">*</span>
+                <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
               </label>
               <LookupField
                 compact

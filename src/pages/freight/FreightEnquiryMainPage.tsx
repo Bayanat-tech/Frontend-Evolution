@@ -177,10 +177,9 @@ type FreightEnquiryMainPageProps = {
   screenType?: "enquiry" | "rfq";
 };
 
-type ListStatusTab = "active" | "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
+type ListStatusTab = "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
 
 const listStatusTabs: { key: ListStatusTab; label: string }[] = [
-  { key: "active", label: "Active" },
   { key: "draft", label: "Draft" },
   { key: "in_progress", label: "In Progress" },
   { key: "approved", label: "Approved" },
@@ -206,7 +205,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [listRows, setListRows] = useState<EnquiryListRow[]>([]);
   const [listQuery, setListQuery] = useState("");
-  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("active");
+  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("draft");
   const [view, setView] = useState<EnquiryView>("list");
   const [notice, setNotice] = useState<Notice>(null);
   const [deepOpenDone, setDeepOpenDone] = useState("");
@@ -363,6 +362,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         accessorKey: "indstatus",
         header: "Status",
         size: 100,
+        enableColumnFilter: false,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
           return (
@@ -2198,7 +2198,6 @@ function matchesListStatusTab(row: EnquiryListRow, tab: ListStatusTab) {
   const status = lookupText(row, "indstatus");
   const action = lookupText(row, "last_action");
   const finalApproved = lookupText(row, "final_approved");
-  if (tab === "active") return status !== "C";
   if (tab === "approved") return status === "A" || finalApproved === "Y";
   if (tab === "cancelled") return status === "C";
   if (tab === "rejected") return status === "R" || action === "REJECTED";
@@ -2510,7 +2509,7 @@ function FormInput({
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span className="flex items-center gap-0.5">
-          {label} {required && <span className="text-rose-500 font-bold">*</span>}
+          {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </span>
         {maxLength !== undefined && value && value.length > 0 && (
           <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
@@ -2589,7 +2588,7 @@ function FormLookup({
   return (
     <div className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center gap-0.5">
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <LookupField
         compact
@@ -2626,7 +2625,7 @@ function FormSelect({
   return (
     <label className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
       <span className="flex items-center gap-0.5">
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <select
         className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white focus:border-[#00378C]`}

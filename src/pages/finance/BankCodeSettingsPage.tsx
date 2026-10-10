@@ -647,6 +647,7 @@ function BankCodeEditor({
               <div className="col-span-2">
                 <LookupField
                   label="Account"
+                  required
                   value={form.ac_code}
                   displayValue={
                     form.ac_code ? `${form.ac_code} - ${form.ac_name}` : ""
@@ -675,6 +676,7 @@ function BankCodeEditor({
               </div>
               <FormField
                 label="Bank Account Code"
+                required
                 value={form.bank_ac_code}
                 disabled={readOnly}
                 onChange={(value) => setField("bank_ac_code", value)}
@@ -731,7 +733,7 @@ function FormField({
     <div className="flex flex-col">
       <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         type={type}

@@ -138,6 +138,17 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
     },
   },
   {
+    keys: ["ims", "inventory management", "purchase_sales", "purchase-sales", "purchase sales"],
+    meta: {
+      Icon: Boxes,
+      accent: { gradient: "linear-gradient(135deg, #3b82f6 0%, #0f766e 100%)", light: "#eaf3ff", border: "#a8c8ff", icon: "#0f4fa8", text: "#0f2f64", glow: "rgba(59, 130, 246, 0.18)" },
+      code: "IMS",
+      fullForm: "Inventory Management System",
+      description: "Purchases, sales, stock movements, production and inventory reports.",
+      status: "completed",
+    },
+  },
+  {
     keys: ["cms"],
     meta: {
       Icon: Globe,

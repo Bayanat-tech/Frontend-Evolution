@@ -40,8 +40,10 @@ const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
 const todayStr = new Date().toISOString().slice(0, 10);
@@ -261,7 +263,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const { user } = useAuth();
   const { company_code: authCompanyCode, loginid } = user ?? {};
   const [activeTab, setActiveTab] = useState<InvoiceTab>("setup");
-
+const [fcRates, setFcRates] = useState<Record<string, string>>({});
   const [invoice, setInvoice] = useState<any>(() => {
     if (existingData && Object.keys(existingData).length > 0) return existingData;
     return { invoice_date: todayStr, from_date: todayStr, to_date: todayStr, desp_date: todayStr, credit_note_date: todayStr, despatched: "N" };
@@ -280,8 +282,10 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [companyCurrCode, setCompanyCurrCode] = useState<string>("");
-  const [exRateTouched, setExRateTouched] = useState(false);
-
+// replace the exRateTouched state
+const [exRateTouched, setExRateTouched] = useState<boolean>(
+  () => !!(existingData && getValue(existingData, "ex_rate"))
+);
   const setField = (key: string, value: string) => setInvoice((prev: any) => ({ ...prev, [key]: value }));
 
   const prinCode = getValue(invoice, "prin_code") || "";
@@ -359,6 +363,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     const rate = Number(invoice.ex_rate);
     return rate > 0 ? 1 / rate : 1;
   }, [currCode, companyCurrCode, invoice.ex_rate]);
+const isForeign = exchangeFactor !== 1;
 
   // Job rows
   useEffect(() => {
@@ -408,19 +413,32 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     return () => { cancelled = true; };
   }, [prinCode, consolidatedInvNo, fromDate, toDate, user?.loginid, user?.company_code]);
 
-  const displayJobRows = useMemo<NormalizedJobRow[]>(() => {
-    return jobRows.map((row) => {
-      const bill = Number(row.bill || 0);
-      const billRate = Number(row.bill_rate || 0);
-      
-      return {
-        ...row,
-        // Use exchangeFactor to correctly convert to the invoice currency (FC)
-        FC_BILL: bill * exchangeFactor,
-        FC_BILL_RATE: billRate * exchangeFactor,
-      };
-    });
-  }, [jobRows, exchangeFactor]);
+const displayJobRows = useMemo<NormalizedJobRow[]>(() => {
+  const rate = Number(invoice.ex_rate) || 0;
+  return jobRows.map((row) => {
+    const qty = Number(row.quantity || 0);
+    const inrRate = Number(row.bill_rate || 0);
+
+    if (!isForeign || rate <= 0) {
+      const bill = Number(row.bill) > 0 ? Number(row.bill) : qty * inrRate;
+      return { ...row, bill, FC_BILL: bill, FC_BILL_RATE: inrRate };
+    }
+
+    const typed = fcRates[jobRowKey(row)];
+    const fcRate = typed !== undefined && typed !== ""
+      ? Number(typed)
+      : Math.round(inrRate * exchangeFactor * 100) / 100;
+    const newInrRate = fcRate * rate;           // INR = USD × ex_rate
+
+    return {
+      ...row,
+      bill_rate: newInrRate,
+      bill: qty * newInrRate,
+      FC_BILL_RATE: fcRate,
+      FC_BILL: qty * fcRate,
+    };
+  });
+}, [jobRows, exchangeFactor, isForeign, fcRates, invoice.ex_rate]);
 
   const displayStorageRows = useMemo(
     () => storageRows.map((row: any) => ({ ...row, AMOUNT: Number(row.AMOUNT ?? 0) * exchangeFactor })),
@@ -435,11 +453,11 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const selectedJobRows = useMemo(() => displayJobRows.filter((r) => selectedJobKeys.has(jobRowKey(r))), [displayJobRows, selectedJobKeys]);
   const selectedStorageRows = useMemo(() => displayStorageRows.filter((r: any, i: number) => selectedStorageKeys.has(storageRowKey(r, i))), [displayStorageRows, selectedStorageKeys]);
 
-  const billingTotals = useMemo(() => {
-    const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.bill || 0), 0);
-    const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
-    return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
-  }, [selectedJobRows, selectedStorageRows]);
+const billingTotals = useMemo(() => {
+  const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.FC_BILL || 0), 0);
+  const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
+  return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
+}, [selectedJobRows, selectedStorageRows]);
 
   const lineCount = selectedJobRows.length + selectedStorageRows.length;
 
@@ -471,7 +489,8 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
           cost_rate: costRate, 
           bill_amount: quantity * billRate, 
           cost_amount: quantity * costRate,
-          
+          bill: quantity * billRate,        // add: INR amount
+          cost: quantity * costRate,        // add
           // ADD THESE TWO LINES SO ORACLE RECEIVES THE FC VALUES
           FC_BILL: row.FC_BILL,
           FC_BILL_RATE: row.FC_BILL_RATE
@@ -601,7 +620,13 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     disabled={viewMode || loadingCurrencies} 
   />
 </div>
-            <div><FormInput label="Exchange Rate" value={getValue(invoice, "ex_rate") ?? ""} onChange={(v) => setField("ex_rate", v)} placeholder="Auto" /></div>
+            <div>
+<FormInput
+  label="Exchange Rate"
+  value={getValue(invoice, "ex_rate") ?? ""}
+  onChange={(v) => { setExRateTouched(true); setField("ex_rate", v); }}
+  placeholder="Auto"
+/>                            </div>
             <div><FormSelect label="Despatched" value={getValue(invoice, "despatched") ?? "N"} onChange={(v) => setField("despatched", v)} options={[{ value: "Y", label: "Yes" }, { value: "N", label: "No" }]} /></div>
 
             {/* Row 2: every date field, side by side */}
@@ -694,9 +719,19 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   <TableCell className="text-right text-[11.5px] text-foreground">{row.bill_rate.toFixed(2)}</TableCell>
   
   {/* NEW CELL */}
-  <TableCell className="text-right text-[11.5px] font-medium text-blue-600">
-    {row.FC_BILL_RATE ? row.FC_BILL_RATE.toFixed(2) : "0.00"}
-  </TableCell>
+<TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+  {isForeign && !viewMode ? (
+    <input
+      type="number"
+      step="0.01"
+      className="h-6 w-24 rounded border border-input bg-background px-1 text-right text-[11.5px] text-blue-600"
+      value={fcRates[key] ?? row.FC_BILL_RATE.toFixed(2)}
+      onChange={(e) => setFcRates((p) => ({ ...p, [key]: e.target.value }))}
+    />
+  ) : (
+    <span className="text-[11.5px] font-medium text-blue-600">{row.FC_BILL_RATE.toFixed(2)}</span>
+  )}
+</TableCell>
   
   <TableCell className="text-right text-[11.5px] text-foreground">{row.cost_rate.toFixed(2)}</TableCell>
   <TableCell className="text-right text-[11.5px] font-semibold text-foreground">{row.bill.toFixed(2)}</TableCell>
@@ -792,7 +827,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
               <Button type="button" variant="default" onClick={handleExistingActivityWisePrint} className="justify-start">
                 <Sheet size={14} className="mr-2" /> Existing Activity-wise
               </Button>
-              <Button disabled type="button" variant="default" onClick={handleStandardPrint} className="justify-start">
+              <Button type="button" variant="default" onClick={handleStandardPrint} className="justify-start">
                 <FileText size={14} className="mr-2" /> Standard (Base Currency)
               </Button>
             </div>

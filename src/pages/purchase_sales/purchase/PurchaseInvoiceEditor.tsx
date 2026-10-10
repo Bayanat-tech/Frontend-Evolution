@@ -182,7 +182,6 @@ export function PurchaseInvoiceEditor({
           po_doc_no: text(headerRaw.po_doc_no),
           po_doc_date: toDateInputValue(headerRaw.po_doc_date),
           ac_name: text(headerRaw.ac_name),
-          dept_code: text(headerRaw.dept_code),
           po_remarks: text(headerRaw.po_remarks),
           po_ref_no: text(headerRaw.po_ref_no),
           po_ref_date: text(headerRaw.po_ref_date),
@@ -202,6 +201,10 @@ export function PurchaseInvoiceEditor({
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
+   curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           po_dlvr_contact: text(headerRaw.po_dlvr_contact),
           po_dlvr_email: text(headerRaw.po_dlvr_email),
@@ -221,7 +224,7 @@ export function PurchaseInvoiceEditor({
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
           tx_cat_name: text(headerRaw.tx_cat_name),
-          dept_name: text(headerRaw.dept_name),
+        
           tx_compntcat_name_1: text(headerRaw.tx_compntcat_name_1),
           tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1),
           discount_scoope:
