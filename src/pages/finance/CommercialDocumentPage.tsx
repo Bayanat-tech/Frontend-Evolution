@@ -1020,7 +1020,7 @@ function CommercialEditor({
         ) : (
           <div className="commercial-header-shell flex flex-col gap-1.5">
             <div className="commercial-header-panel">
-              <section className="commercial-header-block commercial-header-block-doc">
+              {/* <section className="commercial-header-block commercial-header-block-doc">
                 <div className="commercial-header-block-title">
                   <span className="finance-section-icon"><FileText size={11} /></span>
                   <span>Document Details</span>
@@ -1030,25 +1030,25 @@ function CommercialEditor({
 
 
   {/* ── Doc Date ── */}
-  <Field label="Doc Date" required error={fieldErrors.doc_date}>
+  {/* <Field label="Doc Date" required error={fieldErrors.doc_date}>
     <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
-  </Field>
+  </Field> */}
 
   {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
-  {isPI && (
+  {/* {isPI && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
       <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
-  )}
-  {isSales && (
+  )} */}
+  {/* {isSales && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
       <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
-  )}
+  )} */}
 
   {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
   {/* {!isPO && (
@@ -1062,7 +1062,7 @@ function CommercialEditor({
     <BiscDatePicker required disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
   </Field>
 )} */}
-  {!isPO && (
+  {/* {!isPO && (
   <Field label="INV Date" required error={fieldErrors.inv_date}>
     <div className="relative">
       <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
@@ -1078,10 +1078,10 @@ function CommercialEditor({
       />
     </div>
   </Field>
-)}
+)} */}
 
 
-  {!isPO && (
+  {/* {!isPO && (
     <LookupField
       label="Ref Doc"
       className="col-span-2"
@@ -1102,8 +1102,8 @@ function CommercialEditor({
           code1: user?.company_code || "",
           number1: form.div_code ? Number(form.div_code) : undefined,
         })
-      }
-      // onChange={async (value, row) => {
+      } */}
+      {/* // onChange={async (value, row) => {
       //   if (!value || !row) return;
       onChange={async (value, row) => {
          if (!value || !row) {
@@ -1146,18 +1146,18 @@ function CommercialEditor({
             div_name: c.div_name,
             ref_doc_no: docNo,
             detail: mapped.detail,
-          }));
+          })); */}
 
-        } catch (err) {
+        {/* } catch (err) {
           console.error("Failed to load ref doc", err);
           setError(err instanceof Error ? err.message : "Unable to load reference document");
         }
       }}
     />
-  )}
+  )} */}
 
   {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
-  {isPO && (
+  {/* {isPO && (
     <Field label="Ref No">
       <Input disabled={isCancelled} value={form.ref_no || ""}
         onChange={(e) => update("ref_no", e.target.value)} />
@@ -1184,7 +1184,7 @@ function CommercialEditor({
         <option value="NON-PDO">NON-PDO</option>
       </Select>
     </Field>
-  )}
+  )} */}
   {/* {isPO && (
     <Field label="Order Type (LPO/CPO)">
       <Select value={form.cash_ind || "N"}
@@ -1194,8 +1194,8 @@ function CommercialEditor({
       </Select>
     </Field>
   )} */}
-          </div>
-        </section>
+          {/* </div>
+        </section> */} 
 
         <section className={`commercial-header-block commercial-header-block-party ${isSales ? "commercial-header-block-party-sales" : ""}`}>
           <div className="commercial-header-block-title">
@@ -1205,17 +1205,7 @@ function CommercialEditor({
             <span>{isSales ? "Customer Details" : "Supplier Details"}</span>
           </div>
           <div className="commercial-header-block-fields">
-          {/* <div className="commercial-party-primary"> */}
-          {/* <div className="commercial-header-block-fields party-fields"> */}
-
-  {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
-  {/* field: ac_code / ac_name — same in all tables ── */}
-  {/* <div className="col-span-1"> */}
-  <div className="commercial-party-primary">
-  {/* <div style={{ gridColumn: "span 2" }}> */}
-  {/* <div style={{ gridColumn: "span 2 / span 2", minWidth: 0 }}> */}
-   {/* <div style={{ gridColumn: "span 2" }}>
-    <div className="party-main"> */}
+           <div className="commercial-party-primary">
     <LookupField
       label={isSales ? "Customer" : "Supplier"} required enforceRequired
       value={form.ac_code}
@@ -1418,9 +1408,187 @@ function CommercialEditor({
           </div>
         </section>
 
+         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-1.5">
+          {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5"> */}
+          <section className="commercial-header-block commercial-header-block-doc">
+                <div className="commercial-header-block-title">
+                  <span className="finance-section-icon"><FileText size={11} /></span>
+                  <span>Document Details</span>
+                </div>
+                <div className="commercial-header-block-fields">
 
 
-        <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}>
+
+  {/* ── Doc Date ── */}
+  <Field label="Doc Date" required error={fieldErrors.doc_date}>
+    <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
+  </Field>
+
+  {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
+  {isPI && (
+    <Field label="Ref No" required error={fieldErrors.ref_no}>
+      <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
+        className={fieldErrors.ref_no ? "border-destructive" : ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
+    </Field>
+  )}
+  {isSales && (
+    <Field label="Ref No" required error={fieldErrors.ref_no}>
+      <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
+        className={fieldErrors.ref_no ? "border-destructive" : ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
+    </Field>
+  )}
+
+  {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
+  {/* {!isPO && (
+    <Field label="INV Date" required error={fieldErrors.inv_date}>
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+    </Field>
+  )} */}
+
+  {/* {!isPO && (
+  <Field label="INV Date" required error={fieldErrors.inv_date}>
+    <BiscDatePicker required disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+  </Field>
+)} */}
+  {!isPO && (
+  <Field label="INV Date" required error={fieldErrors.inv_date}>
+    <div className="relative">
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+      <input
+        tabIndex={-1}
+        aria-hidden="true"
+        required
+        disabled={isCancelled}
+        value={dateInput(form.inv_date)}
+        onChange={() => {}}
+        ref={(el) => el?.setCustomValidity(form.inv_date ? "" : "INV Date is required")}
+        style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 1, opacity: 0, pointerEvents: "none" }}
+      />
+    </div>
+  </Field>
+)}
+
+
+  {!isPO && (
+    <LookupField
+      label="Ref Doc"
+      className="col-span-2"
+      disabled={isCancelled}
+      value={form.ref_doc_no || ""}
+      displayValue={form.ref_doc_no || ""}
+      columns={[
+        { field: "DOC_NO", header: "Doc No" },
+        { field: "DOC_DATE", header: "Date" },
+        { field: "REF_NO", header: "Ref No" },
+        { field: "REMARKS", header: "Remarks" },
+      ]}
+      valueField="DOC_NO"
+      displayFields={["DOC_NO"]}
+      loadOptions={() =>
+        getDynamicFinanceLookup({
+          parameter: "Account_LPO_REF_DOC",
+          code1: user?.company_code || "",
+          number1: form.div_code ? Number(form.div_code) : undefined,
+        })
+      }
+      // onChange={async (value, row) => {
+      //   if (!value || !row) return;
+      onChange={async (value, row) => {
+         if (!value || !row) {
+          setForm((c) => ({ ...c, ref_doc_no: "" }));
+         return;
+        }
+        const r = row as Record<string, unknown>;
+        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
+        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+        setForm((c) => ({ ...c, ref_doc_no: docNo }));
+        try {
+          let header: Record<string, unknown> = {};
+          try {
+            header = await getPurchaseHeader(docNo, srcType);
+            if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType);
+          } catch {
+            header = await getLpoHeader(docNo, srcType);
+          }
+
+          let rawDetail: Record<string, unknown>[] = [];
+          try {
+            const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+            if (res.length) rawDetail = res;
+          } catch {}
+          if (!rawDetail.length) {
+            try {
+              rawDetail = await getLpoDetail(docNo, srcType);
+            } catch {}
+          }
+
+          // const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          const targetDocType: CommercialType = docType;
+          const mapped = mapForm(targetDocType, header, rawDetail);
+          setForm((c) => ({
+            ...c,
+            ...mapped,
+            doc_type: targetDocType,
+            doc_no: c.doc_no,
+            div_code: c.div_code,
+            div_name: c.div_name,
+            ref_doc_no: docNo,
+            detail: mapped.detail,
+          }));
+
+        } catch (err) {
+          console.error("Failed to load ref doc", err);
+          setError(err instanceof Error ? err.message : "Unable to load reference document");
+        }
+      }}
+    />
+  )}
+
+  {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
+  {isPO && (
+    <Field label="Ref No">
+      <Input disabled={isCancelled} value={form.ref_no || ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="Ref Date">
+      <BiscDatePicker disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="APP Ref No">
+      <Input disabled={isCancelled} value={form.app_ref_no || ""}
+        onChange={(e) => update("app_ref_no", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="LPO Category">
+      <Select value={form.pdo_type || ""}
+        onChange={(e) => update("pdo_type", e.target.value)}>
+        <option value="" />
+        <option value="PDO-OTO">PDO-OTO</option>
+        <option value="PDO-NON-OTO">PDO-NON-OTO</option>
+        <option value="NON-PDO">NON-PDO</option>
+      </Select>
+    </Field>
+  )}
+  {/* {isPO && (
+    <Field label="Order Type (LPO/CPO)">
+      <Select value={form.cash_ind || "N"}
+        onChange={(e) => update("cash_ind", e.target.value)}>
+        <option value="N">LPO - Credit Purchase</option>
+        <option value="Y">CPO - Cash Purchase</option>
+      </Select>
+    </Field>
+  )} */}
+          </div>
+        </section>
+
+         <section className="commercial-header-block commercial-header-block-tax">
+        {/* <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}> */}
           <div className="commercial-header-block-title">
             <span className="finance-section-icon"><Receipt size={11} /></span>
             <span>Tax & Additional Details</span>
@@ -1532,6 +1700,7 @@ function CommercialEditor({
   {/* PO table fields: hse_compliance (Y/N) / print_letter_head (bool) ── */}
             </div>
           </section>
+          </div>
         </div>
       </div>
     )}

@@ -942,7 +942,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     pi_pr_no: form.po_pr_no,
     pi_scope_of_work: form.po_scope_of_work,
     pi_ref_doc_no: form.grn_doc_no,
-    discount_scoope:form.discount_scoope||"ITEM"
+    discount_scoope:form.discount_scoope||"ITEM",
+    pr_req_no: form.pr_req_no,
 
   };
 }

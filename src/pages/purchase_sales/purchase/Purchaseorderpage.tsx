@@ -14,7 +14,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
-import { LPO_CONFIG } from "./Purchaseordertypes";
+import { LPO_CONFIG, PO_DOC_TYPE } from "./Purchaseordertypes";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
@@ -181,6 +181,7 @@ const loadRows = async (clearNotice = true) => {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+      code4: PO_DOC_TYPE.LPO,
     });
 
     return response as unknown as PurchaseOrderRow[];
@@ -205,6 +206,7 @@ const loadRows = async (clearNotice = true) => {
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tabValue,
+           code4: PO_DOC_TYPE.LPO,
       });
 
       return {

@@ -81,6 +81,21 @@ export function SalesInvoiceHeaderForm({
     const loginIdOrAdmin = loginid || "ADMIN";
     const discountScope = form.discount_scoope || "ITEM";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
+
+    // phone / fax: digits, + ( ) - and space only, max 20 chars
+    const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
+
+    // whole number only, max 4 digits
+    const cleanInt = (v: string, max = 4) => v.replace(/\D/g, "").slice(0, max);
+
+    // positive number, max 3 decimals
+    const cleanAmount = (v: string) => {
+        const cleaned = v.replace(/[^0-9.]/g, "");
+        const [int, ...rest] = cleaned.split(".");
+        return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+    };
 
     return (
         <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
@@ -123,14 +138,14 @@ export function SalesInvoiceHeaderForm({
                                         curr_code: text(
                                             getLookupValue(row || {}, "curr_code")
                                         ),
-                                        curr_name:text(
+                                        curr_name: text(
                                             getLookupValue(row || {}, "curr_name")
                                         ),
 
                                         dept_code: text(
                                             getLookupValue(row || {}, "dept_code")
                                         ),
-                                         dept_name: text(
+                                        dept_name: text(
                                             getLookupValue(row || {}, "dept_name")
                                         ),
                                         e_mail: text(getLookupValue(row || {}, "e_mail")),
@@ -143,31 +158,70 @@ export function SalesInvoiceHeaderForm({
                         </div>
 
                         <CField label="Address" className="col-span-5">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.address1} onChange={(e) => updateField("address1", e.target.value)} />
+                            <Input className="h-7 text-xs"  readOnly={true} disabled={headerAndLineDisabled} value={form.address1} onChange={(e) => updateField("address1", e.target.value)} />
                         </CField>
                         <CField label="" className="col-span-5">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.address2} onChange={(e) => updateField("address2", e.target.value)} />
+                            <Input className="h-7 text-xs" readOnly={true} disabled={headerAndLineDisabled} value={form.address2} onChange={(e) => updateField("address2", e.target.value)} />
                         </CField>
                         <CField label="" className="col-span-5">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.address3} onChange={(e) => updateField("address3", e.target.value)} />
+                            <Input className="h-7 text-xs" readOnly={true} disabled={headerAndLineDisabled} value={form.address3} onChange={(e) => updateField("address3", e.target.value)} />
                         </CField>
                         <CField label="Tel no" className="col-span-3">
-                            <Input className="h-7 text-xs" type="number" disabled={headerAndLineDisabled} value={form.so_party_phone} onChange={(e) => updateField("so_party_phone", e.target.value)} />
+                            <Input
+                                className="h-7 text-xs"
+                                type="tel"
+                                 readOnly={true}
+                                maxLength={20}
+                                disabled={headerAndLineDisabled}
+                                value={form.so_party_phone || ""}
+                                onChange={(e) => updateField("so_party_phone", cleanPhone(e.target.value))}
+                            />
                         </CField>
                         <CField label="Fax" className="col-span-2">
-                            <Input className="h-7 text-xs" type="number" disabled={headerAndLineDisabled} value={form.so_party_fax} onChange={(e) => updateField("so_party_fax", e.target.value)} />
+                            <Input
+                                className="h-7 text-xs"
+                                type="tel"
+                                 readOnly={true}
+                                maxLength={20}
+                                disabled={headerAndLineDisabled}
+                                value={form.so_party_fax || ""}
+                                onChange={(e) => updateField("so_party_fax", cleanPhone(e.target.value))}
+                            />
                         </CField>
 
                         <div className="col-span-5 grid grid-cols-3 gap-x-2">
                             <CField label="Email">
-                                <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.e_mail} onChange={(e) => updateField("e_mail", e.target.value)} />
+                                <Input
+                                    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`}
+                                    type="email"
+                                     readOnly={true}
+                                    maxLength={100}
+                                    disabled={headerAndLineDisabled}
+                                    value={form.e_mail || ""}
+                                    onChange={(e) => updateField("e_mail", e.target.value.trim())}
+                                />
+                                {emailInvalid && <span className="text-[10px] text-destructive">Invalid email</span>}
                             </CField>
 
                             <CField label="Credit Period">
-                                <Input className="h-7 text-xs text-right" type="number" step="1" disabled={headerAndLineDisabled} value={form.so_credit_period} onChange={(e) => updateField("so_credit_period", Number(e.target.value || 0))} />
+                                <Input
+                                    className="h-7 text-xs text-right"
+                                    inputMode="numeric"
+                                     readOnly={true}
+                                    disabled={headerAndLineDisabled}
+                                    value={form.credit_period ?? ""}
+                                    onChange={(e) => updateField("credit_period", cleanInt(e.target.value))}
+                                />
                             </CField>
                             <CField label="Credit Amount">
-                                <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.credit_amount} onChange={(e) => updateField("credit_amount", e.target.value)} />
+                                <Input
+                                    className="h-7 text-xs text-right"
+                                    inputMode="decimal"
+                                     readOnly={true}
+                                    disabled={headerAndLineDisabled}
+                                    value={form.credit_amount ?? ""}
+                                    onChange={(e) => updateField("credit_amount", cleanAmount(e.target.value))}
+                                />
                             </CField>
                         </div>
                     </HeaderBlock>
@@ -238,11 +292,17 @@ export function SalesInvoiceHeaderForm({
                                             dept_name: text(getLookupValue(row || {}, "dept_name")),
                                             remarks: text(getLookupValue(row || {}, "remarks")),
                                             so_remarks: text(getLookupValue(row || {}, "so_remarks")),
-                                            so_ref_no: text(getLookupValue(row || {}, "so_ref_no")),
-                                            so_ref_date: text(getLookupValue(row || {}, "so_ref_date")),
                                             curr_code: text(getLookupValue(row || {}, "curr_code")),
                                             curr_name: text(getLookupValue(row || {}, "curr_name")),
                                             ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
+                                            address1: text(getLookupValue(row || {}, "address1") || accountRow?.address1),
+                                            address2: text(getLookupValue(row || {}, "address2") || accountRow?.address2),
+                                            address3: text(getLookupValue(row || {}, "address3") || accountRow?.address3),
+                                            e_mail: text(getLookupValue(row || {}, "e_mail") || accountRow?.e_mail),
+                                            credit_amount: numberOrZero(getLookupValue(row || {}, "credit_amount")),
+                                            so_ref_no: text(getLookupValue(row || {}, "so_ref_no")),
+                                            so_ref_date: text(getLookupValue(row || {}, "so_ref_date")),
+                                        
                                             so_other_expense_cost: numberOrZero(getLookupValue(row || {}, "so_other_expense_cost")),
                                             disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
                                             disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
@@ -438,7 +498,7 @@ export function SalesInvoiceHeaderForm({
 
                     <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-2">
                         <CField label="Delivery Contact"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.so_dlvr_contact} onChange={(e) => updateField("so_dlvr_contact", e.target.value)} /></CField>
-                        <CField label="Delivery Tel"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.so_dlvr_mobile} onChange={(e) => updateField("so_dlvr_mobile", e.target.value)} /></CField>
+                        <CField label="Delivery Tel"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.so_dlvr_mobile} onChange={(e) => updateField("so_dlvr_mobile", e.target.value)} /></CField>
                         <CField label="Delivery Email"><Input className="h-7 text-xs" type="email" disabled={headerAndLineDisabled} value={form.so_dlvr_email} onChange={(e) => updateField("so_dlvr_email", e.target.value)} /></CField>
                         <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(e) => updateField("so_dlvr_term", e.target.value)} /></CField>
                     </HeaderBlock>
