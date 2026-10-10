@@ -11,6 +11,7 @@ import {
   getDivisions,
   getDocAccounts,
   getFyPeriods,
+  getTransactionDefaultData,
   getTransactionDetail,
   getTransactionDocuments,
   // getTransactionHeader,
@@ -573,7 +574,65 @@ function CommercialEditor({
   useEffect(() => {
     let mounted = true;
     async function load() {
-      if (!editMode || editor.mode !== "edit") return;
+      if (!editMode || editor.mode !== "edit") {
+        try {
+          const defaults = await getTransactionDefaultData(docType, false);
+          if (!mounted) return;
+          const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
+          const defaultDiv = editor.mode === "create" && editor.div?.div_code ? editor.div.div_code : text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          
+          let accountRow: Record<string, unknown> | undefined;
+          if (defaultAcCode) {
+            try {
+              const headerAccounts = await getDocAccounts(docType, "H", defaultDiv);
+              accountRow = (headerAccounts || []).find((r: Record<string, unknown>) => {
+                const code = text(r.ac_code ?? r.AC_CODE ?? "");
+                return code.toUpperCase() === defaultAcCode.toUpperCase();
+              });
+            } catch {
+              // Ignore lookup failures for optional account row
+            }
+          }
+
+          const getVal = (k: string) => accountRow ? text(accountRow[k] ?? accountRow[k.toUpperCase()] ?? accountRow[k.toLowerCase()] ?? "") : "";
+          const resolvedCurrCode = getVal("curr_code") || text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
+          let resolvedExRate = Number(defaults.ex_rate ?? 1);
+          if (accountRow && getVal("curr_code")) {
+            try {
+              const currRows = await getDynamicFinanceLookup({
+                parameter: "Account_Currency_CODE_Search",
+                code1: user?.company_code || "",
+              });
+              const match = currRows.find(
+                (r: Record<string, unknown>) =>
+                  String(r["curr_code"] ?? "").toUpperCase() === resolvedCurrCode.toUpperCase()
+              );
+              if (match) resolvedExRate = Number(match["ex_rate"] ?? 1) || 1;
+            } catch {}
+          }
+
+          setForm((current) => ({
+            ...current,
+            ac_code: defaultAcCode || current.ac_code,
+            ac_name: getVal("ac_name") || text(defaults.Account?.ac_name ?? (defaults as any).ac_name ?? current.ac_name),
+            curr_code: resolvedCurrCode || current.curr_code,
+            curr_name: text(defaults.Currency?.curr_name ?? (defaults as any).curr_name ?? current.curr_name),
+            ex_rate: resolvedExRate || current.ex_rate || 1,
+            div_code: current.div_code || defaultDiv,
+            div_name: current.div_name || (editor.mode === "create" && editor.div?.div_name ? editor.div.div_name : text(defaults.Division?.div_name ?? "")),
+            party_address: getVal("address") || current.party_address,
+            party_phone: getVal("phone") || current.party_phone,
+            party_fax: getVal("fax") || current.party_fax,
+            dlvr_contact: getVal("contact_person") || current.dlvr_contact,
+            dlvr_mobile: getVal("mobile_no") || current.dlvr_mobile,
+            dlvr_email: getVal("e_mail") || current.dlvr_email,
+            remarks: getVal("l4_description") || current.remarks,
+          }));
+        } catch {
+          // Defaults are optional; use empty form if no setup row is found
+        }
+        return;
+      }
       setLoading(true);
       try {
         const [header, detail, docAccounts] = await Promise.all([
