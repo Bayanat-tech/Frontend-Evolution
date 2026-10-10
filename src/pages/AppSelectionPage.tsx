@@ -287,7 +287,7 @@ const appLaunchGroups = [
     key: "business",
     title: "Business Suite",
     subtitle: "Finance, vendor and customer management workflows",
-    codes: ["FINANCE", "VMS", "CMS", "PURCHASE_SALES"],
+    codes: ["FINANCE", "VMS", "CMS", "IMS"],
     tone: "business",
   },
   {
