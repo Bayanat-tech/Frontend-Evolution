@@ -539,31 +539,56 @@ function PaymentDocumentEditor({
           if (!mounted) return;
           const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
           const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          const effectiveDiv = defaultDiv || (editor?.mode === "create" ? text(editor.divCode) : "") || text(form.div_code);
           let resolvedAcName = text(defaults.ac_name ?? defaults.Account?.ac_name ?? "");
           let resolvedCurrCode = text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
           let resolvedCurrName = text(defaults.curr_name ?? defaults.Currency?.curr_name ?? "");
           let resolvedExRate = Number(defaults.ex_rate ?? 1);
 
           if (defaultAcCode && (!resolvedAcName || !resolvedCurrCode)) {
-            try {
-              const headerAccounts = await getDocAccounts(docType, "H", defaultDiv);
-              const matched = (headerAccounts || []).find((a: Record<string, unknown>) => {
-                const code = text(a.ac_code ?? a.AC_CODE ?? "");
-                return code.toUpperCase() === defaultAcCode.toUpperCase();
-              });
-              if (matched) {
-                if (!resolvedAcName) resolvedAcName = text(matched.ac_name ?? matched.AC_NAME ?? "");
-                if (!resolvedCurrCode) resolvedCurrCode = text(matched.curr_code ?? matched.CURR_CODE ?? "");
-                if (!resolvedCurrName) resolvedCurrName = text(matched.curr_name ?? matched.CURR_NAME ?? "");
-                const matchedRate = Number(matched.ex_rate ?? matched.EX_RATE ?? 0);
-                if (matchedRate > 0) resolvedExRate = matchedRate;
+            if (effectiveDiv) {
+              try {
+                const headerAccounts = await getDocAccounts(docType, "H", effectiveDiv);
+                const matched = (headerAccounts || []).find((a: Record<string, unknown>) => {
+                  const code = text(a.ac_code ?? a.AC_CODE ?? "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(matched.ac_name ?? matched.AC_NAME ?? "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(matched.curr_code ?? matched.CURR_CODE ?? "");
+                  if (!resolvedCurrName) resolvedCurrName = text(matched.curr_name ?? matched.CURR_NAME ?? "");
+                  const matchedRate = Number(matched.ex_rate ?? matched.EX_RATE ?? 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
               }
-            } catch {
-              // fallback
+            }
+
+            if (!resolvedCurrCode || !resolvedAcName) {
+              try {
+                const acRows = await getDynamicFinanceLookup({
+                  parameter: "Account_AC_CODE_Serach",
+                  code1: user?.company_code || "",
+                });
+                const matched = (acRows || []).find((a: Record<string, unknown>) => {
+                  const code = text(getLookupValue(a, "ac_code") || a.ac_code || "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(getLookupValue(matched, "ac_name") || matched.ac_name || "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(getLookupValue(matched, "curr_code") || matched.curr_code || "");
+                  if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(matched, "curr_name") || matched.curr_name || "");
+                  const matchedRate = Number(getLookupValue(matched, "ex_rate") || matched.ex_rate || 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
             }
           }
 
-          if (resolvedCurrCode && (!resolvedExRate || resolvedExRate <= 0)) {
+          if (resolvedCurrCode) {
             try {
               const currencyRows = await getDynamicFinanceLookup({
                 parameter: "Account_Currency_CODE_Serach",
@@ -582,6 +607,14 @@ function PaymentDocumentEditor({
             } catch {}
           }
 
+          let defaultChequeNo = "";
+          if (docType !== "CR" && defaultAcCode) {
+            try {
+              const cheque: Record<string, unknown> = await getCheque(defaultAcCode).catch(() => ({}));
+              defaultChequeNo = text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? "");
+            } catch {}
+          }
+
           setForm((current) => ({
             ...current,
             ac_code: defaultAcCode || current.ac_code,
@@ -589,6 +622,8 @@ function PaymentDocumentEditor({
             curr_code: resolvedCurrCode || current.curr_code,
             curr_name: resolvedCurrName || current.curr_name,
             ex_rate: resolvedExRate > 0 ? resolvedExRate : (current.ex_rate || 1),
+            div_code: effectiveDiv || current.div_code,
+            ...(defaultChequeNo ? { cheque_no: defaultChequeNo } : {}),
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
           }));
@@ -608,23 +643,50 @@ function PaymentDocumentEditor({
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
   const loadTaxOptions = useCallback(async () => {
+    let rows: LookupRow[] = [];
     try {
-      const rows = await getDynamicLookup({
-        parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-        code1: user?.company_code,
+      rows = await getDynamicFinanceLookup({
+        parameter: "Account_Tax_Search",
+        code1: user?.company_code || "",
         loginid: user?.loginid || user?.username || "ADMIN",
       });
-      const map: Record<string, number> = {};
-      rows.forEach((r) => {
-        const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
-        const rate = Number(getLookupValue(r, "tx_percnt") ?? getLookupValue(r, "tx_compnt_perc_1") ?? getLookupValue(r, "perc") ?? 0);
-        if (code) map[code] = rate;
-      });
-      setTaxRateMap((prev) => ({ ...prev, ...map }));
-      return rows;
     } catch {
-      return [];
+      // fallback
     }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicLookup({
+          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        rows = [];
+      }
+    }
+    const map: Record<string, number> = {};
+    (rows || []).forEach((r) => {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const rawRate = Number(
+        getLookupValue(r, "tx_percnt") ??
+        getLookupValue(r, "tx_compnt_perc_1") ??
+        getLookupValue(r, "perc") ??
+        getLookupValue(r, "tax_percnt") ??
+        getLookupValue(r, "tax_rate") ??
+        getLookupValue(r, "rate") ??
+        0
+      );
+      const name = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+      let rate = rawRate;
+      if (rate <= 0) {
+        if (name.includes("5%") || name.includes("STD") || name.includes("STANDARD") || code.startsWith("10") || code.startsWith("11")) {
+          rate = 5;
+        }
+      }
+      if (code) map[code] = rate;
+    });
+    setTaxRateMap((prev) => ({ ...prev, ...map }));
+    return rows;
   }, [user?.company_code, user?.loginid, user?.username]);
 
   useEffect(() => {
@@ -635,11 +697,18 @@ function PaymentDocumentEditor({
 
   const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
     const trimmed = String(taxCode || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined) {
+    if (trimmed && taxRateMap[trimmed] !== undefined && taxRateMap[trimmed] > 0) {
       return taxRateMap[trimmed];
     }
     if (fallbackPerc != null && !isNaN(Number(fallbackPerc)) && Number(fallbackPerc) > 0) {
       return Number(fallbackPerc);
+    }
+    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
+    if (defaultPerc !== undefined && defaultPerc > 0) return defaultPerc;
+    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
+    if (firstNonZero && firstNonZero > 0) return firstNonZero;
+    if (trimmed.startsWith("10") || trimmed.startsWith("11") || trimmed.toUpperCase().includes("STD")) {
+      return 5;
     }
     return 0;
   }, [taxRateMap]);
@@ -657,12 +726,13 @@ function PaymentDocumentEditor({
           }
           return d;
         }
-        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
-        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
+        const effectiveRate = dynamicRate > 0 ? dynamicRate : (Number(d.tx_compnt_perc_1) > 0 ? Number(d.tx_compnt_perc_1) : 5);
+        const taxAmt = Number(((Number(d.amount) || 0) * (effectiveRate / 100)).toFixed(3));
+        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === effectiveRate && d.tx_compnt_1_expmt === "S") {
           return d;
         }
         changed = true;
-        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: dynamicRate, tx_compnt_amt_1: taxAmt };
+        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: effectiveRate, tx_compnt_amt_1: taxAmt };
       });
       return changed ? { ...current, detail: nextDetail } : current;
     });
@@ -1836,13 +1906,52 @@ function PaymentDocumentEditor({
                                 disabled={disabled}
                                 onChange={(value, row) => {
                                   const r = (row || {}) as Record<string, unknown>;
-                                  const lookupPerc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
-                                  const perc = lookupPerc || getTaxPercForCode(value);
+                                  const rowRate = Number(
+                                    getLookupValue(r, "tx_percnt") ??
+                                    getLookupValue(r, "tx_compnt_perc_1") ??
+                                    getLookupValue(r, "perc") ??
+                                    getLookupValue(r, "tax_percnt") ??
+                                    getLookupValue(r, "tax_rate") ??
+                                    getLookupValue(r, "rate") ??
+                                    0
+                                  );
+                                  const rowName = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+                                  const valStr = String(value || "").trim();
+                                  const isZero = rowName.includes("ZERO") || valStr.startsWith("20") || valStr.startsWith("21");
+                                  const isExempt = rowName.includes("EXEMPT") || valStr.startsWith("30") || valStr.startsWith("31");
+                                  const isStd = rowName.includes("STD") || rowName.includes("STANDARD") || valStr.startsWith("10") || valStr.startsWith("11");
+
+                                  let determinedTaxType: "S" | "Z" | "E" | "N" = "N";
+                                  let perc = 0;
+
+                                  if (isZero) {
+                                    determinedTaxType = "Z";
+                                    perc = 0;
+                                  } else if (isExempt) {
+                                    determinedTaxType = "E";
+                                    perc = 0;
+                                  } else if (rowRate > 0) {
+                                    determinedTaxType = "S";
+                                    perc = rowRate;
+                                  } else if (isStd) {
+                                    determinedTaxType = "S";
+                                    perc = getTaxPercForCode(value) || 5;
+                                  } else if (valStr && valStr !== "N/A") {
+                                    const mappedRate = getTaxPercForCode(value);
+                                    determinedTaxType = "S";
+                                    perc = mappedRate > 0 ? mappedRate : 5;
+                                  }
+
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxAmt = Number(((lineAmt * perc) / 100).toFixed(3));
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+
+                                  if (valStr && perc > 0) {
+                                    setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
+                                  }
+
                                   updateDetail(detail.id, {
                                     tx_compntcat_code_1: value,
-                                    tx_compnt_1_expmt: perc > 0 ? "S" : "N",
+                                    tx_compnt_1_expmt: determinedTaxType,
                                     tx_compnt_perc_1: perc,
                                     tx_compnt_amt_1: taxAmt,
                                   });
@@ -1859,7 +1968,11 @@ function PaymentDocumentEditor({
                                 onChange={(event) => {
                                   const taxType = event.target.value;
                                   const lineAmt = Number(detail.amount) || 0;
-                                  const taxPerc = taxType === "S" ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0 ? detail.tx_compnt_perc_1 : getTaxPercForCode(detail.tx_compntcat_code_1 || "")) : 0;
+                                  const taxPerc = taxType === "S"
+                                    ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0
+                                        ? detail.tx_compnt_perc_1
+                                        : (getTaxPercForCode(detail.tx_compntcat_code_1 || "") || 5))
+                                    : 0;
                                   const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,

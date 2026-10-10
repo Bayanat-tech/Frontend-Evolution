@@ -33,7 +33,7 @@ import {
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -442,32 +442,65 @@ function JVDocument({
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
   const loadTaxOptions = async () => {
-    const rows = await getDynamicLookup({
-      parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-      code1: user?.company_code,
-      loginid: user?.loginid || user?.username || "ADMIN",
-    });
-    const map: Record<string, number> = {};
-    for (const r of rows) {
-      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
-      const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
-      if (code) {
-        map[code] = perc;
+    let rows: LookupRow[] = [];
+    try {
+      rows = await getDynamicFinanceLookup({
+        parameter: "Account_Tax_Search",
+        code1: user?.company_code || "",
+        loginid: user?.loginid || user?.username || "ADMIN",
+      });
+    } catch {
+      // fallback
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicLookup({
+          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        rows = [];
       }
     }
+    const map: Record<string, number> = {};
+    (rows || []).forEach((r) => {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const rawRate = Number(
+        getLookupValue(r, "tx_percnt") ??
+        getLookupValue(r, "tx_compnt_perc_1") ??
+        getLookupValue(r, "perc") ??
+        getLookupValue(r, "tax_percnt") ??
+        getLookupValue(r, "tax_rate") ??
+        getLookupValue(r, "rate") ??
+        0
+      );
+      const name = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+      let rate = rawRate;
+      if (rate <= 0) {
+        if (name.includes("5%") || name.includes("STD") || name.includes("STANDARD") || code.startsWith("10") || code.startsWith("11")) {
+          rate = 5;
+        }
+      }
+      if (code) map[code] = rate;
+    });
     setTaxRateMap((prev) => ({ ...prev, ...map }));
     return rows;
   };
 
   const getTaxPercForCode = (code: string): number => {
     const trimmed = (code || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined) {
+    if (trimmed && taxRateMap[trimmed] !== undefined && taxRateMap[trimmed] > 0) {
       return taxRateMap[trimmed];
     }
     const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
-    if (defaultPerc !== undefined) return defaultPerc;
+    if (defaultPerc !== undefined && defaultPerc > 0) return defaultPerc;
     const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
-    return firstNonZero ?? 0;
+    if (firstNonZero && firstNonZero > 0) return firstNonZero;
+    if (trimmed.startsWith("10") || trimmed.startsWith("11") || trimmed.toUpperCase().includes("STD")) {
+      return 5;
+    }
+    return 0;
   };
 
   const [reportOpen, setReportOpen] = useState(false);
