@@ -600,7 +600,7 @@ function CommercialEditor({
           if (accountRow && getVal("curr_code")) {
             try {
               const currRows = await getDynamicFinanceLookup({
-                parameter: "Account_Currency_CODE_Search",
+                parameter: "Account_Currency_CODE_Serach",
                 code1: user?.company_code || "",
               });
               const match = currRows.find(
@@ -1229,7 +1229,7 @@ function CommercialEditor({
           let newExRate = form.ex_rate;
           if (newCurrCode) {
             const currRows = await getDynamicFinanceLookup({
-              parameter: "Account_Currency_CODE_Search",
+              parameter: "Account_Currency_CODE_Serach",
               code1: user?.company_code || "",
             });
             const match = currRows.find(
@@ -1282,7 +1282,7 @@ function CommercialEditor({
       columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
       valueField="curr_code"
       displayFields={["curr_code", "curr_name", "ex_rate"]}
-      loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
+      loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Serach", code1: user?.company_code || "" })}
       onChange={(value, row) => {
         const newRate = Number(getLookupValue(row || {}, "ex_rate") || form.ex_rate || 1);
         const currName = text(getLookupValue(row || {}, "curr_name"));
@@ -1924,7 +1924,7 @@ function CommercialEditor({
                             columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                             valueField="curr_code"
                             displayFields={["curr_code", "curr_name", "ex_rate"]}
-                            loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
+                            loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Serach", code1: user?.company_code || "" })}
                             onChange={(value, row) => {
                               // const lineExRate = Number(getLookupValue(row || {}, "ex_rate") || line.ex_rate || form.ex_rate || 1);
                               const lineExRate = Number(getLookupValue(row || {}, "ex_rate") || 1);

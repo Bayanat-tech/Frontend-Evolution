@@ -537,13 +537,58 @@ function PaymentDocumentEditor({
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
+          const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          let resolvedAcName = text(defaults.ac_name ?? defaults.Account?.ac_name ?? "");
+          let resolvedCurrCode = text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
+          let resolvedCurrName = text(defaults.curr_name ?? defaults.Currency?.curr_name ?? "");
+          let resolvedExRate = Number(defaults.ex_rate ?? 1);
+
+          if (defaultAcCode && (!resolvedAcName || !resolvedCurrCode)) {
+            try {
+              const headerAccounts = await getDocAccounts(docType, "H", defaultDiv);
+              const matched = (headerAccounts || []).find((a: Record<string, unknown>) => {
+                const code = text(a.ac_code ?? a.AC_CODE ?? "");
+                return code.toUpperCase() === defaultAcCode.toUpperCase();
+              });
+              if (matched) {
+                if (!resolvedAcName) resolvedAcName = text(matched.ac_name ?? matched.AC_NAME ?? "");
+                if (!resolvedCurrCode) resolvedCurrCode = text(matched.curr_code ?? matched.CURR_CODE ?? "");
+                if (!resolvedCurrName) resolvedCurrName = text(matched.curr_name ?? matched.CURR_NAME ?? "");
+                const matchedRate = Number(matched.ex_rate ?? matched.EX_RATE ?? 0);
+                if (matchedRate > 0) resolvedExRate = matchedRate;
+              }
+            } catch {
+              // fallback
+            }
+          }
+
+          if (resolvedCurrCode && (!resolvedExRate || resolvedExRate <= 0)) {
+            try {
+              const currencyRows = await getDynamicFinanceLookup({
+                parameter: "Account_Currency_CODE_Serach",
+                code1: user?.company_code || "",
+              });
+              const match = currencyRows.find(
+                (currencyRow) =>
+                  String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                  resolvedCurrCode.toUpperCase(),
+              );
+              if (match) {
+                const rate = Number(getLookupValue(match, "ex_rate") || (match as any)?.ex_rate || 0);
+                if (rate > 0) resolvedExRate = rate;
+                if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(match, "curr_name") || "");
+              }
+            } catch {}
+          }
+
           setForm((current) => ({
             ...current,
-            ac_code: text(defaults.ac_code ?? defaults.Account?.ac_code ?? current.ac_code),
-            ac_name: text(defaults.Account?.ac_name ?? current.ac_name),
-            curr_code: text(defaults.curr_code ?? defaults.Currency?.curr_code ?? current.curr_code),
-            curr_name: text(defaults.Currency?.curr_name ?? current.curr_name),
-            ex_rate: Number(defaults.ex_rate ?? current.ex_rate ?? 1),
+            ac_code: defaultAcCode || current.ac_code,
+            ac_name: resolvedAcName || current.ac_name,
+            curr_code: resolvedCurrCode || current.curr_code,
+            curr_name: resolvedCurrName || current.curr_name,
+            ex_rate: resolvedExRate > 0 ? resolvedExRate : (current.ex_rate || 1),
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
           }));
@@ -1409,7 +1454,7 @@ function PaymentDocumentEditor({
                             if (!resolvedExRate && selectedCurrency) {
                               try {
                                 const currencyRows = await getDynamicFinanceLookup({
-                                  parameter: "Account_Currency_CODE_Search",
+                                  parameter: "Account_Currency_CODE_Serach",
                                   code1: user?.company_code || "",
                                 });
                                 const match = currencyRows.find(

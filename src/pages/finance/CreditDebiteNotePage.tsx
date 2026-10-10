@@ -496,9 +496,9 @@ function PaymentDocumentEditor({
           setForm((current) => ({
             ...current,
             ac_code: text(defaults.ac_code ?? defaults.Account?.ac_code ?? current.ac_code),
-            ac_name: text(defaults.Account?.ac_name ?? current.ac_name),
+            ac_name: text(defaults.ac_name ?? defaults.Account?.ac_name ?? current.ac_name),
             curr_code: text(defaults.curr_code ?? defaults.Currency?.curr_code ?? current.curr_code),
-            curr_name: text(defaults.Currency?.curr_name ?? current.curr_name),
+            curr_name: text(defaults.curr_name ?? defaults.Currency?.curr_name ?? current.curr_name),
             ex_rate: Number(defaults.ex_rate ?? current.ex_rate ?? 1),
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),

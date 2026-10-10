@@ -130,10 +130,13 @@ export type TransactionChildRow = Record<string, unknown> & {
 
 export type TransactionDefaultData = {
   ac_code?: string;
+  ac_name?: string;
   Account?: { ac_code?: string; ac_name?: string };
   curr_code?: string;
+  curr_name?: string;
   Currency?: { curr_code?: string; curr_name?: string };
   div_code?: string;
+  div_name?: string;
   Division?: { div_code?: string; div_name?: string };
   ex_rate?: number;
   Accountsetup?: { tax_perc?: number; lcur_decimal_nos?: number };
