@@ -296,23 +296,99 @@ export function DocumentSetupPage() {
           rowClassName={(doc) => doc.doc_id === selected?.doc_id ? "bg-[#eaf2ff] font-semibold" : ""}
         />
 
-        {selected ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
-            <div className="min-w-0">
-              <p className="eyebrow m-0">Selected Document</p>
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">{selected.doc_shortname || selected.doc_id}</span>
-                <h2 className="m-0 truncate text-base font-semibold">{selected.doc_name || "Untitled document"}</h2>
+        {selected && docForm ? (
+          <div className="rounded-lg border bg-card p-4 shadow-sm grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+              <div className="min-w-0">
+                <p className="eyebrow m-0">Document Defaults & Settings</p>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">{selected.doc_shortname || selected.doc_id}</span>
+                  <h2 className="m-0 truncate text-base font-semibold">{selected.doc_name || "Untitled document"}</h2>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border bg-secondary px-2.5 py-1">Allowed Headers: {headerRows.length}</span>
+                <span className="rounded-full border bg-secondary px-2.5 py-1">Allowed Details: {detailRows.length}</span>
+                {docDirty && (
+                  <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800">
+                    Configuration Modified (Click Save)
+                  </span>
+                )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border bg-secondary px-2.5 py-1">Header {headerRows.length}</span>
-              <span className="rounded-full border bg-secondary px-2.5 py-1">Detail {detailRows.length}</span>
-              {dirtyCount > 0 && <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800">{dirtyCount} Unsaved</span>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+              <AccountLookup
+                label="Default Header A/C"
+                value={docForm.default_h_ac}
+                name={docForm.default_h_ac_name}
+                onChange={(code, name) => {
+                  setDocForm((prev) => prev ? { ...prev, default_h_ac: code, default_h_ac_name: name } : null);
+                }}
+              />
+              <AccountLookup
+                label="Default Detail A/C"
+                value={docForm.default_d_ac}
+                name={docForm.default_d_ac_name}
+                onChange={(code, name) => {
+                  setDocForm((prev) => prev ? { ...prev, default_d_ac: code, default_d_ac_name: name } : null);
+                }}
+              />
+              <AccountLookup
+                label="Default Cash A/C (CO)"
+                value={docForm.default_h_code_co}
+                name=""
+                onChange={(code) => {
+                  setDocForm((prev) => prev ? { ...prev, default_h_code_co: code } : null);
+                }}
+              />
+              <LookupField
+                label="Default Currency"
+                value={docForm.curr_code}
+                displayValue={docForm.curr_code ? `${docForm.curr_code}${docForm.curr_name ? ` - ${docForm.curr_name}` : ""}` : ""}
+                columns={[
+                  { field: "curr_code", header: "Currency" },
+                  { field: "curr_name", header: "Name" },
+                ]}
+                valueField="curr_code"
+                displayFields={["curr_code", "curr_name"]}
+                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Search", loginid: loginId, code1: companyCode })}
+                onChange={(code, row) => {
+                  setDocForm((prev) => prev ? { ...prev, curr_code: code, curr_name: row ? getLookupText(row, ["curr_name", "currency_name"]) : "" } : null);
+                }}
+              />
+              <LookupField
+                label="Default Division"
+                value={docForm.default_div_code}
+                displayValue={docForm.default_div_code ? `${docForm.default_div_code}${docForm.default_div_name ? ` - ${docForm.default_div_name}` : ""}` : ""}
+                columns={[
+                  { field: "div_code", header: "Division Code" },
+                  { field: "div_name", header: "Division Name" },
+                ]}
+                valueField="div_code"
+                displayFields={["div_code", "div_name"]}
+                loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: loginId, code1: companyCode })}
+                onChange={(code, row) => {
+                  setDocForm((prev) => prev ? { ...prev, default_div_code: code, default_div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" } : null);
+                }}
+              />
+              <label className="field flex flex-col gap-1 text-xs font-medium">
+                <span>Back Date Limit (Days)</span>
+                <Input
+                  type="number"
+                  min="0"
+                  max="365"
+                  value={docForm.back_date}
+                  onChange={(e) => {
+                    setDocForm((prev) => prev ? { ...prev, back_date: e.target.value } : null);
+                  }}
+                  placeholder="e.g. 7"
+                />
+              </label>
             </div>
           </div>
         ) : (
-          <div className="rounded-md border bg-secondary/30 px-3 py-2 text-sm text-muted-foreground">Select a document to manage header and detail accounts.</div>
+          <div className="rounded-md border bg-secondary/30 px-3 py-2 text-sm text-muted-foreground">Select a document from the list above to view and configure its default accounts and allowed accounts.</div>
         )}
 
         <div className="grid min-h-[360px] grid-cols-2 gap-4 max-xl:grid-cols-1">
@@ -509,19 +585,31 @@ function Field({ label, value, onChange, disabled }: { label: string; value: str
 function AccountLookup({ label, value, name, onChange }: { label: string; value: string; name: string; onChange: (value: string, name: string) => void }) {
   const { user } = useAuth();
   return (
-    <LookupField
-      label={label}
-      value={value}
-      displayValue={value ? `${value}${name ? ` - ${name}` : ""}` : ""}
-      columns={[
-        { field: "ac_code", header: "Account Code" },
-        { field: "ac_name", header: "Account Name" },
-      ]}
-      valueField="ac_code"
-      displayFields={["ac_code", "ac_name"]}
-      loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-      onChange={(nextValue, row) => onChange(nextValue, row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "")}
-    />
+    <div className="relative">
+      <LookupField
+        label={label}
+        value={value}
+        displayValue={value ? `${value}${name ? ` - ${name}` : ""}` : ""}
+        columns={[
+          { field: "ac_code", header: "Account Code" },
+          { field: "ac_name", header: "Account Name" },
+        ]}
+        valueField="ac_code"
+        displayFields={["ac_code", "ac_name"]}
+        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+        onChange={(nextValue, row) => onChange(nextValue, row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "")}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("", "")}
+          className="absolute right-7 top-7 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Clear account"
+        >
+          <X size={13} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
