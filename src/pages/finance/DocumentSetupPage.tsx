@@ -195,9 +195,9 @@ export function DocumentSetupPage() {
         await postFinance("upsertSetupDoc", {
           ...docForm,
           company_code: docForm.company_code || companyCode,
-          seq_no: Number(docForm.seq_no || 0),
-          default_sign: Number(docForm.default_sign || 0),
-          last_doc_no: Number(docForm.last_doc_no || 0),
+          seq_no: docForm.seq_no ? String(docForm.seq_no).trim() : null,
+          default_sign: Number(docForm.default_sign || 1),
+          last_doc_no: docForm.last_doc_no ? Number(docForm.last_doc_no) : null,
           back_date: Number(docForm.back_date || 0),
           loginid: loginId,
         });
