@@ -574,7 +574,8 @@ export function BudgetRequestEditor({
                   {editMode && <Field label="Budget Number"><Input disabled value={form.request_number || ""} /></Field>}
 
                   <LookupField
-                    label="Division *"
+                    label="Division"
+                    required
                     value={form.div_code}
                     displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
                     columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
@@ -594,7 +595,8 @@ export function BudgetRequestEditor({
                   />
 
                   <LookupField
-                    label="Currency *"
+                    label="Currency"
+                    required
                     value={form.curr_code}
                     displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
                     columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -614,11 +616,11 @@ export function BudgetRequestEditor({
                     }))}
                   />
 
-                  <Field label="Request Date *">
+                  <Field label="Request Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.request_date} onChange={(event) => updateField("request_date", event.target.value)} />
                   </Field>
 
-                  <Field label="Budget Year *">
+                  <Field label="Budget Year" required>
                     <Select className="max-w-[120px]" disabled={headerAndLineDisabled} required value={form.budget_year} onChange={(event) => updateYear(event.target.value)}>
                       {BUDGET_YEARS.map((year) => (
                         <option key={year} value={year}>{year}</option>
@@ -867,7 +869,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
     <label className="field">
       <span>
         {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       {children}
     </label>

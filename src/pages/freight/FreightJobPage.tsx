@@ -1150,7 +1150,7 @@ function Field({
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <Input
         className={`h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C] ${type === "number" ? "text-right tabular-nums" : ""}`}
@@ -1184,7 +1184,7 @@ function SelectField({
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <select
         className="h-7.5 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 font-medium focus:border-[#00378C]"
@@ -1223,7 +1223,7 @@ function DateField({
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <Input
         className="h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C]"
@@ -1254,7 +1254,7 @@ function DateTimeField({
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <Input
         className="h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C]"
@@ -1355,7 +1355,7 @@ function Lookup({
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-rose-500 font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <LookupField
         value={value}

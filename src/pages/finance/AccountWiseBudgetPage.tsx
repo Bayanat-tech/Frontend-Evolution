@@ -444,6 +444,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5">
               <LookupField
                 label="Version"
+                required
                 value={form.doc_type}
                 displayValue={form.doc_type}
                 columns={[
@@ -457,7 +458,9 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
                 onChange={(value) => setField("doc_type", value)}
               />
               <div className="flex flex-col">
-                <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">Doc Date</label>
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
+                  Doc Date <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
+                </label>
                 <input
                   type="date"
                   value={form.doc_date}
@@ -468,6 +471,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
               </div>
               <LookupField
                 label="Budget Year"
+                required
                 value={form.budget_year}
                 displayValue={form.budget_year}
                 columns={[{ field: "budget_year", header: "Budget Year" }]}
@@ -479,6 +483,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
               />
               <LookupField
                 label="Division"
+                required
                 value={form.div_code}
                 displayValue={form.div_code ? `${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}` : ""}
                 columns={[
@@ -497,6 +502,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
             <div className="mt-2.5 grid grid-cols-1 lg:grid-cols-2 gap-x-3">
               <LookupField
                 label="Account"
+                required
                 value={form.ac_code}
                 displayValue={form.ac_code ? `${form.ac_code}${form.ac_name ? ` - ${form.ac_name}` : ""}` : ""}
                 columns={[

@@ -206,6 +206,7 @@ export function AssetTransferDetailTable({
             {/* Asset */}
             <LookupField
               label="Asset ID – Name"
+              required
               value={editRow.asset_id}
               displayValue={display(editRow.asset_id, editRow.asset_name)}
               columns={assetColumns}

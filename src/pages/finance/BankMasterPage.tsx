@@ -229,16 +229,16 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="bank-master-form" onSubmit={handleSubmit}>
         {error && <div className="alert error">{error}</div>}
-        <Field label="Bank Code" value={form.bank_code} onChange={(value) => setField("bank_code", value)} disabled={readOnly || isEdit} />
-        <Field label="Bank Name" value={form.bank_name} onChange={(value) => setField("bank_name", value)} disabled={readOnly} />
+        <Field label="Bank Code" value={form.bank_code} onChange={(value) => setField("bank_code", value)} disabled={readOnly || isEdit} required />
+        <Field label="Bank Name" value={form.bank_name} onChange={(value) => setField("bank_name", value)} disabled={readOnly} required />
         <Field label="Short Name" value={form.bank_short_name} onChange={(value) => setField("bank_short_name", value)} disabled={readOnly} />
-        <Field label="Main Bank Code" value={form.main_bank_code} onChange={(value) => setField("main_bank_code", value)} disabled={readOnly} />
+        <Field label="Main Bank Code" value={form.main_bank_code} onChange={(value) => setField("main_bank_code", value)} disabled={readOnly} required />
         <Field label="Country Code" value={form.country_code} onChange={(value) => setField("country_code", value)} disabled={readOnly} />
         <Field label="Phone" value={form.phone} onChange={(value) => setField("phone", value)} disabled={readOnly} />
         <Field label="Fax" value={form.fax} onChange={(value) => setField("fax", value)} disabled={readOnly} />
         <Field label="Email" value={form.email} onChange={(value) => setField("email", value)} disabled={readOnly} />
         <label className="field">
-          <span>Address</span>
+          <span>Address <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span></span>
           <textarea className="ui-textarea" value={form.bank_addr1} onChange={(event) => setField("bank_addr1", event.target.value)} disabled={readOnly} />
         </label>
         <label className="field">
@@ -254,10 +254,13 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
   );
 }
 
-function Field({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+function Field({ label, value, onChange, disabled, required }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; required?: boolean }) {
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>
+        {label}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
       <Input value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
     </label>
   );

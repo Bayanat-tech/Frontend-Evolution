@@ -998,7 +998,7 @@ function Field({ label, value, onChange, type = "text", readOnly = false, requir
   const safeValue = type === "date" ? normalizeDateInput(value) : value;
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
       <Input
         className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
         type={type}
@@ -1018,7 +1018,7 @@ function SelectField({ label, value, options, onChange, required, className = ""
   if (!editable) return <DisplayField label={label} value={value} className={className} />;
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
       <select
         className="h-7 rounded-md border border-input bg-background px-2 text-xs font-normal text-foreground"
         value={value}
@@ -1040,7 +1040,7 @@ function Textarea({ label, value, onChange, className = "", rows = 2, required }
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
       <textarea
         rows={rows}
         className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-normal text-foreground shadow-none"
