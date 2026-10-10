@@ -1,3 +1,4 @@
+import { Textarea } from "../../components/ui/Textarea";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
@@ -1243,7 +1244,7 @@ function PettyCashPaymentDocument({
                           label="Account Payee"
                           error={form.ac_payee && form.ac_payee.length > 70 ? `Exceeded limit (${form.ac_payee.length}/70)` : undefined}
                         >
-                          <Input
+                          <Input maxLength={70}
                             disabled={disabled}
                             value={form.ac_payee || ""}
                             placeholder="Account Payee"
@@ -1257,7 +1258,7 @@ function PettyCashPaymentDocument({
                           label="Remarks"
                           error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
                         >
-                          <Input
+                          <Input maxLength={250}
                             disabled={disabled}
                             value={form.remarks || ""}
                             placeholder="Remarks"
@@ -1414,7 +1415,7 @@ function PettyCashPaymentDocument({
                             )}
                           </td>
                           <td className="w-[200px] max-w-[240px] px-1 py-1">
-                            <textarea
+                            <Textarea maxLength={250}
                               disabled={disabled}
                               className={`commercial-line-description ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
                               title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}

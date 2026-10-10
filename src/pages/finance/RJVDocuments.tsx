@@ -1,3 +1,4 @@
+import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
@@ -1182,7 +1183,7 @@ function JVDocument({
                     </Field>
                     <Field label="Source JV No (To Reverse)">
                       <div className="flex gap-1.5 items-center">
-                        <Input
+                        <Input maxLength={30}
                           disabled={disabled || editMode}
                           placeholder="e.g. JV2261000001"
                           value={sourceJvDocNo || form.ref_no || ""}
@@ -1369,7 +1370,7 @@ function JVDocument({
                             )}
                           </td>
                           <td className="w-[200px] max-w-[240px] px-1 py-1">
-                            <textarea
+                            <Textarea maxLength={250}
                               disabled={disabled}
                               className="commercial-line-description"
                               title={detail.remarks || ""}
