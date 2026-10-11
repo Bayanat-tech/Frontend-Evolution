@@ -74,6 +74,15 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   RJV: { title: "Reverse Journal Voucher", subtitle: "Reverse journal entry", addLabel: "Add Reverse Voucher" },
 };
 
+const HEADER_LIMITS: Partial<Record<keyof TransactionHeader, { max: number; label: string }>> = {
+  inv_no:        { max: 30,  label: "Invoice No" },
+  ref_no:        { max: 30,  label: "Ref No" },
+  party_address: { max: 250, label: "Address" },
+  party_phone:   { max: 30,  label: "Phone" },
+  party_fax:     { max: 30,  label: "Fax" },
+  remarks:       { max: 250, label: "Remarks" },
+};
+
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -694,6 +703,16 @@ function PaymentDocumentEditor({
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
 
+  const limitErr = (f: keyof TransactionHeader) => {
+  const l = HEADER_LIMITS[f];
+  const v = String(form[f] ?? "");
+  return l && v.length > l.max ? `Exceeded limit (${v.length}/${l.max})` : undefined;
+};
+const limitProps = (f: keyof TransactionHeader) => ({
+  maxLength: HEADER_LIMITS[f]?.max,
+  className: limitErr(f) ? "!border-rose-500 !ring-rose-400" : "",
+});
+
   const [lineSearch, setLineSearch] = useState("");
   const filteredDetail = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
@@ -1093,33 +1112,46 @@ function PaymentDocumentEditor({
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
     // Character limit validations
-    if (form.inv_no && form.inv_no.length > 30) {
-      return setError("You have exceeded the character limit for Invoice No.");
-    }
-    if (form.ref_no && form.ref_no.length > 30) {
-      return setError("You have exceeded the character limit for Ref No.");
-    }
-    if (form.party_address && form.party_address.length > 250) {
-      return setError("You have exceeded the character limit for Address (max 250 characters).");
-    }
-    if (form.party_phone && form.party_phone.length > 30) {
-      return setError("You have exceeded the character limit for Phone (max 30 characters).");
-    }
-    if (form.party_fax && form.party_fax.length > 30) {
-      return setError("You have exceeded the character limit for Fax (max 30 characters).");
-    }
-    if (form.remarks && form.remarks.length > 250) {
-      return setError("You have exceeded the character limit for Remarks.");
-    }
+    // if (form.inv_no && form.inv_no.length > 30) {
+    //   return setError("You have exceeded the character limit for Invoice No.");
+    // }
+    // if (form.ref_no && form.ref_no.length > 30) {
+    //   return setError("You have exceeded the character limit for Ref No.");
+    // }
+    // if (form.party_address && form.party_address.length > 250) {
+    //   return setError("You have exceeded the character limit for Address (max 250 characters).");
+    // }
+    // if (form.party_phone && form.party_phone.length > 30) {
+    //   return setError("You have exceeded the character limit for Phone (max 30 characters).");
+    // }
+    // if (form.party_fax && form.party_fax.length > 30) {
+    //   return setError("You have exceeded the character limit for Fax (max 30 characters).");
+    // }
+    // if (form.remarks && form.remarks.length > 250) {
+    //   return setError("You have exceeded the character limit for Remarks.");
+    // }
+
+    for (const [f, l] of Object.entries(HEADER_LIMITS)) {
+  const v = String((form as Record<string, unknown>)[f] ?? "");
+  if (l && v.length > l.max) {
+    return setError(`You have exceeded the character limit for ${l.label}.`);
+  }
+}
 
     if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
 
     // Check line character limits
-    for (const d of form.detail) {
-      if (d.remarks && d.remarks.length > 250) {
-        return setError(`You have exceeded the character limit for Remarks on Line #${d.serial_no || 1}.`);
-      }
-    }
+    // for (const d of form.detail) {
+    //   if (d.remarks && d.remarks.length > 250) {
+    //     return setError(`You have exceeded the character limit for Remarks on Line #${d.serial_no || 1}.`);
+    //   }
+    // }
+
+    const tooLong = form.detail.filter((d) => d.remarks && d.remarks.length > 250);
+if (tooLong.length) {
+  setInvalidLineIds(new Set(tooLong.map((d) => d.id)));
+  return setError(`You have exceeded the character limit for Remarks on Line #${tooLong[0].serial_no || 1}.`);
+}
 
     // Missing field validation on lines (new row without details / missing account or zero amount)
     const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
@@ -1225,7 +1257,10 @@ function PaymentDocumentEditor({
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} 
+    // className={`payment-workbench commercial-editor grid h-screen 
+    className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen
+    ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1344,55 +1379,8 @@ function PaymentDocumentEditor({
             ) : (
               <div className="commercial-header-shell flex flex-col gap-1.5 mb-3">
                 <div className="commercial-header-panel">
-                  {/* Block 1: Document Details */}
-                  <section className="commercial-header-block commercial-header-block-doc">
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon"><FileText size={11} /></span>
-                      <span>Document Details</span>
-                    </div>
-                    <div className="commercial-header-block-fields">
-                      <Field label="Doc Date" required>
-                        <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
-                      </Field>
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field
-                          label="Inv No*"
-                          error={form.inv_no && form.inv_no.length > 30 ? `Exceeded limit (${form.inv_no.length}/30)` : undefined}
-                        >
-                          <Input
-                            required
-                            disabled={disabled}
-                            value={form.inv_no || ""}
-                            placeholder="Invoice No"
-                            className={form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                            onChange={(event) => updateField("inv_no", event.target.value)}
-                          />
-                        </Field>
-                      )}
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field label="Inv Date">
-                          <BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
-                        </Field>
-                      )}
-                      {docType !== "CR" && (
-                        <LookupField
-                          label="Bank Account"
-                          value={form.bank_ac_code || ""}
-                          displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                          columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
-                          valueField="bank_ac_code"
-                          displayFields={["bank_ac_code", "bank_ac_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
-                          })}
-                          disabled={disabled || !form.div_code}
-                          onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
-                        />
-                      )}
-                    </div>
-                  </section>
 
-                  {/* Block 2: Customer / Supplier Details */}
+                  {/* Block 1: Customer / Supplier Details */}
                   <section className={`commercial-header-block commercial-header-block-party ${docType === "CN" ? "commercial-header-block-party-sales" : ""}`}>
                     <div className="commercial-header-block-title">
                       <span className="finance-section-icon">
@@ -1459,7 +1447,7 @@ function PaymentDocumentEditor({
                       <Field label="Exchange Rate*">
                         <Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
                       </Field>
-                      <Field
+                      {/* <Field
                         label="Address"
                         className="col-span-2 max-md:col-span-1"
                         error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}
@@ -1472,8 +1460,13 @@ function PaymentDocumentEditor({
                           className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
                           onChange={(event) => updateField("party_address", event.target.value)}
                         />
-                      </Field>
-                      <Field
+                      </Field> */}
+
+                      <Field label="Address" className="col-span-2 max-md:col-span-1" error={limitErr("party_address")}>
+                        <Input {...limitProps("party_address")} placeholder="Address" disabled={disabled} value={form.party_address || ""}
+                          onChange={(event) => updateField("party_address", event.target.value)} />
+                         </Field>
+                      {/* <Field
                         label="Phone"
                         error={form.party_phone && form.party_phone.length > 30 ? `Exceeded limit (${form.party_phone.length}/30)` : undefined}
                       >
@@ -1485,8 +1478,17 @@ function PaymentDocumentEditor({
                           className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
                           onChange={(event) => updateField("party_phone", event.target.value)}
                         />
-                      </Field>
-                      <Field
+                      </Field> */}
+                      <Field label="Phone" error={limitErr("party_phone")}>
+  <Input
+    {...limitProps("party_phone")}
+    placeholder="Phone"
+    disabled={disabled}
+    value={form.party_phone || ""}
+    onChange={(event) => updateField("party_phone", event.target.value)}
+  />
+</Field>
+                      {/* <Field
                         label="Fax"
                         error={form.party_fax && form.party_fax.length > 30 ? `Exceeded limit (${form.party_fax.length}/30)` : undefined}
                       >
@@ -1498,12 +1500,82 @@ function PaymentDocumentEditor({
                           className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
                           onChange={(event) => updateField("party_fax", event.target.value)}
                         />
-                      </Field>
+                      </Field> */}
+                      <Field label="Fax" error={limitErr("party_fax")}>
+  <Input
+    {...limitProps("party_fax")}
+    placeholder="Fax"
+    disabled={disabled}
+    value={form.party_fax || ""}
+    onChange={(event) => updateField("party_fax", event.target.value)}
+  />
+</Field>
                     </div>
                   </section>
 
+                  {/* Block 2: Document Details */}
+                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-1.5">
+                    <section className="commercial-header-block commercial-header-block-doc commercial-header-block-doc-4">
+                    {/* <section className="commercial-header-block commercial-header-block-doc"> */}
+                    <div className="commercial-header-block-title">
+                      <span className="finance-section-icon"><FileText size={11} /></span>
+                      <span>Document Details</span>
+                    </div>
+                    <div className="commercial-header-block-fields">
+                      <Field label="Doc Date" required>
+                        <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
+                      </Field>
+                      {(docType === "CN" || docType === "DN") && (
+                        // <Field
+                        //   label="Inv No*"
+                        //   error={form.inv_no && form.inv_no.length > 30 ? `Exceeded limit (${form.inv_no.length}/30)` : undefined}
+                        // >
+                        //   <Input
+                        //     required
+                        //     disabled={disabled}
+                        //     value={form.inv_no || ""}
+                        //     placeholder="Invoice No"
+                        //     className={form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                        //     onChange={(event) => updateField("inv_no", event.target.value)}
+                        //   />
+                        // </Field>
+                        <Field label="Inv No*" error={limitErr("inv_no")}>
+  <Input
+    {...limitProps("inv_no")}
+    required
+    disabled={disabled}
+    value={form.inv_no || ""}
+    placeholder="Invoice No"
+    onChange={(event) => updateField("inv_no", event.target.value)}
+  />
+</Field>
+                      )}
+                      {(docType === "CN" || docType === "DN") && (
+                        <Field label="Inv Date">
+                          <BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
+                        </Field>
+                      )}
+                      {docType !== "CR" && (
+                        <LookupField
+                          label="Bank Account"
+                          value={form.bank_ac_code || ""}
+                          displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
+                          columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
+                          valueField="bank_ac_code"
+                          displayFields={["bank_ac_code", "bank_ac_name"]}
+                          loadOptions={() => getDynamicLookup({
+                            parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
+                          })}
+                          disabled={disabled || !form.div_code}
+                          onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
+                        />
+                      )}
+                    </div>
+                  </section> 
+
                   {/* Block 3: Tax & Remarks */}
-                  <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-wide">
+                  {/* <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-wide"> */}
+                   <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-3">
                     <div className="commercial-header-block-title">
                       <span className="finance-section-icon"><Receipt size={11} /></span>
                       <span>Tax & Remarks</span>
@@ -1619,7 +1691,7 @@ function PaymentDocumentEditor({
                           <option value="E">Exempt</option>
                         </Select>
                       </label>
-                      <Field
+                      {/* <Field
                         label="Remarks"
                         className="col-span-2 max-md:col-span-1"
                         error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
@@ -1631,9 +1703,19 @@ function PaymentDocumentEditor({
                           className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
                           onChange={(event) => updateField("remarks", event.target.value)}
                         />
-                      </Field>
+                      </Field> */}
+                      <Field label="Remarks" className="col-span-2 max-md:col-span-1" error={limitErr("remarks")}>
+                          <Input
+                          {...limitProps("remarks")}
+                           disabled={disabled}
+                           value={form.remarks || ""}
+                            placeholder="Remarks"
+                            onChange={(event) => updateField("remarks", event.target.value)}
+                            />
+                         </Field>
                     </div>
                   </section>
+                </div>
                 </div>
               </div>
             )}

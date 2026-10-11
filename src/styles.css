@@ -11314,21 +11314,79 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   min-height: 36px !important;
 }
 
-/* Document Details: fixed column widths so date pickers never wrap */
+/* ── Document Details: 5 columns fill the card, Ref Date is widest ── */
 .commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields {
-  grid-template-columns:
-    minmax(140px, 1.15fr)   /* Doc Date */
-    minmax(100px, 1fr)      /* Ref No */
-    minmax(140px, 1.15fr)   /* Ref Date / INV Date */
-    minmax(120px, 1fr)      /* APP Ref No */
-    minmax(140px, 1fr);     /* LPO Category */
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: 1.05fr 0.95fr 1.3fr 1fr 2fr !important;
+  gap: 8px !important;
 }
 
-.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .field,
-.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > div {
+/* ── Tax & Additional Details: Remarks takes the leftover ── */
+.commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: 1.3fr 0.8fr 0.9fr 1.6fr !important;
+  gap: 8px !important;
+}
+
+/* ── Cells can shrink, controls fill the cell ── */
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > *,
+.commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  grid-column: auto !important;
+}
+
+.commercial-document-workbench .commercial-header-block-doc :where(input, select),
+.commercial-document-workbench .commercial-header-block-tax :where(input, select) {
+  width: 100%;
   min-width: 0;
 }
 
-.commercial-document-workbench .commercial-header-block-doc :where(button, input, select, span) {
-  white-space: nowrap;
+/* ── Date placeholder must stay on one line ── */
+/* .commercial-document-workbench .commercial-header-block-doc .field,
+.commercial-document-workbench .commercial-header-block-doc .field * {
+  white-space: nowrap !important;
+}
+.commercial-document-workbench .commercial-header-block-doc .field input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+} */
+
+/* ── Small screens ── */
+@media (max-width: 1100px) {
+  .commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 640px) {
+  .commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Credit/Debit Note: Document Details has 4 fields (Doc Date, Inv No, Inv Date, Bank Account) */
+.commercial-document-workbench .commercial-header-block-doc.commercial-header-block-doc-4 .commercial-header-block-fields {
+  grid-template-columns: 1fr 1fr 1.2fr 1.7fr !important;
+}
+
+/* Tax & Remarks has 3 fields (Tax Code, Tax Type, Remarks) */
+.commercial-document-workbench .commercial-header-block-tax.commercial-header-block-tax-3 .commercial-header-block-fields {
+  grid-template-columns: 1.2fr 0.9fr 2fr !important;
+}
+
+@media (max-width: 1100px) {
+  .commercial-document-workbench .commercial-header-block-doc-4 .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax-3 .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 640px) {
+  .commercial-document-workbench .commercial-header-block-doc-4 .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax-3 .commercial-header-block-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }

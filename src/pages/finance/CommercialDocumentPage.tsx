@@ -134,6 +134,21 @@ const META: Record<CommercialType, { title: string;  addLabel: string }> = {
   SV: { title: "Service Invoice", addLabel: "Add Service" },
 };
 
+const HEADER_LIMITS: Partial<Record<keyof FormState, { max: number; label: string }>> = {
+  ref_no:        { max: 30,  label: "Ref No" },
+  remarks:       { max: 250, label: "Remarks" },
+  party_address: { max: 250, label: "Address" },
+  party_phone:   { max: 30,  label: "Party Phone" },
+  party_fax:      { max: 30,  label: "Party Fax" },
+  payment_terms: { max: 250, label: "Payment Terms" },
+  dlvr_contact:  { max: 70,  label: "Contact" },
+  dlvr_mobile:   { max: 20,  label: "Mobile" },
+  dlvr_email:    { max: 50,  label: "E-mail" },
+  dlvr_term:     { max: 50,  label: "Delivery Term" },
+  delivery_to:   { max: 250, label: "Delivery To" },
+  app_ref_no:    { max: 30,  label: "APP Ref No" },
+};
+
 // const today = () => new Date().toISOString().slice(0, 10);
 const today = () => localYmd(new Date());
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -688,6 +703,19 @@ function CommercialEditor({
   const showReferenceBlock = !isPO;
   const isCancelled = form.canceled === "Y";
 
+  const refNoErr = form.ref_no && form.ref_no.length > 30 ? `Max 30 (${form.ref_no.length})` : undefined;
+  const refNoOver = Boolean(refNoErr);
+  const limitErr = (f: keyof FormState) => {
+  const l = HEADER_LIMITS[f];
+  const v = String(form[f] ?? "");
+  return l && v.length > l.max ? `Max ${l.max} (${v.length})` : undefined;
+};
+
+const limitProps = (f: keyof FormState) => ({
+  maxLength: HEADER_LIMITS[f]?.max,
+  className: limitErr(f) ? "!border-rose-500 !ring-rose-400" : "",
+});
+
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
   // const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
   const baseSign = (docType === "PI" || docType === "PO") ? 1 : -1;
@@ -830,21 +858,30 @@ function CommercialEditor({
   if (isSales && !form.ref_no)          hErr.ref_no    = "Ref No is required";    //inv_no 
 
   // Character limit validations
-  if (form.ref_no && form.ref_no.length > 30) {
-    setError("You have exceeded the character limit for Ref No.");
-    return;
-  }
-  if (form.remarks && form.remarks.length > 250) {
-    setError("You have exceeded the character limit for Remarks.");
-    return;
-  }
-  for (const line of form.detail) {
-    if (line.remarks && line.remarks.length > 250) {
-      setError("You have exceeded the character limit for Remarks.");
-      return;
-    }
-    if (line.l4_description && line.l4_description.length > 250) {
-      setError("You have exceeded the character limit for Remarks.");
+  // if (form.ref_no && form.ref_no.length > 30) {
+  //   setError("You have exceeded the character limit for Ref No.");
+  //   return;
+  // }
+  // if (form.remarks && form.remarks.length > 250) {
+  //   setError("You have exceeded the character limit for Remarks.");
+  //   return;
+  // }
+  // for (const line of form.detail) {
+  //   if (line.remarks && line.remarks.length > 250) {
+  //     setError("You have exceeded the character limit for Remarks.");
+  //     return;
+  //   }
+  //   if (line.l4_description && line.l4_description.length > 250) {
+  //     setError("You have exceeded the character limit for Remarks.");
+  //     return;
+  //   }
+  // }
+
+    // Character limit validations
+  for (const [f, l] of Object.entries(HEADER_LIMITS)) {
+    const v = String((form as Record<string, unknown>)[f] ?? "");
+    if (l && v.length > l.max) {
+      setError(`You have exceeded the character limit for ${l.label}.`);
       return;
     }
   }
@@ -1324,18 +1361,18 @@ function CommercialEditor({
   </Field>
 
   {/* Contact / Delivery */}
-  <Field label="Contact" className="col-span-1">
-    <Input disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
+    <Field label="Contact" className="col-span-1" error={limitErr("dlvr_contact")}>
+    <Input {...limitProps("dlvr_contact")} disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
   </Field>
-  <Field label="Mobile" className="col-span-1">
-    <Input disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
+  <Field label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile")}>
+    <Input {...limitProps("dlvr_mobile")} disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
   </Field>
-  <Field label="E-mail" className="col-span-1">
-    <Input disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
+  <Field label="E-mail" className="col-span-1" error={limitErr("dlvr_email")}>
+    <Input {...limitProps("dlvr_email")} disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
   </Field>
 
-  <Field label="Payment Terms" className="col-span-1">
-    <Input disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
+  <Field label="Payment Terms" className="col-span-1" error={limitErr("payment_terms")}>
+    <Input {...limitProps("payment_terms")} disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
   </Field>
 
   {isSales && (
@@ -1394,7 +1431,7 @@ function CommercialEditor({
   />
   )}
 
-  {isPO && (
+  {/* {isPO && (
     <Field label="Delivery Term">
       <Input disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
     </Field>
@@ -1403,6 +1440,18 @@ function CommercialEditor({
   {isPO && (
     <Field label="Delivery To">
       <Input disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
+    </Field>
+  )} */}
+
+    {isPO && (
+    <Field label="Delivery Term" error={limitErr("dlvr_term")}>
+      <Input {...limitProps("dlvr_term")} disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
+    </Field>
+  )}
+
+  {isPO && (
+    <Field label="Delivery To" error={limitErr("delivery_to")}>
+      <Input {...limitProps("delivery_to")} disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
     </Field>
   )}
           </div>
@@ -1426,16 +1475,29 @@ function CommercialEditor({
 
   {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
-    <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
-        className={fieldErrors.ref_no ? "border-destructive" : ""}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
+    // <Field label="Ref No" required error={fieldErrors.ref_no}>
+    //   <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
+    //     className={fieldErrors.ref_no ? "border-destructive" : ""}
+    //     onChange={(e) => update("ref_no", e.target.value)} />
+    // </Field>
+    <Field label="Ref No" required error={refNoErr || fieldErrors.ref_no}>
+      <Input {...reqProps("Ref No")} disabled={isCancelled} maxLength={30} value={form.ref_no || ""}
+       className={`${fieldErrors.ref_no ? "border-destructive" : ""} ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
+       onChange={(e) => update("ref_no", e.target.value)} />
+</Field>
   )}
-  {isSales && (
+  {/* {isSales && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
       <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
+    </Field>
+  )} */}
+
+    {isSales && (
+    <Field label="Ref No" required error={refNoErr || fieldErrors.ref_no}>
+      <Input {...reqProps("Ref No")} disabled={isCancelled} maxLength={30} value={form.ref_no || form.inv_no || ""}
+        className={`${fieldErrors.ref_no ? "border-destructive" : ""} ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
@@ -1548,10 +1610,15 @@ function CommercialEditor({
 
   {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
   {isPO && (
-    <Field label="Ref No">
-      <Input disabled={isCancelled} value={form.ref_no || ""}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
+    // <Field label="Ref No">
+    //   <Input disabled={isCancelled} value={form.ref_no || ""}
+    //     onChange={(e) => update("ref_no", e.target.value)} />
+    // </Field>
+    <Field label="Ref No" error={refNoErr}>
+  <Input disabled={isCancelled} maxLength={30} value={form.ref_no || ""}
+    className={refNoOver ? "!border-rose-500 !ring-rose-400" : ""}
+    onChange={(e) => update("ref_no", e.target.value)} />
+</Field>
   )}
   {isPO && (
     <Field label="Ref Date">
@@ -1559,8 +1626,13 @@ function CommercialEditor({
     </Field>
   )}
   {isPO && (
-    <Field label="APP Ref No">
-      <Input disabled={isCancelled} value={form.app_ref_no || ""}
+    // <Field label="APP Ref No">
+    //   <Input disabled={isCancelled} value={form.app_ref_no || ""}
+    //     onChange={(e) => update("app_ref_no", e.target.value)} />
+    // </Field>
+
+    <Field label="APP Ref No" error={limitErr("app_ref_no")}>
+      <Input {...limitProps("app_ref_no")} disabled={isCancelled} value={form.app_ref_no || ""}
         onChange={(e) => update("app_ref_no", e.target.value)} />
     </Field>
   )}
@@ -1873,12 +1945,15 @@ function CommercialEditor({
                         <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         {isPO && <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
-                        onChange={(e) => {
-    const amount = Number(e.target.value || 0);
-    const taxperc   = Number(line.tx_compnt_perc_1 || 0);
-    updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
-  }} /></td>
+                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" min="0.001" required
+                           onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
+                            onInput={(e) => e.currentTarget.setCustomValidity("")}
+                            value={line.amount}
+                            onChange={(e) => {
+                             const amount = Number(e.target.value || 0);
+                             const taxperc   = Number(line.tx_compnt_perc_1 || 0);
+                            updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
+                          }} /></td>
                         {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-14 max-w-[62px] px-1 py-1">
                           <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
@@ -2057,22 +2132,40 @@ const reqProps = (label: string) => ({
   onInput: (e: React.FormEvent<HTMLInputElement>) => e.currentTarget.setCustomValidity(""),
 });
 
+// function Field({ label, children, error, required, className }: { label: string; children: React.ReactNode; error?: string; required?: boolean; className?: string }) {
+//   const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+//   const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+//   const isRequired = Boolean(required || hasAsterisk);
+//   return (
+//     <label className={`field ${className || ""}`}>
+//       <span>
+//         {cleanLabel}
+//         {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+//       </span>
+//       {children}
+//       {error && (
+//         <span style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+//           <AlertCircle size={11} /> {error}
+//         </span>
+//       )}
+//     </label>
+//   );
+// }
+
 function Field({ label, children, error, required, className }: { label: string; children: React.ReactNode; error?: string; required?: boolean; className?: string }) {
   const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
   const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
   const isRequired = Boolean(required || hasAsterisk);
   return (
     <label className={`field ${className || ""}`}>
-      <span>
-        {cleanLabel}
-        {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+      <span className="flex items-center justify-between gap-1">
+        <span>
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+        </span>
+        {error && <span className="text-[10px] text-destructive font-semibold tracking-tight">{error}</span>}
       </span>
       {children}
-      {error && (
-        <span style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
-          <AlertCircle size={11} /> {error}
-        </span>
-      )}
     </label>
   );
 }
