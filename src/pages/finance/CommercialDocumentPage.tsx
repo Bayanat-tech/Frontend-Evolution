@@ -1470,9 +1470,9 @@ const limitProps = (f: keyof FormState) => ({
           </div>
         </section>
 
-         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-2">
           {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5"> */}
-          <section className="commercial-header-block commercial-header-block-doc">
+          <section className={`commercial-header-block commercial-header-block-doc ${!isPO ? "commercial-header-block-doc-4" : "commercial-header-block-doc-5"}`}>
                 <div className="commercial-header-block-title">
                   <span className="finance-section-icon"><FileText size={11} /></span>
                   <span>Document Details</span>
@@ -1549,15 +1549,13 @@ const limitProps = (f: keyof FormState) => ({
   {!isPO && (
     <LookupField
       label="Ref Doc"
-      className="col-span-2 commercial-doc-ref-lookup"
+      className="commercial-doc-ref-lookup"
       disabled={isCancelled}
       value={form.ref_doc_no || ""}
       displayValue={form.ref_doc_no || ""}
       columns={[
         { field: "DOC_NO", header: "Doc No" },
         { field: "DOC_DATE", header: "Date" },
-        { field: "REF_NO", header: "Ref No" },
-        { field: "REMARKS", header: "Remarks" },
       ]}
       valueField="DOC_NO"
       displayFields={["DOC_NO"]}
@@ -1953,7 +1951,7 @@ const limitProps = (f: keyof FormState) => ({
                         <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         {isPO && <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input font-bold !text-emerald-700 !bg-emerald-50/60 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px]" type="number" step="0.001" min="0.001" required
+                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px]" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
                             onInput={(e) => e.currentTarget.setCustomValidity("")}
                             value={line.amount}
@@ -1998,7 +1996,7 @@ const limitProps = (f: keyof FormState) => ({
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input font-semibold !text-amber-800 !bg-amber-50/50 border-amber-200 !text-xs md:!text-[13px]" type="number" 
+                        <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px]" type="number" 
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                        {showAllColumns && (
@@ -2071,9 +2069,9 @@ const limitProps = (f: keyof FormState) => ({
                     <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Total Amount</span>
                     <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-amber-50/90 px-3.5 py-1.5 rounded-md border border-amber-300 shadow-2xs">
-                    <span className="text-amber-800 font-bold text-xs uppercase tracking-wider">Tax Amount</span>
-                    <strong className="text-amber-700 font-mono text-sm md:text-base font-bold">{formatAmount(taxTotal)}</strong>
+                  <div className="flex items-center gap-2.5 bg-emerald-50/90 px-3.5 py-1.5 rounded-md border border-emerald-300 shadow-2xs">
+                    <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Tax Amount</span>
+                    <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(taxTotal)}</strong>
                   </div>
                   <div className="flex items-center gap-2.5 bg-blue-50 px-4 py-1.5 rounded-md border-2 border-[#00378c]/50 shadow-xs">
                     <span className="font-extrabold text-[#00378c] text-xs uppercase tracking-wider">Net Total</span>

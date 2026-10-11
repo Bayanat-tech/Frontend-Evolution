@@ -11314,11 +11314,26 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   min-height: 36px !important;
 }
 
-/* ── Document Details: 5 columns balanced for LPO / Purchase / Sales ── */
-.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields {
+/* ── Document Details: 4 columns in PI / Sales, 5 columns in PO ── */
+.commercial-document-workbench .commercial-header-block-doc.commercial-header-block-doc-4 .commercial-header-block-fields {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: 1.1fr 0.95fr 1.35fr 1.1fr 1.2fr !important;
+  grid-template-columns: 1fr 0.95fr 1fr 1fr !important;
+  gap: 8px !important;
+}
+
+.commercial-document-workbench .commercial-header-block-doc.commercial-header-block-doc-5 .commercial-header-block-fields {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: 1.05fr 0.95fr 1.25fr 1.05fr 1.15fr !important;
+  gap: 8px !important;
+}
+
+/* Fallback if class not applied */
+.commercial-document-workbench .commercial-header-block-doc:not(.commercial-header-block-doc-4):not(.commercial-header-block-doc-5) .commercial-header-block-fields {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: 1fr 0.95fr 1fr 1fr !important;
   gap: 8px !important;
 }
 
@@ -11326,7 +11341,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: minmax(180px, 210px) 115px 1fr !important;
+  grid-template-columns: minmax(210px, 240px) 115px 1fr !important;
   gap: 8px !important;
 }
 
@@ -11344,13 +11359,26 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   grid-column: auto !important;
 }
 
-/* ── Ref Doc (PO reference in PI / Sales): expand across column 4 & 5 to fill all available space ── */
-.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .commercial-doc-ref-lookup,
-.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .col-span-2,
-.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > label.col-span-2 {
-  grid-column: 4 / -1 !important;
+/* ── Ref Doc: occupies standard column ── */
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .commercial-doc-ref-lookup {
   width: 100% !important;
   min-width: 0 !important;
+  grid-column: auto !important;
+}
+
+/* ── Financial line item inputs: soft emerald light green matching footer total ── */
+.commercial-document-workbench .commercial-lines-table-separated .commercial-amount-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-amt-input {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #86efac !important;
+  font-weight: 700 !important;
+}
+.commercial-document-workbench .commercial-lines-table-separated .commercial-amount-input:focus,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-amt-input:focus {
+  background-color: #f0fdf4 !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25) !important;
 }
 
 /* ── Clean vertical & horizontal divider lines in commercial tables ── */
