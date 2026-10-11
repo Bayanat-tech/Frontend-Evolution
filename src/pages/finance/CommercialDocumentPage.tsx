@@ -1470,7 +1470,7 @@ const limitProps = (f: keyof FormState) => ({
           </div>
         </section>
 
-         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-2">
+         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
           {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5"> */}
           <section className="commercial-header-block commercial-header-block-doc">
                 <div className="commercial-header-block-title">
@@ -1768,7 +1768,7 @@ const limitProps = (f: keyof FormState) => ({
   {/* ── Remarks ── */}
   <Field
     label="Remarks"
-    className="col-span-1"
+    className="commercial-remarks-field col-span-1"
     error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
   >
     <Input

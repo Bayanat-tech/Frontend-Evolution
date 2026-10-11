@@ -11322,12 +11322,18 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   gap: 8px !important;
 }
 
-/* ── Tax & Additional Details: 3 fields (Category, Type, Remarks gets remaining space) ── */
+/* ── Tax & Additional Details: Category & Type are compact, Remarks gets ALL remaining width ── */
 .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: 1.8fr 1fr 2.6fr !important;
+  grid-template-columns: minmax(180px, 210px) 115px 1fr !important;
   gap: 8px !important;
+}
+
+.commercial-document-workbench .commercial-header-block-tax .commercial-remarks-field,
+.commercial-document-workbench .commercial-header-block-tax .commercial-remarks-field input {
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 /* ── Cells can shrink, controls fill the cell ── */
