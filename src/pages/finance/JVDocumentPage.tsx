@@ -32,7 +32,7 @@ import {
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
-import { getDynamicLookup, getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -425,17 +425,25 @@ function JVDocument({
 
   const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+  const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
 
   const loadTaxOptions = async () => {
     let rows: LookupRow[] = [];
     try {
-      rows = await getDynamicFinanceLookup({
-        parameter: "Account_Tax_Search",
-        code1: user?.company_code || "",
-        loginid: user?.loginid || user?.username || "ADMIN",
-      });
+      rows = await getFinanceTaxList();
     } catch {
       // fallback
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicFinanceLookup({
+          parameter: "Account_Tax_Search",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        // fallback
+      }
     }
     if (!rows || rows.length === 0) {
       try {
@@ -448,7 +456,8 @@ function JVDocument({
         rows = [];
       }
     }
-    const map: Record<string, number> = {};
+    const rMap: Record<string, number> = {};
+    const tMap: Record<string, string> = {};
     (rows || []).forEach((r) => {
       const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
       const rawRate = Number(
@@ -460,30 +469,21 @@ function JVDocument({
         getLookupValue(r, "rate") ??
         0
       );
-      const name = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
-      let rate = rawRate;
-      if (rate <= 0) {
-        if (name.includes("5%") || name.includes("STD") || name.includes("STANDARD") || code.startsWith("10") || code.startsWith("11")) {
-          rate = 5;
-        }
+      const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
+      if (code) {
+        rMap[code] = rawRate;
+        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
       }
-      if (code) map[code] = rate;
     });
-    setTaxRateMap((prev) => ({ ...prev, ...map }));
+    setTaxRateMap((prev) => ({ ...prev, ...rMap }));
+    setTaxTypeMap((prev) => ({ ...prev, ...tMap }));
     return rows;
   };
 
   const getTaxPercForCode = (code: string): number => {
     const trimmed = (code || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined && taxRateMap[trimmed] > 0) {
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
       return taxRateMap[trimmed];
-    }
-    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
-    if (defaultPerc !== undefined && defaultPerc > 0) return defaultPerc;
-    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
-    if (firstNonZero && firstNonZero > 0) return firstNonZero;
-    if (trimmed.startsWith("10") || trimmed.startsWith("11") || trimmed.toUpperCase().includes("STD")) {
-      return 5;
     }
     return 0;
   };
@@ -1211,16 +1211,20 @@ function JVDocument({
                     <Field label="Exchange Rate" required>
                       <Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
                     </Field>
-                    <label className="field col-span-2 max-md:col-span-1">
-                      <span>Remarks</span>
+                    <Field
+                      label="Remarks"
+                      className="col-span-2 max-md:col-span-1"
+                      error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
+                    >
                       <Input
                         disabled={disabled}
                         value={form.remarks || ""}
                         maxLength={250}
                         placeholder="Remarks"
+                        className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
                         onChange={(event) => updateField("remarks", event.target.value)}
                       />
-                    </label>
+                    </Field>
                   </div>
                 </div>
               </div>
@@ -1365,8 +1369,8 @@ function JVDocument({
                           <td className="w-[200px] max-w-[240px] px-1 py-1">
                             <Textarea maxLength={250}
                               disabled={disabled}
-                              className="commercial-line-description"
-                              title={detail.remarks || ""}
+                              className={`commercial-line-description ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}
                               rows={1}
                               value={detail.remarks || ""}
                               onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })}
@@ -1789,15 +1793,18 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children, className }: { label: string; required?: boolean; children: ReactNode; className?: string }) {
+function Field({ label, required, children, className, error }: { label: string; required?: boolean; children: ReactNode; className?: string; error?: string }) {
   const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
   const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
   const isRequired = Boolean(required || hasAsterisk);
   return (
     <label className={`field ${className || ""}`}>
-      <span>
-        {cleanLabel}
-        {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+      <span className="flex items-center justify-between">
+        <span>
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+        </span>
+        {error && <span className="text-[10px] text-destructive font-medium ml-1" style={{ color: "#E24B4A" }}>{error}</span>}
       </span>
       {children}
     </label>

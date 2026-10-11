@@ -65,6 +65,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       const el = innerRef.current;
       if (!el) return;
       const val = String(el.value ?? props.value ?? "");
+
+      // If maxLength is defined, always show the character limit card
+      if (props.maxLength != null) {
+        updateTooltipPosition(val);
+        return;
+      }
+
       if (!val || val.trim().length < 12) {
         setTooltip(null);
         return;
@@ -78,7 +85,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       }
 
       updateTooltipPosition(val);
-    }, [props.value, showOverflowTooltip, type, updateTooltipPosition]);
+    }, [props.maxLength, props.value, showOverflowTooltip, type, updateTooltipPosition]);
 
     const hideTooltip = useCallback(() => {
       setTooltip(null);
@@ -127,8 +134,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             onBlur?.(e);
           }}
           onChange={(e) => {
-            if (tooltip) {
-              const nextVal = e.target.value;
+            const nextVal = e.target.value;
+            if (props.maxLength != null) {
+              updateTooltipPosition(nextVal);
+            } else if (tooltip) {
               if (nextVal && nextVal.length >= 12) {
                 updateTooltipPosition(nextVal);
               } else {
@@ -154,8 +163,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                 boxShadow: "0 10px 25px -5px rgba(0, 55, 140, 0.3), 0 8px 10px -6px rgba(0, 55, 140, 0.2)",
               }}
             >
-              <div className="whitespace-pre-wrap font-medium">{tooltip.text}</div>
-              {props.maxLength && (
+              <div className="whitespace-pre-wrap font-medium break-words max-h-36 overflow-y-auto">
+                {tooltip.text || <span className="opacity-60 italic text-xs">Start typing...</span>}
+              </div>
+              {props.maxLength != null && (
                 <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center justify-between text-[10.5px] opacity-90 font-mono">
                   <span>
                     {tooltip.text.length} / {props.maxLength} characters

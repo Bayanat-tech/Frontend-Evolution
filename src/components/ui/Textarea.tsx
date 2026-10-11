@@ -11,10 +11,10 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
     return () => { window.removeEventListener("scroll", hide, true); window.removeEventListener("resize", hide); };
   }, []);
   const show = (el: HTMLTextAreaElement) => {
-    if (!el.value || el.value.length < 12) return setPreview(null);
+    if (props.maxLength == null && (!el.value || el.value.length < 12)) return setPreview(null);
     const rect = el.getBoundingClientRect();
     const above = rect.bottom + 150 > window.innerHeight;
-    setPreview({ text: el.value, left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(480, window.innerWidth - 16) - 8)), top: above ? rect.top - 6 : rect.bottom + 6, above });
+    setPreview({ text: el.value || "", left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(480, window.innerWidth - 16) - 8)), top: above ? rect.top - 6 : rect.bottom + 6, above });
   };
   return <>
     <textarea {...props}
@@ -25,7 +25,7 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
       onChange={(event) => { show(event.currentTarget); onChange?.(event); }}
     />
     {preview && createPortal(<div role="tooltip" style={{ position: "fixed", zIndex: 99999, left: preview.left, top: preview.top, transform: preview.above ? "translateY(-100%)" : undefined, width: "min(480px, calc(100vw - 16px))", pointerEvents: "none" }} className="rounded-xl bg-[#00378C] p-4 text-sm text-white shadow-xl">
-      <div className="max-h-24 overflow-hidden whitespace-pre-wrap break-words">{preview.text}</div>
+      <div className="max-h-24 overflow-hidden whitespace-pre-wrap break-words">{preview.text || <span className="opacity-60 italic text-xs">Start typing...</span>}</div>
       {props.maxLength != null && <div className="mt-3 flex justify-between border-t border-white/20 pt-2 font-mono text-xs">
         <span>{preview.text.length} / {props.maxLength} characters</span>
         <span>{preview.text.length > props.maxLength ? "Exceeded by " + (preview.text.length - props.maxLength) : "(" + (props.maxLength - preview.text.length) + " left)"}</span>

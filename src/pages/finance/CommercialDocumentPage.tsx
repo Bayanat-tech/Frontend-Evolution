@@ -1319,8 +1319,8 @@ function CommercialEditor({
     </Field>
   {/* </div> */}
 
-  <Field label="Address" className="col-span-2">
-    <Input disabled={isCancelled} value={form.party_address || ""} onChange={(e) => update("party_address", e.target.value)} />
+  <Field label="Address" className="col-span-2" error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}>
+    <Input maxLength={250} placeholder="Address" disabled={isCancelled} value={form.party_address || ""} className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => update("party_address", e.target.value)} />
   </Field>
 
   {/* Contact / Delivery */}
@@ -1686,12 +1686,17 @@ function CommercialEditor({
   </Field>
 
   {/* ── Remarks ── */}
-  <Field label="Remarks" className="col-span-1">
+  <Field
+    label="Remarks"
+    className="col-span-1"
+    error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
+  >
     <Input
       disabled={isCancelled}
       value={form.remarks || ""}
       maxLength={250}
       placeholder="Remarks"
+      className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
       onChange={(e) => update("remarks", e.target.value)}
     />
   </Field>

@@ -34,7 +34,7 @@ import {
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
 } from "../../api/transactions";
-import { getDynamicLookup, getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -641,17 +641,25 @@ function PaymentDocumentEditor({
   }, [docType, editMode, editor]);
 
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+  const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
 
   const loadTaxOptions = useCallback(async () => {
     let rows: LookupRow[] = [];
     try {
-      rows = await getDynamicFinanceLookup({
-        parameter: "Account_Tax_Search",
-        code1: user?.company_code || "",
-        loginid: user?.loginid || user?.username || "ADMIN",
-      });
+      rows = await getFinanceTaxList();
     } catch {
       // fallback
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicFinanceLookup({
+          parameter: "Account_Tax_Search",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        // fallback
+      }
     }
     if (!rows || rows.length === 0) {
       try {
@@ -664,7 +672,8 @@ function PaymentDocumentEditor({
         rows = [];
       }
     }
-    const map: Record<string, number> = {};
+    const rMap: Record<string, number> = {};
+    const tMap: Record<string, string> = {};
     (rows || []).forEach((r) => {
       const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
       const rawRate = Number(
@@ -676,16 +685,14 @@ function PaymentDocumentEditor({
         getLookupValue(r, "rate") ??
         0
       );
-      const name = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
-      let rate = rawRate;
-      if (rate <= 0) {
-        if (name.includes("5%") || name.includes("STD") || name.includes("STANDARD") || code.startsWith("10") || code.startsWith("11")) {
-          rate = 5;
-        }
+      const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
+      if (code) {
+        rMap[code] = rawRate;
+        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
       }
-      if (code) map[code] = rate;
     });
-    setTaxRateMap((prev) => ({ ...prev, ...map }));
+    setTaxRateMap((prev) => ({ ...prev, ...rMap }));
+    setTaxTypeMap((prev) => ({ ...prev, ...tMap }));
     return rows;
   }, [user?.company_code, user?.loginid, user?.username]);
 
@@ -697,18 +704,11 @@ function PaymentDocumentEditor({
 
   const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
     const trimmed = String(taxCode || "").trim();
-    if (trimmed && taxRateMap[trimmed] !== undefined && taxRateMap[trimmed] > 0) {
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
       return taxRateMap[trimmed];
     }
-    if (fallbackPerc != null && !isNaN(Number(fallbackPerc)) && Number(fallbackPerc) > 0) {
+    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
       return Number(fallbackPerc);
-    }
-    const defaultPerc = (taxRateMap["10100"] ?? taxRateMap["11100"]);
-    if (defaultPerc !== undefined && defaultPerc > 0) return defaultPerc;
-    const firstNonZero = Object.values(taxRateMap).find((p) => p > 0);
-    if (firstNonZero && firstNonZero > 0) return firstNonZero;
-    if (trimmed.startsWith("10") || trimmed.startsWith("11") || trimmed.toUpperCase().includes("STD")) {
-      return 5;
     }
     return 0;
   }, [taxRateMap]);
@@ -1185,6 +1185,15 @@ function PaymentDocumentEditor({
     if (form.cheque_bank && form.cheque_bank.length > 50) {
       return setError("You have exceeded the character limit for Cheque Bank.");
     }
+    if (form.party_address && form.party_address.length > 250) {
+      return setError("You have exceeded the character limit for Party Address (max 250 characters).");
+    }
+    if (form.party_phone && form.party_phone.length > 30) {
+      return setError("You have exceeded the character limit for Party Phone (max 30 characters).");
+    }
+    if (form.party_fax && form.party_fax.length > 30) {
+      return setError("You have exceeded the character limit for Party Fax (max 30 characters).");
+    }
     if (form.remarks && form.remarks.length > 250) {
       return setError("You have exceeded the character limit for Remarks.");
     }
@@ -1447,6 +1456,7 @@ function PaymentDocumentEditor({
                             <Input
                               disabled={disabled}
                               required
+                              maxLength={20}
                               value={form.cheque_no || ""}
                               className={form.cheque_no && form.cheque_no.length > 20 ? "!border-rose-500 !ring-rose-400" : ""}
                               onChange={(event) => updateField("cheque_no", event.target.value)}
@@ -1462,6 +1472,7 @@ function PaymentDocumentEditor({
                         >
                           <Input
                             disabled={disabled}
+                            maxLength={50}
                             value={form.cheque_bank || ""}
                             className={form.cheque_bank && form.cheque_bank.length > 50 ? "!border-rose-500 !ring-rose-400" : ""}
                             onChange={(event) => updateField("cheque_bank", event.target.value)}
@@ -1489,6 +1500,7 @@ function PaymentDocumentEditor({
                       >
                         <Input
                           disabled={disabled}
+                          maxLength={30}
                           value={form.ref_no || ""}
                           className={form.ref_no && form.ref_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
                           onChange={(event) => updateField("ref_no", event.target.value)}
@@ -1634,21 +1646,61 @@ function PaymentDocumentEditor({
                       <Field label="Payment Terms">
                         <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="e.g. 30 Days" />
                       </Field>
-                      <Field label="LPO No">
-                        <Input disabled={disabled} value={form.lpo_no || ""} onChange={(e) => updateField("lpo_no", e.target.value)} placeholder="LPO / PO Reference" />
+                      <Field
+                        label="LPO No"
+                        error={form.lpo_no && form.lpo_no.length > 30 ? `Max 30 (${form.lpo_no.length})` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          disabled={disabled}
+                          value={form.lpo_no || ""}
+                          className={form.lpo_no && form.lpo_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("lpo_no", e.target.value)}
+                          placeholder="LPO / PO Reference"
+                        />
                       </Field>
                       <Field label="LPO Date">
                         <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
                       </Field>
-                      <Field label="Party Phone">
-                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(e) => updateField("party_phone", e.target.value)} placeholder="Phone" />
+                      <Field
+                        label="Party Phone"
+                        error={form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          disabled={disabled}
+                          value={form.party_phone || ""}
+                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_phone", e.target.value)}
+                          placeholder="Phone"
+                        />
                       </Field>
-                      <Field label="Party Fax">
-                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(e) => updateField("party_fax", e.target.value)} placeholder="Fax" />
+                      <Field
+                        label="Party Fax"
+                        error={form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          disabled={disabled}
+                          value={form.party_fax || ""}
+                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_fax", e.target.value)}
+                          placeholder="Fax"
+                        />
                       </Field>
                       <div className="col-span-1 max-xl:col-span-3 max-sm:col-span-2">
-                        <Field label="Party Address">
-                          <Input disabled={disabled} value={form.party_address || ""} onChange={(e) => updateField("party_address", e.target.value)} placeholder="Full Party Address" />
+                        <Field
+                          label="Party Address"
+                          error={form.party_address && form.party_address.length > 250 ? `Max 250 (${form.party_address.length})` : undefined}
+                        >
+                          <Input
+                            maxLength={250}
+                            disabled={disabled}
+                            value={form.party_address || ""}
+                            className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(e) => updateField("party_address", e.target.value)}
+                            placeholder="Full Party Address"
+                          />
                         </Field>
                       </div>
                     </div>
@@ -1931,15 +1983,13 @@ function PaymentDocumentEditor({
                                     determinedTaxType = "E";
                                     perc = 0;
                                   } else if (rowRate > 0) {
-                                    determinedTaxType = "S";
+                                    determinedTaxType = (taxTypeMap[value] as any) || "S";
                                     perc = rowRate;
-                                  } else if (isStd) {
-                                    determinedTaxType = "S";
-                                    perc = getTaxPercForCode(value) || 5;
                                   } else if (valStr && valStr !== "N/A") {
                                     const mappedRate = getTaxPercForCode(value);
-                                    determinedTaxType = "S";
-                                    perc = mappedRate > 0 ? mappedRate : 5;
+                                    const mappedType = taxTypeMap[value] || (mappedRate > 0 ? "S" : "N");
+                                    determinedTaxType = (mappedType as any) || (mappedRate > 0 ? "S" : "N");
+                                    perc = mappedRate;
                                   }
 
                                   const lineAmt = Number(detail.amount) || 0;
@@ -1971,7 +2021,7 @@ function PaymentDocumentEditor({
                                   const taxPerc = taxType === "S"
                                     ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0
                                         ? detail.tx_compnt_perc_1
-                                        : (getTaxPercForCode(detail.tx_compntcat_code_1 || "") || 5))
+                                        : getTaxPercForCode(detail.tx_compntcat_code_1 || ""))
                                     : 0;
                                   const taxAmt = taxType === "S" ? Number(((lineAmt * taxPerc) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
