@@ -211,6 +211,8 @@ import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
 import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 import PostDateCheque from "../pages/finance/PostDateCheque";
+import { EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
+import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
 
 
 type WorkspaceRouteContext = {
@@ -232,7 +234,31 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
-
+  {
+    name : 'Hr Employee Joining Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/joiner"),
+    element : () => <EmployeeJoinerReportPage />
+  },
+    {
+    name : 'Hr Leave Entitlement Master',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leave_entitlement"),
+    element : () => <HREmployeeLeaveEntitlement />
+  },
+  {
+    name : 'Hr Employee Register Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/register"),
+    element : () => <EmployeeRegisterReportPage />
+  },
+  {
+    name : 'Hr Employee Leaver Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leavers"),
+    element : () => <EmployeeLeaversReportPage />
+  },
+  {
+    name : 'Hr Employee Tenure Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/tenure"),
+    element : () => <EmployeeTenureReportPage />
+  },
   {
     name : 'Post Date Cheque',
     match : ({pathname}) => pathname.toLowerCase().includes("/finance/accounts/transactions/pdc"),
