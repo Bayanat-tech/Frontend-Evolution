@@ -254,6 +254,17 @@ export function DocumentSetupPage() {
     { accessorKey: "default_sign", header: "Sign", size: 80 },
     { accessorKey: "default_h_ac", header: "Default H A/C", size: 150 },
     { accessorKey: "default_d_ac", header: "Default D A/C", size: 150 },
+    {
+      accessorKey: "curr_code",
+      header: "Default Currency",
+      size: 140,
+      cell: ({ row }) => {
+        const code = row.original.curr_code;
+        const name = row.original.curr_name;
+        if (!code) return <span className="text-muted-foreground">-</span>;
+        return <span>{code}{name ? ` - ${name}` : ""}</span>;
+      },
+    },
   ], []);
 
   return (
