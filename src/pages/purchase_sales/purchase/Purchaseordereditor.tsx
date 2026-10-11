@@ -279,12 +279,7 @@ export function PurchaseOrderEditor({
     computedQty: computeQuantity(r),
     lineTotal: Totalunitprice(r)
   })));
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
   const baseTotalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
@@ -293,7 +288,9 @@ export function PurchaseOrderEditor({
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+    const finalTotal = grandTotal + totalTaxAmount;
 
   // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
   //   setForm((current) => {
@@ -653,7 +650,7 @@ export function PurchaseOrderEditor({
                 title="Purchase Order"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -662,27 +659,7 @@ export function PurchaseOrderEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      title="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleReportPreviewExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+                
 
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
@@ -744,6 +721,27 @@ export function PurchaseOrderEditor({
                   )}
 
                 </div>
+                {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button>
+                    <Button
+                      aria-label="Excel"
+                      title="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleReportPreviewExcel()}
+                      disabled={reportPreviewExporting}
+                    >
+                      <Download size={15} />
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>

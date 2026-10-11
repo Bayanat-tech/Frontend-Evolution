@@ -16,6 +16,7 @@ import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordered
 import { LPO_CONFIG, PIN_CONFIG } from "./Purchaseordertypes";
 import { PurchaseInvoiceEditor } from "./PurchaseInvoiceEditor";
 import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
+import { formatDate } from "../../../utils/date";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -495,9 +496,3 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

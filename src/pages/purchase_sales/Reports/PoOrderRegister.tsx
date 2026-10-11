@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -15,6 +15,8 @@ import {
 } from "../../../api/transactions";
 import { openPurchaseReport } from "./PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "./Purchasereportpreview";
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
+import { toInputDate } from "../../../hooks/apiDate";
 
 interface PoOrderRegisterParams {
     loginid: string;
@@ -85,7 +87,7 @@ function ProductMultiSelectField({
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const selectAllRef = useRef<HTMLInputElement | null>(null);
 
-  
+
 
     const selectedValues = React.useMemo(
         () => value.split(",").map((v) => v.trim()).filter(Boolean),
@@ -298,13 +300,15 @@ export default function PoOrderRegisterPage() {
     const [toDateIso, setToDateIso] = useState("");
     const [acCode, setAcCode] = useState("");
     const [acName, setAcName] = useState("");
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
     const [poNumber, setPoNumber] = useState("");
     const [prodCodeFrom, setProdCodeFrom] = useState("");
     const [reportCriteria, setReportCriteria] = useState<"SO_REF_ONLY" | "ALL">("ALL");
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState("Select filters and run the report.");
-      const [poNumberOptions, setPoNumberOptions] = useState<string[]>([]);
-const [poNumberLoading, setPoNumberLoading] = useState(false);
+    const [poNumberOptions, setPoNumberOptions] = useState<string[]>([]);
+    const [poNumberLoading, setPoNumberLoading] = useState(false);
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
 
@@ -312,50 +316,50 @@ const [poNumberLoading, setPoNumberLoading] = useState(false);
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
 
-useEffect(() => {
-    let cancelled = false;
+    useEffect(() => {
+        let cancelled = false;
 
-    async function loadPoNumbers() {
-        if (!acCode) {
-            setPoNumberOptions([]);
-            setPoNumber("");
-            return;
-        }
-
-        setPoNumberLoading(true);
-        try {
-            const rows = await getDynamicLookup({
-                parameter: "Account_PO_Number_By_Supplier_Serach_HDR",
-                code1: companyCode,
-                code2: acCode,
-                loginid: loginId,
-            });
-
-            if (cancelled) return;
-
-            const numbers = Array.from(
-                new Set(
-                    (rows || [])
-                        .map((r: any) => String(r?.PO_NUMBER ?? r?.po_number ?? r?.DOC_NO ?? "").trim())
-                        .filter(Boolean)
-                )
-            );
-
-            setPoNumberOptions(numbers);
-            setPoNumber((current) => (current && !numbers.includes(current) ? "" : current));
-        } catch (err) {
-            if (!cancelled) {
-                console.error("Failed to load PO numbers:", err);
+        async function loadPoNumbers() {
+            if (!acCode) {
                 setPoNumberOptions([]);
+                setPoNumber("");
+                return;
             }
-        } finally {
-            if (!cancelled) setPoNumberLoading(false);
-        }
-    }
 
-    loadPoNumbers();
-    return () => { cancelled = true; };
-}, [acCode, companyCode, loginId]);
+            setPoNumberLoading(true);
+            try {
+                const rows = await getDynamicLookup({
+                    parameter: "Account_PO_Number_By_Supplier_Serach_HDR",
+                    code1: companyCode,
+                    code2: acCode,
+                    loginid: loginId,
+                });
+
+                if (cancelled) return;
+
+                const numbers = Array.from(
+                    new Set(
+                        (rows || [])
+                            .map((r: any) => String(r?.PO_NUMBER ?? r?.po_number ?? r?.DOC_NO ?? "").trim())
+                            .filter(Boolean)
+                    )
+                );
+
+                setPoNumberOptions(numbers);
+                setPoNumber((current) => (current && !numbers.includes(current) ? "" : current));
+            } catch (err) {
+                if (!cancelled) {
+                    console.error("Failed to load PO numbers:", err);
+                    setPoNumberOptions([]);
+                }
+            } finally {
+                if (!cancelled) setPoNumberLoading(false);
+            }
+        }
+
+        loadPoNumbers();
+        return () => { cancelled = true; };
+    }, [acCode, companyCode, loginId]);
 
 
     const buildRequestParams = (): PoOrderRegisterParams => ({
@@ -423,12 +427,23 @@ useEffect(() => {
                 <ReportFilterHeader onClear={resetFilters} />
 
                 <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    <Field label="Date From">
+                    {/* <Field label="Date From">
                         <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
                     </Field>
 
                     <Field label="Date To">
                         <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
+                    </Field> */}
+
+                    <Field label="From">
+                        <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
+                            <BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} />
+                        </ClearableDate>
+                    </Field>
+                    <Field label="To">
+                        <ClearableDate value={toDate} onClear={() => setToDate("")}>
+                            <BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} />
+                        </ClearableDate>
                     </Field>
 
                     <Field label="Supplier">
@@ -461,31 +476,31 @@ useEffect(() => {
                     </Field> */}
 
                     <Field label="PO Number">
-    <select
-        className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-        value={poNumber}
-        onChange={(e) => setPoNumber(e.target.value)}
-        disabled={!acCode || poNumberLoading}
-    >
-        <option value="">
-            {!acCode
-                ? "Select Supplier first"
-                : poNumberLoading
-                    ? "Loading..."
-                    : poNumberOptions.length === 0
-                        ? "No PO numbers found"
-                        : "All"}
-        </option>
-        {poNumberOptions.map((num) => (
-            <option key={num} value={num}>
-                {num}
-            </option>
-        ))}
-    </select>
-</Field>
+                        <select
+                            className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            value={poNumber}
+                            onChange={(e) => setPoNumber(e.target.value)}
+                            disabled={!acCode || poNumberLoading}
+                        >
+                            <option value="">
+                                {!acCode
+                                    ? "Select Supplier first"
+                                    : poNumberLoading
+                                        ? "Loading..."
+                                        : poNumberOptions.length === 0
+                                            ? "No PO numbers found"
+                                            : "All"}
+                            </option>
+                            {poNumberOptions.map((num) => (
+                                <option key={num} value={num}>
+                                    {num}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
 
 
-                    
+
 
                     <ProductMultiSelectField
                         label="Product"
@@ -559,5 +574,36 @@ useEffect(() => {
 
             <PurchaseReportPreview />
         </section>
+    );
+}
+
+function ClearableDate({
+    value,
+    onClear,
+    children,
+}: {
+    value: string;
+    onClear: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="relative">
+            {children}
+            {value && (
+                <button
+                    type="button"
+                    aria-label="Clear date"
+                    title="Clear"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClear();
+                    }}
+                    className="absolute right-9 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-black transition-colors hover:bg-slate-200"
+                >
+                    <X size={14} strokeWidth={2.5} />
+                </button>
+            )}
+        </div>
     );
 }
