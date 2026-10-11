@@ -1,62 +1,12 @@
 import { Plus, Trash2, Save, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
-import { executeDynamicMutation, getDynamicLookupaccount } from "../../api/lookups";
+import { executeDynamicDelete, executeDynamicMutation, getDynamicLookupaccount } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 import { upsertMfBomApi, TMfBomRowPayload } from "../../api/purchaseSales";
-
-// ════════════════════════════════════════════════════════════════════════
-// SCREEN — PS_ProductBomPage — maintains the MF_BOM table (per manager's
-// Main SQL): COMPANY_CODE, PRIN_CODE, PROD_CODE (parent), CHILD_PROD_CODE,
-// P_UOM, P_QTY, L_UOM, L_QTY, USER_ID, USER_DT, QUANTITY, UPPP, BOM_TYPE,
-// UNIT_PRICE, PRODN_REQD, PROD_LUOM_QTY.
-//
-// Header: Principal (required) -> Parent Product (scoped to Principal,
-// legacy dropdown restricted this to CO_PACK = 'Y' products). The screen
-// previously called this field "Co-packing Product" — renamed to "Parent
-// Product" here since that's what it actually is (case 'p_2'/'prod_code'
-// in the legacy dw code), and it's what's stored in MF_BOM.PROD_CODE.
-//
-// Grid: one row per MF_BOM record (Child Product Code, P_UOM/P_QTY,
-// L_UOM/L_QTY, Quantity, UPPP, BOM_TYPE, Unit Price, MIS Reqd =
-// PRODN_REQD, Parent Prodn LUOM QTY = PROD_LUOM_QTY). USER_ID/USER_DT are
-// audit columns, not editable — not shown here.
-//
-// Legacy 'cbx_1' co-pack-view toggle: no UI control maps to it currently.
-// Hardcoded to 'N' (non-co-pack view) everywhere below. Add a checkbox and
-// wire it through if the co-pack view is actually needed.
-//
-// BOM_TYPE: no UI input for this — line.bom_type stays "" and is still sent
-// in the Save payload to keep the backend contract unchanged.
-//
-// Child/Parent Product Code selection: LookupField's onChange is assumed
-// to pass the selected row as an optional second argument (value, row).
-// If your LookupField implementation only passes value, add a row
-// parameter to its onChange signature so the Name field (and
-// principal/parent product names) can auto-fill from the selected
-// row — see onChange handlers below.
-//
-// Retrieve: still goes through getDynamicLookupaccount /
-// PURCHASE_SALE_MF_BOM_RETRIEVE — no other backend file was shared for
-// that route, so it's untouched.
-//
-// Delete: rows loaded from Retrieve are marked is_persisted = true. When
-// such a row is removed, we call executeDynamicMutation with
-// PURCHASE_SALE_MF_BOM_DELETE (wired to a WHEN branch in
-// PROC_BUILD_DYNAMIC_DEL_PURCHASE_SALE) before removing it from local
-// state. Brand-new rows (is_persisted = false) are just spliced out
-// locally, since they were never saved to MF_BOM. Also untouched — no
-// backend file shared for this route either.
-//
-// Save: wired to the real PROC_INS_UPD_MF_BOM endpoint via upsertMfBomApi
-// (defined above). That proc takes an array of MF_BOM rows in one call
-// (all rows must share COMPANY_CODE/PRIN_CODE/PROD_CODE, which the
-// backend validates), so this replaces the old per-line
-// executeDynamicMutation loop with a single request carrying every line.
-// ───────────────────────────────────────────────────────────────────────
 
 const COPACK_VIEW_FLAG = "N"; // TODO: no UI control for legacy cbx_1 yet.
 
@@ -152,6 +102,8 @@ export function PS_ProductBomPage() {
 
   const [header, setHeader] = useState<TBomHeader>({ ...EMPTY_HEADER });
   const [lines, setLines] = useState<TBomLine[]>([makeEmptyLine()]);
+  
+
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -170,10 +122,8 @@ export function PS_ProductBomPage() {
 
   const addLine = () => setLines((prev) => [...prev, makeEmptyLine()]);
 
-  // ── Remove a line. Rows that already exist in MF_BOM (is_persisted)
-  // are deleted server-side first; brand-new unsaved rows are just
-  // dropped from local state.
-  const removeLine = async (rowId: string) => {
+ 
+    const removeLine = async (rowId: string) => {
     if (lines.length <= 1) return;
     const line = lines.find((l) => l.row_id === rowId);
     if (!line) return;
@@ -181,14 +131,18 @@ export function PS_ProductBomPage() {
     if (line.is_persisted) {
       setDeletingRowId(rowId);
       setNotice(null);
-      try {
-        await executeDynamicMutation({
+          try {
+        await executeDynamicDelete({
           parameter: DELETE_PARAMETER,
           loginid,
-          val1s1: companyCode,
-          val1s2: header.principal_code,
-          val1s3: header.parent_product_code,
-          val1s4: line.child_prod_code,
+          code1: companyCode,
+          code2: header.principal_code,
+          code3: header.parent_product_code,
+          code4: line.child_prod_code,
+        });
+        setNotice({
+          type: "success",
+          message: `BOM line ${line.child_prod_code} deleted successfully.`,
         });
       } catch (error) {
         setNotice({
@@ -378,6 +332,7 @@ export function PS_ProductBomPage() {
 
       await upsertMfBomApi(payload);
 
+
       // Rows saved successfully are now persisted server-side.
       setLines((prev) => prev.map((l) => ({ ...l, is_persisted: true })));
       setNotice({ type: "success", message: "BOM saved successfully" });
@@ -469,7 +424,7 @@ export function PS_ProductBomPage() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b bg-muted/40 text-left">
-              <th className="p-2 w-10">No.</th>
+              <th className="p-2 w-13">No.</th>
               <th className="p-2 min-w-[240px]">
                 Product Code<span className="text-destructive">*</span>
               </th>
@@ -480,9 +435,9 @@ export function PS_ProductBomPage() {
               <th className="p-2 min-w-[100px]">
                 Quantity 1<span className="text-destructive">*</span>
               </th>
-              <th className="p-2 min-w-[100px]">PUOM</th>
+              <th className="p-2 min-w-[100px]">PUOM<span className="text-destructive">*</span></th>
               <th className="p-2 min-w-[100px]">Quantity 2</th>
-              <th className="p-2 min-w-[100px]">LUOM</th>
+              <th className="p-2 min-w-[100px]">LUOM<span className="text-destructive">*</span></th>
               <th className="p-2 min-w-[90px]">UPPP</th>
               <th className="p-2 min-w-[110px]">Unit Price</th>
               <th className="p-2 w-10" />

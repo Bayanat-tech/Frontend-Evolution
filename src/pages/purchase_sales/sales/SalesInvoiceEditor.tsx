@@ -368,14 +368,11 @@ export function SalesInvoiceEditor({
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+    const finalTotal = grandTotal + totalTaxAmount;
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -634,7 +631,7 @@ export function SalesInvoiceEditor({
                 title="Sales Invoice"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -647,25 +644,7 @@ export function SalesInvoiceEditor({
                     Cancelled
                   </Badge>
                 )}
-                {form.doc_no ? (
-                  <>
-                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
-                      <Printer size={15} /> Print
-                    </Button>
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExcel()}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                ) : null}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+             
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
@@ -724,6 +703,25 @@ export function SalesInvoiceEditor({
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
+                     {form.doc_no ? (
+                  <>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
+                    </Button>
+                    <Button
+                      aria-label="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                    </Button>
+                  </>
+                ) : null}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
 
                 </div>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
