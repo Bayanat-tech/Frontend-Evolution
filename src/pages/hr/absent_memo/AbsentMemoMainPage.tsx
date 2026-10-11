@@ -1,14 +1,21 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Edit2, FileText, Loader2, Plus, RefreshCw, Save, X } from "lucide-react";
+import { ArrowLeft, Edit2, FileText, Loader2, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../../../api/client";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
+import { NewReportDialog } from "../../../components/new_report_format";
 import { useAuth } from "../../../state/AuthContext";
 import AddAbsentMemoPage, { type AbsentMemoFormHandle } from "./AddAbsentMemoPage";
 
 const gridDataParameter = "HR_ABSENT_MEMO_MAIN_PAGE";
+
+// print=false stops the backend HTML from auto-opening a print dialog inside the preview.
+// AbsentMemoMainPage.tsx
+const ABSENT_MEMO_REPORT_URL = "/api/wms/reports/absent-memo/html?print=false";
+const PRINT_IFRAME_ID = "absent-memo-print-iframe";
 
 export type AbsentMemoRow = {
   doc_no: string | number;
@@ -22,6 +29,31 @@ export type AbsentMemoRow = {
 };
 
 type EditorMode = "add" | "edit";
+
+// ── Backend report fetch (full HTML with company header/footer) ──────────────
+const fetchAbsentMemoReportHtml = async (docNo: number): Promise<string> => {
+  try {
+    const res = await api.post(
+      ABSENT_MEMO_REPORT_URL,
+      { doc_no: docNo },
+      { responseType: "text" },
+    );
+    return res.data;
+  } catch (e: any) {
+    let message = "Failed to load report. Please try again.";
+    const data = e?.response?.data;
+    try {
+      // responseType 'text' leaves the JSON error body as a string
+      const parsed = typeof data === "string" ? JSON.parse(data) : data;
+      if (parsed?.message) {
+        message = parsed.code ? `${parsed.code}: ${parsed.message}` : parsed.message;
+      }
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
+  }
+};
 
 const AbsentMemoMainPage = () => {
   const title = "Absent Memo";
@@ -39,6 +71,13 @@ const AbsentMemoMainPage = () => {
   const [editorMode, setEditorMode] = useState<EditorMode>("add");
   const [activeRow, setActiveRow] = useState<AbsentMemoRow | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ── Report preview dialog state (NewReportDialog: raw HTML) ──
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportPreviewError, setReportPreviewError] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportTitle, setReportTitle] = useState(title);
 
   // Ref to the form so the header Save button can trigger it
   const formRef = useRef<AbsentMemoFormHandle>(null);
@@ -97,6 +136,85 @@ const AbsentMemoMainPage = () => {
     }
   };
 
+  /* ── Row-level print: fetch full report HTML from backend, open dialog ── */
+  const handlePrintAbsentMemo = async (row: AbsentMemoRow) => {
+    const docNo = Number(row?.doc_no);
+    if (!docNo || Number.isNaN(docNo)) return;
+
+    setReportTitle(`${title} ${docNo}`.trim());
+    setReportHtml(null);
+    setReportPreviewError("");
+    setReportPreviewOpen(true);
+    setReportLoading(true);
+
+    try {
+      setReportHtml(await fetchAbsentMemoReportHtml(docNo));
+    } catch (error) {
+      setReportPreviewError(
+        error instanceof Error ? error.message : "Failed to load report. Please try again.",
+      );
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const closeReportPreview = () => {
+    setReportPreviewOpen(false);
+    setReportHtml(null);
+    setReportPreviewError("");
+  };
+
+  // Open report HTML in a new tab
+  const handleOpenReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } else {
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Print dialog (Save as PDF)
+  const handleDownloadReportPdf = () => {
+    if (!reportHtml) return;
+    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = PRINT_IFRAME_ID;
+      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+      iframe.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(reportHtml);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe?.contentWindow?.focus();
+        iframe?.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (iframe.contentDocument?.readyState === "complete") {
+      setTimeout(doPrint, 300);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 300);
+      setTimeout(doPrint, 700);
+    }
+  };
+
   const columns = useMemo<ColumnDef<AbsentMemoRow>[]>(
     () => [
       { accessorKey: "doc_no", header: "Doc No", size: 100, enableSorting: false },
@@ -109,7 +227,7 @@ const AbsentMemoMainPage = () => {
       {
         id: "actions",
         header: "Actions",
-        size: 80,
+        size: 100,
         enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => (
@@ -121,6 +239,14 @@ const AbsentMemoMainPage = () => {
               title="Edit"
             >
               <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => void handlePrintAbsentMemo(row.original)}
+              title="Print / PDF"
+            >
+              <Printer size={13} />
             </button>
           </div>
         ),
@@ -233,6 +359,18 @@ const AbsentMemoMainPage = () => {
         getRowId={(row) => String(row.doc_no)}
         enableExport
         exportFilename="hr-absent-memo-list.csv"
+      />
+
+      {/* ── Report preview dialog ── */}
+      <NewReportDialog
+        open={reportPreviewOpen}
+        onClose={closeReportPreview}
+        title={reportTitle}
+        htmlContent={reportHtml}
+        loading={reportLoading}
+        error={reportPreviewError || null}
+        onOpenInNewWindow={handleOpenReportInNewWindow}
+        onDownloadPdf={handleDownloadReportPdf}
       />
     </section>
   );
