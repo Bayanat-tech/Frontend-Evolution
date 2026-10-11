@@ -1,3 +1,4 @@
+import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -31,7 +32,7 @@ import {
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -492,13 +493,84 @@ function PaymentDocumentEditor({
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
+          const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          const effectiveDiv = defaultDiv || (editor?.mode === "create" ? text(editor.divCode) : "") || text(form.div_code);
+          let resolvedAcName = text(defaults.ac_name ?? defaults.Account?.ac_name ?? "");
+          let resolvedCurrCode = text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
+          let resolvedCurrName = text(defaults.curr_name ?? defaults.Currency?.curr_name ?? "");
+          let resolvedExRate = Number(defaults.ex_rate ?? 1);
+
+          if (defaultAcCode && (!resolvedAcName || !resolvedCurrCode)) {
+            if (effectiveDiv) {
+              try {
+                const headerAccounts = await getDocAccounts(docType, "H", effectiveDiv);
+                const matched = (headerAccounts || []).find((a: Record<string, unknown>) => {
+                  const code = text(a.ac_code ?? a.AC_CODE ?? "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(matched.ac_name ?? matched.AC_NAME ?? "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(matched.curr_code ?? matched.CURR_CODE ?? "");
+                  if (!resolvedCurrName) resolvedCurrName = text(matched.curr_name ?? matched.CURR_NAME ?? "");
+                  const matchedRate = Number(matched.ex_rate ?? matched.EX_RATE ?? 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
+            }
+
+            if (!resolvedCurrCode || !resolvedAcName) {
+              try {
+                const acRows = await getDynamicFinanceLookup({
+                  parameter: "Account_AC_CODE_Serach",
+                  code1: user?.company_code || "",
+                });
+                const matched = (acRows || []).find((a: Record<string, unknown>) => {
+                  const code = text(getLookupValue(a, "ac_code") || a.ac_code || "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(getLookupValue(matched, "ac_name") || matched.ac_name || "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(getLookupValue(matched, "curr_code") || matched.curr_code || "");
+                  if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(matched, "curr_name") || matched.curr_name || "");
+                  const matchedRate = Number(getLookupValue(matched, "ex_rate") || matched.ex_rate || 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
+            }
+          }
+
+          if (resolvedCurrCode) {
+            try {
+              const currencyRows = await getDynamicFinanceLookup({
+                parameter: "Account_Currency_CODE_Serach",
+                code1: user?.company_code || "",
+              });
+              const match = currencyRows.find(
+                (currencyRow) =>
+                  String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                  resolvedCurrCode.toUpperCase(),
+              );
+              if (match) {
+                const rate = Number(getLookupValue(match, "ex_rate") || (match as any)?.ex_rate || 0);
+                if (rate > 0) resolvedExRate = rate;
+                if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(match, "curr_name") || "");
+              }
+            } catch {}
+          }
+
           setForm((current) => ({
             ...current,
-            ac_code: text(defaults.ac_code ?? defaults.Account?.ac_code ?? current.ac_code),
-            ac_name: text(defaults.Account?.ac_name ?? current.ac_name),
-            curr_code: text(defaults.curr_code ?? defaults.Currency?.curr_code ?? current.curr_code),
-            curr_name: text(defaults.Currency?.curr_name ?? current.curr_name),
-            ex_rate: Number(defaults.ex_rate ?? current.ex_rate ?? 1),
+            ac_code: defaultAcCode || current.ac_code,
+            ac_name: resolvedAcName || current.ac_name,
+            curr_code: resolvedCurrCode || current.curr_code,
+            curr_name: resolvedCurrName || current.curr_name,
+            ex_rate: resolvedExRate > 0 ? resolvedExRate : (current.ex_rate || 1),
+            div_code: effectiveDiv || current.div_code,
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
           }));
@@ -519,25 +591,59 @@ function PaymentDocumentEditor({
   const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
   const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+  const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
 
   const loadTaxOptions = useCallback(async () => {
+    let rows: LookupRow[] = [];
     try {
-      const rows = await getDynamicLookup({
-        parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-        code1: user?.company_code,
-        loginid: user?.loginid || user?.username || "ADMIN",
-      });
-      const map: Record<string, number> = {};
-      rows.forEach((r) => {
-        const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
-        const rate = Number(getLookupValue(r, "tx_percnt") ?? getLookupValue(r, "tx_compnt_perc_1") ?? getLookupValue(r, "perc") ?? 0);
-        if (code) map[code] = rate;
-      });
-      setTaxRateMap((prev) => ({ ...prev, ...map }));
-      return rows;
+      rows = await getFinanceTaxList();
     } catch {
-      return [];
+      // fallback
     }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicFinanceLookup({
+          parameter: "Account_Tax_Search",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        // fallback
+      }
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicLookup({
+          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        rows = [];
+      }
+    }
+    const rMap: Record<string, number> = {};
+    const tMap: Record<string, string> = {};
+    (rows || []).forEach((r) => {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const rawRate = Number(
+        getLookupValue(r, "tx_percnt") ??
+        getLookupValue(r, "tx_compnt_perc_1") ??
+        getLookupValue(r, "perc") ??
+        getLookupValue(r, "tax_percnt") ??
+        getLookupValue(r, "tax_rate") ??
+        getLookupValue(r, "rate") ??
+        0
+      );
+      const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
+      if (code) {
+        rMap[code] = rawRate;
+        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+      }
+    });
+    setTaxRateMap((prev) => ({ ...prev, ...rMap }));
+    setTaxTypeMap((prev) => ({ ...prev, ...tMap }));
+    return rows;
   }, [user?.company_code, user?.loginid, user?.username]);
 
   useEffect(() => {
@@ -551,7 +657,7 @@ function PaymentDocumentEditor({
     if (trimmed && taxRateMap[trimmed] !== undefined) {
       return taxRateMap[trimmed];
     }
-    if (fallbackPerc != null && !isNaN(Number(fallbackPerc)) && Number(fallbackPerc) > 0) {
+    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
       return Number(fallbackPerc);
     }
     return 0;
@@ -993,6 +1099,15 @@ function PaymentDocumentEditor({
     if (form.ref_no && form.ref_no.length > 30) {
       return setError("You have exceeded the character limit for Ref No.");
     }
+    if (form.party_address && form.party_address.length > 250) {
+      return setError("You have exceeded the character limit for Address (max 250 characters).");
+    }
+    if (form.party_phone && form.party_phone.length > 30) {
+      return setError("You have exceeded the character limit for Phone (max 30 characters).");
+    }
+    if (form.party_fax && form.party_fax.length > 30) {
+      return setError("You have exceeded the character limit for Fax (max 30 characters).");
+    }
     if (form.remarks && form.remarks.length > 250) {
       return setError("You have exceeded the character limit for Remarks.");
     }
@@ -1344,15 +1459,45 @@ function PaymentDocumentEditor({
                       <Field label="Exchange Rate*">
                         <Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
                       </Field>
-                      <label className="field col-span-2 max-md:col-span-1">
-                        <span>Address</span>
-                        <Input disabled={disabled} value={form.party_address || ""} onChange={(event) => updateField("party_address", event.target.value)} />
-                      </label>
-                      <Field label="Phone">
-                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(event) => updateField("party_phone", event.target.value)} />
+                      <Field
+                        label="Address"
+                        className="col-span-2 max-md:col-span-1"
+                        error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}
+                      >
+                        <Input
+                          maxLength={250}
+                          placeholder="Address"
+                          disabled={disabled}
+                          value={form.party_address || ""}
+                          className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_address", event.target.value)}
+                        />
                       </Field>
-                      <Field label="Fax">
-                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(event) => updateField("party_fax", event.target.value)} />
+                      <Field
+                        label="Phone"
+                        error={form.party_phone && form.party_phone.length > 30 ? `Exceeded limit (${form.party_phone.length}/30)` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          placeholder="Phone"
+                          disabled={disabled}
+                          value={form.party_phone || ""}
+                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_phone", event.target.value)}
+                        />
+                      </Field>
+                      <Field
+                        label="Fax"
+                        error={form.party_fax && form.party_fax.length > 30 ? `Exceeded limit (${form.party_fax.length}/30)` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          placeholder="Fax"
+                          disabled={disabled}
+                          value={form.party_fax || ""}
+                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_fax", event.target.value)}
+                        />
                       </Field>
                     </div>
                   </section>
@@ -1381,22 +1526,57 @@ function PaymentDocumentEditor({
                           loadOptions={loadTaxOptions}
                           disabled={disabled}
                           onChange={(value, row) => {
-                            const rateFromRow = row ? Number(getLookupValue(row, "tx_percnt") ?? getLookupValue(row, "tx_compnt_perc_1") ?? getLookupValue(row, "perc") ?? 0) : undefined;
-                            const dynamicRate = rateFromRow !== undefined ? rateFromRow : (taxRateMap[value] ?? 0);
-                            if (value && rateFromRow !== undefined) {
-                              setTaxRateMap((prev) => ({ ...prev, [value]: rateFromRow }));
+                            const r = (row || {}) as Record<string, unknown>;
+                            const rowRate = Number(
+                              getLookupValue(r, "tx_percnt") ??
+                              getLookupValue(r, "tx_compnt_perc_1") ??
+                              getLookupValue(r, "perc") ??
+                              getLookupValue(r, "tax_percnt") ??
+                              getLookupValue(r, "tax_rate") ??
+                              getLookupValue(r, "rate") ??
+                              0
+                            );
+                            const rowName = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+                            const valStr = String(value || "").trim();
+                            const isZero = rowName.includes("ZERO") || valStr.startsWith("20") || valStr.startsWith("21");
+                            const isExempt = rowName.includes("EXEMPT") || valStr.startsWith("30") || valStr.startsWith("31");
+                            const isStd = rowName.includes("STD") || rowName.includes("STANDARD") || valStr.startsWith("10") || valStr.startsWith("11");
+
+                            let determinedTaxType: "S" | "Z" | "E" | "N" = "N";
+                            let perc = 0;
+
+                            if (isZero) {
+                              determinedTaxType = "Z";
+                              perc = 0;
+                            } else if (isExempt) {
+                              determinedTaxType = "E";
+                              perc = 0;
+                            } else if (rowRate > 0) {
+                              determinedTaxType = (taxTypeMap[value] as any) || "S";
+                              perc = rowRate;
+                            } else if (valStr && valStr !== "N/A") {
+                              const mappedRate = getTaxPercForCode(value);
+                              const mappedType = taxTypeMap[value] || (mappedRate > 0 ? "S" : "N");
+                              determinedTaxType = (mappedType as any) || (mappedRate > 0 ? "S" : "N");
+                              perc = mappedRate;
                             }
+
+                            if (valStr && perc > 0) {
+                              setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
+                            }
+
                             setForm((current) => ({
                               ...current,
                               tx_compntcat_code_1: value,
+                              tx_compnt_1_expmt: determinedTaxType,
                               detail: current.detail.map((d) => {
-                                const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
-                                const taxPerc = isTaxable ? dynamicRate : 0;
-                                const taxAmt = isTaxable ? Number(((Number(d.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                const lineAmt = Number(d.amount || 0);
+                                const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
                                 return {
                                   ...d,
                                   tx_compntcat_code_1: value,
-                                  tx_compnt_perc_1: isTaxable ? taxPerc : (d.tx_compnt_perc_1 || 0),
+                                  tx_compnt_1_expmt: determinedTaxType,
+                                  tx_compnt_perc_1: perc,
                                   tx_compnt_amt_1: taxAmt,
                                 };
                               }),
@@ -1444,7 +1624,7 @@ function PaymentDocumentEditor({
                         className="col-span-2 max-md:col-span-1"
                         error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
                       >
-                        <Input
+                        <Input maxLength={250}
                           disabled={disabled}
                           value={form.remarks || ""}
                           placeholder="Remarks"
@@ -1597,7 +1777,7 @@ function PaymentDocumentEditor({
                             )}
                           </td>
                           <td className="w-[200px] max-w-[240px] px-1 py-1">
-                            <textarea
+                            <Textarea maxLength={250}
                               disabled={disabled}
                               className={`commercial-line-description ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
                               title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}
@@ -1718,12 +1898,15 @@ function PaymentDocumentEditor({
                                 onChange={(event) => {
                                   const taxType = event.target.value;
                                   const lineTaxCode = detail.tx_compntcat_code_1 || form.tx_compntcat_code_1;
-                                  const rate = getTaxPercForCode(lineTaxCode, detail.tx_compnt_perc_1);
-                                  const taxPerc = taxType === "S" ? rate : 0;
-                                  const taxAmt = taxType === "S" ? Number(((Number(detail.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                  const rate = taxType === "S"
+                                    ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0
+                                        ? detail.tx_compnt_perc_1
+                                        : getTaxPercForCode(lineTaxCode))
+                                    : 0;
+                                  const taxAmt = taxType === "S" ? Number(((Number(detail.amount || 0) * rate) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
-                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_perc_1: rate,
                                     tx_compnt_amt_1: taxAmt,
                                   });
                                 }}

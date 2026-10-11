@@ -361,7 +361,7 @@ export function DocumentSetupPage() {
                 ]}
                 valueField="curr_code"
                 displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Search", loginid: loginId, code1: companyCode })}
+                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Serach", loginid: loginId, code1: companyCode })}
                 onChange={(code, row) => {
                   setDocForm((prev) => prev ? { ...prev, curr_code: code, curr_name: row ? getLookupText(row, ["curr_name", "currency_name"]) : "" } : null);
                 }}
