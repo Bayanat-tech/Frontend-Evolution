@@ -1551,6 +1551,7 @@ const limitProps = (f: keyof FormState) => ({
       label="Ref Doc"
       className="commercial-doc-ref-lookup"
       disabled={isCancelled}
+      popoverWidth={320}
       value={form.ref_doc_no || ""}
       displayValue={form.ref_doc_no || ""}
       columns={[
@@ -1680,6 +1681,7 @@ const limitProps = (f: keyof FormState) => ({
   <LookupField
   label="Tax Category"
   disabled={isCancelled}
+  popoverWidth={380}
   value={form.tx_compntcat_code_1 ?? ""}
   displayValue={getTaxCatDisplayName(form.tx_compntcat_code_1, form.tx_compntcat_name_1)}
   columns={[
