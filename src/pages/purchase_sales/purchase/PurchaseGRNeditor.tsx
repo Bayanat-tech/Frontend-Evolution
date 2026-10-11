@@ -476,27 +476,7 @@ export function PurchaseGRNEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
-                    {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={handleExportGrnExcel}
-                      disabled={exportingExcel}
-                      title="Download Excel"
-                    >
-                      {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+           
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
@@ -558,6 +538,27 @@ export function PurchaseGRNEditor({
                   )}
 
                 </div>
+                     {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
+                    {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
+                  </Button>
+                    <Button
+                      aria-label="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={handleExportGrnExcel}
+                      disabled={exportingExcel}
+                      title="Download Excel"
+                    >
+                      {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>

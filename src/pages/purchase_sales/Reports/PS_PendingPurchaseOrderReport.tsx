@@ -11,6 +11,8 @@ import { NewReportPage } from "../../../components/new_report_format/NewReportPa
 import type { ReportFieldConfig, ReportOption } from "../../../components/new_report_format/types";
 import { openPurchaseReport } from "./PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "./Purchasereportpreview";
+import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
+import { X } from "lucide-react";
 
 interface PurchaseOrderReportProps {
   required_values?: {
@@ -63,6 +65,13 @@ const addDays = (d: Date, n: number) => {
 
 const defaultDateFrom = () => toISODate(new Date(new Date().getFullYear(), 0, 1));
 const defaultDateTo = () => toISODate(new Date());
+
+function toInputDate(value: string) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
 
 const DEFAULT_PARAMS: Params = {
   dateFrom: defaultDateFrom(),
@@ -362,27 +371,17 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
               Document Date Range
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-              <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                            <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
                 Date From
-                <input
-                  type="date"
-                  className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-                  value={params.dateFrom}
-                  max={params.dateTo || undefined}
-                  disabled={loading}
-                  onChange={(e) => setParam("dateFrom", e.target.value)}
-                />
+                <ClearableDate value={params.dateFrom} onClear={() => setParam("dateFrom", "")}>
+                  <BiscDatePicker value={toInputDate(params.dateFrom)} onChange={(v) => setParam("dateFrom", v)} />
+                </ClearableDate>
               </label>
               <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
                 Date To
-                <input
-                  type="date"
-                  className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-                  value={params.dateTo}
-                  min={params.dateFrom || undefined}
-                  disabled={loading}
-                  onChange={(e) => setParam("dateTo", e.target.value)}
-                />
+                <ClearableDate value={params.dateTo} onClear={() => setParam("dateTo", "")}>
+                  <BiscDatePicker value={toInputDate(params.dateTo)} onChange={(v) => setParam("dateTo", v)} />
+                </ClearableDate>
               </label>
               <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
                 Cancelled PO
@@ -439,5 +438,36 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     </>
   );
 };
+
+function ClearableDate({
+  value,
+  onClear,
+  children,
+}: {
+  value: string;
+  onClear: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      {children}
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear date"
+          title="Clear"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClear();
+          }}
+          className="absolute right-9 top-1/2 z-10 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-black transition-colors hover:bg-slate-200"
+        >
+          <X size={14} strokeWidth={2.5} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default PurchaseOrderReport;

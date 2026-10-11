@@ -226,7 +226,7 @@ export function PurchaseOrderHeaderForm({
             </CField>
 
             {docTypeUpper === "LPO" && (
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <LookupField
                   label="Reference No"
                   placeholder="Quotation No"
@@ -255,7 +255,7 @@ export function PurchaseOrderHeaderForm({
                     if (selectedAcCode) {
                       try {
                         const accountRows = await getDynamicLookup({
-                          parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+                          parameter: "Account_AC_C0ODE_Serach_For_suppier_customer",
                           code1: companyCode,
                           loginid: loginIdOrAdmin,
                         });
@@ -491,6 +491,16 @@ export function PurchaseOrderHeaderForm({
                 ex_rate: Number(getLookupValue(row || {}, "ex_rate") || (row as any)?.ex_rate || current.ex_rate || 1),
               }))}
             />
+                     <CField label="Ex Rate">
+              <Input
+                className="h-7 text-xs text-right"
+                type="number"
+                disabled={headerAndLineDisabled}
+                step="0.000001"
+                value={form.ex_rate}
+                onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))}
+              />
+            </CField>
             <LookupField
               label="Department"
               value={form.dept_code || ""}
@@ -502,16 +512,7 @@ export function PurchaseOrderHeaderForm({
               disabled={headerAndLineDisabled}
               onChange={(value, row) => setForm((current) => ({ ...current, dept_code: value, dept_name: text(getLookupValue(row || {}, "dept_name")) }))}
             />
-            <CField label="Ex Rate">
-              <Input
-                className="h-7 text-xs text-right"
-                type="number"
-                disabled={headerAndLineDisabled}
-                step="0.000001"
-                value={form.ex_rate}
-                onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))}
-              />
-            </CField>
+   
           </HeaderBlock>
 
           <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
