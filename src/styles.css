@@ -11318,15 +11318,15 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: 1.15fr 0.95fr 1.25fr 1.1fr 1.15fr !important;
+  grid-template-columns: 1.1fr 0.95fr 1.35fr 1.1fr 1.2fr !important;
   gap: 8px !important;
 }
 
-/* ── Tax & Additional Details: Remarks takes the leftover ── */
+/* ── Tax & Additional Details: 3 fields (Category, Type, Remarks gets remaining space) ── */
 .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: 1.3fr 0.8fr 0.9fr 1.6fr !important;
+  grid-template-columns: 1.8fr 1fr 2.6fr !important;
   gap: 8px !important;
 }
 
@@ -11347,15 +11347,27 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   min-width: 0 !important;
 }
 
-/* ── Clean vertical column divider lines in commercial tables ── */
+/* ── Clean vertical & horizontal divider lines in commercial tables ── */
 .commercial-document-workbench .commercial-lines-table-separated thead th {
-  border-right: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-bottom: 2px solid #002d72 !important;
 }
 .commercial-document-workbench .commercial-lines-table-separated thead th:last-child {
   border-right: none !important;
 }
+.commercial-document-workbench .commercial-lines-table-separated tbody tr {
+  border-bottom: 1px solid #cbd5e1 !important;
+  transition: background-color 0.15s ease;
+}
+.commercial-document-workbench .commercial-lines-table-separated tbody tr:nth-child(even) {
+  background-color: #f8fafc !important;
+}
+.commercial-document-workbench .commercial-lines-table-separated tbody tr:hover {
+  background-color: #f1f5f9 !important;
+}
 .commercial-document-workbench .commercial-lines-table-separated tbody td {
-  border-right: 1px solid #e2e8f0 !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
 }
 .commercial-document-workbench .commercial-lines-table-separated tbody td:last-child {
   border-right: none !important;
@@ -11365,6 +11377,13 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-document-workbench .commercial-header-block-tax :where(input, select) {
   width: 100%;
   min-width: 0;
+}
+
+/* ── Date placeholder must stay on one line ── */
+.commercial-document-workbench .bisc-date-picker-trigger,
+.commercial-document-workbench .bisc-date-picker-trigger span {
+  white-space: nowrap !important;
+  text-overflow: ellipsis;
 }
 
 /* ── Date placeholder must stay on one line ── */

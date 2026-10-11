@@ -119,12 +119,25 @@ salesman_name?: string;
 sector_code?: string;
 sector_name?: string;
 tx_compntcat_code_1?: string;
+tx_compntcat_name_1?: string;
 tx_cat_code?: string;
 tx_compnt_1_expmt?: string;
 tx_compnt_perc_1?: number;
   print_letter_head?: boolean;
   canceled?: string;
   detail: Line[];
+};
+
+const TAX_CATEGORY_NAME_MAP: Record<string, string> = {
+  "10100": "LOCAL PURCHASE - SRV",
+  "11000": "NO VAT",
+  "11100": "LOCAL SALES - SRV",
+};
+
+const getTaxCatDisplayName = (code?: string, name?: string) => {
+  if (name && name.trim()) return name.trim();
+  if (code && TAX_CATEGORY_NAME_MAP[code]) return TAX_CATEGORY_NAME_MAP[code];
+  return code || "";
 };
 
 const META: Record<CommercialType, { title: string;  addLabel: string }> = {
@@ -1457,7 +1470,7 @@ const limitProps = (f: keyof FormState) => ({
           </div>
         </section>
 
-         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-1.5">
+         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-2">
           {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5"> */}
           <section className="commercial-header-block commercial-header-block-doc">
                 <div className="commercial-header-block-title">
@@ -1670,7 +1683,7 @@ const limitProps = (f: keyof FormState) => ({
   label="Tax Category"
   disabled={isCancelled}
   value={form.tx_compntcat_code_1 ?? ""}
-  displayValue={form.tx_compntcat_code_1 ?? ""}
+  displayValue={getTaxCatDisplayName(form.tx_compntcat_code_1, form.tx_compntcat_name_1)}
   columns={[
     { field: "tx_compntcat_code", header: "Category Code" },
     { field: "tx_compntcat_name", header: "Category Name" },
@@ -1686,6 +1699,7 @@ const limitProps = (f: keyof FormState) => ({
 
  onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
+  const catName = text(getLookupValue(r, "tx_compntcat_name"));
   const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
   const code = text(getLookupValue(r, "tx_cat_code"));
 
@@ -1704,6 +1718,7 @@ const limitProps = (f: keyof FormState) => ({
     return {
       ...c,
       tx_compntcat_code_1: value,
+      tx_compntcat_name_1: catName,
       tx_cat_code:         code,
       tx_compnt_perc_1:    resolvedPerc,
       detail:              updatedDetail,
@@ -1711,13 +1726,6 @@ const limitProps = (f: keyof FormState) => ({
   });
  }}
  />
-
-  {/* ── Tax Code ── */}
-  <Field label="Tax Code">
-    <Input disabled value={form.tx_cat_code || ""}
-      onChange={(e) => update("tx_cat_code", e.target.value)} 
-      />
-  </Field>
 
   {/* ── Tax Type  ── */}
   <Field label="Tax Type">
@@ -1945,7 +1953,7 @@ const limitProps = (f: keyof FormState) => ({
                         <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         {isPO && <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
                         <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input font-bold !text-emerald-700 !bg-emerald-50/60 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400" type="number" step="0.001" min="0.001" required
+                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input font-bold !text-emerald-700 !bg-emerald-50/60 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px]" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
                             onInput={(e) => e.currentTarget.setCustomValidity("")}
                             value={line.amount}
@@ -1990,7 +1998,7 @@ const limitProps = (f: keyof FormState) => ({
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input font-semibold !text-amber-800 !bg-amber-50/50 border-amber-200" type="number" 
+                        <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input font-semibold !text-amber-800 !bg-amber-50/50 border-amber-200 !text-xs md:!text-[13px]" type="number" 
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                        {showAllColumns && (
@@ -2045,7 +2053,7 @@ const limitProps = (f: keyof FormState) => ({
                         )}
                         <td className="finance-amount-cell w-24 px-1 py-1">
                           <Input
-                            className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200"
+                            className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]"
                             disabled
                             value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(line.ex_rate ?? form.ex_rate ?? 1))}
                           />
@@ -2057,19 +2065,19 @@ const limitProps = (f: keyof FormState) => ({
                 </table>
               </div>
               
-              <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/90 px-3 py-2 gap-3">
-                <div className="commercial-line-totals flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-2 bg-emerald-50/90 px-3 py-1 rounded-md border border-emerald-300 shadow-2xs">
-                    <span className="text-emerald-800 font-semibold text-[11px]">Total Amount</span>
-                    <strong className="text-emerald-700 font-mono text-xs font-bold">{formatAmount(total)}</strong>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2.5 gap-3.5">
+                <div className="commercial-line-totals flex items-center gap-3.5">
+                  <div className="flex items-center gap-2.5 bg-emerald-50/90 px-3.5 py-1.5 rounded-md border border-emerald-300 shadow-2xs">
+                    <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Total Amount</span>
+                    <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-amber-50/90 px-3 py-1 rounded-md border border-amber-300 shadow-2xs">
-                    <span className="text-amber-800 font-semibold text-[11px]">Tax Amount</span>
-                    <strong className="text-amber-700 font-mono text-xs font-bold">{formatAmount(taxTotal)}</strong>
+                  <div className="flex items-center gap-2.5 bg-amber-50/90 px-3.5 py-1.5 rounded-md border border-amber-300 shadow-2xs">
+                    <span className="text-amber-800 font-bold text-xs uppercase tracking-wider">Tax Amount</span>
+                    <strong className="text-amber-700 font-mono text-sm md:text-base font-bold">{formatAmount(taxTotal)}</strong>
                   </div>
-                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-md border-2 border-[#00378c]/40 shadow-xs">
-                    <span className="font-bold text-[#00378c] text-[11px]">Net Total</span>
-                    <strong className="text-[#00378c] font-mono text-xs font-extrabold">{formatAmount(total + taxTotal)}</strong>
+                  <div className="flex items-center gap-2.5 bg-blue-50 px-4 py-1.5 rounded-md border-2 border-[#00378c]/50 shadow-xs">
+                    <span className="font-extrabold text-[#00378c] text-xs uppercase tracking-wider">Net Total</span>
+                    <strong className="text-[#00378c] font-mono text-base md:text-lg font-black">{formatAmount(total + taxTotal)}</strong>
                   </div>
                 </div>
               </div>
@@ -2252,6 +2260,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     tax_type: text(header.tx_compnt_1_expmt),
     tx_compnt_1_expmt: text(header.tx_compnt_1_expmt),
     tx_compntcat_code_1: text(header.tx_compntcat_code_1),
+    tx_compntcat_name_1: text(nested(headerRaw, ["Tax Category", "tx_compntcat_name"]) ?? header.tx_compntcat_name ?? header.tax_category_name),
     // tx_cat_code:         text(header.tx_cat_code),
     tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
     // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
