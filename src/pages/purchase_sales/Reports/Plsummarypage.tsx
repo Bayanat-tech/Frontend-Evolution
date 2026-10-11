@@ -245,7 +245,7 @@ export default function PLSummaryPage() {
   try {
     const html = await getPLSummaryReportHtml(params);
 
-    // Backend HTML madhla logo (lookup rikama asel tar hach vapra)
+
     const htmlLogo =
       new DOMParser().parseFromString(html, "text/html").querySelector("img")?.getAttribute("src") || "";
 

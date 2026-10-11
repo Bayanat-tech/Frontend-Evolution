@@ -482,6 +482,16 @@ export function PurchaseInvoiceHeaderForm({
                                 ex_rate: Number(getLookupValue(row || {}, "ex_rate") || (row as any)?.ex_rate || current.ex_rate || 1),
                             }))}
                         />
+                          <CField label="Ex Rate">
+                            <Input
+                                className="h-7 text-xs text-right"
+                                type="number"
+                                disabled={headerAndLineDisabled}
+                                step="0.000001"
+                                value={form.ex_rate}
+                                onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))}
+                            />
+                        </CField>
                         <LookupField
                             label="Department"
                             value={form.dept_code || ""}
@@ -493,16 +503,7 @@ export function PurchaseInvoiceHeaderForm({
                             disabled={headerAndLineDisabled}
                             onChange={(value, row) => setForm((current) => ({ ...current, dept_code: value, dept_name: text(getLookupValue(row || {}, "dept_name")) }))}
                         />
-                        <CField label="Ex Rate">
-                            <Input
-                                className="h-7 text-xs text-right"
-                                type="number"
-                                disabled={headerAndLineDisabled}
-                                step="0.000001"
-                                value={form.ex_rate}
-                                onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))}
-                            />
-                        </CField>
+                      
                     </HeaderBlock>
 
                     <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
