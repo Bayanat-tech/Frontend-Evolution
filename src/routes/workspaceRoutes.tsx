@@ -190,7 +190,6 @@ import AccrualTypePage from "../pages/hr/pay_componants/AccrualTypePage";
 import AttendanceTypesPage from "../pages/hr/pay_componants/AttendanceTypePage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
-// import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
 import PurchaseRequestRegisterReport from "../pages/almswf/PurchaseRequestRegisterReport";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage";
@@ -200,7 +199,7 @@ import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
 import EmployeeDetailsPage from "../pages/hr/Employee Details/Employeedetailspage";
-import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+// import PrRegisterOldPage from "../pages/ims/Reports/purchase_request_register(old)";
 import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
@@ -217,6 +216,7 @@ import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
 import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseReturnPage";
 import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
+import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 
 
 type WorkspaceRouteContext = {
@@ -1576,7 +1576,7 @@ function isProductBrandRoute(pathname: string) {
 function isProfitLossSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/profit_loss_summary"
+    "/workspace/ims/purchase_sales/reports/profit_loss_summary"
   );
 }
 // function isProfitLossSummaryRoute(pathname: string) {
@@ -1587,14 +1587,14 @@ function isProfitLossSummaryRoute(pathname: string) {
 function isPoOrderRegisterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+    "/workspace/ims/purchase_sales/reports/po_order_register"
   );
 }
 
 function isPurchaseRequestRegisterOldRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/purchase_request_register"
+    "/workspace/ims/purchase_sales/reports/purchase_request_register"
   );
 }
 
@@ -1602,7 +1602,7 @@ function isPurchaseRequestRegisterOldRoute(pathname: string) {
 function isStockReportsRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
-    normalized.includes("/workspace/purchase_sales/purchase_sales/reports/stock_report")
+    normalized.includes("/workspace/ims/purchase_sales/reports/stock_report")
   );
 }
 
@@ -2938,6 +2938,6 @@ function isPendingPurchaseOrderRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/pending_purchase_order"
+    "/workspace/ims/purchase_sales/reports/pending_purchase_order"
   );
 }
