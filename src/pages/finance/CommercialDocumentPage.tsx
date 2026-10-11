@@ -600,7 +600,7 @@ function CommercialEditor({
           if (accountRow && getVal("curr_code")) {
             try {
               const currRows = await getDynamicFinanceLookup({
-                parameter: "Account_Currency_CODE_Serach",
+                parameter: "Account_Currency_CODE_Search",
                 code1: user?.company_code || "",
               });
               const match = currRows.find(
