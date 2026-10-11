@@ -18,6 +18,7 @@ import { SIN_CONFIG } from "./SalesOrdertypes";
 import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
 import { downloadSalesInvoiceExcel, SalesInvoiceReport } from "./SalesInvoiceReport";
 import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
+import { formatDate } from "../../../utils/date";
 
 export interface SalesOrderRow {
   doc_type: string;
@@ -513,9 +514,3 @@ useEffect(() => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}
