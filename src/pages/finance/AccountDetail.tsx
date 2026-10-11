@@ -236,7 +236,9 @@ function ApprovalTab({
         <label className="field">
           <span>CR Number</span>
           <Input
+            maxLength={50}
             value={form.cr_no}
+            className={form.cr_no && form.cr_no.length > 50 ? "!border-rose-500 !ring-rose-400" : ""}
             onChange={(e) => setForm((f) => ({ ...f, cr_no: e.target.value }))}
             placeholder="Enter CR number"
           />
@@ -447,7 +449,9 @@ function ActivitiesTab({
 
           <td className="p-1">
             <Input
+              maxLength={10}
               value={newAct.act_code}
+              className={newAct.act_code && newAct.act_code.length > 10 ? "!border-rose-500 !ring-rose-400" : ""}
               onChange={(e) =>
                 setNewAct((f) => ({ ...f, act_code: e.target.value }))
               }
@@ -456,7 +460,9 @@ function ActivitiesTab({
 
           <td className="p-1">
             <Input
+              maxLength={100}
               value={newAct.act_desc}
+              className={newAct.act_desc && newAct.act_desc.length > 100 ? "!border-rose-500 !ring-rose-400" : ""}
               onChange={(e) =>
                 setNewAct((f) => ({ ...f, act_desc: e.target.value }))
               }
@@ -514,8 +520,8 @@ function ActivitiesTab({
             <tbody>
                <tr>
                 <td className="p-1"><Input value={editRow.SRNO} disabled /></td>
-                <td className="p-1"><Input value={editRow.ACT_CODE} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_CODE: e.target.value } : r)} /></td>
-                <td className="p-1"><Input value={editRow.ACT_DESC} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_DESC: e.target.value } : r)} /></td>
+                <td className="p-1"><Input maxLength={10} value={editRow.ACT_CODE} className={editRow.ACT_CODE && editRow.ACT_CODE.length > 10 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_CODE: e.target.value } : r)} /></td>
+                <td className="p-1"><Input maxLength={100} value={editRow.ACT_DESC} className={editRow.ACT_DESC && editRow.ACT_DESC.length > 100 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_DESC: e.target.value } : r)} /></td>
                 <td className="p-1"><Input value={editRow.USER_ID || ""} onChange={(e) => setEditRow((r) => r ? { ...r, USER_ID: e.target.value } : r)} /></td>
                 <td className="p-1">
                   <Input

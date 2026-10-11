@@ -11338,6 +11338,15 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   grid-column: auto !important;
 }
 
+/* ── Ref Doc (PO reference in PI / Sales): expand across column 4 & 5 to fill all available space ── */
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .commercial-doc-ref-lookup,
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > .col-span-2,
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > label.col-span-2 {
+  grid-column: 4 / -1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
 .commercial-document-workbench .commercial-header-block-doc :where(input, select),
 .commercial-document-workbench .commercial-header-block-tax :where(input, select) {
   width: 100%;

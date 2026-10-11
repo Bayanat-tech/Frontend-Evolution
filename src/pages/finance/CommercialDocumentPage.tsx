@@ -1536,7 +1536,7 @@ const limitProps = (f: keyof FormState) => ({
   {!isPO && (
     <LookupField
       label="Ref Doc"
-      className="col-span-2"
+      className="col-span-2 commercial-doc-ref-lookup"
       disabled={isCancelled}
       value={form.ref_doc_no || ""}
       displayValue={form.ref_doc_no || ""}
