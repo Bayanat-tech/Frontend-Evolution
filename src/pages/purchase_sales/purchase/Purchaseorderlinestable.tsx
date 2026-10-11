@@ -26,7 +26,7 @@ import {
 } from "./Purchaseorderutils";
 import { SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -173,7 +173,31 @@ export function PurchaseOrderLinesTable({
   // Compact view  = columns of the reference sheet (+ Action)
   // All Columns   = compact columns + Div, Lcurr Before Tax, Tax Type/Cat/Code, Tax Lcurr, Lcurr After Tax, Req Date, Remarks
   const tableColSpan = showAllColumns ? 27 : 18;
+  
+  // Default zone = first zone from the same lookup the Zone field uses
+  const [defaultZone, setDefaultZone] = useState("");
 
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "PS_POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        const first = list[0];
+        if (alive && first) setDefaultZone(text(getLookupValue(first, "zone_code")));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [companyCode, loginid]);
+
+  // Fill the default zone on any line that has none (existing and newly added)
+  useEffect(() => {
+    if (!defaultZone || headerAndLineDisabled) return;
+    rows.forEach((r) => {
+      if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
+    });
+  }, [defaultZone, rows, headerAndLineDisabled]);
   return (
     <div
       className="commercial-lines-card rounded-md border bg-card min-w-0"
@@ -653,16 +677,16 @@ export function PurchaseOrderLinesTable({
           fontSize: 14
         }}
       >
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Puom)</span>
           <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Qty (Luom)</span>
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
-        </div>
+        </div> */}
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Amount Before Discount</span>
+          <span className="text-muted-foreground">Amount</span>
           <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
         </div>
         <div className="flex items-center gap-2">
@@ -670,7 +694,7 @@ export function PurchaseOrderLinesTable({
           <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Amount Before Tax</span>
+          <span className="text-muted-foreground">Total Amount Excluding Tax</span>
           <strong>{formatAmount(grandTotal)}</strong>
         </div>
         <div className="flex items-center gap-2">
@@ -678,7 +702,7 @@ export function PurchaseOrderLinesTable({
           <strong>{formatAmount(totalTaxAmount)}</strong>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
-          <span className="font-semibold text-[#00378C]">Amount After Tax</span>
+          <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>

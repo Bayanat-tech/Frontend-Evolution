@@ -525,7 +525,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                 <div className="freight-master-field">
                   <label className="freight-master-label">
                     <span>Airline</span>
-                    <span className="text-red-500 font-bold ml-0.5">*</span>
+                    <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
                   </label>
                   <LookupField
                     compact
@@ -627,7 +627,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
               <div className="tariff-currency-row">                <div className="freight-master-field">
                   <label className="freight-master-label">
                     <span>Currency</span>
-                    <span className="text-red-500 font-bold ml-0.5">*</span>
+                    <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
                   </label>
                   <LookupField
                     compact
@@ -851,7 +851,7 @@ function Field({
     <div className={`freight-master-field ${className || ""}`}>
       <label className="freight-master-label">
         <span>{label}</span>
-        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         className={`freight-master-input ${numeric ? "numeric" : ""}`}

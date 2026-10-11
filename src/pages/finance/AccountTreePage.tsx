@@ -746,7 +746,10 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
               </label>
             )}
             <label className="field">
-              <span>Description</span>
+              <span>
+                Description
+                <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
+              </span>
               <Input value={description} onChange={(event) => { setDescription(event.target.value); onDirtyChange(true); }} />
             </label>
 
@@ -953,7 +956,7 @@ function AccountLevelFiveForm({
                 <label className={field.type === "textarea" ? "field field-wide" : "field"} key={field.name}>
                     <span>
                       {field.label}
-                      {field.name === "ac_name" && <b>*</b>}
+                      {field.name === "ac_name" && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
                     </span>
                     {field.type === "flag" ? (
                       <Select value={value[field.name]} onChange={(event) => setField(field.name, event.target.value)}>
