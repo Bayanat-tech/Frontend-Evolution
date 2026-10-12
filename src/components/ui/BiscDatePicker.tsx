@@ -298,7 +298,7 @@ export function BiscDatePicker({
         } bg-white text-foreground flex items-center justify-between transition-all cursor-pointer select-none
           ${disabled ? "opacity-60 cursor-not-allowed bg-slate-50" : "hover:border-[#64748b] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/30 shadow-2xs"}`}
       >
-        <span className={formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-xs font-mono font-medium tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-xs" : "text-[12px]"} text-slate-400`}>
+        <span className={`whitespace-nowrap overflow-hidden text-ellipsis select-none ${formattedDisplay ? `text-[#0f172a] font-medium ${compact ? "text-xs font-mono font-medium tracking-tight" : "text-[12px] tracking-tight"}` : `${compact ? "text-xs" : "text-[12px]"} text-slate-400`}`}>
           {formattedDisplay || placeholder || defaultPlaceholder}
         </span>
         <CalendarIcon className={`${compact ? "w-3.5 h-3.5 ml-1" : "w-3.5 h-3.5 ml-1"} text-slate-500 shrink-0`} />

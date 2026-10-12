@@ -149,7 +149,7 @@ import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import { ExpenseMasterPage } from "../pages/purchase_sales/Expensemasterpage";
 import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
-import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
+import ProductPurchaseSales from "../pages/purchase_sales/PS_Productmaster";
 
 import { ProductTypePage } from "../pages/purchase_sales/PS_ProductTypePage";
 
@@ -190,7 +190,6 @@ import AccrualTypePage from "../pages/hr/pay_componants/AccrualTypePage";
 import AttendanceTypesPage from "../pages/hr/pay_componants/AttendanceTypePage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
-import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
 import PurchaseRequestRegisterReport from "../pages/almswf/PurchaseRequestRegisterReport";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage";
@@ -200,7 +199,7 @@ import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
 import EmployeeDetailsPage from "../pages/hr/Employee Details/Employeedetailspage";
-import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+// import PrRegisterOldPage from "../pages/ims/Reports/purchase_request_register(old)";
 import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
@@ -208,11 +207,18 @@ import { VacationSettlementPage } from "../pages/hr/Vacationsettlement";
 import { PamsBulkAppraisalPage } from "../pages/pams/PamsBulkAppraisalPage";
 import { KpiAcceptancePage } from "../pages/pams/KpiAcceptancePage";
 import SalaryAdvanceRecoveryPage from "../pages/hr/SalaryAdvanceRecovery";
+import StockReportPage from "../pages/purchase_sales/Reports/StockReportPage";
 import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotationcomparisonpage";
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import PostDateCheque from "../pages/finance/PostDateCheque";
 import { EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
 import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
+import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
+import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
+import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseReturnPage";
+import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
+import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 
 
 type WorkspaceRouteContext = {
@@ -319,6 +325,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
     element: () => <ProductPurchaseSales />
   },
+
+  {
+  name: "Purchase Sales Product Type",
+  match: ({ pathname }) => isProductTypeRoute(pathname),
+  element: () => <ProductTypePage />,
+  },
+
+
+
+
   {
     name: 'HR Accural Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
@@ -1063,11 +1079,39 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       throw new Error("Function not implemented.");
     }} />
   },
+   {
+    name: "Purchase Return Setup",
+    match: ({ pathname }) => isPurchaseReturnSetupRoute(pathname),
+    element: () => <PurchaseReturnPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
 
   {
     name: "Purchase Quotation Setup",
     match: ({ pathname }) => isPProductionJoborderSetupRoute(pathname),
     element: () => <ProductionJobOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
+     {
+    name: "Material Return Setup",
+    match: ({ pathname }) => isMaterialReturnSetupRoute(pathname),
+    element: () => <MateriaLReturnPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
+       {
+    name: "Material Issues Setup",
+    match: ({ pathname }) => isMaterialIssuesSetupRoute(pathname),
+    element: () => <MaterialIssuesPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    }} />
+  },
+   {
+    name: "Sales Return Setup",
+    match: ({ pathname }) => isSalesReturnSetupRoute(pathname),
+    element: () => <SalesReturnPage onClose={function (): void {
       throw new Error("Function not implemented.");
     }} />
   },
@@ -1420,6 +1464,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <ZoneMasterPage />,
   },
 
+ {
+  name: "PurchaseSales Stock Reports",
+  match: ({ pathname }) => isStockReportsRoute(pathname),
+  element: () => <StockReportPage />,
+},
   {
     name: "Expense Master",
     match: ({ pathname }) => isExpenseMasterRoute(pathname),
@@ -1548,24 +1597,38 @@ function isProductBrandRoute(pathname: string) {
   );
 }
 
+
+
 function isProfitLossSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/profit_loss_summary"
+    "/workspace/ims/purchase_sales/reports/profit_loss_summary"
   );
 }
+// function isProfitLossSummaryRoute(pathname: string) {
+//   const normalized = pathname.toLowerCase().replace(/[-\s]/g, "_");
+//   return normalized.includes("/reports/profit_loss_summary");
+// }
 
 function isPoOrderRegisterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+    "/workspace/ims/purchase_sales/reports/po_order_register"
   );
 }
 
 function isPurchaseRequestRegisterOldRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/purchase_request_register"
+    "/workspace/ims/purchase_sales/reports/purchase_request_register"
+  );
+}
+
+
+function isStockReportsRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/workspace/ims/purchase_sales/reports/stock_report")
   );
 }
 
@@ -1639,10 +1702,28 @@ function isPurchaseGRNSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (normalized.includes("purchase_sales/purchase/purchase_grn"))
 }
+function isPurchaseReturnSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/purchase/purchase_return"))
+}
+function isSalesReturnSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/sales/sales_return"))
+}
+
 
 function isPProductionJoborderSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (normalized.includes("purchase_sales/production/job_order"))
+}
+
+function isMaterialReturnSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/production/material_return"))
+}
+function isMaterialIssuesSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("purchase_sales/production/material_issues"))
 }
 
 function isSalesorderSetupRoute(pathname: string) {
@@ -2812,12 +2893,19 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
   );
 }
 
+
+function isProductRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return /\/workspace\/purchase_sales\/purchase_sales\/masters\/product$/.test(normalized);
+}
+
+
 function isProductTypeRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
+     normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
   );
 }
@@ -2826,8 +2914,8 @@ function isProductCategoryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
+        normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
   );
 }
@@ -2860,12 +2948,8 @@ function isProductBomRoute(pathname: string) {
 }
 
 function isPnSRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
-
-  return (
-    normalized.includes("/purchase_sales/purchase_sales") 
-   
-  );
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized === "/workspace/purchase_sales/purchase_sales";
 }
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
@@ -2880,6 +2964,6 @@ function isPendingPurchaseOrderRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/reports/pending_purchase_order"
+    "/workspace/ims/purchase_sales/reports/pending_purchase_order"
   );
 }

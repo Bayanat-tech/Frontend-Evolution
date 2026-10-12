@@ -507,12 +507,13 @@ export function FreightInvoicePage() {
             </div>
           <div className="grid gap-2 p-3 md:grid-cols-6">
             <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
-            <Field label="Invoice Date"><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
+            <Field label="Invoice Date" required><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
             <Field label="From Date"><Input type="date" value={form.from_date} disabled={readOnly} onChange={(event) => {setFormField("from_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, event.target.value, form.to_date);}}/></Field>
             <Field label="To Date"><Input type="date" value={form.to_date} disabled={readOnly} onChange={(event) => {setFormField("to_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, event.target.value);}} /></Field>
-            <Field label="Principal">
+            <Field label="Principal" required>
               <LookupField
                 compact
+                required
                 disabled={readOnly || selectedRows.length > 0}
                 value={form.prin_code}
                 displayValue={principalText(form)}
@@ -670,8 +671,16 @@ function emptyForm(): InvoiceFormState {
   };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">{label}{children}</label>;
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
+      <span>
+        {label}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      {children}
+    </label>
+  );
 }
 
 
