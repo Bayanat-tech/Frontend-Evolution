@@ -553,6 +553,8 @@ function CField({
   );
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 function CommercialEditor({
   docType,
   editor,
@@ -926,6 +928,9 @@ const limitProps = (f: keyof FormState) => ({
   if (!isPO && !form.inv_date)          hErr.inv_date  = "INV Date is required";
   if (isPI  && !form.ref_no)            hErr.ref_no    = "Ref No is required";
   if (isSales && !form.ref_no)          hErr.ref_no    = "Ref No is required";    //inv_no 
+  if (form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim())) {
+    hErr.dlvr_email = "Invalid email format";
+  }
 
   // Character limit validations
   // if (form.ref_no && form.ref_no.length > 30) {
@@ -1208,8 +1213,16 @@ const limitProps = (f: keyof FormState) => ({
                       <Input {...limitProps("dlvr_mobile")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
                     </CField>
 
-                    <CField label="E-mail" className="col-span-1" error={limitErr("dlvr_email")}>
-                      <Input {...limitProps("dlvr_email")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
+                    <CField label="E-mail" className="col-span-1" error={(form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim()) ? "Invalid email format" : limitErr("dlvr_email")) || fieldErrors.dlvr_email}>
+                      <Input
+                        {...limitProps("dlvr_email")}
+                        type="email"
+                        placeholder="name@company.com"
+                        className={`h-7 text-xs ${((form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim())) || fieldErrors.dlvr_email) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                        disabled={isCancelled}
+                        value={form.dlvr_email || ""}
+                        onChange={(e) => update("dlvr_email", e.target.value)}
+                      />
                     </CField>
 
                     <CField label="Payment Terms" className="col-span-1" error={limitErr("payment_terms")}>
@@ -1661,7 +1674,7 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Product Code</th>}
-                      <th className="min-w-[220px] px-2 py-2 text-left">Description</th>
+                      <th className="w-[320px] min-w-[280px] px-2 py-2 text-left">Description</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Cost Code</th>}
                       <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty</th>
                       {isPO && <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty Rcv</th>}
@@ -1676,9 +1689,9 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
-                      <th className="px-2 py-2 text-left">Job</th>
-                      {isPO && <th className="px-2 py-2 text-left">Dept.</th>}
-                      {isPO && <th className="px-2 py-2 text-left">Remarks</th>}
+                      <th className="w-28 min-w-[110px] px-2 py-2 text-left">Job</th>
+                      {isPO && <th className="w-28 min-w-[110px] px-2 py-2 text-left">Dept.</th>}
+                      {isPO && <th className="w-56 min-w-[200px] px-2 py-2 text-left">Remarks</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
@@ -1738,12 +1751,12 @@ const limitProps = (f: keyof FormState) => ({
     
   </td>
 )}
-                        <td className="min-w-[220px] w-[260px] px-1 py-1">
+                        <td className="w-[320px] min-w-[280px] px-1 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
                             title={line.remarks || ""}
-                            rows={1}
+                            rows={2}
                             value={line.remarks || ""}
                             onChange={(event) => updateLine(line.id, { remarks: event.target.value })}
                             placeholder="Description"
@@ -1844,12 +1857,12 @@ const limitProps = (f: keyof FormState) => ({
                             />
                           </td>
                         )}
-                        <td className="w-20 max-w-[80px] px-1 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
+                        <td className="w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
-                          <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
+                          <td className="w-28 min-w-[110px] px-1 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
                        )}
                         {isPO && (
-                         <td className="w-[260px] px-2 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
+                         <td className="w-56 min-w-[200px] px-1 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
                         )}
                         <td className="finance-amount-cell w-24 px-1 py-1">
                           <Input

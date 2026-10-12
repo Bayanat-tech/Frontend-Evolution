@@ -671,14 +671,14 @@
 
 /* Table description cell */
 :where(.finance-document-ui, .finance-document-editor) .finance-lines-table textarea.commercial-line-description {
-  height: 25px !important;
-  min-height: 25px !important;
-  max-height: 25px !important;
-  line-height: 21px !important;
-  resize: none !important;
-  overflow: hidden !important;
-  white-space: nowrap !important;
-  padding: 1px 6px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 90px !important;
+  line-height: 1.35 !important;
+  resize: vertical !important;
+  overflow-y: auto !important;
+  white-space: pre-wrap !important;
+  padding: 4px 6px !important;
 }
 
 /* Table select (Cr/Dr) */
@@ -1075,7 +1075,7 @@
 .finance-document-editor .commercial-line-totals > div { display:flex; gap:6px; border:0; padding:0; margin:0; }
 .finance-document-editor .finance-lines-table { --finance-col-no:36px; --finance-col-account:230px; width:100% !important; }
 .finance-document-editor .finance-lines-table .finance-col-account { left: var(--finance-col-no, 38px) !important; }
-.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:220px !important; min-width:180px !important; max-width:260px !important; }
+.finance-document-editor .finance-lines-table td:has(.commercial-line-description) { width:320px !important; min-width:260px !important; max-width:480px !important; }
 .finance-document-editor .finance-lines-table .finance-amount-cell { width:88px !important; min-width:82px !important; }
 .finance-document-editor .finance-money-input { min-width:0 !important; }
 .finance-document-editor .commercial-sticky-footer { padding:4px 10px !important; min-height:32px; }

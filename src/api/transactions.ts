@@ -61,6 +61,7 @@ export type TransactionHeader = {
   cheque_bank?: string;
   ac_payee?: string;
   tx_compntcat_code_1?: string;
+  tx_compntcat_name_1?: string;
   tx_compnt_1_expmt?: string;
   files?: unknown[];
   detail: TransactionDetail[];
