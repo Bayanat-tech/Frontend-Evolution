@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, X } from "lucide-react";
+import { Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -1164,6 +1164,12 @@ function JVDocument({
                     <span className="font-semibold text-[#00378C]">Doc Date:</span>
                     <span className="font-medium">{formatDate(form.doc_date)}</span>
                   </span>
+                  {form.ref_no && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Ref No:</span>
+                      <span className="font-medium bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">{form.ref_no}</span>
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1.5">
                     <span className="font-semibold text-[#00378C]">Currency:</span>
                     <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
@@ -1186,43 +1192,87 @@ function JVDocument({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5 mb-3">
-                <div className="finance-payment-header-block">
-                  <div className="finance-section-title">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                {/* Card 1: Document Details */}
+                <div className="finance-payment-header-block flex flex-col h-full">
+                  <div className="finance-section-title flex items-center">
                     <span className="finance-section-icon"><FileText size={11} /></span>
-                    <span>Document & Currency Details</span>
+                    <span>Document Details</span>
                   </div>
-                  <div className="finance-payment-header-fields">
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
                     <Field label="Doc Date" required>
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                     </Field>
-                    <LookupField
-                      label="Currency"
-                      required
-                      value={form.curr_code}
-                      displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                      columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                      valueField="curr_code"
-                      displayFields={["curr_code", "curr_name"]}
-                      loadOptions={getCurrencyRows}
-                      disabled={disabled}
-                      onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
-                    />
-                    <Field label="Exchange Rate" required>
-                      <Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
+                    <Field
+                      label="Ref No"
+                      error={form.ref_no && form.ref_no.length > 30 ? `Max 30 (${form.ref_no.length})` : undefined}
+                    >
+                      <Input
+                        disabled={disabled}
+                        maxLength={30}
+                        value={form.ref_no || ""}
+                        placeholder="Ref No"
+                        className={`h-7 text-xs ${form.ref_no && form.ref_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                        onChange={(event) => updateField("ref_no", event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Ref Date">
+                      <BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} />
                     </Field>
                     <Field
                       label="Remarks"
-                      className="col-span-2 max-md:col-span-1"
+                      className="col-span-3"
                       error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
                     >
                       <Input
                         disabled={disabled}
                         value={form.remarks || ""}
                         maxLength={250}
-                        placeholder="Remarks"
-                        className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                        placeholder="Remarks / Narration"
+                        className={`h-7 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
                         onChange={(event) => updateField("remarks", event.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Card 2: Currency & Exchange Rate */}
+                <div className="finance-payment-header-block flex flex-col h-full">
+                  <div className="finance-section-title flex items-center">
+                    <span className="finance-section-icon"><Coins size={11} /></span>
+                    <span>Currency & Rate</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
+                    <div>
+                      <LookupField
+                        label="Currency *"
+                        required
+                        enforceRequired
+                        value={form.curr_code}
+                        displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                        columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                        valueField="curr_code"
+                        displayFields={["curr_code", "curr_name"]}
+                        loadOptions={getCurrencyRows}
+                        disabled={disabled}
+                        onChange={(value, row) => setForm((current) => ({
+                          ...current,
+                          curr_code: value,
+                          curr_name: text(getLookupValue(row || {}, "curr_name")),
+                          ex_rate: Number(row?.ex_rate ?? 1)
+                        }))}
+                      />
+                    </div>
+                    <Field label="Exchange Rate *" required>
+                      <Input
+                        disabled={disabled}
+                        required
+                        type="number"
+                        style={{ textAlign: "right" }}
+                        step="0.0001"
+                        className="h-7 text-xs font-mono"
+                        value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(4) : ""}
+                        onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))}
                       />
                     </Field>
                   </div>
@@ -1283,21 +1333,21 @@ function JVDocument({
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
-                  <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
-                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
-                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Dept</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="px-2 py-2 text-center text-white w-14">Action</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
+                      <th className="px-2 py-2 text-center w-[110px]">Allocations</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Dept</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="px-2 py-2 text-center w-14">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1441,7 +1491,17 @@ function JVDocument({
                           {showAllColumns && (
                             <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                           )}
-                          <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                          <td className="px-2 py-1 text-center">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              title="Delete line"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                              onClick={() => removeDetailRow(detail.id)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         </tr>
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
@@ -1470,19 +1530,43 @@ function JVDocument({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer flex justify-end">
-                <div className="commercial-summary-chips">
-                  <div className={`commercial-summary-chip ${Math.abs(total) > 0.001 ? "border-destructive text-destructive bg-red-50" : "border-emerald-200 text-emerald-700 bg-emerald-50"}`}>
-                    <span className="commercial-summary-label">Balance</span>
-                    <span className="commercial-summary-value font-bold">{formatAmount(total)}</span>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-between gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  {isBalanced ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Balanced Journal Voucher
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-rose-500" />
+                      Out of Balance: Difference {formatAmount(Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3))))}
+                    </span>
+                  )}
+                </div>
+
+                <div className="commercial-line-totals flex items-center gap-2.5">
+                  <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Debit</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-emerald-700">{formatAmount(debitTotal)}</strong>
                   </div>
-                  <div className="commercial-summary-chip">
-                    <span className="commercial-summary-label">Tax Amount</span>
-                    <span className="commercial-summary-value">{formatAmount(totalTax)}</span>
+                  <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Credit</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-blue-700">{formatAmount(creditTotal)}</strong>
                   </div>
-                  <div className="commercial-summary-chip commercial-summary-net">
-                    <span className="commercial-summary-label">Net Total</span>
-                    <span className="commercial-summary-value font-bold text-[#00378C]">{formatAmount(total + totalTax)}</span>
+                  {totalTax > 0 && (
+                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                      <span className="text-xs font-semibold text-slate-600">Tax</span>
+                      <strong className="font-mono text-sm font-bold tabular-nums text-slate-700">{formatAmount(totalTax)}</strong>
+                    </div>
+                  )}
+                  <div className={`flex min-h-9 items-center gap-2 rounded-md border px-3 py-1 shadow-2xs ${
+                    isBalanced ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-300 bg-rose-50 text-rose-800"
+                  }`}>
+                    <span className="text-xs font-bold">Difference</span>
+                    <strong className="font-mono text-sm font-extrabold tabular-nums">
+                      {formatAmount(Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3))))}
+                    </strong>
                   </div>
                 </div>
               </div>
