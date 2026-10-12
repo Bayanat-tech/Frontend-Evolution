@@ -215,7 +215,7 @@ import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotat
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import PostDateCheque from "../pages/finance/PostDateCheque";
-import { EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
+import { AttendanceRegisterReportPage, EmployeeAccrualBalanceReportPage, EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeePayUnitReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
 import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
 import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
@@ -245,6 +245,21 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name : 'Attendance Register Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/attendance_register"),
+    element : () => <AttendanceRegisterReportPage />
+  },
+  {
+    name : 'Employee Accural Balance Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/employee_accural_balance"),
+    element : () => <EmployeeAccrualBalanceReportPage />
+  },
+  {
+    name : 'Employee Pay Unit List Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/employee_pay_unit"),
+    element : () => <EmployeePayUnitReportPage />
+  },
   {
     name : 'Hr Employee Joining Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/joining_report"),

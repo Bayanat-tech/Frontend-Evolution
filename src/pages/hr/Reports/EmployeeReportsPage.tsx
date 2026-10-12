@@ -1,6 +1,6 @@
 /**
  * HR Reports – complete single file
- * Pages: Joiner | Register | Leavers | Tenure
+ * Pages: Joiner | Register | Leavers | Tenure | Attendance Register | Accrual Balance | Pay Unit List
  * Endpoint: POST /api/hr/reports/:type/:report   (type = html | excel)
  * LOV: getDynamicLookup → /api/wms/common/proc_build_dynamic_sql_common
  * Company Code: from useAuth()
@@ -18,10 +18,20 @@ import { useAuth } from "../../../state/AuthContext";
    Shared types & helpers
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type ReportKey = "joiner" | "register" | "leavers" | "tenure";
+export type ReportKey =
+  | "joiner"
+  | "register"
+  | "leavers"
+  | "tenure"
+  | "attendance"
+  | "accrual"
+  | "payunit";
 export type FilterValues = Record<string, string | string[] | boolean>;
 
 const ALL = "All";
+
+/** Reports that show an employee LOV (and must reset it when Division/Department change) */
+const EMP_LOV_REPORTS: ReportKey[] = ["register", "tenure", "attendance", "accrual", "payunit"];
 
 function toApiValue(v: string | string[] | boolean | undefined): string {
   if (v == null || v === false) return ALL;
@@ -34,8 +44,11 @@ function toApiValue(v: string | string[] | boolean | undefined): string {
   return s || ALL;
 }
 
-/** Keys that hold dates: join_from/join_to, sep_from/sep_to, as_of_date */
+/** Keys that hold dates: join_from/join_to, sep_from/sep_to, period_from/period_to, as_of_date */
 const DATE_KEY = /(_from|_to|_date)$/;
+
+/** Employee range keys look like *_from / *_to but are NOT dates */
+const NON_DATE_KEYS = new Set(["emp_from", "emp_to"]);
 
 /**
  * Normalise any date value to a 'YYYY-MM-DD' string, or "" when empty/invalid.
@@ -56,10 +69,17 @@ function toDateString(v: string | string[] | boolean | undefined): string {
   return "";
 }
 
+/** Today as 'YYYY-MM-DD' using local time */
+function todayIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function buildPayload(values: FilterValues): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(values)) {
-    if (DATE_KEY.test(k)) {
+    if (DATE_KEY.test(k) && !NON_DATE_KEYS.has(k)) {
       // dates are sent as 'YYYY-MM-DD' (or "" when not set) – never "All"
       out[k] = toDateString(v);
     } else if (typeof v === "boolean") {
@@ -239,10 +259,10 @@ function useHrReport(
     };
   }, [values.div_code, values.dept_code, companyCode]);
 
-  // ── Employee LOV (only for Register & Tenure) ──
+  // ── Employee LOV (Register, Tenure, Attendance, Accrual, Pay Unit) ──
   useEffect(() => {
     if (!companyCode) return;
-    if (reportKey !== "register" && reportKey !== "tenure") return;
+    if (!EMP_LOV_REPORTS.includes(reportKey)) return;
 
     const div = toApiValue(values.div_code);
     const dept = toApiValue(values.dept_code);
@@ -256,10 +276,13 @@ function useHrReport(
         section_code: sect === ALL ? undefined : sect,
       });
       if (cancelled) return;
+      const withAll = [{ value: ALL, label: "All" }, ...emps];
       setFieldOptions((prev) => ({
         ...prev,
-        employee_code: [{ value: ALL, label: "All" }, ...emps],
-        employee_id: [{ value: ALL, label: "All" }, ...emps],
+        employee_code: withAll,
+        employee_id: withAll,
+        emp_from: withAll,
+        emp_to: withAll,
       }));
     })();
 
@@ -282,21 +305,22 @@ function useHrReport(
     (key: string, value: any) => {
       setValues((prev) => {
         const next = { ...prev, [key]: value };
+        const hasEmp = EMP_LOV_REPORTS.includes(reportKey);
+        const resetEmp = () => {
+          next.employee_code = [ALL];
+          next.employee_id = [ALL];
+          next.emp_from = [ALL];
+          next.emp_to = [ALL];
+        };
         // Reset children when parent changes
         if (key === "div_code") {
           next.dept_code = [ALL];
           next.section_code = [ALL];
-          if (reportKey === "register" || reportKey === "tenure") {
-            next.employee_code = [ALL];
-            next.employee_id = [ALL];
-          }
+          if (hasEmp) resetEmp();
         }
         if (key === "dept_code") {
           next.section_code = [ALL];
-          if (reportKey === "register" || reportKey === "tenure") {
-            next.employee_code = [ALL];
-            next.employee_id = [ALL];
-          }
+          if (hasEmp) resetEmp();
         }
         return next;
       });
@@ -630,10 +654,120 @@ export function EmployeeTenureReportPage() {
   return <HrReportShell r={r} />;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. Attendance Register
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const ATTENDANCE_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "emp_from", label: "Employee From", type: "multiselect", colSpan: 3 },
+  { key: "emp_to", label: "Employee To", type: "multiselect", colSpan: 3 },
+  {
+    key: "period_from",
+    label: "Date Range",
+    type: "daterange",
+    toKey: "period_to",
+    colSpan: 6,
+  },
+  {
+    key: "history",
+    label: "History Report",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "N", label: "No" },
+      { value: "Y", label: "Yes" },
+    ],
+  },
+];
+
+export function AttendanceRegisterReportPage() {
+  const r = useHrReport("attendance", "Attendance Register", ATTENDANCE_FIELDS, {
+    history: "N",
+  });
+  return <HrReportShell r={r} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. Employee Accrual Balance (Leave Accruals)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const ACCRUAL_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  { key: "as_of_date", label: "Date To", type: "date", colSpan: 3 },
+];
+
+export function EmployeeAccrualBalanceReportPage() {
+  const r = useHrReport("accrual", "Employee Accrual Balance", ACCRUAL_FIELDS, {
+    as_of_date: todayIso(),
+  });
+  return <HrReportShell r={r} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. Employee Pay Unit List
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PAYUNIT_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 3 },
+  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  {
+    key: "join_from",
+    label: "Join Date Range",
+    type: "daterange",
+    toKey: "join_to",
+    colSpan: 6,
+  },
+  {
+    key: "emp_status",
+    label: "Employee Status",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "A", label: "Active Employees" },
+      { value: "All", label: "All Employees" },
+    ],
+  },
+  {
+    key: "group_by",
+    label: "Group Criteria",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "DESG", label: "Designation" },
+      { value: "GRADE_DESG", label: "Grade + Designation" },
+      { value: "DIV", label: "Division" },
+      { value: "DEPT", label: "Department" },
+      { value: "EMP", label: "Employee" },
+      { value: "SECT", label: "Section" },
+    ],
+  },
+];
+
+export function EmployeePayUnitReportPage() {
+  const r = useHrReport("payunit", "Employee Pay Units List", PAYUNIT_FIELDS, {
+    emp_status: "A",
+    group_by: "DESG",
+  });
+  return <HrReportShell r={r} />;
+}
+
 /* Default export */
 export default {
   EmployeeJoinerReportPage,
   EmployeeRegisterReportPage,
   EmployeeLeaversReportPage,
   EmployeeTenureReportPage,
+  AttendanceRegisterReportPage,
+  EmployeeAccrualBalanceReportPage,
+  EmployeePayUnitReportPage,
 };
