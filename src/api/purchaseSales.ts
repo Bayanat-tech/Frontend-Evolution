@@ -106,7 +106,7 @@ export async function upsertBulkPurchaseEntryApi(
 const endpoint =
   docType === PO_DOC_TYPE.LPO
     ? "/api/purchase-sales/insUpdTtePOrderBulk"
-    : docType === PO_DOC_TYPE.PQA
+    : docType === PO_DOC_TYPE.PQO
     ? "/api/purchase-sales/insUpdTtePQuotationBulk"
     : docType === PO_DOC_TYPE.GRN
     ? "/api/purchase-sales/insUpdTtePGrnBulk"
