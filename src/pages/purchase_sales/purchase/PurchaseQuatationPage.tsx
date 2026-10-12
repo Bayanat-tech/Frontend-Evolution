@@ -13,7 +13,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
-import { PQA_CONFIG } from "./Purchaseordertypes";
+import { PQO_CONFIG } from "./Purchaseordertypes";
 import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 import { Dialog } from "../../../components/mms_ui";
 import { formatDate } from "../../../utils/date";
@@ -439,7 +439,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         <div className="fixed inset-0 z-50 bg-background">
           <PurchaseQuotationEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={PQA_CONFIG}
+            config={PQO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -476,7 +476,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           onClose={() => setPrintTarget(null)}
           form={printTarget as any}
           companyCode={user?.company_code || ""}
-          docType="PQA"
+          docType="PQO"
         />
       )}
     </section>
