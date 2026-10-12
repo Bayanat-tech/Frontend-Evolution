@@ -1,3 +1,6 @@
+import { CompanyLogoField } from "./CompanyLogoField";
+import { LookupField } from "../../components/ui/LookupField";
+import { loadInboundCountryLookup } from "../../utils/lookupLoaders";
 import { Check, ChevronDown, Edit2, Eye, EyeOff, FileText, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
@@ -27,6 +30,7 @@ type SecurityField = {
   editPlaceholder?: string;
   table?: boolean;
   width?: number;
+  maxLength?: number;
 };
 
 export type SecurityMasterConfig = {
@@ -138,13 +142,14 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
     routeKeys: ["sec_company", "seccompany", "company", "company_master", "company-master", "companymaster", "company master"],
     keyField: "company_code",
     fields: [
-      { name: "company_code", label: "Company Code", required: true, disabledOnEdit: true, table: true, width: 130 },
-      { name: "company_name", label: "Company Name", table: true, width: 260 },
-      { name: "address1", label: "Address 1", table: true, width: 220 },
-      { name: "address2", label: "Address 2", table: true, width: 220 },
-      { name: "address3", label: "Address 3", table: true, width: 220 },
-      { name: "city", label: "City", table: true, width: 140 },
-      { name: "country", label: "Country", table: true, width: 140 },
+      { name: "company_code", maxLength: 7, label: "Company Code", required: true, disabledOnEdit: true, table: true, width: 130 },
+      { name: "company_name", maxLength: 30, label: "Company Name", table: true, width: 260 },
+      { name: "address1", maxLength: 50, label: "Address 1", table: true, width: 220 },
+      { name: "address2", maxLength: 20, label: "Address 2", table: true, width: 220 },
+      { name: "address3", maxLength: 20, label: "Address 3", table: true, width: 220 },
+      { name: "city", maxLength: 20, label: "City", table: true, width: 140 },
+      { name: "country", maxLength: 5, label: "Country", table: true, width: 140 },
+      { name: "company_logo", label: "Company Logo", maxLength: 225, table: false },
     ],
     deleteEnabled: true,
   },
@@ -293,6 +298,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
@@ -465,6 +471,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
+    if (logoUploading) return;
     const missing = config.fields.find((field) => isRequiredField(field, editMode) && !String(form[field.name] ?? "").trim());
     if (missing) {
       setNotice({ type: "error", message: `${missing.label} is required` });
@@ -567,7 +574,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
             <Button
               type="submit"
               form="security-master-form"
-              disabled={saving}
+              disabled={saving || logoUploading}
               className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
             >
               <Save size={13} /> {saving ? "Saving..." : "Save"}
@@ -577,7 +584,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
               variant="outline"
               size="icon"
               onClick={() => setFormOpen(false)}
-              disabled={saving}
+              disabled={saving || logoUploading}
               aria-label="Close"
               title="Close"
               className="h-7 w-7 rounded-md"
@@ -603,10 +610,10 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
             </div>
 
             <div className="p-3">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5">
-                {config.fields.map((field) => (
+              <div className={config.master === "sec_company" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3" : "grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5"}>
+                {config.fields.filter((field) => field.name !== "company_logo").map((field) => (
                   <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
-                    {renderInput(
+                    {config.master === "sec_company" && field.name === "country" ? <LookupField compact value={String(form.country || "")} valueField="country_code" displayFields={["country_code", "country_name"]} columns={[{ field: "country_code", header: "Code" }, { field: "country_name", header: "Country" }]} loadOptions={loadInboundCountryLookup} onChange={(value) => updateFormField(field, value)} disabled={saving || logoUploading} /> : renderInput(
                       field,
                       form[field.name],
                       Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
@@ -627,6 +634,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
                   </Field>
                 ))}
               </div>
+              {config.master === "sec_company" && <CompanyLogoField value={String(form.company_logo || "")} disabled={saving} busy={logoUploading} onBusy={setLogoUploading} onChange={(url) => setForm((current) => ({ ...current, company_logo: url }))} onError={(message) => setNotice({ type: "error", message })} />}
               {positionImpact ? (
                 <div className="mt-2.5 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 text-xs text-slate-600 text-left">
                   <strong className="text-slate-900">Position preview:</strong>{" "}
@@ -677,7 +685,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
               <Button
                 type="button"
                 onClick={openAdd}
-                disabled={saving}
+                disabled={saving || logoUploading}
                 className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
               >
                 <Plus size={14} strokeWidth={2.5} /> Add
@@ -712,7 +720,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         footer={
           <>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Close</Button>
-            <Button disabled={saving} variant="destructive" onClick={confirmDelete}>Delete</Button>
+            <Button disabled={saving || logoUploading} variant="destructive" onClick={confirmDelete}>Delete</Button>
           </>
         }
       >
@@ -768,7 +776,8 @@ function renderInput(
       <div className="relative">
         <input
           disabled={disabled}
-          type={field.type === "number" ? "number" : "text"}
+          maxLength={field.maxLength}
+      type={field.type === "number" ? "number" : "text"}
           value={disabled && !value ? "" : String(value ?? "")}
           placeholder={editMode && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
           className={`${inputClass} pr-8`}

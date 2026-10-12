@@ -42,6 +42,7 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
 import { LookupField } from "../../components/ui/LookupField";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
@@ -155,13 +156,18 @@ const EMPTY_ACCOUNT_FORM: AccountFormState = {
 
 const ACCOUNT_FORM_SECTIONS: Array<{
   title: string;
-  fields: Array<{ name: keyof AccountFormState; label: string; type?: "number" | "date" | "email" | "flag" | "textarea" }>;
+  fields: Array<{
+    name: keyof AccountFormState;
+    label: string;
+    type?: "number" | "date" | "email" | "flag" | "textarea";
+    maxLength?: number;
+  }>;
 }> = [
   {
     title: "Basic Information",
     fields: [
-      { name: "ac_name", label: "Account Name" },
-      { name: "l4_code", label: "Level 4 Code" },
+      { name: "ac_name", label: "Account Name", maxLength: 100 },
+      { name: "l4_code", label: "Level 4 Code", maxLength: 8 },
       { name: "dept_code", label: "Department Code" },
       { name: "curr_code", label: "Currency Code" },
       { name: "pl_bl_code", label: "BS / PL Code" },
@@ -171,27 +177,27 @@ const ACCOUNT_FORM_SECTIONS: Array<{
   {
     title: "Address and Contact",
     fields: [
-      { name: "address_1", label: "Address 1", type: "textarea" },
-      { name: "address_2", label: "Address 2", type: "textarea" },
-      { name: "address_3", label: "Address 3", type: "textarea" },
-      { name: "city_name", label: "City" },
+      { name: "address_1", label: "Address 1", type: "textarea", maxLength: 255 },
+      { name: "address_2", label: "Address 2", type: "textarea", maxLength: 100 },
+      { name: "address_3", label: "Address 3", type: "textarea", maxLength: 100 },
+      { name: "city_name", label: "City", maxLength: 100 },
       { name: "territory_code", label: "Territory Code" },
       { name: "country_code", label: "Country Code" },
-      { name: "phone", label: "Phone" },
-      { name: "mobile_no", label: "Mobile No" },
-      { name: "fax", label: "Fax" },
-      { name: "e_mail", label: "Email", type: "email" },
-      { name: "contact_person", label: "Contact Person" },
+      { name: "phone", label: "Phone", maxLength: 50 },
+      { name: "mobile_no", label: "Mobile No", maxLength: 50 },
+      { name: "fax", label: "Fax", maxLength: 50 },
+      { name: "e_mail", label: "Email", type: "email", maxLength: 50 },
+      { name: "contact_person", label: "Contact Person", maxLength: 50 },
     ],
   },
   {
     title: "Credit and Bank",
     fields: [
-      { name: "credit_period", label: "Credit Period", type: "number" },
-      { name: "credit_amount", label: "Credit Amount", type: "number" },
-      { name: "bank_ac_code", label: "Bank Account Code" },
-      { name: "bank_name", label: "Bank Name" },
-      { name: "bank_swift", label: "Bank Swift" },
+      { name: "credit_period", label: "Credit Period", type: "number", maxLength: 5 },
+      { name: "credit_amount", label: "Credit Amount", type: "number", maxLength: 15 },
+      { name: "bank_ac_code", label: "Bank Account Code", maxLength: 50 },
+      { name: "bank_name", label: "Bank Name", maxLength: 70 },
+      { name: "bank_swift", label: "Bank Swift", maxLength: 50 },
     ],
   },
   {
@@ -200,7 +206,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "contract_expry_date", label: "Expiry Date", type: "date" },
       { name: "salesman_code", label: "Salesman Code" },
       { name: "sector_code", label: "Sector Code" },
-      { name: "trn_no", label: "TRN No" },
+      { name: "trn_no", label: "TRN No", maxLength: 30 },
       { name: "tax_country_code", label: "Tax Country Code" },
       { name: "tax_registrd", label: "Tax Registered", type: "flag" },
       { name: "rcm_apply", label: "Reverse Charge Apply", type: "flag" },
@@ -210,26 +216,16 @@ const ACCOUNT_FORM_SECTIONS: Array<{
   {
     title: "BI and Expense",
     fields: [
-      { name: "bi_main_group", label: "BI Main Group" },
-      { name: "bi_sub_group", label: "BI Sub Group" },
-      { name: "bi_exp_type", label: "BI Exp Type" },
-      { name: "bi_pl_bs_ind", label: "BI PL BS IND" },
-      { name: "bi_dept", label: "BI Dept" },
+      { name: "bi_main_group", label: "BI Main Group", maxLength: 50 },
+      { name: "bi_sub_group", label: "BI Sub Group", maxLength: 50 },
+      { name: "bi_exp_type", label: "BI Exp Type", maxLength: 100 },
+      { name: "bi_pl_bs_ind", label: "BI PL BS IND", maxLength: 10 },
+      { name: "bi_dept", label: "BI Dept", maxLength: 50 },
       // { name: "exp_alloc", label: "Expense Allocation" },
       { name: "exp_type_description", label: "Exp Type Description" },
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
-  // {
-  //   title: "Approval",
-  //   fields: [
-  //     // { name: "cr_no", label: "CR No" },
-  //     // { name: "apprval_factor", label: "Approval Factor" },
-  //     // { name: "request_number", label: "Request Number" },
-  //     // { name: "ac_type", label: "Account Type" },
-  //     { name: "ac_active", label: "Active", type: "flag" },
-  //   ],
-  // },
 ];
 
 export function AccountTreePage() {
@@ -678,6 +674,26 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
       return;
     }
 
+    if (level !== 5 && description.trim().length > 100) {
+      setError("Description cannot exceed 100 characters.");
+      return;
+    }
+
+    if (level === 5) {
+      if (accountForm.ac_name.trim().length > 100) {
+        setError("Account Name cannot exceed 100 characters.");
+        return;
+      }
+      for (const section of ACCOUNT_FORM_SECTIONS) {
+        for (const f of section.fields) {
+          if (f.maxLength && accountForm[f.name] && String(accountForm[f.name]).length > f.maxLength) {
+            setError(`${f.label} exceeds maximum allowed character limit of ${f.maxLength}.`);
+            return;
+          }
+        }
+      }
+    }
+
     try {
       setSaving(true);
       const payload = level === 5
@@ -750,7 +766,12 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
                 Description
                 <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
               </span>
-              <Input value={description} onChange={(event) => { setDescription(event.target.value); onDirtyChange(true); }} />
+              <Input
+                maxLength={100}
+                value={description}
+                className={description && description.length > 100 ? "!border-rose-500 !ring-rose-400" : ""}
+                onChange={(event) => { setDescription(event.target.value); onDirtyChange(true); }}
+              />
             </label>
 
             {level === 4 && (
@@ -964,8 +985,9 @@ function AccountLevelFiveForm({
                         <option value="Y">Yes</option>
                       </Select>
                     ) : field.type === "textarea" ? (
-                      <textarea
-                        className="ui-textarea"
+                      <Textarea
+                        className={value[field.name] && field.maxLength && value[field.name].length > field.maxLength ? "ui-textarea !border-rose-500 !ring-rose-400" : "ui-textarea"}
+                        maxLength={field.maxLength}
                         value={value[field.name]}
                         onChange={(event) => setField(field.name, event.target.value)}
                       />
@@ -977,7 +999,9 @@ function AccountLevelFiveForm({
                     ) : (
                       <Input
                         type={field.type || "text"}
+                        maxLength={field.maxLength}
                         value={value[field.name]}
+                        className={value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength ? "!border-rose-500 !ring-rose-400" : ""}
                         onChange={(event) => setField(field.name, event.target.value)}
                         disabled={field.name === "l4_code"}
                       />

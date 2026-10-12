@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
+import { AlertCircle, Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -81,6 +81,18 @@ const HEADER_LIMITS: Partial<Record<keyof TransactionHeader, { max: number; labe
   party_phone:   { max: 30,  label: "Phone" },
   party_fax:     { max: 30,  label: "Fax" },
   remarks:       { max: 250, label: "Remarks" },
+};
+
+const TAX_CATEGORY_NAME_MAP: Record<string, string> = {
+  "10100": "LOCAL PURCHASE - SRV",
+  "11000": "NO VAT",
+  "11100": "LOCAL SALES - SRV",
+};
+
+const getTaxCatDisplayName = (code?: string, name?: string) => {
+  if (name && name.trim()) return name.trim();
+  if (code && TAX_CATEGORY_NAME_MAP[code]) return TAX_CATEGORY_NAME_MAP[code];
+  return code || "";
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -401,6 +413,61 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
         // onDownloadPdf={...}
       />
     </section>
+  );
+}
+
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  gridCols = "grid-cols-2",
+  grow = false,
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  grow?: boolean;
+}) {
+  return (
+    <div className={`finance-payment-header-block ${grow ? "flex-1" : ""}`}>
+      <div className="finance-section-title flex items-center">
+        <span className="finance-section-icon">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className={`grid gap-x-2 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label,
+  required,
+  className,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  className?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`field flex flex-col gap-0.5 ${className || ""}`}>
+      <span className="text-[10px] font-semibold">
+        {label}
+        {required && <span className="ml-1 text-destructive font-bold">*</span>}
+      </span>
+      {children}
+      {error && (
+        <span data-error="true" className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+          <AlertCircle size={10} /> {error}
+        </span>
+      )}
+    </label>
   );
 }
 
@@ -1378,344 +1445,331 @@ if (tooLong.length) {
               </div>
             ) : (
               <div className="commercial-header-shell flex flex-col gap-1.5 mb-3">
-                <div className="commercial-header-panel">
-
-                  {/* Block 1: Customer / Supplier Details */}
-                  <section className={`commercial-header-block commercial-header-block-party ${docType === "CN" ? "commercial-header-block-party-sales" : ""}`}>
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon">
-                        {docType === "CN" ? <User size={11} /> : <Building2 size={11} />}
-                      </span>
-                      <span>{docType === "CN" ? "Customer Details" : "Supplier Details"}</span>
-                    </div>
-                    <div className="commercial-header-block-fields">
-                      <div className="col-span-1">
-                        <LookupField
-                          label={docType === "CN" ? "Customer *" : "Supplier *"}
-                          value={form.ac_code}
-                          displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
-                          valueField="ac_code"
-                          displayFields={["ac_code", "ac_name", 'curr_code']}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_AC_CODE_Serach_HDR",
-                            code1: user?.company_code,
-                            code2: "H",
-                            code3: form.doc_type,
-                            code4: form.div_code
-                          })}
-                          disabled={disabled || !form.div_code}
-                          onChange={async (value, row) => {
-                            setForm((current) => ({
-                              ...current,
-                              ac_code: value,
-                              ac_name: text(getLookupValue(row || {}, "ac_name")),
-                              curr_code: text(getLookupValue(row || {}, "curr_code")),
-                            }));
-                            if ((docType === "CN" || docType === "DN") && value) {
-                              const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
+                <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.95fr)] gap-1.5 p-1.5 items-stretch">
+                    {/* ══ COLUMN 1: Customer Details (CN) / Supplier Details (DN) ══ */}
+                    <div className="flex flex-col gap-1.5">
+                      <HeaderBlock
+                        label={docType === "CN" ? "Customer Details" : "Supplier Details"}
+                        icon={docType === "CN" ? <User size={11} /> : <Building2 size={11} />}
+                        gridCols="grid-cols-2"
+                        grow
+                      >
+                        <div className="col-span-2">
+                          <LookupField
+                            label={docType === "CN" ? "Customer *" : "Supplier *"}
+                            value={form.ac_code}
+                            displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                            valueField="ac_code"
+                            displayFields={["ac_code", "ac_name", "curr_code"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_AC_CODE_Serach_HDR",
+                              code1: user?.company_code,
+                              code2: "H",
+                              code3: form.doc_type,
+                              code4: form.div_code
+                            })}
+                            disabled={disabled || !form.div_code}
+                            onChange={async (value, row) => {
+                              const r = row || {} as Record<string, unknown>;
+                              const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
+                              const newCurrCode = get("curr_code");
+                              let newExRate = form.ex_rate;
+                              if (newCurrCode) {
+                                try {
+                                  const currRows = await getDynamicFinanceLookup({
+                                    parameter: "Account_Currency_CODE_Serach",
+                                    code1: user?.company_code || "",
+                                  });
+                                  const match = currRows.find(
+                                    (rec: Record<string, unknown>) =>
+                                      String(rec["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
+                                  );
+                                  if (match) {
+                                    const rate = Number(getLookupValue(match, "ex_rate") || (match as any)?.ex_rate || 0);
+                                    if (rate > 0) newExRate = rate;
+                                  }
+                                } catch {}
+                              }
                               setForm((current) => ({
                                 ...current,
-                                cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
+                                ac_code: value,
+                                ac_name: text(getLookupValue(row || {}, "ac_name")),
+                                curr_code: newCurrCode || current.curr_code,
+                                ex_rate: newExRate,
+                                party_address: get("address") || current.party_address,
+                                party_phone: get("phone") || current.party_phone,
+                                party_fax: get("fax") || current.party_fax,
                               }));
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <LookupField
-                          label="Currency*"
-                          value={form.curr_code}
-                          displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                          columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                          valueField="curr_code"
-                          displayFields={["curr_code", "curr_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_Currency_CODE_Serach",
-                            code1: user?.company_code,
-                            loginid: user?.loginid || user?.username || "ADMIN"
-                          })}
-                          disabled={disabled}
-                          onChange={(value, row) => setForm((current) => ({
-                            ...current,
-                            curr_code: value,
-                            curr_name: text(getLookupValue(row || {}, "curr_name")),
-                            ex_rate: Number(row?.ex_rate ?? 1),
-                          }))}
-                        />
-                      </div>
-                      <Field label="Exchange Rate*">
-                        <Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
-                      </Field>
-                      {/* <Field
-                        label="Address"
-                        className="col-span-2 max-md:col-span-1"
-                        error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}
-                      >
-                        <Input
-                          maxLength={250}
-                          placeholder="Address"
-                          disabled={disabled}
-                          value={form.party_address || ""}
-                          className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(event) => updateField("party_address", event.target.value)}
-                        />
-                      </Field> */}
+                              if ((docType === "CN" || docType === "DN") && value) {
+                                const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
+                                setForm((current) => ({
+                                  ...current,
+                                  cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
+                                }));
+                              }
+                            }}
+                          />
+                        </div>
 
-                      <Field label="Address" className="col-span-2 max-md:col-span-1" error={limitErr("party_address")}>
-                        <Input {...limitProps("party_address")} placeholder="Address" disabled={disabled} value={form.party_address || ""}
-                          onChange={(event) => updateField("party_address", event.target.value)} />
-                         </Field>
-                      {/* <Field
-                        label="Phone"
-                        error={form.party_phone && form.party_phone.length > 30 ? `Exceeded limit (${form.party_phone.length}/30)` : undefined}
-                      >
-                        <Input
-                          maxLength={30}
-                          placeholder="Phone"
-                          disabled={disabled}
-                          value={form.party_phone || ""}
-                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(event) => updateField("party_phone", event.target.value)}
-                        />
-                      </Field> */}
-                      <Field label="Phone" error={limitErr("party_phone")}>
-  <Input
-    {...limitProps("party_phone")}
-    placeholder="Phone"
-    disabled={disabled}
-    value={form.party_phone || ""}
-    onChange={(event) => updateField("party_phone", event.target.value)}
-  />
-</Field>
-                      {/* <Field
-                        label="Fax"
-                        error={form.party_fax && form.party_fax.length > 30 ? `Exceeded limit (${form.party_fax.length}/30)` : undefined}
-                      >
-                        <Input
-                          maxLength={30}
-                          placeholder="Fax"
-                          disabled={disabled}
-                          value={form.party_fax || ""}
-                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(event) => updateField("party_fax", event.target.value)}
-                        />
-                      </Field> */}
-                      <Field label="Fax" error={limitErr("party_fax")}>
-  <Input
-    {...limitProps("party_fax")}
-    placeholder="Fax"
-    disabled={disabled}
-    value={form.party_fax || ""}
-    onChange={(event) => updateField("party_fax", event.target.value)}
-  />
-</Field>
+                        <CField label="Address" className="col-span-2" error={limitErr("party_address")}>
+                          <Input
+                            {...limitProps("party_address")}
+                            placeholder="Address"
+                            disabled={disabled}
+                            value={form.party_address || ""}
+                            className={`h-7 text-xs ${form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_address", event.target.value)}
+                          />
+                        </CField>
+
+                        <CField label="Phone" className="col-span-1" error={limitErr("party_phone")}>
+                          <Input
+                            {...limitProps("party_phone")}
+                            placeholder="Phone"
+                            disabled={disabled}
+                            value={form.party_phone || ""}
+                            className={`h-7 text-xs ${form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_phone", event.target.value)}
+                          />
+                        </CField>
+
+                        <CField label="Fax" className="col-span-1" error={limitErr("party_fax")}>
+                          <Input
+                            {...limitProps("party_fax")}
+                            placeholder="Fax"
+                            disabled={disabled}
+                            value={form.party_fax || ""}
+                            className={`h-7 text-xs ${form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_fax", event.target.value)}
+                          />
+                        </CField>
+                      </HeaderBlock>
                     </div>
-                  </section>
 
-                  {/* Block 2: Document Details */}
-                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-1.5">
-                    <section className="commercial-header-block commercial-header-block-doc commercial-header-block-doc-4">
-                    {/* <section className="commercial-header-block commercial-header-block-doc"> */}
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon"><FileText size={11} /></span>
-                      <span>Document Details</span>
+                    {/* ══ COLUMN 2: Document Details ══ */}
+                    <div className="flex flex-col gap-1.5">
+                      <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
+                        <CField label="Doc Date" required className="col-span-1">
+                          <BiscDatePicker compact disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
+                        </CField>
+
+                        {(docType === "CN" || docType === "DN") && (
+                          <CField label="Inv No" required className="col-span-1" error={limitErr("inv_no")}>
+                            <Input
+                              {...limitProps("inv_no")}
+                              required
+                              disabled={disabled}
+                              value={form.inv_no || ""}
+                              placeholder="Invoice No"
+                              className={`h-7 text-xs ${form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              onChange={(event) => updateField("inv_no", event.target.value)}
+                            />
+                          </CField>
+                        )}
+
+                        {(docType === "CN" || docType === "DN") && (
+                          <CField label="Inv Date" className="col-span-1">
+                            <BiscDatePicker compact disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
+                          </CField>
+                        )}
+
+                        {docType !== "CR" && (
+                          <div className="col-span-1">
+                            <LookupField
+                              label="Bank Account"
+                              value={form.bank_ac_code || ""}
+                              displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
+                              columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
+                              valueField="bank_ac_code"
+                              displayFields={["bank_ac_code", "bank_ac_name"]}
+                              loadOptions={() => getDynamicLookup({
+                                parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
+                              })}
+                              disabled={disabled || !form.div_code}
+                              onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
+                            />
+                          </div>
+                        )}
+
+                        {/* Remarks: Wide textarea across entire bottom of Document Details */}
+                        <CField
+                          label="Remarks"
+                          className="col-span-2"
+                          error={limitErr("remarks")}
+                        >
+                          <textarea
+                            className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            disabled={disabled}
+                            value={form.remarks || ""}
+                            maxLength={250}
+                            placeholder="Remarks / Notes"
+                            onChange={(event) => updateField("remarks", event.target.value)}
+                          />
+                        </CField>
+                      </HeaderBlock>
                     </div>
-                    <div className="commercial-header-block-fields">
-                      <Field label="Doc Date" required>
-                        <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
-                      </Field>
-                      {(docType === "CN" || docType === "DN") && (
-                        // <Field
-                        //   label="Inv No*"
-                        //   error={form.inv_no && form.inv_no.length > 30 ? `Exceeded limit (${form.inv_no.length}/30)` : undefined}
-                        // >
-                        //   <Input
-                        //     required
-                        //     disabled={disabled}
-                        //     value={form.inv_no || ""}
-                        //     placeholder="Invoice No"
-                        //     className={form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                        //     onChange={(event) => updateField("inv_no", event.target.value)}
-                        //   />
-                        // </Field>
-                        <Field label="Inv No*" error={limitErr("inv_no")}>
-  <Input
-    {...limitProps("inv_no")}
-    required
-    disabled={disabled}
-    value={form.inv_no || ""}
-    placeholder="Invoice No"
-    onChange={(event) => updateField("inv_no", event.target.value)}
-  />
-</Field>
-                      )}
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field label="Inv Date">
-                          <BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
-                        </Field>
-                      )}
-                      {docType !== "CR" && (
-                        <LookupField
-                          label="Bank Account"
-                          value={form.bank_ac_code || ""}
-                          displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                          columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
-                          valueField="bank_ac_code"
-                          displayFields={["bank_ac_code", "bank_ac_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
-                          })}
-                          disabled={disabled || !form.div_code}
-                          onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
-                        />
-                      )}
-                    </div>
-                  </section> 
 
-                  {/* Block 3: Tax & Remarks */}
-                  {/* <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-wide"> */}
-                   <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-3">
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon"><Receipt size={11} /></span>
-                      <span>Tax & Remarks</span>
-                    </div>
-                    <div className="commercial-header-block-fields">
-                      <label className="field col-span-1 max-md:col-span-1">
-                        <span>Tax Code</span>
-                        <LookupField
-                          label="Tax Code"
-                          compact
-                          placeholder="Tax code"
-                          value={form.tx_compntcat_code_1 || ""}
-                          displayValue={form.tx_compntcat_code_1 || ""}
-                          columns={[
-                            { field: "tx_compntcat_code", header: "Code" },
-                            { field: "tx_compntcat_name", header: "Name" },
-                          ]}
-                          valueField="tx_compntcat_code"
-                          displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                          loadOptions={loadTaxOptions}
-                          disabled={disabled}
-                          onChange={(value, row) => {
-                            const r = (row || {}) as Record<string, unknown>;
-                            const rowRate = Number(
-                              getLookupValue(r, "tx_percnt") ??
-                              getLookupValue(r, "tx_compnt_perc_1") ??
-                              getLookupValue(r, "perc") ??
-                              getLookupValue(r, "tax_percnt") ??
-                              getLookupValue(r, "tax_rate") ??
-                              getLookupValue(r, "rate") ??
-                              0
-                            );
-                            const rowName = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
-                            const valStr = String(value || "").trim();
-                            const isZero = rowName.includes("ZERO") || valStr.startsWith("20") || valStr.startsWith("21");
-                            const isExempt = rowName.includes("EXEMPT") || valStr.startsWith("30") || valStr.startsWith("31");
-                            const isStd = rowName.includes("STD") || rowName.includes("STANDARD") || valStr.startsWith("10") || valStr.startsWith("11");
-
-                            let determinedTaxType: "S" | "Z" | "E" | "N" = "N";
-                            let perc = 0;
-
-                            if (isZero) {
-                              determinedTaxType = "Z";
-                              perc = 0;
-                            } else if (isExempt) {
-                              determinedTaxType = "E";
-                              perc = 0;
-                            } else if (rowRate > 0) {
-                              determinedTaxType = (taxTypeMap[value] as any) || "S";
-                              perc = rowRate;
-                            } else if (valStr && valStr !== "N/A") {
-                              const mappedRate = getTaxPercForCode(value);
-                              const mappedType = taxTypeMap[value] || (mappedRate > 0 ? "S" : "N");
-                              determinedTaxType = (mappedType as any) || (mappedRate > 0 ? "S" : "N");
-                              perc = mappedRate;
-                            }
-
-                            if (valStr && perc > 0) {
-                              setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
-                            }
-
-                            setForm((current) => ({
+                    {/* ══ COLUMN 3: Currency & Exchange Rate + Tax Details ══ */}
+                    <div className="flex flex-col gap-1.5">
+                      {/* Card 1: Currency & Exchange Rate */}
+                      <HeaderBlock label="Currency & Exchange Rate" icon={<Coins size={11} />} gridCols="grid-cols-[1.3fr_1fr]">
+                        <div>
+                          <LookupField
+                            label="Currency *"
+                            required
+                            enforceRequired
+                            value={form.curr_code}
+                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                            valueField="curr_code"
+                            displayFields={["curr_code", "curr_name"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_Currency_CODE_Serach",
+                              code1: user?.company_code,
+                              loginid: user?.loginid || user?.username || "ADMIN"
+                            })}
+                            disabled={disabled}
+                            onChange={(value, row) => setForm((current) => ({
                               ...current,
-                              tx_compntcat_code_1: value,
-                              tx_compnt_1_expmt: determinedTaxType,
-                              detail: current.detail.map((d) => {
-                                const lineAmt = Number(d.amount || 0);
-                                const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                              curr_code: value,
+                              curr_name: text(getLookupValue(row || {}, "curr_name")),
+                              ex_rate: Number(row?.ex_rate ?? 1),
+                            }))}
+                          />
+                        </div>
+
+                        <CField label="Ex Rate" required>
+                          <Input
+                            disabled={disabled}
+                            required
+                            type="number"
+                            step="0.0001"
+                            className="h-7 text-xs"
+                            value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""}
+                            onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))}
+                          />
+                        </CField>
+                      </HeaderBlock>
+
+                      {/* Card 2: Tax Details */}
+                      <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow>
+                        <CField label="Tax Type">
+                          <Select
+                            className="h-7 text-xs"
+                            disabled={disabled}
+                            value={form.tx_compnt_1_expmt || "N"}
+                            onChange={(event) => {
+                              const taxType = event.target.value;
+                              setForm((current) => {
+                                const currentTaxCode = current.tx_compntcat_code_1;
+                                const defaultRate = getTaxPercForCode(currentTaxCode, 0);
                                 return {
-                                  ...d,
-                                  tx_compntcat_code_1: value,
-                                  tx_compnt_1_expmt: determinedTaxType,
-                                  tx_compnt_perc_1: perc,
-                                  tx_compnt_amt_1: taxAmt,
+                                  ...current,
+                                  tx_compnt_1_expmt: taxType,
+                                  detail: current.detail.map((d) => {
+                                    const lineTaxCode = d.tx_compntcat_code_1 || currentTaxCode;
+                                    const rate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1 || defaultRate);
+                                    const taxPerc = taxType === "S" ? rate : 0;
+                                    const taxAmt = taxType === "S" ? Number(((Number(d.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                    return {
+                                      ...d,
+                                      tx_compnt_1_expmt: taxType,
+                                      tx_compnt_perc_1: taxPerc,
+                                      tx_compnt_amt_1: taxAmt,
+                                    };
+                                  }),
                                 };
-                              }),
-                            }));
-                          }}
-                        />
-                      </label>
-                      <label className="field col-span-1 max-md:col-span-1">
-                        <span>Tax Type</span>
-                        <Select
-                          disabled={disabled}
-                          value={form.tx_compnt_1_expmt || "N"}
-                          onChange={(event) => {
-                            const taxType = event.target.value;
-                            setForm((current) => {
-                              const currentTaxCode = current.tx_compntcat_code_1;
-                              const defaultRate = getTaxPercForCode(currentTaxCode, 0);
-                              return {
+                              });
+                            }}
+                          >
+                            <option value="N">No Tax</option>
+                            <option value="S">Std Tax</option>
+                            <option value="Z">Zero</option>
+                            <option value="E">Exempt</option>
+                          </Select>
+                        </CField>
+
+                        <div className="col-span-1">
+                          <LookupField
+                            label="Tax Category"
+                            popoverWidth={420}
+                            placeholder="Tax code"
+                            value={form.tx_compntcat_code_1 || ""}
+                            displayValue={getTaxCatDisplayName(form.tx_compntcat_code_1, form.tx_compntcat_name_1)}
+                            columns={[
+                              { field: "tx_compntcat_code", header: "Category Code" },
+                              { field: "tx_compntcat_name", header: "Category Name" },
+                            ]}
+                            valueField="tx_compntcat_code"
+                            displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+                            loadOptions={loadTaxOptions}
+                            disabled={disabled}
+                            onChange={(value, row) => {
+                              const r = (row || {}) as Record<string, unknown>;
+                              const catName = text(getLookupValue(r, "tx_compntcat_name"));
+                              const rowRate = Number(
+                                getLookupValue(r, "tx_percnt") ??
+                                getLookupValue(r, "tx_compnt_perc_1") ??
+                                getLookupValue(r, "perc") ??
+                                getLookupValue(r, "tax_percnt") ??
+                                getLookupValue(r, "tax_rate") ??
+                                getLookupValue(r, "rate") ??
+                                0
+                              );
+                              const rowName = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+                              const valStr = String(value || "").trim();
+                              const isZero = rowName.includes("ZERO") || valStr.startsWith("20") || valStr.startsWith("21");
+                              const isExempt = rowName.includes("EXEMPT") || valStr.startsWith("30") || valStr.startsWith("31");
+                              const isStd = rowName.includes("STD") || rowName.includes("STANDARD") || valStr.startsWith("10") || valStr.startsWith("11");
+
+                              let determinedTaxType: "S" | "Z" | "E" | "N" = "N";
+                              let perc = 0;
+
+                              if (isZero) {
+                                determinedTaxType = "Z";
+                                perc = 0;
+                              } else if (isExempt) {
+                                determinedTaxType = "E";
+                                perc = 0;
+                              } else if (rowRate > 0) {
+                                determinedTaxType = (taxTypeMap[value] as any) || "S";
+                                perc = rowRate;
+                              } else if (valStr && valStr !== "N/A") {
+                                const mappedRate = getTaxPercForCode(value);
+                                const mappedType = taxTypeMap[value] || (mappedRate > 0 ? "S" : "N");
+                                determinedTaxType = (mappedType as any) || (mappedRate > 0 ? "S" : "N");
+                                perc = mappedRate;
+                              }
+
+                              if (valStr && perc > 0) {
+                                setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
+                              }
+
+                              setForm((current) => ({
                                 ...current,
-                                tx_compnt_1_expmt: taxType,
+                                tx_compntcat_code_1: value,
+                                tx_compntcat_name_1: catName,
+                                tx_compnt_1_expmt: determinedTaxType,
                                 detail: current.detail.map((d) => {
-                                  const lineTaxCode = d.tx_compntcat_code_1 || currentTaxCode;
-                                  const rate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1 || defaultRate);
-                                  const taxPerc = taxType === "S" ? rate : 0;
-                                  const taxAmt = taxType === "S" ? Number(((Number(d.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                  const lineAmt = Number(d.amount || 0);
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
                                   return {
                                     ...d,
-                                    tx_compnt_1_expmt: taxType,
-                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compntcat_code_1: value,
+                                    tx_compnt_1_expmt: determinedTaxType,
+                                    tx_compnt_perc_1: perc,
                                     tx_compnt_amt_1: taxAmt,
                                   };
                                 }),
-                              };
-                            });
-                          }}
-                        >
-                          <option value="N">No Tax</option>
-                          <option value="S">Std Tax</option>
-                          <option value="Z">Zero</option>
-                          <option value="E">Exempt</option>
-                        </Select>
-                      </label>
-                      {/* <Field
-                        label="Remarks"
-                        className="col-span-2 max-md:col-span-1"
-                        error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
-                      >
-                        <Input maxLength={250}
-                          disabled={disabled}
-                          value={form.remarks || ""}
-                          placeholder="Remarks"
-                          className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(event) => updateField("remarks", event.target.value)}
-                        />
-                      </Field> */}
-                      <Field label="Remarks" className="col-span-2 max-md:col-span-1" error={limitErr("remarks")}>
-                          <Input
-                          {...limitProps("remarks")}
-                           disabled={disabled}
-                           value={form.remarks || ""}
-                            placeholder="Remarks"
-                            onChange={(event) => updateField("remarks", event.target.value)}
-                            />
-                         </Field>
+                              }));
+                            }}
+                          />
+                        </div>
+                      </HeaderBlock>
                     </div>
-                  </section>
-                </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1778,17 +1832,17 @@ if (tooLong.length) {
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
                       <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
+                      <th className="px-2 py-2 text-left text-white w-[320px] min-w-[280px]">Description</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white w-28 min-w-[110px]">Amount</th>
                       <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
                       <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white w-24 min-w-[100px]">Tax Amt</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white w-28 min-w-[110px]">Job No</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white w-32 min-w-[110px]">Base Amount</th>}
                       <th className="px-2 py-2 text-center text-white w-14">Action</th>
                     </tr>
                   </thead>
@@ -1858,12 +1912,12 @@ if (tooLong.length) {
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </td>
-                          <td className="w-[200px] max-w-[240px] px-1 py-1">
+                          <td className="w-[320px] min-w-[280px] max-w-[480px] px-1 py-1">
                             <Textarea maxLength={250}
                               disabled={disabled}
-                              className={`commercial-line-description ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              className={`commercial-line-description w-[320px] min-w-[280px] ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
                               title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}
-                              rows={1}
+                              rows={2}
                               value={detail.remarks || ""}
                               onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })}
                               placeholder="Line remarks"
@@ -1895,14 +1949,14 @@ if (tooLong.length) {
                               <Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} />
                             </td>
                           )}
-                          <td className="finance-amount-cell px-2 py-1">
+                          <td className="finance-amount-cell w-28 min-w-[110px] px-2 py-1">
                             <div className="flex flex-col gap-1">
                               <Input
                                 disabled={disabled}
                                 type="number"
                                 style={{ textAlign: "right" }}
                                 step="0.001"
-                                className={`commercial-number-input finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
@@ -2001,12 +2055,12 @@ if (tooLong.length) {
                             </td>
                           )}
                           <td className="w-24 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                          <td className="finance-amount-cell w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                           {showAllColumns && (
-                            <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
+                            <td className="w-28 min-w-[110px] px-2 py-1"><Input className="w-28 min-w-[110px]" disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                           )}
                           {showAllColumns && (
-                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
+                            <td className="finance-amount-cell w-32 min-w-[110px] px-2 py-1"><Input className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                           )}
                           <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                         </tr>
