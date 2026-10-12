@@ -164,6 +164,7 @@ export function FinanceDashboardPanel() {
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const companyName = String(userRecord.company_name || userRecord.COMPANY_NAME || companyCode);
+  const companyLogo = String(userRecord.company_logo || userRecord.COMPANY_LOGO || "");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
 
   const [fyPeriod, setFyPeriod] = useState<string>("");
@@ -172,6 +173,7 @@ export function FinanceDashboardPanel() {
   const [data, setData] = useState<DashboardData>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [logoFailed, setLogoFailed] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -347,7 +349,16 @@ export function FinanceDashboardPanel() {
           <label>
             <span>Company</span>
             <strong>
-              <Building2 size={13} />
+              {companyLogo && !logoFailed ? (
+                <img
+                  src={companyLogo}
+                  alt=""
+                  className="h-3.5 w-3.5 object-contain rounded-sm inline-block"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <Building2 size={13} />
+              )}
               {companyName}
             </strong>
           </label>

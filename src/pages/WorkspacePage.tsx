@@ -62,6 +62,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import { getCompanyLogoRequest } from "../api/auth";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
@@ -183,6 +184,33 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [displayCollapsed]);
   const companyName = user?.company_name || user?.COMPANY_NAME || (user?.tenant_name && user.tenant_name !== "WMSDEV_TENANT" ? user.tenant_name : "Bayanat India");
   const companyCode = user?.company_code || user?.COMPANY_CODE || "01";
+  const userLogo = user?.company_logo || user?.COMPANY_LOGO || "";
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>(userLogo);
+  const [logoLoadFailed, setLogoLoadFailed] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const initialLogo = user?.company_logo || user?.COMPANY_LOGO;
+    if (initialLogo) {
+      setCompanyLogoUrl(initialLogo);
+      setLogoLoadFailed(false);
+    } else if (companyCode) {
+      getCompanyLogoRequest(companyCode)
+        .then((logo) => {
+          if (!isCancelled && logo) {
+            setCompanyLogoUrl(logo);
+            setLogoLoadFailed(false);
+          }
+        })
+        .catch(() => {
+          // keep fallback
+        });
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.company_logo, user?.COMPANY_LOGO, companyCode]);
+
   const fallbackUserName = (user as { name?: string } | null)?.name;
   const displayName = user?.username || user?.loginid || fallbackUserName || "User";
   const userInitials = (displayName || "U").slice(0, 3).toUpperCase();
@@ -231,11 +259,22 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     <div className={cn("workspace h-screen flex flex-col overflow-hidden bg-background", isFinanceApp && "finance-workspace")} style={{ fontFamily: "Inter, sans-serif" }}>
       {/* Top Header - BISC style: clean white/card, logo + company left, dark mode + profile right */}
       <header className="workspace-top-header h-[45px] bg-card border-b border-border flex items-center justify-between px-5 shrink-0 z-20">
-        {/* Left: Logo + Company Name */}
+        {/* Left: Company Logo */}
         <div className="flex items-center gap-3 min-w-[200px]">
-          <Link to="/apps" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <Building2 className="h-5 w-5 text-primary shrink-0" />
-            <span className="text-foreground font-semibold text-sm tracking-tight">{companyName}</span>
+          <Link to="/apps" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity" title={companyName}>
+            {companyLogoUrl && !logoLoadFailed ? (
+              <img
+                src={companyLogoUrl}
+                alt={companyName}
+                onError={() => setLogoLoadFailed(true)}
+                className="h-8 max-h-8 max-w-[220px] object-contain shrink-0"
+              />
+            ) : (
+              <>
+                <Building2 className="h-5 w-5 text-primary shrink-0" />
+                <span className="text-foreground font-semibold text-sm tracking-tight">{companyName}</span>
+              </>
+            )}
           </Link>
         </div>
 
