@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt, List } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt, List, Truck, Coins } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
 import { api } from "../../api/client";
 import {
   Division,
@@ -496,6 +496,63 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   );
 }
 
+// Group block matching purchase quotation header layout: finance-payment-header-block > finance-section-title > fields
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  gridCols = "grid-cols-2",
+  grow = false,
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  grow?: boolean;
+}) {
+  return (
+    <div className={`finance-payment-header-block ${grow ? "flex-1" : ""}`}>
+      <div className="finance-section-title flex items-center">
+        <span className="finance-section-icon">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className={`grid gap-x-2 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Label above the control matching purchase quotation design
+function CField({
+  label,
+  required,
+  className,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  className?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`field flex flex-col gap-0.5 ${className || ""}`}>
+      <span className="text-[10px] font-semibold">
+        {label}
+        {required && <span className="ml-1 text-destructive">*</span>}
+      </span>
+      {children}
+      {error && (
+        <span data-error="true" className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+          <AlertCircle size={10} /> {error}
+        </span>
+      )}
+    </label>
+  );
+}
+
 function CommercialEditor({
   docType,
   editor,
@@ -954,7 +1011,7 @@ const limitProps = (f: keyof FormState) => ({
 };
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench finance-document-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1069,726 +1126,471 @@ const limitProps = (f: keyof FormState) => ({
           </div>
         ) : (
           <div className="commercial-header-shell flex flex-col gap-1.5">
-            <div className="commercial-header-panel">
-              {/* <section className="commercial-header-block commercial-header-block-doc">
-                <div className="commercial-header-block-title">
-                  <span className="finance-section-icon"><FileText size={11} /></span>
-                  <span>Document Details</span>
+            <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.0fr)_minmax(0,1.4fr)] gap-1.5 p-1.5 items-stretch">
+                {/* ══ COLUMN 1: Supplier Details / Customer Details ══ */}
+                <div className="flex flex-col gap-1.5">
+                  <HeaderBlock label={isSales ? "Customer Details" : "Supplier Details"} icon={isSales ? <User size={11} /> : <Building2 size={11} />} gridCols="grid-cols-2" grow>
+                    <div className="col-span-2">
+                      <LookupField
+                        label={isSales ? "Customer *" : "Supplier *"}
+                        required
+                        enforceRequired
+                        value={form.ac_code}
+                        displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+                        columns={[
+                          { field: "ac_code", header: "Code" },
+                          { field: "ac_name", header: "Name" },
+                        ]}
+                        valueField="ac_code"
+                        displayFields={["ac_code", "ac_name"]}
+                        loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
+                        disabled={isCancelled}
+                        onChange={(value, row) => {
+                          const r = row || {} as Record<string, unknown>;
+                          const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
+                          const newCurrCode = get("curr_code");
+
+                          void (async () => {
+                            let newExRate = form.ex_rate;
+                            if (newCurrCode) {
+                              const currRows = await getDynamicFinanceLookup({
+                                parameter: "Account_Currency_CODE_Search",
+                                code1: user?.company_code || "",
+                              });
+                              const match = currRows.find(
+                                (rec: Record<string, unknown>) =>
+                                  String(rec["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
+                              );
+                              newExRate = Number(match?.["ex_rate"] ?? 1) || 1;
+                            }
+
+                            setForm((c) => ({
+                              ...c,
+                              ac_code:       value,
+                              ac_name:       get("ac_name"),
+                              curr_code:     get("curr_code"),
+                              ex_rate:       newExRate,
+                              party_address: get("address"),
+                              party_phone:   get("phone"),
+                              party_fax:     get("fax"),
+                              dlvr_contact:  get("contact_person"),
+                              dlvr_mobile:   get("mobile_no"),
+                              dlvr_email:    get("e_mail"),
+                              remarks:       get("l4_description"),
+                            }));
+                          })();
+                        }}
+                      />
+                      {fieldErrors.ac_code && (
+                        <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+                          <AlertCircle size={11} /> {fieldErrors.ac_code}
+                        </span>
+                      )}
+                    </div>
+
+                    <CField label="Address" className="col-span-2" error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}>
+                      <Input
+                        maxLength={250}
+                        placeholder="Address"
+                        disabled={isCancelled}
+                        value={form.party_address || ""}
+                        className={`h-7 text-xs ${form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                        onChange={(e) => update("party_address", e.target.value)}
+                      />
+                    </CField>
+
+                    <CField label="Contact" className="col-span-1" error={limitErr("dlvr_contact")}>
+                      <Input {...limitProps("dlvr_contact")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
+                    </CField>
+
+                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile")}>
+                      <Input {...limitProps("dlvr_mobile")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
+                    </CField>
+
+                    <CField label="E-mail" className="col-span-1" error={limitErr("dlvr_email")}>
+                      <Input {...limitProps("dlvr_email")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
+                    </CField>
+
+                    <CField label="Payment Terms" className="col-span-1" error={limitErr("payment_terms")}>
+                      <Input {...limitProps("payment_terms")} className="h-7 text-xs" disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
+                    </CField>
+
+                    {isSales && (
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Salesman"
+                          disabled={isCancelled}
+                          value={form.salesman_code ?? ""}
+                          displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
+                          columns={[
+                            { field: "salesman_code", header: "Code" },
+                            { field: "salesman_name", header: "Name" },
+                          ]}
+                          valueField="salesman_code"
+                          displayFields={["salesman_code", "salesman_name"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Salesman_Search",
+                              code1: user?.company_code || "",
+                            })
+                          }
+                          onChange={(value, row) =>
+                            setForm((c) => ({
+                              ...c,
+                              salesman_code: value,
+                              salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+
+                    {isSales && (
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Sector"
+                          disabled={isCancelled}
+                          value={form.sector_code ?? ""}
+                          displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
+                          columns={[
+                            { field: "sector_code", header: "Code" },
+                            { field: "sector_name", header: "Name" },
+                          ]}
+                          valueField="sector_code"
+                          displayFields={["sector_code", "sector_name"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Sector_Search",
+                              code1: user?.company_code || "",
+                            })
+                          }
+                          onChange={(value, row) =>
+                            setForm((c) => ({
+                              ...c,
+                              sector_code: value,
+                              sector_name: text(getLookupValue(row || {}, "sector_name")),
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </HeaderBlock>
                 </div>
-                <div className="commercial-header-block-fields">
 
+                {/* ══ COLUMN 2: Document Details ══ */}
+                <div className="flex flex-col gap-1.5">
+                  <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
+                    <CField label="Doc Date" required error={fieldErrors.doc_date} className="col-span-1">
+                      <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
+                    </CField>
 
+                    {!isPO && (
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Ref Doc"
+                          disabled={isCancelled}
+                          popoverWidth={340}
+                          value={form.ref_doc_no || ""}
+                          displayValue={form.ref_doc_no || ""}
+                          columns={[
+                            { field: "DOC_NO", header: "Doc No" },
+                            { field: "DOC_DATE", header: "Date" },
+                          ]}
+                          valueField="DOC_NO"
+                          displayFields={["DOC_NO"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Account_LPO_REF_DOC",
+                              code1: user?.company_code || "",
+                              number1: form.div_code ? Number(form.div_code) : undefined,
+                            })
+                          }
+                          onChange={async (value, row) => {
+                            if (!value || !row) {
+                              setForm((c) => ({ ...c, ref_doc_no: "" }));
+                              return;
+                            }
+                            const r = row as Record<string, unknown>;
+                            const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
+                            const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+                            setForm((c) => ({ ...c, ref_doc_no: docNo }));
+                            try {
+                              let header: Record<string, unknown> = {};
+                              try {
+                                header = await getPurchaseHeader(docNo, srcType);
+                                if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType);
+                              } catch {
+                                header = await getLpoHeader(docNo, srcType);
+                              }
 
-  {/* ── Doc Date ── */}
-  {/* <Field label="Doc Date" required error={fieldErrors.doc_date}>
-    <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
-  </Field> */}
+                              let rawDetail: Record<string, unknown>[] = [];
+                              try {
+                                const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+                                if (res.length) rawDetail = res;
+                              } catch {}
+                              if (!rawDetail.length) {
+                                try {
+                                  rawDetail = await getLpoDetail(docNo, srcType);
+                                } catch {}
+                              }
 
-  {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
-  {/* {isPI && (
-    <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
-        className={fieldErrors.ref_no ? "border-destructive" : ""}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
-  )} */}
-  {/* {isSales && (
-    <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
-        className={fieldErrors.ref_no ? "border-destructive" : ""}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
-  )} */}
+                              const targetDocType: CommercialType = docType;
+                              const mapped = mapForm(targetDocType, header, rawDetail);
+                              setForm((c) => ({
+                                ...c,
+                                ...mapped,
+                                doc_type: targetDocType,
+                                doc_no: c.doc_no,
+                                div_code: c.div_code,
+                                div_name: c.div_name,
+                                ref_doc_no: docNo,
+                                detail: mapped.detail,
+                              }));
+                            } catch (err) {
+                              console.error("Failed to load ref doc", err);
+                              setError(err instanceof Error ? err.message : "Unable to load reference document");
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
 
-  {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
-  {/* {!isPO && (
-    <Field label="INV Date" required error={fieldErrors.inv_date}>
-      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
-    </Field>
-  )} */}
+                    {isPO && (
+                      <CField label="Ref Date" className="col-span-1">
+                        <BiscDatePicker disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
+                      </CField>
+                    )}
 
-  {/* {!isPO && (
-  <Field label="INV Date" required error={fieldErrors.inv_date}>
-    <BiscDatePicker required disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
-  </Field>
-)} */}
-  {/* {!isPO && (
-  <Field label="INV Date" required error={fieldErrors.inv_date}>
-    <div className="relative">
-      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
-      <input
-        tabIndex={-1}
-        aria-hidden="true"
-        required
-        disabled={isCancelled}
-        value={dateInput(form.inv_date)}
-        onChange={() => {}}
-        ref={(el) => el?.setCustomValidity(form.inv_date ? "" : "INV Date is required")}
-        style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 1, opacity: 0, pointerEvents: "none" }}
-      />
-    </div>
-  </Field>
-)} */}
+                    {isPI && (
+                      <CField label="Ref No" required error={refNoErr || fieldErrors.ref_no} className="col-span-1">
+                        <Input {...reqProps("Ref No")} disabled={isCancelled} maxLength={30} value={form.ref_no || ""}
+                          className={`h-7 text-xs ${fieldErrors.ref_no ? "border-destructive" : ""} ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
+                          onChange={(e) => update("ref_no", e.target.value)} />
+                      </CField>
+                    )}
+                    {isSales && (
+                      <CField label="Ref No" required error={refNoErr || fieldErrors.ref_no} className="col-span-1">
+                        <Input {...reqProps("Ref No")} disabled={isCancelled} maxLength={30} value={form.ref_no || form.inv_no || ""}
+                          className={`h-7 text-xs ${fieldErrors.ref_no ? "border-destructive" : ""} ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
+                          onChange={(e) => update("ref_no", e.target.value)} />
+                      </CField>
+                    )}
+                    {isPO && (
+                      <CField label="Ref No" error={refNoErr} className="col-span-1">
+                        <Input disabled={isCancelled} maxLength={30} value={form.ref_no || ""}
+                          className={`h-7 text-xs ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
+                          onChange={(e) => update("ref_no", e.target.value)} />
+                      </CField>
+                    )}
 
+                    {!isPO && (
+                      <CField label="INV Date" required error={fieldErrors.inv_date} className="col-span-1">
+                        <div className="relative">
+                          <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+                          <input
+                            tabIndex={-1}
+                            aria-hidden="true"
+                            required
+                            disabled={isCancelled}
+                            value={dateInput(form.inv_date)}
+                            onChange={() => {}}
+                            ref={(el) => el?.setCustomValidity(form.inv_date ? "" : "INV Date is required")}
+                            style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 1, opacity: 0, pointerEvents: "none" }}
+                          />
+                        </div>
+                      </CField>
+                    )}
 
-  {/* {!isPO && (
-    <LookupField
-      label="Ref Doc"
-      className="col-span-2"
-      disabled={isCancelled}
-      value={form.ref_doc_no || ""}
-      displayValue={form.ref_doc_no || ""}
-      columns={[
-        { field: "DOC_NO", header: "Doc No" },
-        { field: "DOC_DATE", header: "Date" },
-        { field: "REF_NO", header: "Ref No" },
-        { field: "REMARKS", header: "Remarks" },
-      ]}
-      valueField="DOC_NO"
-      displayFields={["DOC_NO"]}
-      loadOptions={() =>
-        getDynamicFinanceLookup({
-          parameter: "Account_LPO_REF_DOC",
-          code1: user?.company_code || "",
-          number1: form.div_code ? Number(form.div_code) : undefined,
-        })
-      } */}
-      {/* // onChange={async (value, row) => {
-      //   if (!value || !row) return;
-      onChange={async (value, row) => {
-         if (!value || !row) {
-          setForm((c) => ({ ...c, ref_doc_no: "" }));
-         return;
-        }
-        const r = row as Record<string, unknown>;
-        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
-        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
-        setForm((c) => ({ ...c, ref_doc_no: docNo }));
-        try {
-          let header: Record<string, unknown> = {};
-          try {
-            header = await getPurchaseHeader(docNo, srcType);
-            if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType);
-          } catch {
-            header = await getLpoHeader(docNo, srcType);
-          }
+                    {isPO && (
+                      <CField label="APP Ref No" error={limitErr("app_ref_no")} className="col-span-1">
+                        <Input {...limitProps("app_ref_no")} className="h-7 text-xs" disabled={isCancelled} value={form.app_ref_no || ""} onChange={(e) => update("app_ref_no", e.target.value)} />
+                      </CField>
+                    )}
 
-          let rawDetail: Record<string, unknown>[] = [];
-          try {
-            const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
-            if (res.length) rawDetail = res;
-          } catch {}
-          if (!rawDetail.length) {
-            try {
-              rawDetail = await getLpoDetail(docNo, srcType);
-            } catch {}
-          }
+                    {isPO && (
+                      <CField label="LPO Category" className="col-span-1">
+                        <Select className="h-7 text-xs" value={form.pdo_type || ""} onChange={(e) => update("pdo_type", e.target.value)}>
+                          <option value="" />
+                          <option value="PDO-OTO">PDO-OTO</option>
+                          <option value="PDO-NON-OTO">PDO-NON-OTO</option>
+                          <option value="NON-PDO">NON-PDO</option>
+                        </Select>
+                      </CField>
+                    )}
 
-          // const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
-          const targetDocType: CommercialType = docType;
-          const mapped = mapForm(targetDocType, header, rawDetail);
-          setForm((c) => ({
-            ...c,
-            ...mapped,
-            doc_type: targetDocType,
-            doc_no: c.doc_no,
-            div_code: c.div_code,
-            div_name: c.div_name,
-            ref_doc_no: docNo,
-            detail: mapped.detail,
-          })); */}
-
-        {/* } catch (err) {
-          console.error("Failed to load ref doc", err);
-          setError(err instanceof Error ? err.message : "Unable to load reference document");
-        }
-      }}
-    />
-  )} */}
-
-  {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
-  {/* {isPO && (
-    <Field label="Ref No">
-      <Input disabled={isCancelled} value={form.ref_no || ""}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
-  )}
-  {isPO && (
-    <Field label="Ref Date">
-      <BiscDatePicker disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
-    </Field>
-  )}
-  {isPO && (
-    <Field label="APP Ref No">
-      <Input disabled={isCancelled} value={form.app_ref_no || ""}
-        onChange={(e) => update("app_ref_no", e.target.value)} />
-    </Field>
-  )}
-  {isPO && (
-    <Field label="LPO Category">
-      <Select value={form.pdo_type || ""}
-        onChange={(e) => update("pdo_type", e.target.value)}>
-        <option value="" />
-        <option value="PDO-OTO">PDO-OTO</option>
-        <option value="PDO-NON-OTO">PDO-NON-OTO</option>
-        <option value="NON-PDO">NON-PDO</option>
-      </Select>
-    </Field>
-  )} */}
-  {/* {isPO && (
-    <Field label="Order Type (LPO/CPO)">
-      <Select value={form.cash_ind || "N"}
-        onChange={(e) => update("cash_ind", e.target.value)}>
-        <option value="N">LPO - Credit Purchase</option>
-        <option value="Y">CPO - Cash Purchase</option>
-      </Select>
-    </Field>
-  )} */}
-          {/* </div>
-        </section> */} 
-
-        <section className={`commercial-header-block commercial-header-block-party ${isSales ? "commercial-header-block-party-sales" : ""}`}>
-          <div className="commercial-header-block-title">
-            <span className="finance-section-icon">
-              {isSales ? <User size={11} /> : <Building2 size={11} />}
-            </span>
-            <span>{isSales ? "Customer Details" : "Supplier Details"}</span>
-          </div>
-          <div className="commercial-header-block-fields">
-           <div className="commercial-party-primary">
-    <LookupField
-      label={isSales ? "Customer" : "Supplier"} required enforceRequired
-      value={form.ac_code}
-      displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-      columns={[
-        { field: "ac_code", header: "Code" },
-        { field: "ac_name", header: "Name" },
-      ]}
-      valueField="ac_code"
-      displayFields={["ac_code", "ac_name"]}
-      loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-      disabled={isCancelled}
-      onChange={(value, row) => {
-        const r   = row || {} as Record<string, unknown>;
-        const get = (k: string) =>
-          text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
-
-        const newCurrCode = get("curr_code"); //change currency acc to curr
-
-        void (async () => {
-          let newExRate = form.ex_rate;
-          if (newCurrCode) {
-            const currRows = await getDynamicFinanceLookup({
-              parameter: "Account_Currency_CODE_Search",
-              code1: user?.company_code || "",
-            });
-            const match = currRows.find(
-              (r: Record<string, unknown>) =>
-                String(r["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
-            );
-            newExRate = Number(match?.["ex_rate"] ?? 1) || 1;
-          }
-
-          setForm((c) => ({
-            ...c,
-            ac_code:       value,
-            ac_name:       get("ac_name"),
-            curr_code:     get("curr_code"),
-            ex_rate:       newExRate,
-            party_address: get("address"),
-            party_phone:   get("phone"),
-            party_fax:     get("fax"),
-            dlvr_contact:  get("contact_person"),
-            dlvr_mobile:   get("mobile_no"),
-            dlvr_email:    get("e_mail"),
-            remarks:       get("l4_description"), 
-          })); 
-        })();
-      }}
-    />
-    {fieldErrors.ac_code && (
-      <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
-        <AlertCircle size={11} /> {fieldErrors.ac_code}
-      </span>
-    )}
-  </div>
-
-  
-
-  {/* Currency + Exchange Rate */}
-  {/* <div className="col-span-1"> */}
-  {/* <div style={{ gridColumn: "span 1" }}> */}
-    {/* <div style={{ gridColumn: "span 1 / span 1", minWidth: 0 }}> */}
-  <div className="commercial-party-primary">
-  {/* <div className="col-span-1  grid grid-cols-2 "> */}
-  {/* <div style={{ gridColumn: "span 1" }}> */}
-    <LookupField
-      label="Currency"
-      required
-      enforceRequired
-      disabled={isCancelled}
-      value={form.curr_code ?? ""}
-      displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
-      columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-      valueField="curr_code"
-      displayFields={["curr_code", "curr_name", "ex_rate"]}
-      loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
-      onChange={(value, row) => {
-        const newRate = Number(getLookupValue(row || {}, "ex_rate") || form.ex_rate || 1);
-        const currName = text(getLookupValue(row || {}, "curr_name"));
-        setForm((c) => ({
-          ...c,
-          curr_code: value,
-          curr_name: currName,
-          ex_rate: newRate,
-          // detail: c.detail.map((row) => ({ ...row, ex_rate: newRate })),
-          detail: c.detail.map((row) =>
-  !row.curr_code || row.curr_code === c.curr_code
-    ? { ...row, curr_code: value, curr_name: currName, ex_rate: newRate, lcur_amount: Math.abs(Number(row.amount || 0)) * newRate }
-    : row
-),
-        }));
-      }}
-    />
-    {fieldErrors.curr_code && (
-      <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
-        <AlertCircle size={11} /> {fieldErrors.curr_code}
-      </span>
-    )}
-  </div>
-
-  {/* <div  style={{ gridColumn: "span 1" }}> */}
-    <Field label="Ex Rate" required error={fieldErrors.ex_rate} className="col-span-1">
-      <ExchangeRateInput
-        disabled={isCancelled}
-        required
-        value={form.ex_rate}
-        onChange={(rate) => update("ex_rate", rate)}
-        className={fieldErrors.ex_rate ? "border-destructive" : ""}
-      />
-    </Field>
-  {/* </div> */}
-
-  <Field label="Address" className="col-span-2" error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}>
-    <Input maxLength={250} placeholder="Address" disabled={isCancelled} value={form.party_address || ""} className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => update("party_address", e.target.value)} />
-  </Field>
-
-  {/* Contact / Delivery */}
-    <Field label="Contact" className="col-span-1" error={limitErr("dlvr_contact")}>
-    <Input {...limitProps("dlvr_contact")} disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
-  </Field>
-  <Field label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile")}>
-    <Input {...limitProps("dlvr_mobile")} disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
-  </Field>
-  <Field label="E-mail" className="col-span-1" error={limitErr("dlvr_email")}>
-    <Input {...limitProps("dlvr_email")} disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
-  </Field>
-
-  <Field label="Payment Terms" className="col-span-1" error={limitErr("payment_terms")}>
-    <Input {...limitProps("payment_terms")} disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
-  </Field>
-
-  {isSales && (
-  <LookupField
-    label="Salesman"
-    disabled={isCancelled}
-    value={form.salesman_code ?? ""}
-    displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
-    columns={[
-      { field: "salesman_code", header: "Code" },
-      { field: "salesman_name", header: "Name" },
-    ]}
-    valueField="salesman_code"
-    displayFields={["salesman_code", "salesman_name"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter: "Salesman_Search",
-        code1: user?.company_code || "",
-      })
-    }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        salesman_code: value,
-        salesman_name: text(getLookupValue(row || {}, "salesman_name")),
-      }))
-    }
-  />
-  )}
-
-  {isSales && (
-   <LookupField
-    label="Sector"
-    disabled={isCancelled}
-    value={form.sector_code ?? ""}
-    displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
-    columns={[
-      { field: "sector_code", header: "Code" },
-      { field: "sector_name", header: "Name" },
-    ]}
-    valueField="sector_code"
-    displayFields={["sector_code", "sector_name"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter: "Sector_Search",
-        code1: user?.company_code || "",
-      })
-    }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        sector_code: value,
-        sector_name: text(getLookupValue(row || {}, "sector_name")),
-      }))
-    }
-  />
-  )}
-
-  {/* {isPO && (
-    <Field label="Delivery Term">
-      <Input disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
-    </Field>
-  )}
-
-  {isPO && (
-    <Field label="Delivery To">
-      <Input disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
-    </Field>
-  )} */}
-
-    {isPO && (
-    <Field label="Delivery Term" error={limitErr("dlvr_term")}>
-      <Input {...limitProps("dlvr_term")} disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
-    </Field>
-  )}
-
-  {isPO && (
-    <Field label="Delivery To" error={limitErr("delivery_to")}>
-      <Input {...limitProps("delivery_to")} disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
-    </Field>
-  )}
-          </div>
-        </section>
-
-         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-2">
-          {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5"> */}
-          <section className={`commercial-header-block commercial-header-block-doc ${!isPO ? "commercial-header-block-doc-4" : "commercial-header-block-doc-5"}`}>
-                <div className="commercial-header-block-title">
-                  <span className="finance-section-icon"><FileText size={11} /></span>
-                  <span>Document Details</span>
+                    {/* Remarks: Wide textarea across entire bottom of Document Details */}
+                    <CField
+                      label="Remarks"
+                      className="col-span-2"
+                      error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
+                    >
+                      <textarea
+                        className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                        disabled={isCancelled}
+                        value={form.remarks || ""}
+                        maxLength={250}
+                        placeholder="Remarks / Notes"
+                        onChange={(e) => update("remarks", e.target.value)}
+                      />
+                    </CField>
+                  </HeaderBlock>
                 </div>
-                <div className="commercial-header-block-fields">
 
+                {/* ══ COLUMN 3: Currency, Delivery Terms, Tax Details ══ */}
+                <div className="flex flex-col gap-1.5">
+                  {/* Card 1: Currency & Exchange Rate */}
+                  <HeaderBlock label="Currency & Exchange Rate" icon={<Coins size={11} />} gridCols="grid-cols-[1.3fr_1fr]">
+                    <div>
+                      <LookupField
+                        label="Currency *"
+                        required
+                        enforceRequired
+                        disabled={isCancelled}
+                        value={form.curr_code ?? ""}
+                        displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+                        columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                        valueField="curr_code"
+                        displayFields={["curr_code", "curr_name", "ex_rate"]}
+                        loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
+                        onChange={(value, row) => {
+                          const newRate = Number(getLookupValue(row || {}, "ex_rate") || form.ex_rate || 1);
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((c) => ({
+                            ...c,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: newRate,
+                            detail: c.detail.map((l) =>
+                              !l.curr_code || l.curr_code === c.curr_code
+                                ? { ...l, curr_code: value, curr_name: currName, ex_rate: newRate, lcur_amount: Math.abs(Number(l.amount || 0)) * newRate }
+                                : l
+                            ),
+                          }));
+                        }}
+                      />
+                      {fieldErrors.curr_code && (
+                        <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+                          <AlertCircle size={11} /> {fieldErrors.curr_code}
+                        </span>
+                      )}
+                    </div>
 
+                    <CField label="Ex Rate" required error={fieldErrors.ex_rate}>
+                      <ExchangeRateInput
+                        disabled={isCancelled}
+                        required
+                        value={form.ex_rate}
+                        onChange={(rate) => update("ex_rate", rate)}
+                        className={fieldErrors.ex_rate ? "border-destructive" : ""}
+                      />
+                    </CField>
+                  </HeaderBlock>
 
-  {/* ── Doc Date ── */}
-  <Field label="Doc Date" required error={fieldErrors.doc_date}>
-    <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
-  </Field>
+                  {/* Card 2: Delivery Terms (PO only) */}
+                  {isPO && (
+                    <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-2">
+                      <CField label="Delivery Term" error={limitErr("dlvr_term")}>
+                        <Input {...limitProps("dlvr_term")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
+                      </CField>
+                      <CField label="Delivery To" error={limitErr("delivery_to")}>
+                        <Input {...limitProps("delivery_to")} className="h-7 text-xs" disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
+                      </CField>
+                    </HeaderBlock>
+                  )}
 
-  {/* ── Invoice No / Ref No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
-  {isPI && (
-    // <Field label="Ref No" required error={fieldErrors.ref_no}>
-    //   <Input {...reqProps("Ref No")} disabled={isCancelled} value={form.ref_no || ""}
-    //     className={fieldErrors.ref_no ? "border-destructive" : ""}
-    //     onChange={(e) => update("ref_no", e.target.value)} />
-    // </Field>
-    <Field label="Ref No" required error={refNoErr || fieldErrors.ref_no}>
-      <Input {...reqProps("Ref No")} disabled={isCancelled} maxLength={30} value={form.ref_no || ""}
-       className={`${fieldErrors.ref_no ? "border-destructive" : ""} ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
-       onChange={(e) => update("ref_no", e.target.value)} />
-</Field>
-  )}
-  {/* {isSales && (
-    <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input {...reqProps("Ref No")}  disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
-        className={fieldErrors.ref_no ? "border-destructive" : ""}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
-  )} */}
+                  {/* Card 3: Tax Details */}
+                  <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow>
+                    <CField label="Tax Type">
+                      <Select
+                        className="h-7 text-xs"
+                        value={form.tax_type || ""}
+                        disabled={isCancelled}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const perc = v === "S" ? (form.tx_compnt_perc_1 && form.tx_compnt_perc_1 > 0 ? form.tx_compnt_perc_1 : getTaxPercForCode(form.tx_compntcat_code_1 || "")) : 0;
+                          setForm((c) => {
+                            const catCode = c.tx_compntcat_code_1 || "";
+                            const updatedDetail = c.detail.map((line) => ({
+                              ...line,
+                              tx_compntcat_code_1: catCode || line.tx_compntcat_code_1,
+                              tx_compnt_1_expmt:   v,
+                              tx_compnt_perc_1:    perc,
+                              tx_compnt_amt_1:     (Number(line.amount || 0) * perc) / 100,
+                            }));
+                            return {
+                              ...c,
+                              tax_type:          v,
+                              tx_compnt_1_expmt: v,
+                              tx_compnt_perc_1:  perc,
+                              detail:            updatedDetail,
+                            };
+                          });
+                        }}
+                      >
+                        <option value="" />
+                        <option value="S">Std. Tax</option>
+                        <option value="Z">Zero</option>
+                        <option value="E">Expmt</option>
+                        <option value="N">No VAT</option>
+                      </Select>
+                    </CField>
 
-    {isSales && (
-    <Field label="Ref No" required error={refNoErr || fieldErrors.ref_no}>
-      <Input {...reqProps("Ref No")} disabled={isCancelled} maxLength={30} value={form.ref_no || form.inv_no || ""}
-        className={`${fieldErrors.ref_no ? "border-destructive" : ""} ${refNoOver ? "!border-rose-500 !ring-rose-400" : ""}`}
-        onChange={(e) => update("ref_no", e.target.value)} />
-    </Field>
-  )}
+                    <div className="col-span-1">
+                      <LookupField
+                        label="Tax Category"
+                        disabled={isCancelled}
+                        popoverWidth={420}
+                        value={form.tx_compntcat_code_1 ?? ""}
+                        displayValue={getTaxCatDisplayName(form.tx_compntcat_code_1, form.tx_compntcat_name_1)}
+                        columns={[
+                          { field: "tx_compntcat_code", header: "Category Code" },
+                          { field: "tx_compntcat_name", header: "Category Name" },
+                        ]}
+                        valueField="tx_compntcat_code"
+                        displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+                        loadOptions={() =>
+                          getDynamicFinanceLookup({
+                            parameter: "Account_Tax_Search",
+                            code1: user?.company_code || "",
+                          })
+                        }
+                        onChange={(value, row) => {
+                          const r = row || {} as Record<string, unknown>;
+                          const catName = text(getLookupValue(r, "tx_compntcat_name"));
+                          const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
+                          const code = text(getLookupValue(r, "tx_cat_code"));
 
-  {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
-  {/* {!isPO && (
-    <Field label="INV Date" required error={fieldErrors.inv_date}>
-      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
-    </Field>
-  )} */}
+                          setForm((c) => {
+                            const resolvedPerc = perc !== 0 ? perc : getTaxPercForCode(value);
+                            const resolvedExpmt = resolvedPerc > 0 ? "S" : (c.tx_compnt_1_expmt || c.tax_type || "N");
 
-  {/* {!isPO && (
-  <Field label="INV Date" required error={fieldErrors.inv_date}>
-    <BiscDatePicker required disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
-  </Field>
-)} */}
-  {!isPO && (
-  <Field label="INV Date" required error={fieldErrors.inv_date}>
-    <div className="relative">
-      <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
-      <input
-        tabIndex={-1}
-        aria-hidden="true"
-        required
-        disabled={isCancelled}
-        value={dateInput(form.inv_date)}
-        onChange={() => {}}
-        ref={(el) => el?.setCustomValidity(form.inv_date ? "" : "INV Date is required")}
-        style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 1, opacity: 0, pointerEvents: "none" }}
-      />
-    </div>
-  </Field>
-)}
+                            const updatedDetail = c.detail.map((line) => ({
+                              ...line,
+                              tx_compntcat_code_1: value || line.tx_compntcat_code_1,
+                              tx_compnt_1_expmt:   resolvedExpmt,
+                              tx_compnt_perc_1:    resolvedPerc,
+                              tx_compnt_amt_1:     (Number(line.amount || 0) * resolvedPerc) / 100,
+                            }));
 
-
-  {!isPO && (
-    <LookupField
-      label="Ref Doc"
-      className="commercial-doc-ref-lookup"
-      disabled={isCancelled}
-      popoverWidth={320}
-      value={form.ref_doc_no || ""}
-      displayValue={form.ref_doc_no || ""}
-      columns={[
-        { field: "DOC_NO", header: "Doc No" },
-        { field: "DOC_DATE", header: "Date" },
-      ]}
-      valueField="DOC_NO"
-      displayFields={["DOC_NO"]}
-      loadOptions={() =>
-        getDynamicFinanceLookup({
-          parameter: "Account_LPO_REF_DOC",
-          code1: user?.company_code || "",
-          number1: form.div_code ? Number(form.div_code) : undefined,
-        })
-      }
-      // onChange={async (value, row) => {
-      //   if (!value || !row) return;
-      onChange={async (value, row) => {
-         if (!value || !row) {
-          setForm((c) => ({ ...c, ref_doc_no: "" }));
-         return;
-        }
-        const r = row as Record<string, unknown>;
-        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
-        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
-        setForm((c) => ({ ...c, ref_doc_no: docNo }));
-        try {
-          let header: Record<string, unknown> = {};
-          try {
-            header = await getPurchaseHeader(docNo, srcType);
-            if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType);
-          } catch {
-            header = await getLpoHeader(docNo, srcType);
-          }
-
-          let rawDetail: Record<string, unknown>[] = [];
-          try {
-            const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
-            if (res.length) rawDetail = res;
-          } catch {}
-          if (!rawDetail.length) {
-            try {
-              rawDetail = await getLpoDetail(docNo, srcType);
-            } catch {}
-          }
-
-          // const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
-          const targetDocType: CommercialType = docType;
-          const mapped = mapForm(targetDocType, header, rawDetail);
-          setForm((c) => ({
-            ...c,
-            ...mapped,
-            doc_type: targetDocType,
-            doc_no: c.doc_no,
-            div_code: c.div_code,
-            div_name: c.div_name,
-            ref_doc_no: docNo,
-            detail: mapped.detail,
-          }));
-
-        } catch (err) {
-          console.error("Failed to load ref doc", err);
-          setError(err instanceof Error ? err.message : "Unable to load reference document");
-        }
-      }}
-    />
-  )}
-
-  {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
-  {isPO && (
-    // <Field label="Ref No">
-    //   <Input disabled={isCancelled} value={form.ref_no || ""}
-    //     onChange={(e) => update("ref_no", e.target.value)} />
-    // </Field>
-    <Field label="Ref No" error={refNoErr}>
-  <Input disabled={isCancelled} maxLength={30} value={form.ref_no || ""}
-    className={refNoOver ? "!border-rose-500 !ring-rose-400" : ""}
-    onChange={(e) => update("ref_no", e.target.value)} />
-</Field>
-  )}
-  {isPO && (
-    <Field label="Ref Date">
-      <BiscDatePicker disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
-    </Field>
-  )}
-  {isPO && (
-    // <Field label="APP Ref No">
-    //   <Input disabled={isCancelled} value={form.app_ref_no || ""}
-    //     onChange={(e) => update("app_ref_no", e.target.value)} />
-    // </Field>
-
-    <Field label="APP Ref No" error={limitErr("app_ref_no")}>
-      <Input {...limitProps("app_ref_no")} disabled={isCancelled} value={form.app_ref_no || ""}
-        onChange={(e) => update("app_ref_no", e.target.value)} />
-    </Field>
-  )}
-  {isPO && (
-    <Field label="LPO Category">
-      <Select value={form.pdo_type || ""}
-        onChange={(e) => update("pdo_type", e.target.value)}>
-        <option value="" />
-        <option value="PDO-OTO">PDO-OTO</option>
-        <option value="PDO-NON-OTO">PDO-NON-OTO</option>
-        <option value="NON-PDO">NON-PDO</option>
-      </Select>
-    </Field>
-  )}
-  {/* {isPO && (
-    <Field label="Order Type (LPO/CPO)">
-      <Select value={form.cash_ind || "N"}
-        onChange={(e) => update("cash_ind", e.target.value)}>
-        <option value="N">LPO - Credit Purchase</option>
-        <option value="Y">CPO - Cash Purchase</option>
-      </Select>
-    </Field>
-  )} */}
-          </div>
-        </section>
-
-         <section className="commercial-header-block commercial-header-block-tax">
-        {/* <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}> */}
-          <div className="commercial-header-block-title">
-            <span className="finance-section-icon"><Receipt size={11} /></span>
-            <span>Tax & Additional Details</span>
-          </div>
-          <div className="commercial-header-block-fields">
-  <LookupField
-  label="Tax Category"
-  disabled={isCancelled}
-  popoverWidth={380}
-  value={form.tx_compntcat_code_1 ?? ""}
-  displayValue={getTaxCatDisplayName(form.tx_compntcat_code_1, form.tx_compntcat_name_1)}
-  columns={[
-    { field: "tx_compntcat_code", header: "Category Code" },
-    { field: "tx_compntcat_name", header: "Category Name" },
-  ]}
-  valueField="tx_compntcat_code"
-  displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-  loadOptions={() =>
-    getDynamicFinanceLookup({
-      parameter: "Account_Tax_Search",
-      code1: user?.company_code || "",
-    })
-  }
-
- onChange={(value, row) => {
-  const r    = row || {} as Record<string, unknown>;
-  const catName = text(getLookupValue(r, "tx_compntcat_name"));
-  const perc = Number(getLookupValue(r, "tx_percnt") || getLookupValue(r, "perc") || 0);
-  const code = text(getLookupValue(r, "tx_cat_code"));
-
-  setForm((c) => {
-    const resolvedPerc = perc !== 0 ? perc : getTaxPercForCode(value);
-    const resolvedExpmt = resolvedPerc > 0 ? "S" : (c.tx_compnt_1_expmt || c.tax_type || "N");
-
-    const updatedDetail = c.detail.map((line) => ({
-      ...line,
-      tx_compntcat_code_1: value || line.tx_compntcat_code_1,
-      tx_compnt_1_expmt:   resolvedExpmt,
-      tx_compnt_perc_1:    resolvedPerc,
-      tx_compnt_amt_1:     (Number(line.amount || 0) * resolvedPerc) / 100,
-    }));
-
-    return {
-      ...c,
-      tx_compntcat_code_1: value,
-      tx_compntcat_name_1: catName,
-      tx_cat_code:         code,
-      tx_compnt_perc_1:    resolvedPerc,
-      detail:              updatedDetail,
-    };
-  });
- }}
- />
-
-  {/* ── Tax Type  ── */}
-  <Field label="Tax Type">
-    <Select
-      value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
-      disabled={isCancelled}
- onChange={(e) => {
-  const v    = e.target.value;
-  const perc = v === "S" ? (form.tx_compnt_perc_1 && form.tx_compnt_perc_1 > 0 ? form.tx_compnt_perc_1 : getTaxPercForCode(form.tx_compntcat_code_1 || "")) : 0;
-
-  setForm((c) => {
-    const catCode = c.tx_compntcat_code_1 || "";
-
-    const updatedDetail = c.detail.map((line) => ({
-      ...line,
-      tx_compntcat_code_1: catCode || line.tx_compntcat_code_1,
-      tx_compnt_1_expmt:   v,
-      tx_compnt_perc_1:    perc,
-      tx_compnt_amt_1:     (Number(line.amount || 0) * perc) / 100,
-    }));
-
-    return {
-      ...c,
-      tax_type:          v,
-      tx_compnt_1_expmt: v,
-      tx_compnt_perc_1:  perc,
-      detail:            updatedDetail,
-    };
-  });
- }}
-    >
-      <option value="" />
-      <option value="S">Std. Tax</option>
-      <option value="Z">Zero</option>
-      <option value="E">Expmt</option>
-      <option value="N">No VAT</option>
-    </Select>
-  </Field>
-
-  {/* ── Remarks ── */}
-  <Field
-    label="Remarks"
-    className="commercial-remarks-field col-span-1"
-    error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
-  >
-    <Input
-      disabled={isCancelled}
-      value={form.remarks || ""}
-      maxLength={250}
-      placeholder="Remarks"
-      className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
-      onChange={(e) => update("remarks", e.target.value)}
-    />
-  </Field>
-
-  {/* ── HSE Compliant + Letter Head checkboxes — PO only ── */}
-  {/* PO table fields: hse_compliance (Y/N) / print_letter_head (bool) ── */}
+                            return {
+                              ...c,
+                              tx_compntcat_code_1: value,
+                              tx_compntcat_name_1: catName,
+                              tx_cat_code:         code,
+                              tx_compnt_perc_1:    resolvedPerc,
+                              detail:              updatedDetail,
+                            };
+                          });
+                        }}
+                      />
+                    </div>
+                  </HeaderBlock>
+                </div>
+              </div>
             </div>
-          </section>
           </div>
-        </div>
-      </div>
-    )}
+        )}
             <div className="commercial-lines-card min-w-0 rounded-md border border-[#cbd5e1] bg-card shadow-sm overflow-hidden mb-3">
               <div className="finance-line-actions flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
                 <div className="finance-line-actions-title flex items-center gap-2">
