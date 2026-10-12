@@ -2923,7 +2923,7 @@ function isProductBomRoute(pathname: string) {
 
 function isPnSRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
-  return normalized === "/workspace/purchase_sales/purchase_sales";
+  return normalized === "/workspace/ims/ims";
 }
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
