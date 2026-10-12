@@ -433,7 +433,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
 
       </>}
       {editor && (
-        <div className="finance-document-editor finance-document-ui">
+        <div className="finance-document-editor finance-document-ui flex flex-col w-full h-full min-w-0 min-h-0">
           <CommercialEditor
             docType={docType}
             editor={editor}
@@ -1011,7 +1011,7 @@ const limitProps = (f: keyof FormState) => ({
 };
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench finance-document-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen w-full min-w-0 ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -1282,7 +1282,7 @@ const limitProps = (f: keyof FormState) => ({
                 <div className="flex flex-col gap-1.5">
                   <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
                     <CField label="Doc Date" required error={fieldErrors.doc_date} className="col-span-1">
-                      <BiscDatePicker disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
+                      <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
                     </CField>
 
                     {!isPO && (
@@ -1358,7 +1358,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     {isPO && (
                       <CField label="Ref Date" className="col-span-1">
-                        <BiscDatePicker disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
+                        <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
                       </CField>
                     )}
 
@@ -1387,7 +1387,7 @@ const limitProps = (f: keyof FormState) => ({
                     {!isPO && (
                       <CField label="INV Date" required error={fieldErrors.inv_date} className="col-span-1">
                         <div className="relative">
-                          <BiscDatePicker disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+                          <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
                           <input
                             tabIndex={-1}
                             aria-hidden="true"

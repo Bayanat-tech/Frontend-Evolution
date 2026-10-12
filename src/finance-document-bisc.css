@@ -1622,3 +1622,15 @@ button.commercial-add-line-btn:hover svg {
   .finance-document-editor .finance-allocation-cell { padding-left: 16px !important; padding-right: 8px !important; }
   .finance-document-editor .finance-allocation-branch { max-width: calc(100cqw - 40px); padding-left: 10px; }
 }
+
+/* Ensure Commercial Document Workbench always remains a full-width vertical grid layout */
+form.commercial-document-workbench {
+  display: grid !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.commercial-document-workbench .commercial-editor-body {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
