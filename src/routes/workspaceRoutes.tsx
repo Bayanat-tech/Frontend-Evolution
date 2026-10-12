@@ -221,7 +221,7 @@ import { MaterialIssuesPage } from "../pages/purchase_sales/production/Materiall
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
-
+import HrDashboard from "../pages/hr/dashboard/HRDashboard";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -242,6 +242,12 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+    {
+    name: "HR Dashboard",
+    // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
+    match: ({ pathname }) => pathname.toLowerCase().replace(/\/+$/, "") === "/workspace/hcm/hcm",
+    element: () => <HrDashboard />,
+  },
   {
     name : 'Hr Employee Joining Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/joining_report"),
