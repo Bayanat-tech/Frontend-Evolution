@@ -553,7 +553,7 @@ function UtilityField({
       <div className="freight-master-field">
         <label className="freight-master-label">
           <span>{field.label}</span>
-          {field.required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+          {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </label>
         <Select
           className="freight-master-select"
@@ -575,7 +575,7 @@ function UtilityField({
       <div className="freight-master-field">
         <label className="freight-master-label">
           <span>{field.label}</span>
-          {field.required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+          {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </label>
         <LookupField
           compact
@@ -612,7 +612,7 @@ function UtilityField({
     <div className="freight-master-field">
       <label className="freight-master-label">
         <span>{field.label}</span>
-        {field.required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         className="freight-master-input"

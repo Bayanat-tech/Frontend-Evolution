@@ -14,9 +14,10 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
-import { LPO_CONFIG } from "./Purchaseordertypes";
+import { LPO_CONFIG, PO_DOC_TYPE } from "./Purchaseordertypes";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { formatDate } from "../../../utils/date";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -181,6 +182,7 @@ const loadRows = async (clearNotice = true) => {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+      code4: PO_DOC_TYPE.LPO,
     });
 
     return response as unknown as PurchaseOrderRow[];
@@ -205,6 +207,7 @@ const loadRows = async (clearNotice = true) => {
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tabValue,
+           code4: PO_DOC_TYPE.LPO,
       });
 
       return {
@@ -527,9 +530,3 @@ useEffect(() => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

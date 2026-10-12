@@ -167,6 +167,7 @@ export function AssetDepreciationPage() {
             <div className="freight-master-field">
               <label className="freight-master-label">
                 <span>Month</span>
+                <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
               </label>
               <input
                 className="freight-master-input"
@@ -183,6 +184,7 @@ export function AssetDepreciationPage() {
             <div className="freight-master-field">
               <label className="freight-master-label">
                 <span>Division</span>
+                <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
               </label>
               <LookupField
                 compact

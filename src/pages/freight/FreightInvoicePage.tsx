@@ -21,6 +21,8 @@ import { freightSelect, getFreightInvoiceDetailReport } from "../../api/freight"
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -307,12 +309,12 @@ export function FreightInvoicePage() {
   }
 
   async function saveInvoice(action: "draft" | "confirm" = "draft") {
-    if (!selectedRows.length) {
-      toast.error("Select at least one confirmed freight job activity.");
+    if (!form.prin_code) {
+      toast.error("Kindly fill in the missing fields.");
       return;
     }
-    if (!form.prin_code) {
-      toast.error("Principal is required.");
+    if (!selectedRows.length) {
+      toast.error("Kindly fill in the missing fields.");
       return;
     }
 
@@ -427,15 +429,21 @@ export function FreightInvoicePage() {
       <DataTable
         columns={columns}
         data={filteredRows}
-        toolbar={
-          <button
-            type="button"
-            onClick={openNew}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-xs cursor-pointer"
-          >
-            <Plus size={14} />
-            Create Invoice
-          </button>
+        actionButton={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              title="Create Invoice"
+              onClick={openNew}
+            >
+              <Plus size={14} /> Create Invoice
+            </Button>
+            <FinanceListActionsMenu
+              onExport={() => exportToCsv(filteredRows, columns, "freight-invoice-list.csv")}
+              onRefresh={() => void loadRows()}
+            />
+          </div>
         }
         loading={loading}
         searchValue={query}
@@ -446,8 +454,7 @@ export function FreightInvoicePage() {
         density="grid"
         enablePagination
         pageSize={25}
-        enableExport
-        exportFilename="freight-invoice-list.csv"
+        enableExport={false}
         getRowId={(row, index) => text(row.invoice_no) || String(index)}
       />
 
@@ -500,12 +507,13 @@ export function FreightInvoicePage() {
             </div>
           <div className="grid gap-2 p-3 md:grid-cols-6">
             <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
-            <Field label="Invoice Date"><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
+            <Field label="Invoice Date" required><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
             <Field label="From Date"><Input type="date" value={form.from_date} disabled={readOnly} onChange={(event) => {setFormField("from_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, event.target.value, form.to_date);}}/></Field>
             <Field label="To Date"><Input type="date" value={form.to_date} disabled={readOnly} onChange={(event) => {setFormField("to_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, event.target.value);}} /></Field>
-            <Field label="Principal">
+            <Field label="Principal" required>
               <LookupField
                 compact
+                required
                 disabled={readOnly || selectedRows.length > 0}
                 value={form.prin_code}
                 displayValue={principalText(form)}
@@ -544,7 +552,7 @@ export function FreightInvoicePage() {
               </div>
               <div className="max-h-64 overflow-auto">
                 <table className="w-full min-w-[1050px] text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                  <thead className="sticky top-0 bg-[#00378C] text-white text-xs uppercase tracking-wide">
                     <tr>
                       <th className="w-12 px-2 py-2 text-center">Use</th>
                       <th className="px-2 py-2 text-left">Job</th>
@@ -598,7 +606,7 @@ export function FreightInvoicePage() {
             </div>
             <div className="max-h-72 overflow-auto">
               <table className="w-full min-w-[960px] text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                <thead className="sticky top-0 bg-[#00378C] text-white text-xs uppercase tracking-wide">
                   <tr>
                     <th className="px-2 py-2 text-left">Job</th>
                     <th className="px-2 py-2 text-left">Activity</th>
@@ -663,8 +671,16 @@ function emptyForm(): InvoiceFormState {
   };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">{label}{children}</label>;
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
+      <span>
+        {label}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      {children}
+    </label>
+  );
 }
 
 

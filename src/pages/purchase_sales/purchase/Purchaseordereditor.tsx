@@ -127,18 +127,27 @@ export function PurchaseOrderEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
       })
     );
+
+
   }, [
     form.tx_compntcat_code_1,
     form.tx_cat_code,
@@ -194,13 +203,14 @@ export function PurchaseOrderEditor({
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           credit_period: Number(headerRaw.credit_period || acRow?.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
           party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
           party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           ex_rate: Number(headerRaw.ex_rate || acRow?.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -278,12 +288,7 @@ export function PurchaseOrderEditor({
     computedQty: computeQuantity(r),
     lineTotal: Totalunitprice(r)
   })));
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
   const baseTotalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
@@ -292,7 +297,9 @@ export function PurchaseOrderEditor({
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+    const finalTotal = grandTotal + totalTaxAmount;
 
   // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
   //   setForm((current) => {
@@ -652,7 +659,7 @@ export function PurchaseOrderEditor({
                 title="Purchase Order"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -661,27 +668,7 @@ export function PurchaseOrderEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      title="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleReportPreviewExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+                
 
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
@@ -743,6 +730,27 @@ export function PurchaseOrderEditor({
                   )}
 
                 </div>
+                {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button>
+                    <Button
+                      aria-label="Excel"
+                      title="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleReportPreviewExcel()}
+                      disabled={reportPreviewExporting}
+                    >
+                      <Download size={15} />
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>

@@ -14,10 +14,11 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "./SalesOrdereditor";
-import { SDN_CONFIG, SO_CONFIG } from "./SalesOrdertypes";
+import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { formatDate } from "../../../utils/date";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -161,6 +162,7 @@ const loadRows = async (clearNotice = true) => {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+       code4: SO_DOC_TYPE.SO
     });
 
     return response as unknown as SalesOrderRow[];
@@ -181,10 +183,11 @@ const loadRows = async (clearNotice = true) => {
     const results = await Promise.all(
       visibleTabs.map(async (tabValue) => {
         const response = await getDynamicLookup({
-          parameter: "PS_POORDER_ENTRY_TAB_List",
+          parameter: "PS_SORDER_ENTRY_TAB_List",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
+           code4: SO_DOC_TYPE.SO
         });
   
         return {
@@ -498,9 +501,3 @@ const loadRows = async (clearNotice = true) => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

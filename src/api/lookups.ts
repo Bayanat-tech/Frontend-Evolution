@@ -197,6 +197,18 @@ export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
   }
 }
 
+export async function getFinanceTaxList(): Promise<LookupRow[]> {
+  try {
+    const response = await api.get<ApiResponse<LookupRow[]>>("/api/finance/tax?limit=500");
+    if (response.data?.data && Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export async function executeDynamicMutation(params: DynamicMutationParams) {
   try {
     const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_common", params);

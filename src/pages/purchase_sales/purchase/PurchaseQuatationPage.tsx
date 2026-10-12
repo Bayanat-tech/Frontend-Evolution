@@ -16,6 +16,7 @@ import { PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuo
 import { PQA_CONFIG } from "./Purchaseordertypes";
 import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 import { Dialog } from "../../../components/mms_ui";
+import { formatDate } from "../../../utils/date";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -168,7 +169,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     const results = await Promise.all(
       visibleTabs.map(async (tabValue) => {
         const response = await getDynamicLookup({
-          parameter: "PS_POORDER_ENTRY_TAB_List",
+          parameter: "PS_QUOTATION_ENTRY_TAB_List",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
@@ -480,10 +481,4 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       )}
     </section>
   );
-}
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
 }
