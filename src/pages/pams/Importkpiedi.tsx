@@ -32,7 +32,7 @@ interface ImportKpiEdiProps {
   divisionName?: string;
   departmentCode?: string;
   departmentName?: string;
-  designationLookup?: Record<string, DesignationInfo>;
+  designationLookup?: Record<string, DesignationInfo[]>;
 }
 
 interface EdiRow {
@@ -148,25 +148,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     () => `${totalCount} record${totalCount === 1 ? "" : "s"}`,
     [totalCount]
   );
-
-  const resolveScope = (desgCode: string) => {
-    const key = String(desgCode || "").trim();
-    const info = designationLookup[key];
-    if (info) {
-      return {
-        divCode: info.divCode,
-        divName: info.divName,
-        deptCode: info.deptCode,
-        deptName: info.deptName,
-      };
-    }
-    return {
-      divCode: divisionCode,
-      divName: divisionName,
-      deptCode: departmentCode,
-      deptName: departmentName,
-    };
-  };
 
   // ═════════════════════════════════════════════════════════
   // FETCH STAGING
@@ -299,7 +280,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
   };
 
   // ═════════════════════════════════════════════════════════
-  // UPLOAD TO EDI STAGING
+  // UPLOAD TO EDI STAGING — ORDER-BASED div/dept routing
   // ═════════════════════════════════════════════════════════
   const CHUNK_SIZE = 100;
 
@@ -344,9 +325,19 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         filled.push(merged);
       }
 
+      const desgUseCount: Record<string, number> = {};
+
       const mappedRows = filled.map((r) => {
         const desgCode = getVal(r, "DESGCODE", "DESG_CODE").replace(/\.0+$/, "");
-        const scope = resolveScope(desgCode);
+        const arr = designationLookup[desgCode] || [];
+        const idx = desgUseCount[desgCode] || 0;
+        const info = arr[idx] || arr[0];
+
+        desgUseCount[desgCode] = idx + 1;
+
+        const scope = info
+          ? { divCode: info.divCode, divName: info.divName, deptCode: info.deptCode, deptName: info.deptName }
+          : { divCode: divisionCode, divName: divisionName, deptCode: departmentCode, deptName: departmentName };
 
         return [
           scope.divCode || "-",
@@ -476,35 +467,29 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-
+  // ═════════════════════════════════════════════════════════
+  // DOWNLOAD TEMPLATE
+  // 5 columns only: DESG_CODE, DESG_NAME, KPI_GROUP, WEIGHTAGE, KPI_ACTIVITY
+  // One row per (div, dept, desg) — duplicates preserved
+  // ═════════════════════════════════════════════════════════
   const handleDownloadTemplate = async () => {
     try {
       setIsLoading(true);
       setUploadError(null);
 
-      // ── Fetch unique designations under logged-in HOD ──────
-      const rows = await pamsSelect({
-        parameter: "hod_team_designations",
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code ?? "",
-      });
-
       const templateData: Array<Record<string, string>> = [];
+      const desgCodes = Object.keys(designationLookup || {}).sort();
+      const nameMap: Record<string, string> = {};
 
-      if (Array.isArray(rows) && rows.length > 0) {
-        for (const raw of rows) {
-          const r: AnyRow = {};
-          Object.keys(raw).forEach((k) => {
-            r[k.toUpperCase()] = (raw as AnyRow)[k];
-          });
+      // One row per (div, dept, desg) — but only 5 columns shown
+      for (const desgCode of desgCodes) {
+        const arr = designationLookup[desgCode];
+        if (!Array.isArray(arr) || arr.length === 0) continue;
 
-          const desgCode = text(r.DESG_CODE);
-          const desgName = text(r.DESG_NAME);
-          if (!desgCode && !desgName) continue;
-
+        for (const info of arr) {
           templateData.push({
             DESG_CODE: desgCode,
-            DESG_NAME: desgName,
+            DESG_NAME: "",   // filled below
             KPI_GROUP: "",
             WEIGHTAGE: "",
             KPI_ACTIVITY: "",
@@ -512,7 +497,59 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         }
       }
 
-      // ── Fallback: header-only row if nothing fetched ───────
+      // Resolve DESG_NAME — fetch per unique (div, dept) pair
+      if (templateData.length > 0) {
+        try {
+          const pairs = new Set<string>();
+          for (const desgCode of desgCodes) {
+            const arr = designationLookup[desgCode];
+            if (!Array.isArray(arr)) continue;
+            for (const info of arr) {
+              if (info.divCode && info.deptCode) {
+                pairs.add(`${info.divCode}|${info.deptCode}`);
+              }
+            }
+          }
+
+          for (const pair of pairs) {
+            const [d, p] = pair.split("|");
+            try {
+              const desgRows = await pamsSelect({
+                parameter: "employee_designation",
+                loginid: user?.loginid ?? "",
+                code1: user?.company_code ?? "",
+                code2: d,
+                code3: p,
+                code4: "All",
+              });
+
+              if (Array.isArray(desgRows)) {
+                for (const raw of desgRows) {
+                  const r: AnyRow = {};
+                  Object.keys(raw).forEach((k) => {
+                    r[k.toUpperCase()] = (raw as AnyRow)[k];
+                  });
+                  const c = text(r.DESG_CODE);
+                  const n = text(r.DESG_NAME);
+                  if (c && !nameMap[c]) nameMap[c] = n;
+                }
+              }
+            } catch {
+              // silent
+            }
+          }
+
+          for (const row of templateData) {
+            if (nameMap[row.DESG_CODE]) {
+              row.DESG_NAME = nameMap[row.DESG_CODE];
+            }
+          }
+        } catch {
+          // silent
+        }
+      }
+
+      // Fallback: header-only row
       if (templateData.length === 0) {
         templateData.push({
           DESG_CODE: "",
@@ -523,10 +560,9 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         });
       }
 
-      // ── Build worksheet ────────────────────────────────────
+      // Build worksheet
       const ws = XLSX.utils.json_to_sheet(templateData);
 
-      // ── Pura header row YELLOW ─────────────────────────────
       const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
       const yellowStyle = {
         fill: { patternType: "solid", fgColor: { rgb: "FFFF00" } },
@@ -539,23 +575,22 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         (ws[cellRef] as any).s = yellowStyle;
       }
 
-      // ── Column widths ──────────────────────────────────────
+      // Only 5 columns
       ws["!cols"] = [
-        { wch: 12 }, // DESG_CODE
-        { wch: 40 }, // DESG_NAME
-        { wch: 32 }, // KPI_GROUP
-        { wch: 12 }, // WEIGHTAGE
-        { wch: 55 }, // KPI_ACTIVITY
+        { wch: 12 },  // DESG_CODE
+        { wch: 40 },  // DESG_NAME
+        { wch: 32 },  // KPI_GROUP
+        { wch: 12 },  // WEIGHTAGE
+        { wch: 55 },  // KPI_ACTIVITY
       ];
 
-      // ── Write file ─────────────────────────────────────────
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "KpiEdiTemplate");
       XLSX.writeFile(wb, "KPI_EDI_Template.xlsx");
 
       setNotice({
         type: "success",
-        message: `Template downloaded with ${templateData.length} designation(s).`,
+        message: `Template downloaded with ${templateData.length} row(s).`,
       });
     } catch (err: any) {
       setUploadError("Failed to generate template: " + (err?.message || err));

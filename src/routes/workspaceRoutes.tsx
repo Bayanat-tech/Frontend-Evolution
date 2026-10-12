@@ -194,7 +194,7 @@ import CompanyInfo from "../pages/security/CompanyInfo";
 import PurchaseRequestRegisterReport from "../pages/almswf/PurchaseRequestRegisterReport";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage";
 import PoOrderRegisterPage from "../pages/purchase_sales/Reports/PoOrderRegister";
-import LeaveSlapPage from "../pages/hr/LeaveSlab";
+
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
@@ -216,7 +216,9 @@ import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
 import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseReturnPage";
 import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
+import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 
 
 type WorkspaceRouteContext = {
@@ -239,6 +241,13 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 
 export const workspaceRoutes: WorkspaceRoute[] = [
 
+   {
+    name: 'HR Leave Slap Page',
+    match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
+    element: () => <LeaveSlapPage />,
+  },
+
+
   {
     name : 'Post Date Cheque',
     match : ({pathname}) => pathname.toLowerCase().includes("/finance/accounts/transactions/pdc"),
@@ -260,12 +269,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <SalaryAdvanceRecoveryPage />,
   },
 
-  {
-    name: 'HR Leave Slap Page',
-    match: (context) => isHrRoute(context) && isHrLeaveSlapRoute(context),
-    element: () => <LeaveSlapPage />,
-  },
-
+ 
   {
     name: 'Travel Fare Page',
     match: (context) => isHrRoute(context) && isHrTravelFareRoute(context),
@@ -1269,6 +1273,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <AppraisalWeightageMaster />,
   },
 
+  
+
   {
     name: "Application Progress",
     match: (context) => isApplicationProgressRoute(context),
@@ -1278,7 +1284,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Oxmaint",
     match: (context) => isOxMaintRoute(context),
     element: (context) => getOxMaintElement(context),
-  },
+  }, 
 
   {
     name: "HR Employee Pay Units",
@@ -1477,6 +1483,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <JobProductionOrderPage />,
   },
 
+     {
+    name: "Employee Assessment Report",
+    match: ({ pathname }) => isEmployeeAssessmentReportRoute(pathname),
+    element: () => <EmployeeAssessmentReportPage />
+  },
+  
   {
     name: "Product BOM",
     match: ({ pathname }) => isProductBomRoute(pathname),
@@ -1504,6 +1516,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+function isEmployeeAssessmentReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee assessment report") ||
+    compact.includes("reportsemployeeemployeeassessmentreport") ||
+    compact.includes("reportsemployeeemployeeassessment")
+  );
 }
 
 function isHrEmpLanguageSkillRoute(pathname: string) {
@@ -2749,6 +2771,11 @@ function isHrRoute(context: WorkspaceRouteContext) {
   );
 }
 
+function isHrLeaveSlapRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveslap") || compact.includes("LeaveSlap");
+}
+
 function isLeaveFlowRoute(context: WorkspaceRouteContext, key: LeaveFlowKey) {
   if (!isHrRoute(context)) return false;
   const config = leaveFlowConfigList.find((item) => item.key === key);
@@ -2765,10 +2792,9 @@ function decodeRouteText(value: string) {
   }
 }
 
-function isHrLeaveSlapRoute(context: WorkspaceRouteContext) {
-  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return compact.includes("leaveslap") || compact.includes("LeaveSlap");
-}
+
+
+
 function isHrTravelFareRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("TravelFare") || compact.includes("travelfare");
