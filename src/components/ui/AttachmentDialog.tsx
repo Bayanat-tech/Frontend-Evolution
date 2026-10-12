@@ -186,11 +186,12 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
+      // contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
+      contentClassName="w-[min(96vw,1100px)] max-h-[86vh] attachment-dialog"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
-      footer={<Button variant="outline" onClick={onClose}>Close</Button>}
+      // footer={<Button variant="outline" onClick={onClose}>Close</Button>}
     >
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">
