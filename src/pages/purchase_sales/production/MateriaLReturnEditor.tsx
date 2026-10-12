@@ -58,6 +58,8 @@ import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { MaterialHeaderForm } from "./MaterialHeader";
+import { PurchaseGrnDetailsTable } from "../purchase/PurchaseGrnDetails";
+import { MaterialDetailsTable } from "./MaterialDetailsTable";
 
 
 export type { PurchaseOrderEditorState };
@@ -815,7 +817,7 @@ export function MateriaLReturnEditor({
                   </div>
                 )}
 
-                <PurchaseOrderLinesTable
+                <MaterialDetailsTable
                   rows={rows}
                   form={form}
                   setdetails={setRows}
