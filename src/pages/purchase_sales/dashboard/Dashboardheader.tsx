@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import type { PurchaseSalesDashboardData } from "./types";
 import { fmt, fmtCompact } from "./UiPage";
@@ -15,19 +16,21 @@ function Tile({ label, value, sub }: { label: string; value: string; sub: string
 }
 
 export default function DashboardHeader({
-  companyCode, data, loading, updatedAt, onRefresh,
+  companyCode, data, loading, updatedAt, onRefresh, filters,
 }: {
   companyCode: string;
   data: PurchaseSalesDashboardData | null;
   loading: boolean;
   updatedAt: Date | null;
   onRefresh: () => void;
+  filters?: ReactNode;
 }) {
   const s = data?.summary;
   const pending = s ? s.pOrderGrnPending + s.invoicePending + s.sOrderSdnPending + s.sInvoicePending : 0;
   const dash = "—";
   return (
-    <div className="grid gap-3 rounded-2xl bg-gradient-to-r from-[#0b2a7b] to-[#1e56d8] p-3.5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(0,2.6fr)] lg:items-center">
+    // CHANGED: xl = one row: title | tiles | filters (height unchanged)
+    <div className="grid gap-3 rounded-2xl bg-gradient-to-r from-[#0b2a7b] to-[#1e56d8] p-3.5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(0,2.6fr)] lg:items-center xl:grid-cols-[auto_minmax(0,1fr)_auto]">
       <div className="flex items-start gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">Purchase &amp; Sales overview</h1>
@@ -51,6 +54,8 @@ export default function DashboardHeader({
         <Tile label="Invoiced" value={s ? fmt(s.totalInvoice + s.totalSInvoice) : dash} sub={s ? `${fmt(s.totalInvoice)} purchase, ${fmt(s.totalSInvoice)} sales` : " "} />
         <Tile label="Needs action" value={s ? fmt(pending) : dash} sub="Awaiting GRN, SDN or invoice" />
       </div>
+      {/* CHANGED: filters are the third column, same row as the tiles */}
+      {filters && <div className="flex items-end gap-3 lg:col-span-2 xl:col-span-1">{filters}</div>}
     </div>
   );
 }

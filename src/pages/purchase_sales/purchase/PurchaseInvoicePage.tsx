@@ -16,6 +16,7 @@ import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordered
 import { LPO_CONFIG, PIN_CONFIG } from "./Purchaseordertypes";
 import { PurchaseInvoiceEditor } from "./PurchaseInvoiceEditor";
 import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
+import { formatDate } from "../../../utils/date";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -190,7 +191,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
     const results = await Promise.all(
       visibleTabs.map(async (tabValue) => {
         const response = await getDynamicLookup({
-          parameter: "PS_POORDER_ENTRY_TAB_List",
+          parameter: "PS_INVOICE_ENTRY_TAB_List",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
@@ -388,7 +389,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
             );
           })}
       </div>
-      <TabStrip
+      {/* <TabStrip
         value={tab}
         onChange={(value) => setTab(value as RequestTab)}
         tabs={
@@ -406,7 +407,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
               { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
             ]
         }
-      />
+      /> */}
 
       <div className="min-h-[650px]">
         <DataTable
@@ -495,9 +496,3 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

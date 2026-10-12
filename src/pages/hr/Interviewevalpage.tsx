@@ -1,12 +1,15 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft, ClipboardCheck, Edit2, Eye, Loader2, Plus, RefreshCw, Save, Trash2, X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
-import { Addinterviewevalform } from "./Addinterviewevalform";
+import { Addinterviewevalform, type InterviewEvalFormHandle } from "./Addinterviewevalform";
 
 type InterviewEvalRow = {
   doc_no: string;
@@ -24,11 +27,7 @@ type InterviewEvalRow = {
   [key: string]: unknown;
 };
 
-type PopupState = {
-  open: boolean;
-  mode: "add" | "edit" | "view";
-  data: Partial<InterviewEvalRow>;
-};
+type EditorMode = "add" | "edit" | "view";
 
 const baseParams = (loginid: string, companyCode: string) => ({
   parameter: "HR_CAM_INT_EVAL_FORM",
@@ -65,13 +64,11 @@ const parseCreatedAt = (input: unknown): number => {
   let t = Date.parse(raw);
   if (!Number.isNaN(t)) return t;
 
-  // Try swapping a space-separated date/time into ISO-friendly form:
   // "YYYY-MM-DD HH24:MI:SS" -> "YYYY-MM-DDTHH24:MI:SS"
   t = Date.parse(raw.replace(" ", "T"));
   if (!Number.isNaN(t)) return t;
 
-  // Try common Oracle default NLS format: "DD-MON-YY" / "DD-MON-YYYY"
-  // e.g. "30-JUN-26", "30-JUN-2026", optionally with a time portion.
+  // Oracle default NLS format: "DD-MON-YY" / "DD-MON-YYYY", optionally with time.
   const oracleMatch = raw.match(
     /^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
   );
@@ -96,26 +93,33 @@ const parseCreatedAt = (input: unknown): number => {
 const createdAtSortValue = (createdAt: unknown): number => parseCreatedAt(createdAt);
 
 const sortByCreatedAtDesc = (rows: InterviewEvalRow[]): InterviewEvalRow[] =>
-  [...rows].sort(
-    (a, b) => createdAtSortValue(b.created_at) - createdAtSortValue(a.created_at),
-  );
+  [...rows].sort((a, b) => createdAtSortValue(b.created_at) - createdAtSortValue(a.created_at));
 
 export function InterviewEvalPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const loginid = user?.loginid || "ADMIN";
   const companyCode = user?.company_code || "";
 
   const [rows, setRows] = useState<InterviewEvalRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
+
+  // view state (list ⇄ full-page editor)
+  const [view, setView] = useState<"list" | "editor">("list");
+  const [editorMode, setEditorMode] = useState<EditorMode>("add");
+  const [activeRow, setActiveRow] = useState<Partial<InterviewEvalRow> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // delete state
   const [deleteTarget, setDeleteTarget] = useState<InterviewEvalRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Ref to the form so the header Save button can trigger it
+  const formRef = useRef<InterviewEvalFormHandle>(null);
 
   const loadRows = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
-    setNotice(null);
     try {
       const data = await getDynamicLookup(baseParams(loginid, companyCode));
       const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
@@ -130,23 +134,54 @@ export function InterviewEvalPage() {
       }));
       setRows(sortByCreatedAtDesc(list));
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load interview evaluation records",
-      });
+      toast.error(
+        error instanceof Error ? error.message : "Unable to load interview evaluation records",
+      );
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginid, companyCode]);
 
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
+  /* ── Navigation handlers ── */
+  const openEditor = (mode: EditorMode, row: Partial<InterviewEvalRow> | null = null) => {
+    setEditorMode(mode);
+    setActiveRow(row);
+    setView("editor");
+  };
+
+  const handleCloseEditor = () => {
+    if (saving) return;
+    setView("list");
+    setEditorMode("add");
+    setActiveRow(null);
+  };
+
+  const handleSaved = () => {
+    setView("list");
+    setEditorMode("add");
+    setActiveRow(null);
+    void loadRows();
+  };
+
+  /* ── Header Save button handler ── */
+  const handleHeaderSave = async () => {
+    setSaving(true);
+    try {
+      await formRef.current?.save();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ── Delete ── */
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    setNotice(null);
     try {
       await executeDynamicDelete({
         parameter: "HR_CAM_INT_EVAL_FORM_DELETE",
@@ -155,14 +190,11 @@ export function InterviewEvalPage() {
         code2: deleteTarget.doc_type,
         code3: String(deleteTarget.doc_no),
       });
+      toast.success(`Document ${deleteTarget.doc_no} deleted successfully`);
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `Document ${deleteTarget.doc_no} deleted successfully.` });
       await loadRows();
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to delete evaluation record",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to delete evaluation record");
     } finally {
       setDeleting(false);
     }
@@ -174,21 +206,14 @@ export function InterviewEvalPage() {
         accessorKey: "doc_no",
         header: "Doc No",
         size: 100,
-        // Sorting disabled here so users can't click the header and flip
-        // the order — the desired order (newest first) is enforced by
-        // sortByCreatedAtDesc() pre-sorting the row array on load, using
-        // created_at as the sort key (that column is intentionally not
-        // rendered in the UI — see note below where it used to be defined).
+        // Sorting disabled on every column: the newest-first order is enforced
+        // by sortByCreatedAtDesc() on load (created_at is fetched but not shown).
         enableSorting: false,
       },
       {
         accessorKey: "doc_date",
         header: "Doc Date",
         size: 120,
-        // Sorting disabled: doc_date is a user-editable business field
-        // (people can backdate/postdate it on the form), so it must never
-        // become the active sort column — otherwise it silently overrides
-        // the newest-first-by-created_at order this table is meant to show.
         enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
@@ -205,7 +230,6 @@ export function InterviewEvalPage() {
         accessorKey: "intrvw_date",
         header: "Interview Date",
         size: 130,
-        // Same reasoning as doc_date: keep the table locked to created_at order.
         enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
@@ -220,89 +244,146 @@ export function InterviewEvalPage() {
         enableSorting: false,
         cell: ({ row }) => {
           const val = (row.original.hire_flag ?? "").toString().toUpperCase();
-          if (val === "Y")
-            return (
-              <span style={{ color: "#16a34a", fontWeight: 600, fontSize: "0.8125rem" }}>
-                Yes
-              </span>
-            );
-          if (val === "N")
-            return (
-              <span style={{ color: "#dc2626", fontWeight: 600, fontSize: "0.8125rem" }}>
-                No
-              </span>
-            );
-          return <span style={{ color: "#6b7280", fontSize: "0.8125rem" }}>-</span>;
+          if (val === "Y") return <span className="text-[0.8125rem] font-semibold text-green-600">Yes</span>;
+          if (val === "N") return <span className="text-[0.8125rem] font-semibold text-red-600">No</span>;
+          return <span className="text-[0.8125rem] text-slate-500">-</span>;
         },
       },
-      // NOTE: created_at is intentionally NOT rendered as a column anymore.
-      // It's still fetched, parsed, and used to pre-sort `rows` (newest
-      // first) via sortByCreatedAtDesc() in loadRows(). It's just hidden
-      // from the UI. If you ever want it back, re-add a column with
-      // accessorKey: "created_at" using parseCreatedAt()/createdAtSortValue()
-      // for its cell rendering and sortingFn.
       {
         id: "actions",
         header: "Actions",
-        size: 100,
+        size: 110,
+        enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor("edit", row.original)}
               title="Edit"
-              onClick={() => setPopup({ open: true, mode: "edit", data: row.original })}
             >
-              <Edit2 size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openEditor("view", row.original)}
               title="View"
-              onClick={() => setPopup({ open: true, mode: "view", data: row.original })}
             >
-              <Eye size={14} />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Delete"
+              <Eye size={13} />
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
               onClick={() => setDeleteTarget(row.original)}
+              title="Delete"
             >
-              <Trash2 size={14} />
-            </Button>
+              <Trash2 size={13} />
+            </button>
           </div>
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Interview Evaluation</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Manage candidate interview evaluation records.
-          </p>
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header (with Save button)
+     ───────────────────────────────────────────────────────── */
+  if (view === "editor") {
+    const isView = editorMode === "view";
+    const title =
+      editorMode === "add"
+        ? "New Interview Evaluation"
+        : editorMode === "edit"
+          ? "Edit Interview Evaluation"
+          : "View Interview Evaluation";
+    const badge = editorMode === "add" ? "Draft" : editorMode === "edit" ? "Editing" : "View only";
+
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <ClipboardCheck size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{title}</h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {badge}
+                </span>
+                {activeRow?.doc_no && (
+                  <span className="text-xs text-muted-foreground">
+                    Doc {String(activeRow.doc_no)}
+                    {activeRow.cand_name ? ` - ${activeRow.cand_name}` : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions: List / Close / Save (Save hidden in view mode) */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <ArrowLeft size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            {!isView && (
+              <Button type="button" size="sm" onClick={handleHeaderSave} disabled={saving}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}{" "}
+                {saving ? "Saving" : editorMode === "edit" ? "Update" : "Save"}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}>
-            <RefreshCw size={15} /> Refresh
+
+        {/* Form content — ref lets the header Save trigger the form */}
+        <Addinterviewevalform
+          ref={formRef}
+          mode={editorMode}
+          existingData={activeRow ?? {}}
+          onClose={(shouldRefetch?: boolean) => (shouldRefetch ? handleSaved() : handleCloseEditor())}
+        />
+      </section>
+    );
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight-style transaction header
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+      {/* Freight-style transaction header */}
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <ClipboardCheck size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Interview Evaluation</h1>
+              <span className="text-xs text-muted-foreground">
+                {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
           </Button>
-          <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
-            <Plus size={15} /> Add Evaluation
+          <Button type="button" size="sm" onClick={() => openEditor("add")}>
+            <Plus size={14} /> Add
           </Button>
         </div>
       </div>
-
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
 
       <DataTable
         columns={columns}
@@ -311,6 +392,7 @@ export function InterviewEvalPage() {
         subtitle="Interview Evaluation List"
         searchPlaceholder="Search doc no, candidate, department..."
         loading={loading}
+        emptyText="No interview evaluation records found"
         height={560}
         minWidth={1100}
         density="grid"
@@ -319,30 +401,7 @@ export function InterviewEvalPage() {
         getRowId={(row) => `${row.doc_type}-${row.doc_no}`}
       />
 
-      {popup.open && (
-        <Dialog
-          open
-          title={
-            popup.mode === "add"
-              ? "Add Interview Evaluation"
-              : popup.mode === "edit"
-                ? "Edit Interview Evaluation"
-                : "View Interview Evaluation"
-          }
-          wide
-          onClose={() => setPopup((p) => ({ ...p, open: false }))}
-        >
-          <Addinterviewevalform
-            mode={popup.mode}
-            existingData={popup.data}
-            onClose={(shouldRefetch?: boolean) => {
-              setPopup((p) => ({ ...p, open: false }));
-              if (shouldRefetch) void loadRows();
-            }}
-          />
-        </Dialog>
-      )}
-
+      {/* Delete confirmation dialog */}
       <Dialog
         open={Boolean(deleteTarget)}
         title="Delete Interview Evaluation"
@@ -361,7 +420,7 @@ export function InterviewEvalPage() {
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="m-0 text-sm text-muted-foreground">
           Confirm delete for document <strong>{deleteTarget?.doc_no}</strong>?
         </p>
       </Dialog>

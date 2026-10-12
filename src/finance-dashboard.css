@@ -7,7 +7,7 @@
   --fb-primary: #00378C;
   --fb-primary-hover: #002d72;
   --fb-primary-light: #eff6ff;
-  --fb-border: #cbd5e1;
+  --fb-border: #94a3b8;
   --fb-border-soft: #e2e8f0;
   --fb-surface: #ffffff;
   --fb-bg: #f8fafc;
@@ -38,7 +38,7 @@
   justify-content: space-between;
   gap: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--fb-border);
+  border-bottom: 1.5px solid var(--fb-border);
   margin-bottom: 18px;
 }
 
@@ -85,7 +85,7 @@
 .finance-dashboard-filters select,
 .finance-dashboard-filters > button {
   height: 34px;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
   color: #1e293b;
@@ -163,8 +163,8 @@
 }
 
 .finance-dashboard-section-title span {
-  height: 1px;
-  background: #cbd5e1;
+  height: 1.5px;
+  background: #94a3b8;
 }
 
 .finance-dashboard-section-title h2 {
@@ -186,9 +186,9 @@
 .finance-dashboard-hero-card {
   padding: 14px 16px 12px;
   border-radius: 10px;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid #94a3b8;
   background: #ffffff;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08);
   position: relative;
   overflow: hidden;
   transition: transform 120ms ease, box-shadow 120ms ease;
@@ -290,10 +290,10 @@
 
 .finance-dashboard-kpi {
   padding: 12px 14px 10px;
-  border: 1px solid var(--fb-border);
-  border-radius: 9px;
+  border: 1.5px solid var(--fb-border);
+  border-radius: 10px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   cursor: pointer;
   transition: all 130ms ease;
   position: relative;
@@ -393,10 +393,10 @@
 }
 
 .finance-dashboard-card {
-  border: 1px solid var(--fb-border);
+  border: 1.5px solid var(--fb-border);
   border-radius: 10px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   overflow: hidden;
 }
 
@@ -408,7 +408,7 @@
   min-height: 42px;
   padding: 0 14px;
   background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1.5px solid #e2e8f0;
 }
 
 .finance-dashboard-card-head h3 {

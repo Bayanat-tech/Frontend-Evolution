@@ -5299,40 +5299,43 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   font-size: 11px;
 }
 
-.freight-dense-form .freight-form-card {
-  border-color: #94a3b8; /* darker outer box border */
+.freight-dense-form .freight-form-card,
+.freight-dense-form .enquiry-details-card,
+.freight-dense-form .freight-tabs-shell {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05) !important;
 }
 
 .freight-dense-form .freight-panel {
-  border-color: #94a3b8;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.035);
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
 }
 
 .freight-dense-form .freight-panel-title {
-  padding: 4px 7px;
+  padding: 5px 8px;
 }
 
 .freight-dense-form .freight-panel-body {
-  padding: 5px;
-}
-
-/* Equalize field heights without making Freight forms feel visually heavy. */
-.freight-dense-form .freight-form-card {
-  border-color: #dbe4f0;
+  padding: 8px;
 }
 
 .freight-dense-form .freight-field-label {
-  color: #111827; /* darker column/label text (was muted-foreground) */
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
 }
 
-.freight-dense-form .freight-form-card label > span:first-child {
-  color: #334155;
-  font-size: 10.5px;
-  font-weight: 800;
-}
-
-freight-dense-form .freight-form-card {
-  border-color: #94a3b8; /* darker outer box border */
+.freight-dense-form label > span:first-child {
+  color: #1e293b !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
 }
 
 /* .freight-dense-form .freight-form-card :where(
@@ -6795,7 +6798,8 @@ freight-dense-form .freight-form-card {
 .commercial-command-header {
   position: relative;
   z-index: 12;
-  background: #003f98;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #cbd5e1;
 }
 
 .commercial-summary-chip {
@@ -6985,10 +6989,29 @@ freight-dense-form .freight-form-card {
   padding: 6px;
 }
 
-.commercial-header-block-doc .commercial-header-block-fields,
+/* .commercial-header-block-doc .commercial-header-block-fields,
 .commercial-header-block-tax .commercial-header-block-fields,
 .commercial-header-block-extra .commercial-header-block-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+} */
+
+.commercial-header-block-doc .commercial-header-block-fields {
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.commercial-header-block-tax .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(180px, 1.2fr)
+    minmax(80px, 0.5fr)
+    minmax(110px, 0.65fr)
+    minmax(240px, 1.5fr);
+  gap: 5px;
+}
+
+.commercial-header-block-extra .commercial-header-block-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .commercial-header-block-tax .commercial-header-block-fields {
@@ -7169,9 +7192,9 @@ freight-dense-form .freight-form-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .commercial-header-block-tax .commercial-header-block-fields {
+  /* .commercial-header-block-tax .commercial-header-block-fields {
     grid-template-columns: minmax(220px, 1.1fr) minmax(110px, 0.45fr) minmax(145px, 0.6fr) minmax(220px, 1fr);
-  }
+  } */
 
   .commercial-header-panel.is-collapsed .commercial-header-block-doc .commercial-header-block-fields {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -7507,16 +7530,30 @@ freight-dense-form .freight-form-card {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.055);
 }
 
-.commercial-command-header {
+.commercial-command-header,
+.freight-transaction-header {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #003f98 0%, #064fb2 54%, #003a8c 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 12px 26px rgba(0, 63, 152, 0.2);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-top: 3.5px solid #00378c;
+  border-bottom: 1px solid #cbd5e1;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 }
 
-.commercial-command-header::after {
+.commercial-command-header::before,
+.freight-transaction-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.5px;
+  background: linear-gradient(90deg, #00255e 0%, #00378c 30%, #0284c7 65%, #38bdf8 85%, #60a5fa 100%);
+  z-index: 15;
+}
+
+.commercial-command-header::after,
+.freight-transaction-header::after {
   content: "";
   position: absolute;
   right: 0;
@@ -8135,7 +8172,7 @@ freight-dense-form .freight-form-card {
 }
 
 .lookup-popover {
-  border: 1px solid #cbd5e1 !important;
+  border: 1.5px solid #94a3b8 !important;
   border-radius: 12px !important;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2) !important;
   background: #ffffff !important;
@@ -8160,27 +8197,36 @@ freight-dense-form .freight-form-card {
 }
 
 .lookup-popover table td {
-  height: 32px;
+  min-height: 32px;
   border-color: #f1f5f9;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  padding: 6px 12px;
 }
 
 .lookup-popover .lookup-results-table {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
-.lookup-popover .lookup-results-table th {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.lookup-popover .lookup-results-table th:first-child,
+.lookup-popover .lookup-results-table td:first-child {
+  width: 125px !important;
+  min-width: 110px !important;
+  max-width: 140px !important;
+  white-space: nowrap !important;
+}
+
+.lookup-popover .lookup-results-table th:nth-child(2),
+.lookup-popover .lookup-results-table td:nth-child(2) {
+  width: auto !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
 }
 
 .lookup-popover .lookup-results-table tr {
-  height: 32px;
+  min-height: 32px;
   transition: background-color 120ms ease;
 }
 
@@ -8220,6 +8266,24 @@ freight-dense-form .freight-form-card {
 .lookup-page-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.lookup-popover ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.lookup-popover ::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.lookup-popover ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.lookup-popover ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .data-table-x-scrollbar {
@@ -9352,19 +9416,24 @@ freight-dense-form .freight-form-card {
   color: #e2e8f0 !important;
 }
 
-.app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header) {
+.app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header, .freight-transaction-header) {
   border-color: #33415d !important;
+  border-top-color: #2563eb !important;
   background:
     linear-gradient(180deg, rgba(21, 25, 39, 0.98) 0%, rgba(17, 24, 39, 0.98) 100%) !important;
   color: #e2e8f0 !important;
   box-shadow: none !important;
 }
 
+.app.dark .workspace-content :where(.commercial-command-header, .freight-transaction-header)::before {
+  background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #60a5fa 100%) !important;
+}
+
 .app.dark .workspace-content :where(.finance-list-heading)::after {
   background: linear-gradient(90deg, #4d8fda 0%, rgba(77, 143, 218, 0.35) 36%, transparent 100%) !important;
 }
 
-.app.dark .workspace-content :where(.finance-list-heading h1, .finance-list-title h1, .finance-toolbar h1, .commercial-command-header h1) {
+.app.dark .workspace-content :where(.finance-list-heading h1, .finance-list-title h1, .finance-toolbar h1, .commercial-command-header h1, .freight-transaction-header h1) {
   color: #f8fafc !important;
   text-shadow: none !important;
 }
@@ -11243,4 +11312,81 @@ freight-dense-form .freight-form-card {
 .lookup-popover .lookup-search-input {
   height: 36px !important;
   min-height: 36px !important;
+}
+
+/* ── Document Details: 5 columns fill the card, Ref Date is widest ── */
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: 1.05fr 0.95fr 1.3fr 1fr 2fr !important;
+  gap: 8px !important;
+}
+
+/* ── Tax & Additional Details: Remarks takes the leftover ── */
+.commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: 1.3fr 0.8fr 0.9fr 1.6fr !important;
+  gap: 8px !important;
+}
+
+/* ── Cells can shrink, controls fill the cell ── */
+.commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields > *,
+.commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  grid-column: auto !important;
+}
+
+.commercial-document-workbench .commercial-header-block-doc :where(input, select),
+.commercial-document-workbench .commercial-header-block-tax :where(input, select) {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── Date placeholder must stay on one line ── */
+/* .commercial-document-workbench .commercial-header-block-doc .field,
+.commercial-document-workbench .commercial-header-block-doc .field * {
+  white-space: nowrap !important;
+}
+.commercial-document-workbench .commercial-header-block-doc .field input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+} */
+
+/* ── Small screens ── */
+@media (max-width: 1100px) {
+  .commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 640px) {
+  .commercial-document-workbench .commercial-header-block-doc .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Credit/Debit Note: Document Details has 4 fields (Doc Date, Inv No, Inv Date, Bank Account) */
+.commercial-document-workbench .commercial-header-block-doc.commercial-header-block-doc-4 .commercial-header-block-fields {
+  grid-template-columns: 1fr 1fr 1.2fr 1.7fr !important;
+}
+
+/* Tax & Remarks has 3 fields (Tax Code, Tax Type, Remarks) */
+.commercial-document-workbench .commercial-header-block-tax.commercial-header-block-tax-3 .commercial-header-block-fields {
+  grid-template-columns: 1.2fr 0.9fr 2fr !important;
+}
+
+@media (max-width: 1100px) {
+  .commercial-document-workbench .commercial-header-block-doc-4 .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax-3 .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 640px) {
+  .commercial-document-workbench .commercial-header-block-doc-4 .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-block-tax-3 .commercial-header-block-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }

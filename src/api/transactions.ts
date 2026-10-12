@@ -130,10 +130,13 @@ export type TransactionChildRow = Record<string, unknown> & {
 
 export type TransactionDefaultData = {
   ac_code?: string;
+  ac_name?: string;
   Account?: { ac_code?: string; ac_name?: string };
   curr_code?: string;
+  curr_name?: string;
   Currency?: { curr_code?: string; curr_name?: string };
   div_code?: string;
+  div_name?: string;
   Division?: { div_code?: string; div_name?: string };
   ex_rate?: number;
   Accountsetup?: { tax_perc?: number; lcur_decimal_nos?: number };
@@ -157,6 +160,8 @@ export type Division = {
 export type CompanyInfo = {
   company_code?: string;
   ac_fy_period?: string;
+  setup_required?: boolean;
+  message?: string;
 };
 
 export type FinanceOutstandingBalance = {
@@ -173,6 +178,15 @@ export async function getCompanyInfo() {
   const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
   return response.data.data || {};
+}
+
+export async function initializeCompanyFinance(companyCode?: string) {
+  const response = await api.post<ApiResponse<Record<string, unknown>>>(
+    "/api/finance/transactions/initialize_company_finance",
+    { company_code: companyCode }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Failed to initialize company finance setup");
+  return response.data;
 }
 
 export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {
@@ -203,6 +217,8 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
       { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_payee", field_value: search.trim(), operator: "contains" },
+      { field_name: "cheque_no", field_value: search.trim(), operator: "contains" },
     ]);
   }
 
@@ -1484,6 +1500,61 @@ export async function getPrRegisterOldDetailReportExcel(params: Record<string, a
 }
 
 
+
+
+export async function getStockSummaryReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockSummary/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getStockSummaryReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockSummary/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+ a.download = "Stock_Summary_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+export async function getStockTransactionReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockTransaction/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getStockTransactionReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockTransaction/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Stock_Transaction_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 
 

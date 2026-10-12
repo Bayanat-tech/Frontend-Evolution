@@ -94,7 +94,7 @@ export function SalesInvoiceEditor({
   const [rejectError, setRejectError] = useState("");
   const [discountEditType, setDiscountEditType] = useState<"amount" | "percent" | null>(null);
   const submitBtnRef = useRef<HTMLDivElement>(null);
-const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   // Print
   // const [reportOpen, setReportOpen] = useState(false);
@@ -208,6 +208,22 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           fetchSalesOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchSalesOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+         let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -223,13 +239,21 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
+         
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),
+           address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -286,7 +310,6 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1),
           tx_cat_code: text(headerRaw.tx_cat_code),
           tx_cat_name: text(headerRaw.tx_cat_name),
-          dept_name: text(headerRaw.dept_name),
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),
           sinvoice_total_amount: numberOrZero(headerRaw.sinvoice_total_amount),
@@ -345,14 +368,11 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
-    const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+    const finalTotal = grandTotal + totalTaxAmount;
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -444,14 +464,14 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     if (invalidRow) {
       return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
     }
-const rect = submitBtnRef.current?.getBoundingClientRect();
-if (rect) {
-  setSubmitConfirmPos({
-    top: rect.bottom + 8,
-    right: window.innerWidth - rect.right,
-  });
-}
-setShowSubmitConfirm(true);
+    const rect = submitBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setSubmitConfirmPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setShowSubmitConfirm(true);
     setShowSubmitConfirm(true);
   };
 
@@ -608,42 +628,24 @@ setShowSubmitConfirm(true);
           <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
             <div className="flex min-h-10 items-center justify-between gap-3">
               <FinanceDocumentIdentity
-                                       title="Sales Invoice"
-                                       documentNo={form.doc_no}
-                                       documentDate={form.doc_date}
-                                       total={formatAmount(grandTotal)}
-                                       divCode={form.div_code}
-                                       divName={form.div_name}
-                                       onBack={onClose}
-                                     headerExpanded={showHeaderDetails}
-                                       onToggleHeader={() => setShowHeaderDetails(value => !value)}
-                                     />
+                title="Sales Invoice"
+                documentNo={form.doc_no}
+                documentDate={form.doc_date}
+                total={formatAmount(finalTotal)}
+                divCode={form.div_code}
+                divName={form.div_name}
+                onBack={onClose}
+                headerExpanded={showHeaderDetails}
+                onToggleHeader={() => setShowHeaderDetails(value => !value)}
+              />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && (
                   <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">
                     Cancelled
                   </Badge>
                 )}
-                {form.doc_no ? (
-                  <>
-                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
-                      <Printer size={15} /> Print
-                    </Button>
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExcel()}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                ) : null}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
-                     <div className="flex items-center gap-2">
+             
+                <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                       {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
@@ -651,20 +653,20 @@ setShowSubmitConfirm(true);
                     </Button>
                   )}
                   <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                      {isPendingTab && (
-                    <Button
-                      type="button"
-                      onClick={handleSubmitClick}
-                      disabled={actionDisabled || actionBarBusy}
-                    >
-                      {actionLoading === "submit" ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                    </Button>
-   )}
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
                     {showSubmitConfirm &&
                       createPortal(
                         <div
@@ -701,6 +703,25 @@ setShowSubmitConfirm(true);
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
+                     {form.doc_no ? (
+                  <>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
+                    </Button>
+                    <Button
+                      aria-label="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                    </Button>
+                  </>
+                ) : null}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
 
                 </div>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
@@ -796,7 +817,7 @@ setShowSubmitConfirm(true);
             )}
           </CardContent>
 
-            {/* <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+          {/* <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs">
               <span className="text-[11px] font-medium text-slate-500">Total Amount</span>

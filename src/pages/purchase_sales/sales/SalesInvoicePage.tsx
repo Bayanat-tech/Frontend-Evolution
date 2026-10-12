@@ -18,6 +18,7 @@ import { SIN_CONFIG } from "./SalesOrdertypes";
 import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
 import { downloadSalesInvoiceExcel, SalesInvoiceReport } from "./SalesInvoiceReport";
 import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
+import { formatDate } from "../../../utils/date";
 
 export interface SalesOrderRow {
   doc_type: string;
@@ -169,7 +170,7 @@ const loadRows = async (clearNotice = true) => {
   const results = await Promise.all(
     visibleTabs.map(async (tabValue) => {
       const response = await getDynamicLookup({
-        parameter: "PS_POORDER_ENTRY_TAB_List",
+        parameter: "PS_SALE_PURCHASE_ENTRY_SINV_TAB_LIST",
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tabValue,
@@ -513,9 +514,3 @@ useEffect(() => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

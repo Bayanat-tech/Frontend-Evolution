@@ -1,6 +1,7 @@
+import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
 import {
@@ -31,7 +32,7 @@ import {
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -47,6 +48,7 @@ import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
@@ -72,6 +74,15 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   RJV: { title: "Reverse Journal Voucher", subtitle: "Reverse journal entry", addLabel: "Add Reverse Voucher" },
 };
 
+const HEADER_LIMITS: Partial<Record<keyof TransactionHeader, { max: number; label: string }>> = {
+  inv_no:        { max: 30,  label: "Invoice No" },
+  ref_no:        { max: 30,  label: "Ref No" },
+  party_address: { max: 250, label: "Address" },
+  party_phone:   { max: 30,  label: "Phone" },
+  party_fax:     { max: 30,  label: "Fax" },
+  remarks:       { max: 250, label: "Remarks" },
+};
+
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -92,7 +103,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   const [editor, setEditor] = useState<EditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([{ id: "canceled", value: "N" }]);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -164,7 +175,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
       accessorKey: "doc_no",
-      header: "Doc No",
+      header: () => <div className="font-bold">Doc No</div>,
       cell: ({ row }) => (
         <button
           type="button"
@@ -172,7 +183,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
             setNotice(null);
             setEditor({ mode: "edit", row: row.original });
           }}
-          className="text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
+          className="doc-no-link text-primary font-semibold hover:underline cursor-pointer text-left bg-transparent border-none p-0 inline-flex items-center"
           title={`Open ${row.original.doc_no}`}
         >
           {formatDocNo(row.original.doc_no)}
@@ -181,7 +192,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     },
     {
       accessorKey: "doc_date",
-      header: () => <div className="text-center w-full">Date</div>,
+      header: () => <div className="text-center w-full font-bold">Date</div>,
       cell: ({ getValue }) => <div className="text-center">{formatDate(getValue())}</div>,
     },
     { accessorKey: "ac_name", header: "Account Name", size: 320 },
@@ -189,61 +200,49 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     { accessorKey: "remarks", header: "Description" },
     {
       accessorKey: "div_code",
-      header: () => <div className="text-center w-full">Div</div>,
-      size: 70,
+      header: () => <div className="text-center w-full font-bold">Div</div>,
+      size: 50,
       cell: ({ getValue }) => <div className="text-center">{String(getValue() || "")}</div>,
     },
     {
       id: "amount",
-      header: () => <div className="text-right w-full">Amount</div>,
+      header: () => <div className="text-right w-full font-bold">Amount</div>,
       accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
       cell: ({ row }) => (
-        <div className="text-right font-mono font-medium">
+        <div className="text-right font-mono tabular-nums font-semibold text-slate-800">
           {formatAmount(Number(row.original.net_amount ?? row.original.amount ?? 0))}
         </div>
       ),
     },
     {
       accessorKey: "canceled",
-      header: () => <div className="text-center w-full">Status</div>,
+      header: () => <div className="text-center w-full font-bold">Status</div>,
       cell: ({ getValue }) => {
         const isCanceled = String(getValue() || "N") === "Y";
         return (
           <div className="flex justify-center">
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                isCanceled
-                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              }`}
-            >
-              {isCanceled ? "Cancelled" : "Active"}
-            </span>
+            <FinanceStatusBadge isCancelled={isCanceled} />
           </div>
         );
       },
     },
     {
       id: "actions",
-      header: () => <div className="text-center w-full">Actions</div>,
+      header: () => <div className="text-center w-full font-bold">Actions</div>,
       enableSorting: false,
+      size: 130,
+      minSize: 130,
       cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => { setNotice(null); setEditor({ mode: "edit", row: row.original }); }} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
-            <Download size={15} />
-          </Button>
-          {row.original.canceled !== "Y" && (
-            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
-              <Ban size={15} />
-            </Button>
-          )}
-        </div>
+        <FinanceDocumentActionButtons
+          onEdit={() => {
+            setNotice(null);
+            setEditor({ mode: "edit", row: row.original });
+          }}
+          onPrint={() => void handleOpenReport(row.original.doc_type || docType, row.original.doc_no)}
+          onExcel={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)}
+          onCancel={row.original.canceled !== "Y" ? () => setCancelTarget(row.original) : undefined}
+          isCancelled={row.original.canceled === "Y"}
+        />
       ),
     },
   ], [docType, columnFilters]);
@@ -339,6 +338,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
                 setPageSize(nextPageSize);
                 setPageIndex(0);
               }}
+              rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
               getRowId={(row, index) => `${row.doc_no}_${index}`}
             />
           </div>
@@ -502,13 +502,84 @@ function PaymentDocumentEditor({
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
+          const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          const effectiveDiv = defaultDiv || (editor?.mode === "create" ? text(editor.divCode) : "") || text(form.div_code);
+          let resolvedAcName = text(defaults.ac_name ?? defaults.Account?.ac_name ?? "");
+          let resolvedCurrCode = text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
+          let resolvedCurrName = text(defaults.curr_name ?? defaults.Currency?.curr_name ?? "");
+          let resolvedExRate = Number(defaults.ex_rate ?? 1);
+
+          if (defaultAcCode && (!resolvedAcName || !resolvedCurrCode)) {
+            if (effectiveDiv) {
+              try {
+                const headerAccounts = await getDocAccounts(docType, "H", effectiveDiv);
+                const matched = (headerAccounts || []).find((a: Record<string, unknown>) => {
+                  const code = text(a.ac_code ?? a.AC_CODE ?? "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(matched.ac_name ?? matched.AC_NAME ?? "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(matched.curr_code ?? matched.CURR_CODE ?? "");
+                  if (!resolvedCurrName) resolvedCurrName = text(matched.curr_name ?? matched.CURR_NAME ?? "");
+                  const matchedRate = Number(matched.ex_rate ?? matched.EX_RATE ?? 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
+            }
+
+            if (!resolvedCurrCode || !resolvedAcName) {
+              try {
+                const acRows = await getDynamicFinanceLookup({
+                  parameter: "Account_AC_CODE_Serach",
+                  code1: user?.company_code || "",
+                });
+                const matched = (acRows || []).find((a: Record<string, unknown>) => {
+                  const code = text(getLookupValue(a, "ac_code") || a.ac_code || "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(getLookupValue(matched, "ac_name") || matched.ac_name || "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(getLookupValue(matched, "curr_code") || matched.curr_code || "");
+                  if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(matched, "curr_name") || matched.curr_name || "");
+                  const matchedRate = Number(getLookupValue(matched, "ex_rate") || matched.ex_rate || 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
+            }
+          }
+
+          if (resolvedCurrCode) {
+            try {
+              const currencyRows = await getDynamicFinanceLookup({
+                parameter: "Account_Currency_CODE_Serach",
+                code1: user?.company_code || "",
+              });
+              const match = currencyRows.find(
+                (currencyRow) =>
+                  String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                  resolvedCurrCode.toUpperCase(),
+              );
+              if (match) {
+                const rate = Number(getLookupValue(match, "ex_rate") || (match as any)?.ex_rate || 0);
+                if (rate > 0) resolvedExRate = rate;
+                if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(match, "curr_name") || "");
+              }
+            } catch {}
+          }
+
           setForm((current) => ({
             ...current,
-            ac_code: text(defaults.ac_code ?? defaults.Account?.ac_code ?? current.ac_code),
-            ac_name: text(defaults.Account?.ac_name ?? current.ac_name),
-            curr_code: text(defaults.curr_code ?? defaults.Currency?.curr_code ?? current.curr_code),
-            curr_name: text(defaults.Currency?.curr_name ?? current.curr_name),
-            ex_rate: Number(defaults.ex_rate ?? current.ex_rate ?? 1),
+            ac_code: defaultAcCode || current.ac_code,
+            ac_name: resolvedAcName || current.ac_name,
+            curr_code: resolvedCurrCode || current.curr_code,
+            curr_name: resolvedCurrName || current.curr_name,
+            ex_rate: resolvedExRate > 0 ? resolvedExRate : (current.ex_rate || 1),
+            div_code: effectiveDiv || current.div_code,
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
           }));
@@ -525,22 +596,122 @@ function PaymentDocumentEditor({
     };
   }, [docType, editMode, editor]);
 
+  const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
+  const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
+  const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+  const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
+
+  const loadTaxOptions = useCallback(async () => {
+    let rows: LookupRow[] = [];
+    try {
+      rows = await getFinanceTaxList();
+    } catch {
+      // fallback
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicFinanceLookup({
+          parameter: "Account_Tax_Search",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        // fallback
+      }
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicLookup({
+          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        rows = [];
+      }
+    }
+    const rMap: Record<string, number> = {};
+    const tMap: Record<string, string> = {};
+    (rows || []).forEach((r) => {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const rawRate = Number(
+        getLookupValue(r, "tx_percnt") ??
+        getLookupValue(r, "tx_compnt_perc_1") ??
+        getLookupValue(r, "perc") ??
+        getLookupValue(r, "tax_percnt") ??
+        getLookupValue(r, "tax_rate") ??
+        getLookupValue(r, "rate") ??
+        0
+      );
+      const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
+      if (code) {
+        rMap[code] = rawRate;
+        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+      }
+    });
+    setTaxRateMap((prev) => ({ ...prev, ...rMap }));
+    setTaxTypeMap((prev) => ({ ...prev, ...tMap }));
+    return rows;
+  }, [user?.company_code, user?.loginid, user?.username]);
+
   useEffect(() => {
-    setForm((current) => ({
-      ...current,
-      detail: current.detail.map((d) => {
-        if (d.tx_compnt_1_expmt !== "S") return d;
-        const taxAmt = (Number(d.amount) || 0) * ((Number(d.tx_compnt_perc_1) || 5) / 100);
-        return { ...d, tx_compnt_amt_1: taxAmt };
-      }),
-    }));
-  }, [form.detail.map((d) => d.amount).join(",")]);
+    if (user?.company_code) {
+      void loadTaxOptions();
+    }
+  }, [user?.company_code, loadTaxOptions]);
+
+  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
+    const trimmed = String(taxCode || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
+      return Number(fallbackPerc);
+    }
+    return 0;
+  }, [taxRateMap]);
+
+  useEffect(() => {
+    setForm((current) => {
+      let changed = false;
+      const nextDetail = current.detail.map((d) => {
+        const lineTaxCode = d.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+        const dynamicRate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1);
+        const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+        if (!isTaxable) {
+          if (d.tx_compnt_amt_1 !== 0 && d.tx_compnt_amt_1 != null) {
+            changed = true;
+            return { ...d, tx_compnt_amt_1: 0 };
+          }
+          return d;
+        }
+        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
+        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
+          return d;
+        }
+        changed = true;
+        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: dynamicRate, tx_compnt_amt_1: taxAmt };
+      });
+      return changed ? { ...current, detail: nextDetail } : current;
+    });
+  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), form.tx_compntcat_code_1, form.tx_compnt_1_expmt, getTaxPercForCode]);
 
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
+
+  const limitErr = (f: keyof TransactionHeader) => {
+  const l = HEADER_LIMITS[f];
+  const v = String(form[f] ?? "");
+  return l && v.length > l.max ? `Exceeded limit (${v.length}/${l.max})` : undefined;
+};
+const limitProps = (f: keyof TransactionHeader) => ({
+  maxLength: HEADER_LIMITS[f]?.max,
+  className: limitErr(f) ? "!border-rose-500 !ring-rose-400" : "",
+});
 
   const [lineSearch, setLineSearch] = useState("");
   const filteredDetail = useMemo(() => {
@@ -592,20 +763,71 @@ function PaymentDocumentEditor({
   };
 
   const updateDetail = (id: string, patch: Partial<TransactionDetail>) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => ({
       ...current,
-      detail: current.detail.map((row) => row.id === id ? { ...row, ...patch } : row),
+      detail: current.detail.map((row) => {
+        if (row.id !== id) return row;
+        const merged = { ...row, ...patch };
+        if ("amount" in patch || "tx_compnt_perc_1" in patch || "tx_compnt_1_expmt" in patch || "tx_compntcat_code_1" in patch) {
+          const amt = Number(merged.amount) || 0;
+          const lineTaxCode = merged.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+          const dynamicRate = getTaxPercForCode(lineTaxCode, merged.tx_compnt_perc_1);
+          let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
+
+          if (dynamicRate > 0 && taxType === "N") {
+            taxType = "S";
+            merged.tx_compnt_1_expmt = "S";
+          }
+
+          if (taxType === "S") {
+            merged.tx_compnt_perc_1 = dynamicRate;
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+          } else {
+            merged.tx_compnt_perc_1 = 0;
+            merged.tx_compnt_amt_1 = 0;
+          }
+          if ("tx_compnt_amt_1" in patch) {
+            merged.tx_compnt_amt_1 = Number(patch.tx_compnt_amt_1) || 0;
+          }
+        }
+        return merged;
+      }),
     }));
   };
 
   const updateDetailAmount = (id: string, newAmount: number) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => {
       const detail = current.detail.find((d) => d.id === id);
-      if (!detail || detail.child_table !== "invoice") {
+      if (!detail) return current;
+
+      const lineTaxCode = detail.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+      const dynamicRate = getTaxPercForCode(lineTaxCode, detail.tx_compnt_perc_1);
+      const isTaxable = (detail.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+      const taxPerc = isTaxable ? dynamicRate : 0;
+      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(3)) : 0;
+      const taxPatch = {
+        tx_compnt_1_expmt: isTaxable ? "S" : "N",
+        tx_compnt_perc_1: isTaxable ? taxPerc : 0,
+        tx_compnt_amt_1: taxAmt,
+      };
+
+      if (detail.child_table !== "invoice") {
         return {
           ...current,
           detail: current.detail.map((row) =>
-            row.id === id ? { ...row, amount: newAmount } : row
+            row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
           ),
         };
       }
@@ -623,14 +845,14 @@ function PaymentDocumentEditor({
 
       return {
         ...current,
-        // ✅ Keep user's typed amount, don't snap it
         detail: current.detail.map((row) =>
-          row.id === id ? { ...row, amount: newAmount } : row
+          row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
         ),
         children: { ...current.children, [id]: updatedChildren },
       };
     });
   };
+
 
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
@@ -720,6 +942,18 @@ function PaymentDocumentEditor({
       ],
     }));
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || !form.div_code || !form.curr_code) return;
+      if (e.key === "Insert" || (e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        addDetailRow();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, form.div_code, form.curr_code, form.detail.length, docType, user?.company_code]);
 
   const removeDetailRow = (id: string) => {
     setForm((current) => ({
@@ -818,6 +1052,12 @@ function PaymentDocumentEditor({
   const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>, targetDetailId?: string) => {
     const parentDetailId = targetDetailId || selectedDetail?.id;
     if (!parentDetailId) return;
+    setInvalidChildRowIds((prev) => {
+      if (!prev.has(childId)) return prev;
+      const next = new Set(prev);
+      next.delete(childId);
+      return next;
+    });
     setForm((current) => {
       const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
         row.id === childId ? { ...row, ...patch } : row,
@@ -826,9 +1066,14 @@ function PaymentDocumentEditor({
       return {
         ...current,
         children: { ...current.children, [parentDetailId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === parentDetailId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== parentDetailId) return d;
+          const lineTaxCode = d.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+          const dynamicRate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1);
+          const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [parentDetailId]: true }));
@@ -845,9 +1090,14 @@ function PaymentDocumentEditor({
       return {
         ...current,
         children: { ...current.children, [parentDetailId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === parentDetailId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== parentDetailId) return d;
+          const lineTaxCode = d.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+          const dynamicRate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1);
+          const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [parentDetailId]: true }));
@@ -861,13 +1111,97 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
-    if (!form.detail || form.detail.length === 0) return setError("At least one detail line is required");
+    // Character limit validations
+    // if (form.inv_no && form.inv_no.length > 30) {
+    //   return setError("You have exceeded the character limit for Invoice No.");
+    // }
+    // if (form.ref_no && form.ref_no.length > 30) {
+    //   return setError("You have exceeded the character limit for Ref No.");
+    // }
+    // if (form.party_address && form.party_address.length > 250) {
+    //   return setError("You have exceeded the character limit for Address (max 250 characters).");
+    // }
+    // if (form.party_phone && form.party_phone.length > 30) {
+    //   return setError("You have exceeded the character limit for Phone (max 30 characters).");
+    // }
+    // if (form.party_fax && form.party_fax.length > 30) {
+    //   return setError("You have exceeded the character limit for Fax (max 30 characters).");
+    // }
+    // if (form.remarks && form.remarks.length > 250) {
+    //   return setError("You have exceeded the character limit for Remarks.");
+    // }
 
-    const missingAc = form.detail.find((d) => !d.ac_code?.trim());
-    if (missingAc) return setError(`A/C Code is missing on line #${missingAc.serial_no || 1}`);
+    for (const [f, l] of Object.entries(HEADER_LIMITS)) {
+  const v = String((form as Record<string, unknown>)[f] ?? "");
+  if (l && v.length > l.max) {
+    return setError(`You have exceeded the character limit for ${l.label}.`);
+  }
+}
 
-    const invalidAmt = form.detail.find((d) => !d.amount || Number(d.amount) <= 0);
-    if (invalidAmt) return setError(`Amount must be greater than zero on line #${invalidAmt.serial_no || 1}`);
+    if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
+
+    // Check line character limits
+    // for (const d of form.detail) {
+    //   if (d.remarks && d.remarks.length > 250) {
+    //     return setError(`You have exceeded the character limit for Remarks on Line #${d.serial_no || 1}.`);
+    //   }
+    // }
+
+    const tooLong = form.detail.filter((d) => d.remarks && d.remarks.length > 250);
+if (tooLong.length) {
+  setInvalidLineIds(new Set(tooLong.map((d) => d.id)));
+  return setError(`You have exceeded the character limit for Remarks on Line #${tooLong[0].serial_no || 1}.`);
+}
+
+    // Missing field validation on lines (new row without details / missing account or zero amount)
+    const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLines.length > 0) {
+      setInvalidLineIds(new Set(invalidLines.map((d) => d.id)));
+      const firstInvalid = invalidLines[0];
+      const missingParts: string[] = [];
+      if (!firstInvalid.ac_code?.trim()) missingParts.push("Account");
+      if (!firstInvalid.amount || Number(firstInvalid.amount) <= 0) missingParts.push("Amount");
+      return setError(`Kindly fill in the missing fields: ${missingParts.join(" and ")} on Line #${firstInvalid.serial_no || 1}.`);
+    }
+
+    // Validation on child allocations (Expense, Invoice, Job)
+    for (const d of form.detail) {
+      const children = (form.children[d.id] || []) as TransactionChildRow[];
+      if (children.length > 0) {
+        for (const [idx, c] of children.entries()) {
+          const rowNum = c.dtl_sr_no || idx + 1;
+          const missingFields: string[] = [];
+          if (d.child_table === "expense") {
+            if (!c.exp_type_code?.trim()) missingFields.push("Expense Type");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "job") {
+            if (!c.job_no?.trim()) missingFields.push("Job No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "invoice") {
+            if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Allocated Amount");
+          }
+
+          if (missingFields.length > 0) {
+            setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+            setSelectedDetailId(d.id);
+            setInvalidChildRowIds(new Set([c.id]));
+            setInvalidChildFields({ [c.id]: missingFields });
+            return setError(
+              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+            );
+          }
+        }
+
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
+        if (Math.abs(childSum - lineAmt) > 0.001) {
+          setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+          setSelectedDetailId(d.id);
+          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+        }
+      }
+    }
 
     setSaving(true);
     setError("");
@@ -923,8 +1257,11 @@ function PaymentDocumentEditor({
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+    <form data-header-expanded={showHeaderDetails} 
+    // className={`payment-workbench commercial-editor grid h-screen 
+    className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen
+    ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+      <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={DOCUMENT_META[docType].title}
@@ -944,8 +1281,8 @@ function PaymentDocumentEditor({
                 <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
                 {form.canceled !== "Y" && (
                   <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
@@ -1026,7 +1363,7 @@ function PaymentDocumentEditor({
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="font-semibold text-[#00378C]">Tax:</span>
-                    <span className="font-medium">{form.tx_compnt_1_expmt === "S" ? "Std (5%)" : form.tx_compnt_1_expmt === "Z" ? "Zero" : form.tx_compnt_1_expmt === "E" ? "Exempt" : "No Tax"}</span>
+                    <span className="font-medium">{form.tx_compnt_1_expmt === "S" ? "Std Tax" : form.tx_compnt_1_expmt === "Z" ? "Zero" : form.tx_compnt_1_expmt === "E" ? "Exempt" : "No Tax"}</span>
                   </span>
                 </div>
                 <Button
@@ -1042,45 +1379,8 @@ function PaymentDocumentEditor({
             ) : (
               <div className="commercial-header-shell flex flex-col gap-1.5 mb-3">
                 <div className="commercial-header-panel">
-                  {/* Block 1: Document Details */}
-                  <section className="commercial-header-block commercial-header-block-doc">
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon"><FileText size={11} /></span>
-                      <span>Document Details</span>
-                    </div>
-                    <div className="commercial-header-block-fields">
-                      <Field label="Doc Date">
-                        <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
-                      </Field>
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field label="Inv No*">
-                          <Input required disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} />
-                        </Field>
-                      )}
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field label="Inv Date">
-                          <BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
-                        </Field>
-                      )}
-                      {docType !== "CR" && (
-                        <LookupField
-                          label="Bank Account"
-                          value={form.bank_ac_code || ""}
-                          displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                          columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
-                          valueField="bank_ac_code"
-                          displayFields={["bank_ac_code", "bank_ac_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
-                          })}
-                          disabled={disabled || !form.div_code}
-                          onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
-                        />
-                      )}
-                    </div>
-                  </section>
 
-                  {/* Block 2: Customer / Supplier Details */}
+                  {/* Block 1: Customer / Supplier Details */}
                   <section className={`commercial-header-block commercial-header-block-party ${docType === "CN" ? "commercial-header-block-party-sales" : ""}`}>
                     <div className="commercial-header-block-title">
                       <span className="finance-section-icon">
@@ -1094,7 +1394,7 @@ function PaymentDocumentEditor({
                           label={docType === "CN" ? "Customer *" : "Supplier *"}
                           value={form.ac_code}
                           displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                           valueField="ac_code"
                           displayFields={["ac_code", "ac_name", 'curr_code']}
                           loadOptions={() => getDynamicLookup({
@@ -1147,21 +1447,135 @@ function PaymentDocumentEditor({
                       <Field label="Exchange Rate*">
                         <Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
                       </Field>
-                      <label className="field col-span-2 max-md:col-span-1">
-                        <span>Address</span>
-                        <Input disabled={disabled} value={form.party_address || ""} onChange={(event) => updateField("party_address", event.target.value)} />
-                      </label>
-                      <Field label="Phone">
-                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(event) => updateField("party_phone", event.target.value)} />
-                      </Field>
-                      <Field label="Fax">
-                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(event) => updateField("party_fax", event.target.value)} />
-                      </Field>
+                      {/* <Field
+                        label="Address"
+                        className="col-span-2 max-md:col-span-1"
+                        error={form.party_address && form.party_address.length > 250 ? `Exceeded limit (${form.party_address.length}/250)` : undefined}
+                      >
+                        <Input
+                          maxLength={250}
+                          placeholder="Address"
+                          disabled={disabled}
+                          value={form.party_address || ""}
+                          className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_address", event.target.value)}
+                        />
+                      </Field> */}
+
+                      <Field label="Address" className="col-span-2 max-md:col-span-1" error={limitErr("party_address")}>
+                        <Input {...limitProps("party_address")} placeholder="Address" disabled={disabled} value={form.party_address || ""}
+                          onChange={(event) => updateField("party_address", event.target.value)} />
+                         </Field>
+                      {/* <Field
+                        label="Phone"
+                        error={form.party_phone && form.party_phone.length > 30 ? `Exceeded limit (${form.party_phone.length}/30)` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          placeholder="Phone"
+                          disabled={disabled}
+                          value={form.party_phone || ""}
+                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_phone", event.target.value)}
+                        />
+                      </Field> */}
+                      <Field label="Phone" error={limitErr("party_phone")}>
+  <Input
+    {...limitProps("party_phone")}
+    placeholder="Phone"
+    disabled={disabled}
+    value={form.party_phone || ""}
+    onChange={(event) => updateField("party_phone", event.target.value)}
+  />
+</Field>
+                      {/* <Field
+                        label="Fax"
+                        error={form.party_fax && form.party_fax.length > 30 ? `Exceeded limit (${form.party_fax.length}/30)` : undefined}
+                      >
+                        <Input
+                          maxLength={30}
+                          placeholder="Fax"
+                          disabled={disabled}
+                          value={form.party_fax || ""}
+                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("party_fax", event.target.value)}
+                        />
+                      </Field> */}
+                      <Field label="Fax" error={limitErr("party_fax")}>
+  <Input
+    {...limitProps("party_fax")}
+    placeholder="Fax"
+    disabled={disabled}
+    value={form.party_fax || ""}
+    onChange={(event) => updateField("party_fax", event.target.value)}
+  />
+</Field>
                     </div>
                   </section>
 
+                  {/* Block 2: Document Details */}
+                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-1.5">
+                    <section className="commercial-header-block commercial-header-block-doc commercial-header-block-doc-4">
+                    {/* <section className="commercial-header-block commercial-header-block-doc"> */}
+                    <div className="commercial-header-block-title">
+                      <span className="finance-section-icon"><FileText size={11} /></span>
+                      <span>Document Details</span>
+                    </div>
+                    <div className="commercial-header-block-fields">
+                      <Field label="Doc Date" required>
+                        <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
+                      </Field>
+                      {(docType === "CN" || docType === "DN") && (
+                        // <Field
+                        //   label="Inv No*"
+                        //   error={form.inv_no && form.inv_no.length > 30 ? `Exceeded limit (${form.inv_no.length}/30)` : undefined}
+                        // >
+                        //   <Input
+                        //     required
+                        //     disabled={disabled}
+                        //     value={form.inv_no || ""}
+                        //     placeholder="Invoice No"
+                        //     className={form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
+                        //     onChange={(event) => updateField("inv_no", event.target.value)}
+                        //   />
+                        // </Field>
+                        <Field label="Inv No*" error={limitErr("inv_no")}>
+  <Input
+    {...limitProps("inv_no")}
+    required
+    disabled={disabled}
+    value={form.inv_no || ""}
+    placeholder="Invoice No"
+    onChange={(event) => updateField("inv_no", event.target.value)}
+  />
+</Field>
+                      )}
+                      {(docType === "CN" || docType === "DN") && (
+                        <Field label="Inv Date">
+                          <BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
+                        </Field>
+                      )}
+                      {docType !== "CR" && (
+                        <LookupField
+                          label="Bank Account"
+                          value={form.bank_ac_code || ""}
+                          displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
+                          columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
+                          valueField="bank_ac_code"
+                          displayFields={["bank_ac_code", "bank_ac_name"]}
+                          loadOptions={() => getDynamicLookup({
+                            parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
+                          })}
+                          disabled={disabled || !form.div_code}
+                          onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
+                        />
+                      )}
+                    </div>
+                  </section> 
+
                   {/* Block 3: Tax & Remarks */}
-                  <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-wide">
+                  {/* <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-wide"> */}
+                   <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-3">
                     <div className="commercial-header-block-title">
                       <span className="finance-section-icon"><Receipt size={11} /></span>
                       <span>Tax & Remarks</span>
@@ -1181,19 +1595,65 @@ function PaymentDocumentEditor({
                           ]}
                           valueField="tx_compntcat_code"
                           displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                            code1: user?.company_code,
-                            loginid: user?.loginid || user?.username || "ADMIN",
-                          })}
+                          loadOptions={loadTaxOptions}
                           disabled={disabled}
-                          onChange={(value) =>
+                          onChange={(value, row) => {
+                            const r = (row || {}) as Record<string, unknown>;
+                            const rowRate = Number(
+                              getLookupValue(r, "tx_percnt") ??
+                              getLookupValue(r, "tx_compnt_perc_1") ??
+                              getLookupValue(r, "perc") ??
+                              getLookupValue(r, "tax_percnt") ??
+                              getLookupValue(r, "tax_rate") ??
+                              getLookupValue(r, "rate") ??
+                              0
+                            );
+                            const rowName = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+                            const valStr = String(value || "").trim();
+                            const isZero = rowName.includes("ZERO") || valStr.startsWith("20") || valStr.startsWith("21");
+                            const isExempt = rowName.includes("EXEMPT") || valStr.startsWith("30") || valStr.startsWith("31");
+                            const isStd = rowName.includes("STD") || rowName.includes("STANDARD") || valStr.startsWith("10") || valStr.startsWith("11");
+
+                            let determinedTaxType: "S" | "Z" | "E" | "N" = "N";
+                            let perc = 0;
+
+                            if (isZero) {
+                              determinedTaxType = "Z";
+                              perc = 0;
+                            } else if (isExempt) {
+                              determinedTaxType = "E";
+                              perc = 0;
+                            } else if (rowRate > 0) {
+                              determinedTaxType = (taxTypeMap[value] as any) || "S";
+                              perc = rowRate;
+                            } else if (valStr && valStr !== "N/A") {
+                              const mappedRate = getTaxPercForCode(value);
+                              const mappedType = taxTypeMap[value] || (mappedRate > 0 ? "S" : "N");
+                              determinedTaxType = (mappedType as any) || (mappedRate > 0 ? "S" : "N");
+                              perc = mappedRate;
+                            }
+
+                            if (valStr && perc > 0) {
+                              setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
+                            }
+
                             setForm((current) => ({
                               ...current,
                               tx_compntcat_code_1: value,
-                              detail: current.detail.map((d) => ({ ...d, tx_compntcat_code_1: value })),
-                            }))
-                          }
+                              tx_compnt_1_expmt: determinedTaxType,
+                              detail: current.detail.map((d) => {
+                                const lineAmt = Number(d.amount || 0);
+                                const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                                return {
+                                  ...d,
+                                  tx_compntcat_code_1: value,
+                                  tx_compnt_1_expmt: determinedTaxType,
+                                  tx_compnt_perc_1: perc,
+                                  tx_compnt_amt_1: taxAmt,
+                                };
+                              }),
+                            }));
+                          }}
                         />
                       </label>
                       <label className="field col-span-1 max-md:col-span-1">
@@ -1203,20 +1663,26 @@ function PaymentDocumentEditor({
                           value={form.tx_compnt_1_expmt || "N"}
                           onChange={(event) => {
                             const taxType = event.target.value;
-                            setForm((current) => ({
-                              ...current,
-                              tx_compnt_1_expmt: taxType,
-                              detail: current.detail.map((d) => {
-                                const taxPerc = taxType === "S" ? (d.tx_compnt_perc_1 ?? 5) : 0;
-                                const taxAmt = taxType === "S" ? (Number(d.amount) || 0) * (taxPerc / 100) : 0;
-                                return {
-                                  ...d,
-                                  tx_compnt_1_expmt: taxType,
-                                  tx_compnt_perc_1: taxPerc,
-                                  tx_compnt_amt_1: taxAmt,
-                                };
-                              }),
-                            }));
+                            setForm((current) => {
+                              const currentTaxCode = current.tx_compntcat_code_1;
+                              const defaultRate = getTaxPercForCode(currentTaxCode, 0);
+                              return {
+                                ...current,
+                                tx_compnt_1_expmt: taxType,
+                                detail: current.detail.map((d) => {
+                                  const lineTaxCode = d.tx_compntcat_code_1 || currentTaxCode;
+                                  const rate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1 || defaultRate);
+                                  const taxPerc = taxType === "S" ? rate : 0;
+                                  const taxAmt = taxType === "S" ? Number(((Number(d.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                  return {
+                                    ...d,
+                                    tx_compnt_1_expmt: taxType,
+                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_amt_1: taxAmt,
+                                  };
+                                }),
+                              };
+                            });
                           }}
                         >
                           <option value="N">No Tax</option>
@@ -1225,12 +1691,31 @@ function PaymentDocumentEditor({
                           <option value="E">Exempt</option>
                         </Select>
                       </label>
-                      <label className="field col-span-2 max-md:col-span-1">
-                        <span>Remarks</span>
-                        <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
-                      </label>
+                      {/* <Field
+                        label="Remarks"
+                        className="col-span-2 max-md:col-span-1"
+                        error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
+                      >
+                        <Input maxLength={250}
+                          disabled={disabled}
+                          value={form.remarks || ""}
+                          placeholder="Remarks"
+                          className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(event) => updateField("remarks", event.target.value)}
+                        />
+                      </Field> */}
+                      <Field label="Remarks" className="col-span-2 max-md:col-span-1" error={limitErr("remarks")}>
+                          <Input
+                          {...limitProps("remarks")}
+                           disabled={disabled}
+                           value={form.remarks || ""}
+                            placeholder="Remarks"
+                            onChange={(event) => updateField("remarks", event.target.value)}
+                            />
+                         </Field>
                     </div>
                   </section>
+                </div>
                 </div>
               </div>
             )}
@@ -1281,7 +1766,7 @@ function PaymentDocumentEditor({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow} className="commercial-add-line-btn">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
@@ -1317,14 +1802,14 @@ function PaymentDocumentEditor({
                         <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
                           <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
                           <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
-                            <div className="w-full max-w-[460px] truncate">
+                            <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
                               <LookupField
                                 label="Detail Account"
                                 compact
                                 placeholder="A/c code"
                                 value={detail.ac_code}
                                 displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
                                 valueField="ac_code"
                                 displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
                                 loadOptions={() => getDynamicLookup({
@@ -1374,10 +1859,10 @@ function PaymentDocumentEditor({
                             )}
                           </td>
                           <td className="w-[200px] max-w-[240px] px-1 py-1">
-                            <textarea
+                            <Textarea maxLength={250}
                               disabled={disabled}
-                              className="commercial-line-description"
-                              title={detail.remarks || ""}
+                              className={`commercial-line-description ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}
                               rows={1}
                               value={detail.remarks || ""}
                               onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })}
@@ -1417,6 +1902,7 @@ function PaymentDocumentEditor({
                                 type="number"
                                 style={{ textAlign: "right" }}
                                 step="0.001"
+                                className={`commercial-number-input finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
@@ -1466,13 +1952,23 @@ function PaymentDocumentEditor({
                                 ]}
                                 valueField="tx_compntcat_code"
                                 displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                                loadOptions={() => getDynamicLookup({
-                                  parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                                  code1: user?.company_code,
-                                  loginid: user?.loginid || user?.username || "ADMIN",
-                                })}
+                                loadOptions={loadTaxOptions}
                                 disabled={disabled}
-                                onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
+                                onChange={(value, row) => {
+                                  const rateFromRow = row ? Number(getLookupValue(row, "tx_percnt") ?? getLookupValue(row, "tx_compnt_perc_1") ?? getLookupValue(row, "perc") ?? 0) : undefined;
+                                  const dynamicRate = rateFromRow !== undefined ? rateFromRow : (taxRateMap[value] ?? 0);
+                                  if (value && rateFromRow !== undefined) {
+                                    setTaxRateMap((prev) => ({ ...prev, [value]: rateFromRow }));
+                                  }
+                                  const isTaxable = (detail.tx_compnt_1_expmt || form.tx_compnt_1_expmt) === "S";
+                                  const taxPerc = isTaxable ? dynamicRate : 0;
+                                  const taxAmt = isTaxable ? Number(((Number(detail.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                  updateDetail(detail.id, {
+                                    tx_compntcat_code_1: value,
+                                    tx_compnt_perc_1: isTaxable ? taxPerc : (detail.tx_compnt_perc_1 || 0),
+                                    tx_compnt_amt_1: taxAmt,
+                                  });
+                                }}
                               />
                             </td>
                           )}
@@ -1483,11 +1979,16 @@ function PaymentDocumentEditor({
                                 value={detail.tx_compnt_1_expmt || "N"}
                                 onChange={(event) => {
                                   const taxType = event.target.value;
-                                  const taxPerc = taxType === "S" ? 5 : 0;
-                                  const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                                  const lineTaxCode = detail.tx_compntcat_code_1 || form.tx_compntcat_code_1;
+                                  const rate = taxType === "S"
+                                    ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0
+                                        ? detail.tx_compnt_perc_1
+                                        : getTaxPercForCode(lineTaxCode))
+                                    : 0;
+                                  const taxAmt = taxType === "S" ? Number(((Number(detail.amount || 0) * rate) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
-                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_perc_1: rate,
                                     tx_compnt_amt_1: taxAmt,
                                   });
                                 }}
@@ -1526,6 +2027,8 @@ function PaymentDocumentEditor({
                                 onRefreshInvoices={() => void loadChildrenForDetail(detail)}
                                 onInvNoBlur={handleInvNoBlur}
                                 onClose={() => toggleRowExpanded(detail.id)}
+                                invalidChildRowIds={invalidChildRowIds}
+                                invalidChildFields={invalidChildFields}
                               />
                               </div>
                             </td>
@@ -1831,12 +2334,19 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({ label, required, children, className, error }: { label: string; required?: boolean; children: ReactNode; className?: string; error?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
+
   return (
-    <label className="field">
-      <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+    <label className={`field ${className || ""}`}>
+      <span className="flex items-center justify-between">
+        <span>
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+        </span>
+        {error && <span className="text-[11px] font-medium text-rose-500">{error}</span>}
       </span>
       {children}
     </label>
@@ -1895,12 +2405,12 @@ function emptyDetailRow({
     ex_rate: 1,
     amount: 0,
     sign_ind: docType === "CN" || docType === "CP" ? 1 : -1,
-    tx_compntcat_code_1: "11100",
+    tx_compntcat_code_1: "",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
     tx_compnt_lcuramt_1: null,
-    tx_compnt_perc_1: null,
-    tx_compnt_amt_1: null,
+    tx_compnt_perc_1: 0,
+    tx_compnt_amt_1: 0,
     job_no: "",
     dept_code: "",
     child_table: "",

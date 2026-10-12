@@ -376,6 +376,8 @@ const AppraisalViewTabsPage: React.FC = () => {
   const docNo = getDocNoFromPath();
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
+  // ✅ Source tab passed from MyTaskPage (PENDING / IN PROGRESS / REJECTED / SENT BACK / APPROVED)
+  const sourceTab = (searchParams.get("source_tab") ?? "").toUpperCase();
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
@@ -386,9 +388,6 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [finalApproved, setFinalApproved] = useState<string>(
     prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
   );
-  // NEW: doc's creator — used to detect the "employee is their own HOD"
-  // self-rating case (CREATED_BY === EMPLOYEE_CODE). Backend's
-  // 'get_appraisal_flow_level' select must return CREATED_BY for this to work.
   const [createdBy, setCreatedBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
   );
@@ -400,7 +399,6 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
-  // ── KEY CHANGE: prefetchedRow hai to loading=false se start karo ───────────
   const [loading, setLoading] = useState(!prefetchedRow);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
 
@@ -425,19 +423,25 @@ const AppraisalViewTabsPage: React.FC = () => {
   // ── Derived ────────────────────────────────────────────────────────────────
   const isFinalized = finalApproved === "YES";
 
-  // Employee is their own creator/HOD -> only Level 0 (their own self-rating
-  // fill) is a Draft/Submit step. From Level 1 onward (COO, CEO, HR) it's
-  // pure Approve/Sent Back/Reject, because Level 1's approver there is the
-  // COO, not a second rating step.
-  // Normal employee -> Level 0 (employee) and Level 1 (supervisor) are both
-  // Draft/Submit steps; Level 2 onward is Approve/Sent Back/Reject.
   const employeeIsHOD =
     !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
 
+  // ✅ ONLY show action buttons (Draft/Submit/Approve/Reject/Send Back)
+  // when the appraisal was opened from the Pending tab (or no source_tab
+  // is present, e.g. a deep link). In Progress / Rejected / Sent Back /
+  // Closed tabs → only Print + Exit are shown.
+  const showActionButtons =
+    sourceTab === "" || sourceTab === "PENDING";
+
   const showSaveSubmitButtons =
-    !isFinalized && (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
+    showActionButtons &&
+    !isFinalized &&
+    (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
   const showApproveRejectButtons =
-    !isFinalized && (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
+    showActionButtons &&
+    !isFinalized &&
+    (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) &&
+    flowLevel <= 7;
 
   const finalRating = calcFinalRating(taskTotal, characterTotal, weightageConfig);
   const showFinalRating = taskTotal > 0 && characterTotal > 0;

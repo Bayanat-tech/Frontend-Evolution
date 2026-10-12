@@ -222,7 +222,7 @@ export function WmsMasterForm({
       <div className="mb-0.5 flex items-center justify-between">
         <label className="block text-[11px] font-medium text-slate-600 text-left">
           {field.label}
-          {field.required && <span className="ml-0.5 text-red-500">*</span>}
+          {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </label>
         {field.maxLength && typeof value === "string" && (
           <span className={`text-[10px] font-medium ${value.length > field.maxLength ? "text-red-600" : "text-slate-400"}`}>
@@ -246,7 +246,7 @@ export function WmsMasterForm({
             />
             <span className="text-sm text-slate-900">
               {field.label}
-              {field.required && <span className="ml-0.5 text-red-500">*</span>}
+              {field.required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
             </span>
           </label>
           {errorText}

@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/Table";
 import { useAuth } from "../../../state/AuthContext";
-import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
+import { executeWmsInboundSql, getInvocieDetailReport, getInvoiceDetailStandardReport  } from "../../../api/wms";
 import {
   getPrincipalDropdown, getInvoiceJobSelection, getStorageSelection,
   normalizeStorageRow, updateBillingApi, TInvoice, TInvoiceDetail, StorageSelectionRow,
@@ -40,8 +40,10 @@ const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
 const todayStr = new Date().toISOString().slice(0, 10);
@@ -62,6 +64,8 @@ const normalizeJobRow = (row: any) => ({
   cost_rate: Number(row.cost_rate ?? row.COST_RATE ?? 0),
   job_date: row.job_date ?? row.JOB_DATE ?? null,
   selected: (row.selected ?? row.SELECTED) === "Y",
+  FC_BILL_RATE: Number(row.fc_bill_rate ?? row.FC_BILL_RATE),
+  FC_BILL: Number(row.FC_BILL ?? row.FC_BILL)
 });
 
 type NormalizedJobRow = ReturnType<typeof normalizeJobRow>;
@@ -259,7 +263,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const { user } = useAuth();
   const { company_code: authCompanyCode, loginid } = user ?? {};
   const [activeTab, setActiveTab] = useState<InvoiceTab>("setup");
-
+const [fcRates, setFcRates] = useState<Record<string, string>>({});
   const [invoice, setInvoice] = useState<any>(() => {
     if (existingData && Object.keys(existingData).length > 0) return existingData;
     return { invoice_date: todayStr, from_date: todayStr, to_date: todayStr, desp_date: todayStr, credit_note_date: todayStr, despatched: "N" };
@@ -278,8 +282,10 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [companyCurrCode, setCompanyCurrCode] = useState<string>("");
-  const [exRateTouched, setExRateTouched] = useState(false);
-
+// replace the exRateTouched state
+const [exRateTouched, setExRateTouched] = useState<boolean>(
+  () => !!(existingData && getValue(existingData, "ex_rate"))
+);
   const setField = (key: string, value: string) => setInvoice((prev: any) => ({ ...prev, [key]: value }));
 
   const prinCode = getValue(invoice, "prin_code") || "";
@@ -297,10 +303,24 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     let cancelled = false;
     (async () => {
       try {
-        const rows = await executeWmsInboundSql(`SELECT * FROM MS_COMPANYINFO WHERE COMPANY_CODE = '${authCompanyCode}'`);
+        const rows = await executeWmsInboundSql(`SELECT CURRENCY FROM MS_COMPANYINFO WHERE COMPANY_CODE = '${authCompanyCode}'`);
         const row = Array.isArray(rows) ? rows[0] : undefined;
-        const curr = getValue(row, "curr_code");
-        if (!cancelled) setCompanyCurrCode(String(curr ?? "").trim());
+        
+        // FIXED HERE: looking for "currency" instead of "curr_code"
+        const curr = getValue(row, "currency");
+        
+        if (!cancelled) {
+          const currencyStr = String(curr ?? "").trim();
+          setCompanyCurrCode(currencyStr);
+          
+          // Set as default if no curr_code is currently set
+          setInvoice((prev: any) => {
+            if (!prev.curr_code) {
+              return { ...prev, curr_code: currencyStr };
+            }
+            return prev;
+          });
+        }
       } catch { if (!cancelled) setCompanyCurrCode(""); }
     })();
     return () => { cancelled = true; };
@@ -343,6 +363,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     const rate = Number(invoice.ex_rate);
     return rate > 0 ? 1 / rate : 1;
   }, [currCode, companyCurrCode, invoice.ex_rate]);
+const isForeign = exchangeFactor !== 1;
 
   // Job rows
   useEffect(() => {
@@ -392,10 +413,32 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     return () => { cancelled = true; };
   }, [prinCode, consolidatedInvNo, fromDate, toDate, user?.loginid, user?.company_code]);
 
-  const displayJobRows = useMemo<NormalizedJobRow[]>(
-    () => jobRows.map((row) => ({ ...row, bill: row.bill * exchangeFactor, bill_rate: row.bill_rate * exchangeFactor, cost_rate: row.cost_rate * exchangeFactor })),
-    [jobRows, exchangeFactor],
-  );
+const displayJobRows = useMemo<NormalizedJobRow[]>(() => {
+  const rate = Number(invoice.ex_rate) || 0;
+  return jobRows.map((row) => {
+    const qty = Number(row.quantity || 0);
+    const inrRate = Number(row.bill_rate || 0);
+
+    if (!isForeign || rate <= 0) {
+      const bill = Number(row.bill) > 0 ? Number(row.bill) : qty * inrRate;
+      return { ...row, bill, FC_BILL: bill, FC_BILL_RATE: inrRate };
+    }
+
+    const typed = fcRates[jobRowKey(row)];
+    const fcRate = typed !== undefined && typed !== ""
+      ? Number(typed)
+      : Math.round(inrRate * exchangeFactor * 100) / 100;
+    const newInrRate = fcRate * rate;           // INR = USD × ex_rate
+
+    return {
+      ...row,
+      bill_rate: newInrRate,
+      bill: qty * newInrRate,
+      FC_BILL_RATE: fcRate,
+      FC_BILL: qty * fcRate,
+    };
+  });
+}, [jobRows, exchangeFactor, isForeign, fcRates, invoice.ex_rate]);
 
   const displayStorageRows = useMemo(
     () => storageRows.map((row: any) => ({ ...row, AMOUNT: Number(row.AMOUNT ?? 0) * exchangeFactor })),
@@ -410,11 +453,11 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
   const selectedJobRows = useMemo(() => displayJobRows.filter((r) => selectedJobKeys.has(jobRowKey(r))), [displayJobRows, selectedJobKeys]);
   const selectedStorageRows = useMemo(() => displayStorageRows.filter((r: any, i: number) => selectedStorageKeys.has(storageRowKey(r, i))), [displayStorageRows, selectedStorageKeys]);
 
-  const billingTotals = useMemo(() => {
-    const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.bill || 0), 0);
-    const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
-    return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
-  }, [selectedJobRows, selectedStorageRows]);
+const billingTotals = useMemo(() => {
+  const jobTotal = selectedJobRows.reduce((sum, r) => sum + Number(r.FC_BILL || 0), 0);
+  const storageTotal = selectedStorageRows.reduce((sum: number, r: any) => sum + Number(r.AMOUNT || 0), 0);
+  return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
+}, [selectedJobRows, selectedStorageRows]);
 
   const lineCount = selectedJobRows.length + selectedStorageRows.length;
 
@@ -430,11 +473,28 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
         invoice_no: row.invoice_no, prin_code: prinCode, quantity: row.quantity, bill: row.bill, job_date: row.job_date, srno: row.srno, selected: "Y",
       }));
       const storageSelection = selectedStorageRows.map((row: any) => ({ ...row, act_code: "9001", SELECTED: "Y" }));
-      const jobDetailRows: TInvoiceDetail[] = selectedJobRows.map((row) => {
+      const jobDetailRows: TInvoiceDetail[] = selectedJobRows.map((row:any) => {
         const quantity = Number(row.quantity || 0);
         const billRate = Number(row.bill_rate || 0);
         const costRate = Number(row.cost_rate || 0);
-        return { invoice_no: invoiceNo, prin_code: prinCode, job_no: row.job_no, act_code: row.act_code, activity: row.activity, quantity, bill_rate: billRate, cost_rate: costRate, bill_amount: quantity * billRate, cost_amount: quantity * costRate } as TInvoiceDetail;
+        
+        return { 
+          invoice_no: invoiceNo, 
+          prin_code: prinCode, 
+          job_no: row.job_no, 
+          act_code: row.act_code, 
+          activity: row.activity, 
+          quantity, 
+          bill_rate: billRate, 
+          cost_rate: costRate, 
+          bill_amount: quantity * billRate, 
+          cost_amount: quantity * costRate,
+          bill: quantity * billRate,        // add: INR amount
+          cost: quantity * costRate,        // add
+          // ADD THESE TWO LINES SO ORACLE RECEIVES THE FC VALUES
+          FC_BILL: row.FC_BILL,
+          FC_BILL_RATE: row.FC_BILL_RATE
+        } as TInvoiceDetail;
       });
       const storageDetailRows: TInvoiceDetail[] = selectedStorageRows.map((row: any) => ({
         invoice_no: invoiceNo, prin_code: prinCode, act_code: "9001", activity: row.ACTIVITY, bill: row.AMOUNT, cost: 0,
@@ -449,6 +509,29 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
     } catch (err) {
       setNotice({ type: "error", text: err instanceof Error ? err.message : "Error while saving invoice." });
     } finally { setSaving(false); }
+  };
+
+  const [printModalOpen, setPrintModalOpen] = useState(false)
+
+    const handleStandardPrint = async () => {
+    setPrintModalOpen(false);
+    if (!prinCode || !invoiceNo) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) { setNotice({ type: "error", text: "Please allow pop-ups for this site to view the report." }); return; }
+    reportWindow.document.write("Loading standard invoice report...");
+    try {
+      const html = await getInvoiceDetailStandardReport(String(prinCode), String(invoiceNo), String(user?.company_code ?? ""));
+      if (reportWindow.closed) return;
+      reportWindow.document.open(); reportWindow.document.write(html); reportWindow.document.close();
+    } catch {
+      setNotice({ type: "error", text: "Failed to load standard report. Please try again." });
+      if (!reportWindow.closed) reportWindow.close();
+    }
+  };
+
+  const handleExistingActivityWisePrint = () => {
+    setPrintModalOpen(false);
+    handlePrint("activitywise");
   };
 
   const handlePrint = async (report_type: "grouped" | "activitywise") => {
@@ -494,7 +577,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
           {hasExistingData && (
             <>
               <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("grouped")}><Printer size={14} /> Grouped</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => handlePrint("activitywise")}><Sheet size={14} /> Activity-wise</Button>
+<Button type="button" size="sm" variant="outline" onClick={() => setPrintModalOpen(true)}><Sheet size={14} /> Activity-wise</Button>
             </>
           )}
           <Button type="button" size="sm" variant="outline" onClick={() => onClose(false)}><ArrowLeft size={14} /> Cancel</Button>
@@ -513,12 +596,37 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
             {/* Row 1: Principal (2 cols), Currency, Exchange Rate, Despatched */}
             <div className="lg:col-span-2">
-              <FormLookup label="Principal Code" value={prinCode} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")} onChange={(value, row) => setInvoice((prev: any) => ({ ...prev, prin_code: value, curr_code: row ? getValue(row, "curr_code") ?? "" : "" }))} required disabled={viewMode} />
-            </div>
+<FormLookup label="Principal Code" value={prinCode} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]} loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")} onChange={(value) => setInvoice((prev: any) => ({ ...prev, prin_code: value }))} required disabled={viewMode} />            </div>
+<div>
+  <FormLookup 
+    label="Currency" 
+    value={currCode} 
+    valueField="code" 
+    displayFields={["code", "name"]} 
+    columns={[{ field: "code", header: "Code" }, { field: "name", header: "Name" }]} 
+    loadOptions={async () => { 
+      if (currencyOptions.length) return currencyOptions; 
+      try { 
+        const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`); 
+        const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" })); 
+        if (opts.length) setCurrencyOptions(opts); 
+        return opts; 
+      } catch { return []; } 
+    }} 
+    onChange={(value) => {
+      setExRateTouched(false); // Reset this so the new currency's exchange rate is automatically fetched
+      setInvoice((prev: any) => ({ ...prev, curr_code: value }));
+    }} 
+    disabled={viewMode || loadingCurrencies} 
+  />
+</div>
             <div>
-              <FormLookup label="Currency" value={currCode} valueField="code" displayFields={["code", "name"]} columns={[{ field: "code", header: "Code" }, { field: "name", header: "Name" }]} loadOptions={async () => { if (currencyOptions.length) return currencyOptions; try { const rows = await executeWmsInboundSql(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`); const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({ code: row.CURR_CODE ?? row.curr_code ?? "", name: row.CURR_NAME ?? row.curr_name ?? "" })); if (opts.length) setCurrencyOptions(opts); return opts; } catch { return []; } }} onChange={(value) => setInvoice((prev: any) => ({ ...prev, curr_code: value }))} disabled={viewMode || loadingCurrencies} />
-            </div>
-            <div><FormInput label="Exchange Rate" value={getValue(invoice, "ex_rate") ?? ""} onChange={(v) => setField("ex_rate", v)} placeholder="Auto" /></div>
+<FormInput
+  label="Exchange Rate"
+  value={getValue(invoice, "ex_rate") ?? ""}
+  onChange={(v) => { setExRateTouched(true); setField("ex_rate", v); }}
+  placeholder="Auto"
+/>                            </div>
             <div><FormSelect label="Despatched" value={getValue(invoice, "despatched") ?? "N"} onChange={(v) => setField("despatched", v)} options={[{ value: "Y", label: "Yes" }, { value: "N", label: "No" }]} /></div>
 
             {/* Row 2: every date field, side by side */}
@@ -573,16 +681,23 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
                   <div className="min-h-0 flex-1 overflow-auto">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-secondary/70">
-                        <TableRow>
-                          <TableHead className="w-8 text-[10.5px]"><input type="checkbox" checked={jobRows.length > 0 && jobRows.every((r) => selectedJobKeys.has(jobRowKey(r)))} onChange={toggleAllJobs} disabled={viewMode || jobRows.length === 0} /></TableHead>
-                          <TableHead className="text-[10.5px] uppercase">Job No</TableHead>
-                          <TableHead className="text-[10.5px] uppercase">Activity</TableHead>
-                          <TableHead className="text-right text-[10.5px] uppercase">Qty</TableHead>
-                          <TableHead className="text-right text-[10.5px] uppercase">Bill Rate</TableHead>
-                          <TableHead className="text-right text-[10.5px] uppercase">Cost Rate</TableHead>
-                          <TableHead className="text-right text-[10.5px] uppercase">Bill</TableHead>
-                          <TableHead className="text-[10.5px] uppercase">Job Date</TableHead>
-                        </TableRow>
+                  <TableRow>
+                    <TableHead className="w-8 text-[10.5px]"><input type="checkbox" checked={jobRows.length > 0 && jobRows.every((r) => selectedJobKeys.has(jobRowKey(r)))} onChange={toggleAllJobs} disabled={viewMode || jobRows.length === 0} /></TableHead>
+                    <TableHead className="text-[10.5px] uppercase">Job No</TableHead>
+                    <TableHead className="text-[10.5px] uppercase">Activity</TableHead>
+                    <TableHead className="text-right text-[10.5px] uppercase">Qty</TableHead>
+                    <TableHead className="text-right text-[10.5px] uppercase">Bill Rate</TableHead>
+                    
+                    {/* NEW HEADERS */}
+                    <TableHead className="text-right text-[10.5px] uppercase text-blue-600">FC Bill Rate</TableHead> 
+                    <TableHead className="text-right text-[10.5px] uppercase">Cost Rate</TableHead>
+                    <TableHead className="text-right text-[10.5px] uppercase">Bill</TableHead>
+                    
+                    {/* NEW HEADER */}
+                    <TableHead className="text-right text-[10.5px] uppercase text-blue-600">FC Bill</TableHead> 
+                    
+                    <TableHead className="text-[10.5px] uppercase">Job Date</TableHead>
+                  </TableRow>
                       </TableHeader>
                       <TableBody>
                         {loadingJobs ? (
@@ -596,16 +711,38 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
                             const key = jobRowKey(row);
                             const isSelected = selectedJobKeys.has(key);
                             return (
-                              <TableRow key={key} className={isSelected ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-accent"} onClick={() => toggleJobRow(key)}>
-                                <TableCell onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={() => toggleJobRow(key)} disabled={viewMode} /></TableCell>
-                                <TableCell className="text-[11.5px] text-foreground">{row.job_no}</TableCell>
-                                <TableCell className="text-[11.5px] text-foreground">{row.act_code ? `${row.act_code} - ${row.activity}` : row.activity}</TableCell>
-                                <TableCell className="text-right text-[11.5px] text-foreground">{row.quantity}</TableCell>
-                                <TableCell className="text-right text-[11.5px] text-foreground">{row.bill_rate.toFixed(2)}</TableCell>
-                                <TableCell className="text-right text-[11.5px] text-foreground">{row.cost_rate.toFixed(2)}</TableCell>
-                                <TableCell className="text-right text-[11.5px] font-semibold text-foreground">{row.bill.toFixed(2)}</TableCell>
-                                <TableCell className="text-[11.5px] text-foreground">{row.job_date ? formatDate(row.job_date) : ""}</TableCell>
-                              </TableRow>
+<TableRow key={key} className={isSelected ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-accent"} onClick={() => toggleJobRow(key)}>
+  <TableCell onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={() => toggleJobRow(key)} disabled={viewMode} /></TableCell>
+  <TableCell className="text-[11.5px] text-foreground">{row.job_no}</TableCell>
+  <TableCell className="text-[11.5px] text-foreground">{row.act_code ? `${row.act_code} - ${row.activity}` : row.activity}</TableCell>
+  <TableCell className="text-right text-[11.5px] text-foreground">{row.quantity}</TableCell>
+  <TableCell className="text-right text-[11.5px] text-foreground">{row.bill_rate.toFixed(2)}</TableCell>
+  
+  {/* NEW CELL */}
+<TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+  {isForeign && !viewMode ? (
+    <input
+      type="number"
+      step="0.01"
+      className="h-6 w-24 rounded border border-input bg-background px-1 text-right text-[11.5px] text-blue-600"
+      value={fcRates[key] ?? row.FC_BILL_RATE.toFixed(2)}
+      onChange={(e) => setFcRates((p) => ({ ...p, [key]: e.target.value }))}
+    />
+  ) : (
+    <span className="text-[11.5px] font-medium text-blue-600">{row.FC_BILL_RATE.toFixed(2)}</span>
+  )}
+</TableCell>
+  
+  <TableCell className="text-right text-[11.5px] text-foreground">{row.cost_rate.toFixed(2)}</TableCell>
+  <TableCell className="text-right text-[11.5px] font-semibold text-foreground">{row.bill.toFixed(2)}</TableCell>
+  
+  {/* NEW CELL */}
+  <TableCell className="text-right text-[11.5px] font-semibold text-blue-600">
+    {row.FC_BILL ? row.FC_BILL.toFixed(2) : "0.00"}
+  </TableCell>
+  
+  <TableCell className="text-[11.5px] text-foreground">{row.job_date ? formatDate(row.job_date) : ""}</TableCell>
+</TableRow>
                             );
                           })
                         )}
@@ -680,7 +817,30 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
           <Total label="Grand total" value={billingTotals.grandTotal} suffix={currCode} emphasize />
         </div>
       </footer>
+            {/* Print Options Modal */}
+      {printModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-md bg-background p-4 shadow-lg border">
+            <h3 className="text-lg font-semibold mb-2">Select Report Format</h3>
+            <p className="text-sm text-muted-foreground mb-4">Choose the format for the activity-wise invoice report.</p>
+            <div className="flex flex-col gap-2">
+              <Button type="button" variant="default" onClick={handleExistingActivityWisePrint} className="justify-start">
+                <Sheet size={14} className="mr-2" /> Existing Activity-wise
+              </Button>
+              <Button type="button" variant="default" onClick={handleStandardPrint} className="justify-start">
+                <FileText size={14} className="mr-2" /> Standard (Base Currency)
+              </Button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="ghost" onClick={() => setPrintModalOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
+    
   );
 }
 

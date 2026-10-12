@@ -98,7 +98,7 @@ export function SalesDNHeaderForm({
        <div className="flex flex-col gap-2">
 
           <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
-                <div className="col-span-2">
+                <div className="col-span-3">
                     <LookupField
                         label="A/c code *"
                         value={form.ac_code}
@@ -119,7 +119,7 @@ export function SalesDNHeaderForm({
                     />
                 </div>
 
-                <div>
+                <div className="col-span-3">
                     <label>SO No</label>
                     <LookupField
                         label="SO No"
@@ -252,23 +252,7 @@ export function SalesDNHeaderForm({
                 <CField label="DN Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
- <div className="col-span-2">
-                    <LookupField
-                        label="Division *"
-                        value={form.div_code}
-                        displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                        columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                        valueField="div_code"
-                        displayFields={["div_code", "div_name"]}
-                        loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: companyCode, loginid: loginIdOrAdmin })}
-                        disabled={headerAndLineDisabled}
-                        onChange={(value, row) => setForm((current) => ({
-                            ...current,
-                            div_code: value,
-                            div_name: text(getLookupValue(row || {}, "div_name")),
-                        }))}
-                    />
-                </div>
+
 
                 {/* <div className="col-span-2">
                     <LookupField
@@ -307,7 +291,7 @@ export function SalesDNHeaderForm({
                     <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
-                <CField label="Delivery Term" className="col-span-1">
+                <CField label="Delivery Term" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
                 </CField>
                 </HeaderBlock>
