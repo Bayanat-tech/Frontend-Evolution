@@ -27,6 +27,7 @@ type LookupFieldProps = {
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
   renderRowActions?: (row: LookupRow) => ReactNode;
+  popoverWidth?: number;
   className?: string;
 };
 
@@ -49,6 +50,7 @@ export function LookupField({
   enforceRequired,
   multiSelect,
   renderRowActions,
+  popoverWidth,
   className,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
@@ -82,10 +84,12 @@ export function LookupField({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    const minIdealWidth = 540;
+    const autoMinWidth = columns.length <= 2 ? 300 : 540;
+    const minIdealWidth = popoverWidth ?? autoMinWidth;
+    const maxAllowedWidth = popoverWidth ?? 780;
     const width = Math.min(
       Math.max(rect.width, minIdealWidth),
-      Math.min(780, viewportWidth - 24),
+      Math.min(maxAllowedWidth, viewportWidth - 24),
     );
 
     // Leave a comfortable 28px margin from top and bottom screen edges (taskbar safety)
