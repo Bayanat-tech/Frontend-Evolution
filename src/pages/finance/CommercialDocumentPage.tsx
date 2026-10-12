@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt, List, Truck, Coins } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
 import { api } from "../../api/client";
 import {
@@ -151,8 +151,6 @@ const HEADER_LIMITS: Partial<Record<keyof FormState, { max: number; label: strin
   ref_no:        { max: 30,  label: "Ref No" },
   remarks:       { max: 250, label: "Remarks" },
   party_address: { max: 250, label: "Address" },
-  party_phone:   { max: 30,  label: "Party Phone" },
-  party_fax:      { max: 30,  label: "Party Fax" },
   payment_terms: { max: 250, label: "Payment Terms" },
   dlvr_contact:  { max: 70,  label: "Contact" },
   dlvr_mobile:   { max: 20,  label: "Mobile" },
@@ -708,8 +706,8 @@ function CommercialEditor({
             div_code: current.div_code || defaultDiv,
             div_name: current.div_name || (editor.mode === "create" && editor.div?.div_name ? editor.div.div_name : text(defaults.Division?.div_name ?? "")),
             party_address: getVal("address") || current.party_address,
-            party_phone: getVal("phone") || current.party_phone,
-            party_fax: getVal("fax") || current.party_fax,
+            party_phone: (getVal("phone") || current.party_phone || "").slice(0, 30),
+            party_fax: (getVal("fax") || current.party_fax || "").slice(0, 30),
             dlvr_contact: getVal("contact_person") || current.dlvr_contact,
             dlvr_mobile: getVal("mobile_no") || current.dlvr_mobile,
             dlvr_email: getVal("e_mail") || current.dlvr_email,
@@ -1177,8 +1175,8 @@ const limitProps = (f: keyof FormState) => ({
                               curr_code:     get("curr_code"),
                               ex_rate:       newExRate,
                               party_address: get("address"),
-                              party_phone:   get("phone"),
-                              party_fax:     get("fax"),
+                              party_phone:   (get("phone") || "").slice(0, 30),
+                              party_fax:     (get("fax") || "").slice(0, 30),
                               dlvr_contact:  get("contact_person"),
                               dlvr_mobile:   get("mobile_no"),
                               dlvr_email:    get("e_mail"),
@@ -1228,66 +1226,6 @@ const limitProps = (f: keyof FormState) => ({
                     <CField label="Payment Terms" className="col-span-1" error={limitErr("payment_terms")}>
                       <Input {...limitProps("payment_terms")} className="h-7 text-xs" disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
                     </CField>
-
-                    {isSales && (
-                      <div className="col-span-1">
-                        <LookupField
-                          label="Salesman"
-                          disabled={isCancelled}
-                          value={form.salesman_code ?? ""}
-                          displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
-                          columns={[
-                            { field: "salesman_code", header: "Code" },
-                            { field: "salesman_name", header: "Name" },
-                          ]}
-                          valueField="salesman_code"
-                          displayFields={["salesman_code", "salesman_name"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Salesman_Search",
-                              code1: user?.company_code || "",
-                            })
-                          }
-                          onChange={(value, row) =>
-                            setForm((c) => ({
-                              ...c,
-                              salesman_code: value,
-                              salesman_name: text(getLookupValue(row || {}, "salesman_name")),
-                            }))
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {isSales && (
-                      <div className="col-span-1">
-                        <LookupField
-                          label="Sector"
-                          disabled={isCancelled}
-                          value={form.sector_code ?? ""}
-                          displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
-                          columns={[
-                            { field: "sector_code", header: "Code" },
-                            { field: "sector_name", header: "Name" },
-                          ]}
-                          valueField="sector_code"
-                          displayFields={["sector_code", "sector_name"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Sector_Search",
-                              code1: user?.company_code || "",
-                            })
-                          }
-                          onChange={(value, row) =>
-                            setForm((c) => ({
-                              ...c,
-                              sector_code: value,
-                              sector_name: text(getLookupValue(row || {}, "sector_name")),
-                            }))
-                          }
-                        />
-                      </div>
-                    )}
                   </HeaderBlock>
                 </div>
 
@@ -1513,7 +1451,7 @@ const limitProps = (f: keyof FormState) => ({
                   )}
 
                   {/* Card 3: Tax Details */}
-                  <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow>
+                  <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow={!isSales}>
                     <CField label="Tax Type">
                       <Select
                         className="h-7 text-xs"
@@ -1599,6 +1537,67 @@ const limitProps = (f: keyof FormState) => ({
                       />
                     </div>
                   </HeaderBlock>
+
+                  {/* Card 4: Sales Details (Sales & Service only) */}
+                  {isSales && (
+                    <HeaderBlock label="Sales Details" icon={<UserCheck size={11} />} gridCols="grid-cols-2" grow>
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Salesman"
+                          disabled={isCancelled}
+                          value={form.salesman_code ?? ""}
+                          displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
+                          columns={[
+                            { field: "salesman_code", header: "Code" },
+                            { field: "salesman_name", header: "Name" },
+                          ]}
+                          valueField="salesman_code"
+                          displayFields={["salesman_code", "salesman_name"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Salesman_Search",
+                              code1: user?.company_code || "",
+                            })
+                          }
+                          onChange={(value, row) =>
+                            setForm((c) => ({
+                              ...c,
+                              salesman_code: value,
+                              salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Sector"
+                          disabled={isCancelled}
+                          value={form.sector_code ?? ""}
+                          displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
+                          columns={[
+                            { field: "sector_code", header: "Code" },
+                            { field: "sector_name", header: "Name" },
+                          ]}
+                          valueField="sector_code"
+                          displayFields={["sector_code", "sector_name"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Sector_Search",
+                              code1: user?.company_code || "",
+                            })
+                          }
+                          onChange={(value, row) =>
+                            setForm((c) => ({
+                              ...c,
+                              sector_code: value,
+                              sector_name: text(getLookupValue(row || {}, "sector_name")),
+                            }))
+                          }
+                        />
+                      </div>
+                    </HeaderBlock>
+                  )}
                 </div>
               </div>
             </div>
@@ -2055,8 +2054,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     delivery_to: text(header.delivery_to),
     dlvr_term: text(header.dlvr_term?? header.delivery_term),
     party_address: text(header.party_address ?? header.address),
-    party_phone:   text(header.party_phone ?? header.phone),
-    party_fax:     text(header.party_fax ?? header.fax),
+    party_phone:   text(header.party_phone ?? header.phone).slice(0, 30),
+    party_fax:     text(header.party_fax ?? header.fax).slice(0, 30),
     dlvr_contact:       text(header.dlvr_contact ?? header.contact_person),
     dlvr_mobile:        text(header.dlvr_mobile ?? header.mobile_no),
     dlvr_email:         text(header.dlvr_email ?? header.e_mail),
