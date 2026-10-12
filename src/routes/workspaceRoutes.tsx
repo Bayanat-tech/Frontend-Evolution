@@ -218,6 +218,7 @@ import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseRet
 import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 
 
 type WorkspaceRouteContext = {
@@ -1482,6 +1483,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <JobProductionOrderPage />,
   },
 
+     {
+    name: "Employee Assessment Report",
+    match: ({ pathname }) => isEmployeeAssessmentReportRoute(pathname),
+    element: () => <EmployeeAssessmentReportPage />
+  },
+  
   {
     name: "Product BOM",
     match: ({ pathname }) => isProductBomRoute(pathname),
@@ -1509,6 +1516,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+function isEmployeeAssessmentReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee assessment report") ||
+    compact.includes("reportsemployeeemployeeassessmentreport") ||
+    compact.includes("reportsemployeeemployeeassessment")
+  );
 }
 
 function isHrEmpLanguageSkillRoute(pathname: string) {
