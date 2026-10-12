@@ -1674,10 +1674,10 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Product Code</th>}
-                      <th className="w-[320px] min-w-[280px] px-2 py-2 text-left">Description</th>
+                      <th className="w-[380px] min-w-[300px] px-2 py-2 text-left">Description</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Cost Code</th>}
-                      <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty</th>
-                      {isPO && <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty Rcv</th>}
+                      <th className="w-18 min-w-[55px] px-2 py-2 text-right">Qty</th>
+                      {/* {isPO && <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty Rcv</th>} */}
                       <th className="w-24 min-w-[95px] px-2 py-2 text-right">Rate</th>
                       <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Amount</th>
                       {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
@@ -1685,13 +1685,13 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="w-[60px] min-w-[60px] px-2 py-2 text-center">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="w-[100px] min-w-[100px] px-2 py-2 text-left">Tax Type</th>}
-                      <th className="w-16 min-w-[65px] px-2 py-2 text-right">Tax %</th>
+                      <th className="w-16 min-w-[55px] px-2 py-2 text-right">Tax %</th>
                       <th className="finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="w-28 min-w-[110px] px-2 py-2 text-left">Job</th>
                       {isPO && <th className="w-28 min-w-[110px] px-2 py-2 text-left">Dept.</th>}
-                      {isPO && <th className="w-56 min-w-[200px] px-2 py-2 text-left">Remarks</th>}
+                      {isPO && <th className="w-56 min-w-[300px] px-2 py-2 text-left">Remarks</th>}
                       <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
@@ -1751,7 +1751,7 @@ const limitProps = (f: keyof FormState) => ({
     
   </td>
 )}
-                        <td className="w-[320px] min-w-[280px] px-1 py-1">
+                        <td className="w-[380px] min-w-[300px] px-1 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
@@ -1765,8 +1765,8 @@ const limitProps = (f: keyof FormState) => ({
                         {isPO && (<td className="w-32 min-w-[110px] px-1 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
                         </td>
                         )}
-                        <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
+                        <td className="w-18 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        {/* {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.001" placeholder="0.000" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
                         <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
@@ -1806,7 +1806,7 @@ const limitProps = (f: keyof FormState) => ({
 </Select>
                         </td>
                       )}
-                        <td className="w-16 min-w-[65px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
+                        <td className="w-16 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
@@ -2122,9 +2122,14 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
   };
 }
 
+// function buildCommercialPayload(form: FormState, companyCode: string) {
+//   return {
+//     ...form,
+//     company_code: companyCode,
 function buildCommercialPayload(form: FormState, companyCode: string) {
+  const { tx_compntcat_name_1, ...formForSave } = form;
   return {
-    ...form,
+    ...formForSave,
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
     // ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
