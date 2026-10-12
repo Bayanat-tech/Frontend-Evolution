@@ -126,6 +126,7 @@ export function PamsBulkAppraisalPage() {
 
     setLoading(true);
     try {
+      // 1. Populate / clone from prev period if employee has zero rows
       await pamsSelect({
         parameter: "populate_dept_kpi",
         loginid,
@@ -135,6 +136,17 @@ export function PamsBulkAppraisalPage() {
         code4: selectedPeriod,
       });
 
+      // 2. Sync newly added master KPIs for this employee's designation
+      await pamsSelect({
+        parameter: "populate_new_dept_kpi",
+        loginid,
+        code1: companyCode,
+        code2: selectedEmployee,
+        code3: selectedType,
+        code4: selectedPeriod,
+      });
+
+      // 3. Load final rows
       const data = await pamsSelect({
         parameter: "kpi_assignment_page",
         loginid,
@@ -159,8 +171,8 @@ export function PamsBulkAppraisalPage() {
   useEffect(() => {
     if (selectedEmployee && selectedType && selectedPeriod) void loadAssignments();
     else setRows([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedType, selectedPeriod]);
-
 
   useEffect(() => {
     setHasSameDesgEmployees(false);
@@ -199,19 +211,22 @@ export function PamsBulkAppraisalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedPeriod, companyCode, loginid]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // PROCESS (single employee)
+  // ═══════════════════════════════════════════════════════════════
   const process = async () => {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
     if (!selectedEmployee) { toast.warning("Select an employee first"); return; }
+
+    if (isKpiType && totalWeightage !== 100) {
+      toast.error(
+        `Total weightage is ${totalWeightage}%. It must be exactly 100% to process.`
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      await pamsCommonProcedure({
-        parameter: "PROC_CLONE_DEPT_KPI_FROM_PREV_PERIOD",
-        loginid,
-        val1s1: companyCode,
-        val1s2: selectedEmployee,
-        val1s3: selectedPeriod,
-      });
-
       await pamsCommonProcedure({
         parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
         loginid,
@@ -252,6 +267,9 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // PROCESS ALL (by designation)
+  // ═══════════════════════════════════════════════════════════════
   const openProcessAllPreview = async () => {
     if (!selectedPeriod) {
       toast.warning("Select a period first");
@@ -259,6 +277,13 @@ export function PamsBulkAppraisalPage() {
     }
     if (!selectedEmployee) {
       toast.warning("Select a source employee first (whose KPI will be copied)");
+      return;
+    }
+
+    if (isKpiType && totalWeightage !== 100) {
+      toast.error(
+        `Total weightage is ${totalWeightage}%. It must be exactly 100% to process all.`
+      );
       return;
     }
 
@@ -296,29 +321,97 @@ export function PamsBulkAppraisalPage() {
     const failed: string[] = [];
 
     try {
+      // ══════════════════════════════════════════════════════════
+      // STEP 0: Source ke paas data hai ya nahi — verify karo
+      // ══════════════════════════════════════════════════════════
+      const sourceRows = await pamsSelect({
+        parameter: "kpi_assignment_page",
+        loginid,
+        code1: companyCode,
+        code2: selectedType,
+        code3: selectedEmployee,
+        code4: selectedPeriod,
+      });
+
+      if (!sourceRows || sourceRows.length === 0) {
+        toast.error(
+          `Source (${selectedEmployee}) ke paas is period ke liye koi KPI nahi hai. Pehle usse KPI assign karo.`
+        );
+        setSaving(false);
+        return;
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // STEP 1: PEHLE SAARE TARGETS KO COPY KARO
+      //         (Ye critical hai — docs create karne se PEHLE)
+      // ══════════════════════════════════════════════════════════
+      const copiedTargets: string[] = [];
+
       for (const target of processAllTargets) {
         const targetEmp = text(target.EMPLOYEE_CODE);
         if (!targetEmp) continue;
 
         try {
-          // 1. Copy KPI rows source → target
           const copyResult = await pamsSelect({
             parameter: "copy_kpi_to_employee",
             loginid,
             code1: companyCode,
-            code2: selectedEmployee,
-            code3: targetEmp,
+            code2: selectedEmployee,  // Source
+            code3: targetEmp,          // Target
             code4: selectedPeriod,
           });
 
           const copyMsg = String(
             (copyResult?.[0] as Record<string, unknown>)?.RESULT ?? ""
           );
+
           if (copyMsg.toUpperCase().startsWith("ERROR")) {
             throw new Error(copyMsg.replace(/^ERROR:\s*/i, ""));
           }
 
-          // 2. Create appraisal doc for target
+    
+          const verify = await pamsSelect({
+            parameter: "kpi_assignment_page",
+            loginid,
+            code1: companyCode,
+            code2: selectedType,
+            code3: targetEmp,
+            code4: selectedPeriod,
+          });
+
+          if (!verify || verify.length === 0) {
+            throw new Error("Copy succeeded but no rows found for target");
+          }
+
+          copiedTargets.push(targetEmp);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          failed.push(`${text(target.RPT_NAME) || targetEmp}: ${msg}`);
+        }
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // STEP 2: AB DOCS CREATE KARO — Source + Copied Targets
+      // ══════════════════════════════════════════════════════════
+
+      // 2a. Source ka doc
+      try {
+        await pamsCommonProcedure({
+          parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
+          loginid,
+          val1s1: companyCode,
+          val1s2: selectedPeriod,
+          val1s3: selectedEmployee,
+        });
+        okCount++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        failed.push(`Source (${selectedEmployee}): ${msg}`);
+      }
+
+      // 2b. Copied targets ke docs
+      for (const targetEmp of copiedTargets) {
+        try {
           await pamsCommonProcedure({
             parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
             loginid,
@@ -326,15 +419,19 @@ export function PamsBulkAppraisalPage() {
             val1s2: selectedPeriod,
             val1s3: targetEmp,
           });
-
           okCount++;
         } catch (err) {
+          const target = processAllTargets.find(
+            (t) => text(t.EMPLOYEE_CODE) === targetEmp
+          );
           const msg = err instanceof Error ? err.message : "Unknown error";
-          failed.push(`${text(target.RPT_NAME) || targetEmp}: ${msg}`);
+          failed.push(`${text(target?.RPT_NAME) || targetEmp}: ${msg}`);
         }
       }
 
-      // Refresh processed employees list
+      // ══════════════════════════════════════════════════════════
+      // Refresh processed list
+      // ══════════════════════════════════════════════════════════
       try {
         const hdrData = await pamsSelect({
           parameter: "appraisal_hdr_employees",
@@ -343,22 +440,18 @@ export function PamsBulkAppraisalPage() {
           code2: selectedPeriod,
         });
         const codes = new Set(
-          hdrData
-            .map((d) => text(d.EMPLOYEE_CODE || d.employee_code))
-            .filter(Boolean)
+          hdrData.map((d) => text(d.EMPLOYEE_CODE || d.employee_code)).filter(Boolean)
         );
         setProcessedEmployees(codes);
       } catch { /* silent */ }
 
-      // Show result
+      // Result toast
       if (failed.length === 0) {
         toast.success(
           `Successfully processed ${okCount} employee(s) for period ${selectedPeriod}.`
         );
       } else if (okCount === 0) {
-        toast.error(
-          `All ${failed.length} employee(s) failed. ` + failed.slice(0, 3).join(" | ")
-        );
+        toast.error(`All failed. ` + failed.slice(0, 3).join(" | "));
       } else {
         toast.warning(
           `${okCount} processed, ${failed.length} failed. ` + failed.slice(0, 3).join(" | ")
@@ -379,16 +472,12 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
-  // Add KPI button
+  // ═══════════════════════════════════════════════════════════════
+  // ADD / EDIT / DELETE KPI
+  // ═══════════════════════════════════════════════════════════════
   const openAddKpi = () => {
     if (!selectedEmployee) {
       toast.warning("Select an employee first");
-      return;
-    }
-    if (isKpiType && totalWeightage >= 100) {
-      toast.error(
-        `Total weightage is already ${totalWeightage}%. Maximum 100% allowed. Cannot add more KPI.`
-      );
       return;
     }
     setKpiEditorTarget(null);
@@ -420,9 +509,13 @@ export function PamsBulkAppraisalPage() {
         code6: selectedType,
         code7: selectedPeriod,
       });
+
       setDeleteTarget(null);
       toast.success(`${typeLabel} removed from this period`);
-      await loadAssignments();
+
+      setRows((prevRows) =>
+        prevRows.filter((row) => text(row.KPI_CODE) !== kpiCode)
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Delete failed");
     }
@@ -1048,7 +1141,6 @@ export function PamsBulkAppraisalPage() {
   );
 }
 
-
 // ═══════════════════════════════════════════════════════════════════
 // KPI EDITOR MODAL
 // ═══════════════════════════════════════════════════════════════════
@@ -1221,20 +1313,6 @@ function KpiEditorModal({
     if (needsWeightage) {
       if (weightage <= 0) {
         toast.warning("Weightage must be greater than 0");
-        return;
-      }
-
-      const originalWeightage = isEdit
-        ? number(existingRow?.WEIGHTAGE || existingRow?.STANDARD_WEIGHTAGE)
-        : 0;
-
-      const projectedTotal = totalWeightage - originalWeightage + weightage;
-
-      if (projectedTotal > 100) {
-        toast.error(
-          `Total weightage would become ${projectedTotal}%. Maximum 100% allowed. ` +
-          `Available: ${100 - (totalWeightage - originalWeightage)}%.`
-        );
         return;
       }
     }
