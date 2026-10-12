@@ -1127,7 +1127,7 @@ const limitProps = (f: keyof FormState) => ({
         ) : (
           <div className="commercial-header-shell flex flex-col gap-1.5">
             <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
-              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.0fr)_minmax(0,1.4fr)] gap-1.5 p-1.5 items-stretch">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.95fr)] gap-1.5 p-1.5 items-stretch">
                 {/* ══ COLUMN 1: Supplier Details / Customer Details ══ */}
                 <div className="flex flex-col gap-1.5">
                   <HeaderBlock label={isSales ? "Customer Details" : "Supplier Details"} icon={isSales ? <User size={11} /> : <Building2 size={11} />} gridCols="grid-cols-2" grow>
@@ -1660,26 +1660,26 @@ const limitProps = (f: keyof FormState) => ({
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
-                      {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
-                      <th className="px-2 py-2 text-left">Description</th>
-                      {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
-                      <th className="px-2 py-2 text-left">Qty</th>
-                      {isPO && <th className="px-2 py-2 text-left">Qty Rcv</th>}
-                      <th className="px-2 py-2 text-left">Rate</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
+                      {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Product Code</th>}
+                      <th className="min-w-[220px] px-2 py-2 text-left">Description</th>
+                      {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Cost Code</th>}
+                      <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty</th>
+                      {isPO && <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty Rcv</th>}
+                      <th className="w-24 min-w-[95px] px-2 py-2 text-right">Rate</th>
+                      <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Amount</th>
                       {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
                       {/* <th className="px-2 py-2 text-left">Cr/Dr</th> */}
-                      <th className="w-[60px] min-w-[60px] px-2 py-2 text-left">Cr/Dr</th>
+                      <th className="w-[60px] min-w-[60px] px-2 py-2 text-center">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="w-[100px] min-w-[100px] px-2 py-2 text-left">Tax Type</th>}
-                      <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
+                      <th className="w-16 min-w-[65px] px-2 py-2 text-right">Tax %</th>
+                      <th className="finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="px-2 py-2 text-left">Job</th>
                       {isPO && <th className="px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="px-2 py-2 text-left">Remarks</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
                     </tr>
@@ -1738,7 +1738,7 @@ const limitProps = (f: keyof FormState) => ({
     
   </td>
 )}
-                        <td className="w-[200px] max-w-[240px] px-1 py-1">
+                        <td className="min-w-[220px] w-[260px] px-1 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
@@ -1749,13 +1749,13 @@ const limitProps = (f: keyof FormState) => ({
                             placeholder="Description"
                           />
                         </td>
-                        {isPO && (<td className="w-36 px-2 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
+                        {isPO && (<td className="w-32 min-w-[110px] px-1 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
                         </td>
                         )}
-                        <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        {isPO && <td className="w-16 max-w-[70px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
-                        <td className="w-20 max-w-[85px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell w-24 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px]" type="number" step="0.001" min="0.001" required
+                        <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
+                        <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.001" placeholder="0.000" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
+                        <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
                             onInput={(e) => e.currentTarget.setCustomValidity("")}
                             value={line.amount}
@@ -1765,8 +1765,8 @@ const limitProps = (f: keyof FormState) => ({
                             updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
                           }} /></td>
                         {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
-                        <td className="w-14 max-w-[62px] px-1 py-1">
-                          <Select disabled={isCancelled} className="h-7 text-xs" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
+                        <td className="w-[60px] min-w-[60px] px-1 py-1">
+                          <Select disabled={isCancelled} className="h-7 text-xs text-center" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
                             <option value={1}>Dr</option>
                           </Select>
@@ -1793,15 +1793,13 @@ const limitProps = (f: keyof FormState) => ({
 </Select>
                         </td>
                       )}
-                        <td className="w-14 max-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
-                        // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
+                        <td className="w-16 min-w-[65px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px]" type="number" 
-                        // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" 
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">

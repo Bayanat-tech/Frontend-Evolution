@@ -1634,3 +1634,29 @@ form.commercial-document-workbench {
   overflow-y: auto !important;
   overflow-x: hidden !important;
 }
+
+/* Financial line item inputs: soft emerald light green matching footer total */
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-amount-input,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-tax-amt-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-amount-input,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-amt-input,
+.finance-lines-table td input.commercial-amount-input,
+.finance-lines-table td input.commercial-tax-amt-input {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1.5px solid #86efac !important;
+  font-weight: 700 !important;
+  text-align: right !important;
+}
+
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-amount-input:focus,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table td input.commercial-tax-amt-input:focus,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-amount-input:focus,
+.commercial-document-workbench .commercial-lines-table-separated .commercial-tax-amt-input:focus,
+.finance-lines-table td input.commercial-amount-input:focus,
+.finance-lines-table td input.commercial-tax-amt-input:focus {
+  background-color: #f0fdf4 !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25) !important;
+}
+
