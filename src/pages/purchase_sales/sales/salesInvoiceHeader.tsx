@@ -584,7 +584,7 @@ export function SalesInvoiceHeaderForm({
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
                             <CField label="Tax Type">
-                                <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                                <Select className="h-7 text-xs"  disabled={headerAndLineDisabled} value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
                                     setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
                                 }}>
@@ -614,7 +614,7 @@ export function SalesInvoiceHeaderForm({
                                         loginid: loginIdOrAdmin
                                     })
                                 }
-                                disabled={disabled}
+                               disabled={headerAndLineDisabled}
                                 onChange={(value, row) =>
                                     setForm((current) => ({
                                         ...current,

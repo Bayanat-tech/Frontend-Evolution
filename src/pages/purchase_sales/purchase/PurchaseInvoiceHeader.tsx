@@ -330,9 +330,12 @@ export function PurchaseInvoiceHeaderForm({
                                             inv_no: text(getLookupValue(row || {}, "inv_no")),
                                             inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                             pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
+                                            po_tx_compnt_1_expmt: text(getLookupValue(row || {}, "po_tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
+                                            tx_compnt_perc_1: getLookupValue(row || {}, "tx_compnt_perc_1") == null
+                                                ? current.tx_compnt_perc_1
+                                                : numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
                                             tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
                                             tx_compntcat_name_1: text(getLookupValue(row || {}, "tx_compntcat_name_1")),
-                                            tx_compnt_perc_1: numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
                                             discount_scoope:
                                                 text(getLookupValue(row || {}, "discount_scoope")) === "PO"
                                                     ? "PO"
@@ -592,10 +595,14 @@ export function PurchaseInvoiceHeaderForm({
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                            <CField label="Tax Type">
-                                <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                            <CField label="Tax Type"  >
+                                <Select className="h-7 text-xs"   disabled={headerAndLineDisabled}  value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                                    setForm((current) => ({
+                                        ...current,
+                                        tx_compnt_1_expmt: taxType,
+                                        tx_compnt_perc_1: taxType === "S" ? 5 : 0,
+                                    }));
                                 }}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
                                 </Select>
