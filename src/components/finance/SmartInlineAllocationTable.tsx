@@ -95,6 +95,7 @@ export function SmartInlineAllocationTable({
       ? [
           { key: "sr", header: "#", width: 28, align: "center" },
           { key: "inv_no", header: "Invoice No", width: 120, align: "left" },
+          { key: "ref_no", header: "Ref No", width: 110, align: "left" },
           { key: "inv_date", header: "Invoice Date", width: 118, align: "left" },
           { key: "inv_amt", header: "Invoice Amount", width: 110, align: "right" },
           { key: "outstanding", header: "Outstanding", width: 110, align: "right" },
@@ -352,6 +353,17 @@ export function SmartInlineAllocationTable({
                               onInvNoBlur?.(row.id, (e.target as HTMLInputElement).value, detail.id);
                             }
                           }}
+                        />
+                      </td>
+
+                      {/* Ref No */}
+                      <td className="px-1 py-0.5">
+                        <input
+                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 font-mono text-xs text-slate-700 focus:border-[#00378C] focus:outline-none transition-colors"
+                          disabled={disabled}
+                          placeholder="Ref No"
+                          value={text(row.ref_no)}
+                          onChange={(e) => onChange(row.id, { ref_no: e.target.value })}
                         />
                       </td>
 

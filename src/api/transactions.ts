@@ -116,6 +116,7 @@ export type TransactionChildRow = Record<string, unknown> & {
   isEditMode?: boolean;
   IsDeletable?: boolean;
   inv_no?: string;
+  ref_no?: string;
   inv_date?: string;
   inv_amt?: number | null;
   c_bal_amt_org?: number | null;
