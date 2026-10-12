@@ -319,7 +319,7 @@ export function SmartInlineAllocationTable({
               const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
               const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
               const isExpTypeMissing = isRowInvalid && (missingList.includes("exp_type_code") || missingList.includes("Expense Type") || !text(row.exp_type_code).trim());
-              const isAmtMissing = isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || Number(row.amount || 0) <= 0);
+              const isAmtMissing = isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || missingList.includes("Valid Allocated Amount") || (childTable !== "invoice" && Number(row.amount || 0) <= 0));
 
               return (
                 <tr
