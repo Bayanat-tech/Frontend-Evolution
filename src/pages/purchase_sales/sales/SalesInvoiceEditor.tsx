@@ -99,19 +99,55 @@ export function SalesInvoiceEditor({
   // Print
   // const [reportOpen, setReportOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
-  useEffect(() => {
+  // useEffect(() => {
+  //   const taxPerc =
+  //     form.tx_compnt_1_expmt === "S" ? 5 : 0;
+
+  //   setRows((current) =>
+  //     current.map((row) => {
+  //       const updatedRow = {
+  //         ...row,
+
+  //         tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+  //         tx_cat_code: `${form.tx_cat_code || ""}`,
+  //         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+  //         tx_compnt_perc_1: taxPerc,
+  //       };
+
+  //       return updatedRow;
+  //     })
+  //   );
+
+
+  // }, [
+  //   form.tx_compntcat_code_1,
+  //   form.tx_cat_code,
+  //   form.tx_compnt_1_expmt,
+  //   form.tx_compnt_perc_1
+
+  // ]);
+
+
+    useEffect(() => {
     const taxPerc =
       form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
@@ -126,7 +162,6 @@ export function SalesInvoiceEditor({
     form.tx_compnt_perc_1
 
   ]);
-
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);

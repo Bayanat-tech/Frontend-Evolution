@@ -115,22 +115,27 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
-  useEffect(() => {
+   useEffect(() => {
     const taxPerc =
       form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
-
-        // Only calculate discount when button is clicked
 
         return updatedRow;
       })
