@@ -1692,7 +1692,7 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="w-28 min-w-[110px] px-2 py-2 text-left">Job</th>
                       {isPO && <th className="w-28 min-w-[110px] px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="w-56 min-w-[200px] px-2 py-2 text-left">Remarks</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>
+                      <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
                     </tr>
@@ -1864,7 +1864,7 @@ const limitProps = (f: keyof FormState) => ({
                         {isPO && (
                          <td className="w-56 min-w-[200px] px-1 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
                         )}
-                        <td className="finance-amount-cell w-24 px-1 py-1">
+                        <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1">
                           <Input
                             className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]"
                             disabled

@@ -1842,7 +1842,7 @@ if (tooLong.length) {
                       <th className="px-2 py-2 text-left text-white">Tax %</th>
                       <th className="finance-amount-cell px-2 py-2 text-right text-white w-24 min-w-[100px]">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white w-28 min-w-[110px]">Job No</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white w-32 min-w-[110px]">Base Amount</th>}
                       <th className="px-2 py-2 text-center text-white w-14">Action</th>
                     </tr>
                   </thead>
@@ -1956,7 +1956,7 @@ if (tooLong.length) {
                                 type="number"
                                 style={{ textAlign: "right" }}
                                 step="0.001"
-                                className={`commercial-number-input commercial-amount-input finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
@@ -2055,12 +2055,12 @@ if (tooLong.length) {
                             </td>
                           )}
                           <td className="w-24 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                           {showAllColumns && (
                             <td className="w-28 min-w-[110px] px-2 py-1"><Input className="w-28 min-w-[110px]" disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                           )}
                           {showAllColumns && (
-                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
+                            <td className="finance-amount-cell w-32 min-w-[110px] px-2 py-1"><Input className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                           )}
                           <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                         </tr>
