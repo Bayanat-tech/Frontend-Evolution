@@ -1,4 +1,4 @@
-import { CloudUpload, Edit2, FileText, Plus, Save, Trash2, X } from "lucide-react";
+import { CloudUpload, Edit2, FileText, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "../../components/ui/Button";
@@ -180,6 +180,7 @@ export function MasterPage({ config }: { config: MasterPageConfig }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [notice, setNotice] = useState<Notice>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -213,6 +214,19 @@ export function MasterPage({ config }: { config: MasterPageConfig }) {
       setLoading(false);
     }
   };
+
+
+   const resetForm = () => {
+    if (editMode && original) {
+   
+      setForm({ ...makeEmpty(), ...original, active: original.active ?? original.is_active ?? "" });
+    } else {
+     
+      setForm(makeEmpty());
+    }
+    setError("");
+  };
+
 
   useEffect(() => {
     void loadRows();
@@ -371,7 +385,20 @@ export function MasterPage({ config }: { config: MasterPageConfig }) {
         {formOpen && (
           <div className="flex items-center gap-1.5">
             {/* With steps, Save lives on the last step next to Back / Next. */}
+            <Button
+      type="button"
+      variant="outline"
+      onClick={resetForm}
+      disabled={saving}
+      title="Reset form"
+      className="h-7 gap-1 px-3 text-xs font-semibold rounded-md"
+    >
+      <RotateCcw size={13} /> Reset
+    </Button>
+              
             {!hasTabs && (
+
+              
               <Button
                 type="submit"
                 form={formId}

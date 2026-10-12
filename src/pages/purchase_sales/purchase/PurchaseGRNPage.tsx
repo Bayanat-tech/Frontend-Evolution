@@ -19,6 +19,7 @@ import { PurchaseGRNEditor } from "./PurchaseGRNeditor";
 import { NewReportDialog } from "../../../components/new_report_format";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { formatDate } from "../../../utils/date";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -550,9 +551,3 @@ useEffect(() => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

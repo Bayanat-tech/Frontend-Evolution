@@ -254,6 +254,21 @@ export function DocumentSetupPage() {
     { accessorKey: "default_sign", header: "Sign", size: 80 },
     { accessorKey: "default_h_ac", header: "Default H A/C", size: 150 },
     { accessorKey: "default_d_ac", header: "Default D A/C", size: 150 },
+    {
+      accessorKey: "curr_code",
+      header: "Default Currency",
+      size: 130,
+      cell: ({ row }) => {
+        const code = row.original.curr_code;
+        const name = row.original.curr_name;
+        if (!code) return <span className="text-muted-foreground">-</span>;
+        return (
+          <span title={name ? `${code} - ${name}` : code} className="font-medium">
+            {code} {name ? <span className="text-xs font-normal text-muted-foreground">({name})</span> : null}
+          </span>
+        );
+      },
+    },
   ], []);
 
   return (
@@ -326,7 +341,7 @@ export function DocumentSetupPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <AccountLookup
                 label="Default Header A/C"
                 value={docForm.default_h_ac}
@@ -381,7 +396,7 @@ export function DocumentSetupPage() {
                   setDocForm((prev) => prev ? { ...prev, default_div_code: code, default_div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" } : null);
                 }}
               />
-              <label className="field flex flex-col gap-1 text-xs font-medium">
+              <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
                 <span>Back Date Limit (Days)</span>
                 <Input
                   type="number"
@@ -392,6 +407,7 @@ export function DocumentSetupPage() {
                     setDocForm((prev) => prev ? { ...prev, back_date: e.target.value } : null);
                   }}
                   placeholder="e.g. 7"
+                  className="h-9"
                 />
               </label>
             </div>
@@ -595,31 +611,19 @@ function Field({ label, value, onChange, disabled }: { label: string; value: str
 function AccountLookup({ label, value, name, onChange }: { label: string; value: string; name: string; onChange: (value: string, name: string) => void }) {
   const { user } = useAuth();
   return (
-    <div className="relative">
-      <LookupField
-        label={label}
-        value={value}
-        displayValue={value ? `${value}${name ? ` - ${name}` : ""}` : ""}
-        columns={[
-          { field: "ac_code", header: "Account Code" },
-          { field: "ac_name", header: "Account Name" },
-        ]}
-        valueField="ac_code"
-        displayFields={["ac_code", "ac_name"]}
-        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
-        onChange={(nextValue, row) => onChange(nextValue, row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "")}
-      />
-      {value ? (
-        <button
-          type="button"
-          onClick={() => onChange("", "")}
-          className="absolute right-7 top-7 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          title="Clear account"
-        >
-          <X size={13} />
-        </button>
-      ) : null}
-    </div>
+    <LookupField
+      label={label}
+      value={value}
+      displayValue={value ? `${value}${name ? ` - ${name}` : ""}` : ""}
+      columns={[
+        { field: "ac_code", header: "Account Code" },
+        { field: "ac_name", header: "Account Name" },
+      ]}
+      valueField="ac_code"
+      displayFields={["ac_code", "ac_name"]}
+      loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+      onChange={(nextValue, row) => onChange(nextValue, row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "")}
+    />
   );
 }
 

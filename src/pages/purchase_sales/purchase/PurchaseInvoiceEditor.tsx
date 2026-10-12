@@ -119,22 +119,32 @@ export function PurchaseInvoiceEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
       })
     );
+
+
   }, [
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
 
   ]);
 
@@ -279,12 +289,7 @@ export function PurchaseInvoiceEditor({
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + linePOAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPoPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
 
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -294,7 +299,9 @@ export function PurchaseInvoiceEditor({
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+    const finalTotal = grandTotal + totalTaxAmount;
 
   const updateField = (
     field: keyof PurchaseOrderForm,
@@ -588,7 +595,7 @@ export function PurchaseInvoiceEditor({
                 title="Purchase Invoice"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -597,16 +604,7 @@ export function PurchaseInvoiceEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-
-                    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                  </>
-                )}
-
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+                
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
@@ -667,6 +665,16 @@ export function PurchaseInvoiceEditor({
                   )}
 
                 </div>
+                {form.doc_no && (
+                  <>
+
+                    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  </>
+                )}
+
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>

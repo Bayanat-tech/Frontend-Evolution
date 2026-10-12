@@ -26,7 +26,7 @@ import {
 } from "./Purchaseorderutils";
 import { SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -174,6 +174,30 @@ export function PurchaseOrderLinesTable({
   // All Columns   = compact columns + Div, Lcurr Before Tax, Tax Type/Cat/Code, Tax Lcurr, Lcurr After Tax, Req Date, Remarks
   const tableColSpan = showAllColumns ? 27 : 18;
 
+  // Default zone = first zone from the same lookup the Zone field uses
+  const [defaultZone, setDefaultZone] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(
+      getDynamicLookup({ parameter: "PS_POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })
+    )
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        const first = list[0];
+        if (alive && first) setDefaultZone(text(getLookupValue(first, "zone_code")));
+      })
+      .catch(() => { });
+    return () => { alive = false; };
+  }, [companyCode, loginid]);
+
+  // Fill the default zone on any line that has none (existing and newly added)
+  useEffect(() => {
+    if (!defaultZone || headerAndLineDisabled) return;
+    rows.forEach((r) => {
+      if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
+    });
+  }, [defaultZone, rows, headerAndLineDisabled]);
   return (
     <div
       className="commercial-lines-card rounded-md border bg-card min-w-0"
@@ -229,7 +253,7 @@ export function PurchaseOrderLinesTable({
         </div>
       </div>
       <div className="commercial-lines-scroll max-h-[43vh] overflow-auto min-w-0">
-       <table className={`finance-lines-table w-full text-xs border-collapse [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${showAllColumns ? "min-w-[2300px]" : "min-w-full"}`}>
+        <table className={`finance-lines-table w-full text-xs border-collapse [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${showAllColumns ? "min-w-[2300px]" : "min-w-full"}`}>
           <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
             {/* Row 1: group bands only (Primary / Lowest / Discount / TAX). Ungrouped columns get an empty cell here - nothing is merged. */}
             <tr>
@@ -240,7 +264,7 @@ export function PurchaseOrderLinesTable({
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>Primary</th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>Lowest</th>
               <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
-              <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
+              <th colSpan={1} style={plainHeaderStyle(undefined, 0)}></th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Discount</th>
               <th style={plainHeaderStyle(undefined, 0)}></th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#f5d0fe")}>TAX</th>
@@ -398,8 +422,8 @@ export function PurchaseOrderLinesTable({
                   {/* <td className="px-2 py-1 text-center">
                     <span className={UOM_LABEL}>{row.p_uom || ""}</span>
                   </td> */}
-                      <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
-                   {row.p_uom || ""}
+                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                    {row.p_uom || ""}
                   </td>
 
                   {/* Lowest: Qty */}
@@ -428,8 +452,8 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
                   {/* Lowest: Unit of Measure */}
-                       <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
-                   {row.l_uom || ""}
+                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                    {row.l_uom || ""}
                   </td>
 
                   {/* Unit Per Primary (now visible in both views) */}
@@ -513,8 +537,23 @@ export function PurchaseOrderLinesTable({
                   {/* Net Amount (Excl Tax) */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
                   {/* TAX: Tax % */}
+                  {/* TAX: Tax % */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
+                    <Input
+                      className={`finance-money-input ${INPUT_BG}`}
+                      disabled={headerAndLineDisabled}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.01"
+                      value={row.tx_compnt_perc_1}
+                      onChange={(event) => {
+                        const taxPerc = Number(event.target.value || 0);
+                        updateRow(row.id, {
+                          tx_compnt_perc_1: taxPerc,
+                          tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+                        });
+                      }}
+                    />
                   </td>
                   {/* TAX: Tax Amount */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row))}</td>
@@ -662,7 +701,7 @@ export function PurchaseOrderLinesTable({
           <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
         </div> */}
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Amount Before Discount</span>
+          <span className="text-muted-foreground">Amount</span>
           <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
         </div>
         <div className="flex items-center gap-2">
@@ -670,7 +709,7 @@ export function PurchaseOrderLinesTable({
           <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Amount Before Tax</span>
+          <span className="text-muted-foreground">Total Amount Excluding Tax</span>
           <strong>{formatAmount(grandTotal)}</strong>
         </div>
         <div className="flex items-center gap-2">
@@ -678,7 +717,7 @@ export function PurchaseOrderLinesTable({
           <strong>{formatAmount(totalTaxAmount)}</strong>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
-          <span className="font-semibold text-[#00378C]">Amount After Tax</span>
+          <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>

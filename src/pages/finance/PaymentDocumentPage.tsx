@@ -591,7 +591,7 @@ function PaymentDocumentEditor({
           if (resolvedCurrCode) {
             try {
               const currencyRows = await getDynamicFinanceLookup({
-                parameter: "Account_Currency_CODE_Serach",
+                parameter: "Account_Currency_CODE_Search",
                 code1: user?.company_code || "",
               });
               const match = currencyRows.find(
@@ -1536,7 +1536,7 @@ function PaymentDocumentEditor({
                             if (!resolvedExRate && selectedCurrency) {
                               try {
                                 const currencyRows = await getDynamicFinanceLookup({
-                                  parameter: "Account_Currency_CODE_Serach",
+                                  parameter: "Account_Currency_CODE_Search",
                                   code1: user?.company_code || "",
                                 });
                                 const match = currencyRows.find(
@@ -1577,7 +1577,7 @@ function PaymentDocumentEditor({
                         valueField="curr_code"
                         displayFields={["curr_code", "curr_name"]}
                         loadOptions={() => getDynamicLookup({
-                          parameter: "Account_Currency_CODE_Serach",
+                          parameter: "Account_Currency_CODE_Search",
                           code1: user?.company_code,
                           loginid: user?.loginid || user?.username || "ADMIN"
                         })}
@@ -1889,7 +1889,7 @@ function PaymentDocumentEditor({
                                 valueField="curr_code"
                                 displayFields={["curr_code", "curr_name"]}
                                 loadOptions={() => getDynamicLookup({
-                                  parameter: "Account_Currency_CODE_Serach",
+                                  parameter: "Account_Currency_CODE_Search",
                                   code1: user?.company_code,
                                   loginid: user?.loginid || user?.username || "ADMIN"
                                 })}
