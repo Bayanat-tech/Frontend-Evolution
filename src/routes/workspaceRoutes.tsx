@@ -279,7 +279,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: 'MSE Prod Group',
-    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/ims/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
 
@@ -291,14 +291,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
     name: 'Purchase Sales Product Brand',
-    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/ims/purchase_sales/masters/product_brand"),
     element: () => <ProductBrandPage />,
   },
   {
-    name: 'Purchase Sales Product',
-    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
-    element: () => <ProductPurchaseSales />
-  },
+  name: 'Purchase Sales Product',
+  match: ({ pathname }) => isProductRoute(pathname),
+  element: () => <ProductPurchaseSales />
+},
 
   {
   name: "Purchase Sales Product Type",
@@ -1420,11 +1420,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
 
-  {
-    name: "Purchase Sales Product Type",
-    match: ({ pathname }) => isProductTypeRoute(pathname),
-    element: () => <ProductTypePage />,
-  },
+  // {
+  //   name: "Purchase Sales Product Type",
+  //   match: ({ pathname }) => isProductTypeRoute(pathname),
+  //   element: () => <ProductTypePage />,
+  // },
 
   {
     name: "Purchase Sales Product Category",
@@ -1553,21 +1553,21 @@ function isHrLeaveTypeRoute(pathname: string) {
 function isExpenseMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/masters/expense_master"
+    "/workspace/ims/purchase_sales/masters/expense_master"
   );
 }
 
 function isPurchaseSaleSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
+    "/workspace/ims/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
   );
 }
 
 function isProductBrandRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+    "/ims/purchase_sales/masters/product_brand"
   );
 }
 
@@ -2870,7 +2870,7 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
 
 function isProductRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
-  return /\/workspace\/purchase_sales\/purchase_sales\/masters\/product$/.test(normalized);
+  return /\/workspace\/ims\/purchase_sales\/masters\/product$/.test(normalized);
 }
 
 
@@ -2878,9 +2878,9 @@ function isProductTypeRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-     normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
+     normalized.includes("/ims/purchase_sales/masters/product_type") ||
+    normalized.includes("/ims/purchase_sales/masters/product%20type") ||
+    normalized.includes("/ims/purchase_sales/masters/product-type")
   );
 }
 
@@ -2888,9 +2888,9 @@ function isProductCategoryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-        normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
+        normalized.includes("/ims/purchase_sales/masters/product_category") ||
+    normalized.includes("/ims/purchase_sales/masters/product%20category") ||
+    normalized.includes("/ims/purchase_sales/masters/product-category")
   );
 }
 
@@ -2898,9 +2898,9 @@ function isZoneMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-    normalized.includes("/purchase_sales/purchase_sales/masters/zone%20master") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/zone_master") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/zone-master")
+    normalized.includes("/ims/purchase_sales/masters/zone%20master") ||
+    normalized.includes("/ims/purchase_sales/masters/zone_master") ||
+    normalized.includes("/ims/purchase_sales/masters/zone-master")
   );
 }
 
@@ -2915,9 +2915,9 @@ function isProductBomRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-    normalized.includes("/purchase_sales/purchase_sales/masters/product_bom") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product%20bom") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product-bom")
+    normalized.includes("/ims/purchase_sales/masters/product_bom") ||
+    normalized.includes("/ims/purchase_sales/masters/product%20bom") ||
+    normalized.includes("/ims/purchase_sales/masters/product-bom")
   );
 }
 

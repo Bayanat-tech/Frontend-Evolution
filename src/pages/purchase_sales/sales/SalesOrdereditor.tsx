@@ -648,19 +648,22 @@ if (rect) {
                   )}
                           {form.doc_no && (
                   <>
-                    {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
+                    <Button type="button" variant="secondary" onClick={() => void openReport()}>
                     <Printer size={15} /> Print
-                  </Button> */}
+                  </Button>
                     <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExportExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                    </Button>
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExportExcel()}
+  disabled={reportPreviewExporting}
+>
+  {reportPreviewExporting ? (
+    <Loader2 size={15} className="animate-spin" />
+  ) : (
+    <Download size={15} />
+  )}
+  Excel
+</Button>
                   </>
                 )}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>

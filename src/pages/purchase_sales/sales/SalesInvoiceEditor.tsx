@@ -708,15 +708,16 @@ export function SalesInvoiceEditor({
                     <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
                       <Printer size={15} /> Print
                     </Button>
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExcel()}
-                    >
-                      <Download size={15} />
-                    </Button>
+                   <Button
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+>
+  <Download size={15} />
+  Excel
+</Button>
+
+                    
                   </>
                 ) : null}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
