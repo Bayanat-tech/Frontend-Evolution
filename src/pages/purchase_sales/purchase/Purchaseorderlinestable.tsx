@@ -173,7 +173,7 @@ export function PurchaseOrderLinesTable({
   // Compact view  = columns of the reference sheet (+ Action)
   // All Columns   = compact columns + Div, Lcurr Before Tax, Tax Type/Cat/Code, Tax Lcurr, Lcurr After Tax, Req Date, Remarks
   const tableColSpan = showAllColumns ? 27 : 18;
-  
+
   // Default zone = first zone from the same lookup the Zone field uses
   const [defaultZone, setDefaultZone] = useState("");
 
@@ -187,7 +187,7 @@ export function PurchaseOrderLinesTable({
         const first = list[0];
         if (alive && first) setDefaultZone(text(getLookupValue(first, "zone_code")));
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => { alive = false; };
   }, [companyCode, loginid]);
 
@@ -253,7 +253,7 @@ export function PurchaseOrderLinesTable({
         </div>
       </div>
       <div className="commercial-lines-scroll max-h-[43vh] overflow-auto min-w-0">
-       <table className={`finance-lines-table w-full text-xs border-collapse [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${showAllColumns ? "min-w-[2300px]" : "min-w-full"}`}>
+        <table className={`finance-lines-table w-full text-xs border-collapse [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 ${showAllColumns ? "min-w-[2300px]" : "min-w-full"}`}>
           <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
             {/* Row 1: group bands only (Primary / Lowest / Discount / TAX). Ungrouped columns get an empty cell here - nothing is merged. */}
             <tr>
@@ -264,7 +264,7 @@ export function PurchaseOrderLinesTable({
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>Primary</th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>Lowest</th>
               <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
-              <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
+              <th colSpan={1} style={plainHeaderStyle(undefined, 0)}></th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Discount</th>
               <th style={plainHeaderStyle(undefined, 0)}></th>
               <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#f5d0fe")}>TAX</th>
@@ -422,8 +422,8 @@ export function PurchaseOrderLinesTable({
                   {/* <td className="px-2 py-1 text-center">
                     <span className={UOM_LABEL}>{row.p_uom || ""}</span>
                   </td> */}
-                      <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
-                   {row.p_uom || ""}
+                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                    {row.p_uom || ""}
                   </td>
 
                   {/* Lowest: Qty */}
@@ -452,8 +452,8 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
                   {/* Lowest: Unit of Measure */}
-                       <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
-                   {row.l_uom || ""}
+                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>
+                    {row.l_uom || ""}
                   </td>
 
                   {/* Unit Per Primary (now visible in both views) */}
@@ -537,8 +537,23 @@ export function PurchaseOrderLinesTable({
                   {/* Net Amount (Excl Tax) */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineAmount(row))}</td>
                   {/* TAX: Tax % */}
+                  {/* TAX: Tax % */}
                   <td className="px-2 py-1">
-                    <Input className={`finance-money-input ${INPUT_BG}`} disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
+                    <Input
+                      className={`finance-money-input ${INPUT_BG}`}
+                      disabled={headerAndLineDisabled}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.01"
+                      value={row.tx_compnt_perc_1}
+                      onChange={(event) => {
+                        const taxPerc = Number(event.target.value || 0);
+                        updateRow(row.id, {
+                          tx_compnt_perc_1: taxPerc,
+                          tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100),
+                        });
+                      }}
+                    />
                   </td>
                   {/* TAX: Tax Amount */}
                   <td className={AMOUNT_CELL}>{formatAmount(lineTaxAmount(row))}</td>

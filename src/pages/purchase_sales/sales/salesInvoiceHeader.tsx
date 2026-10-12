@@ -441,7 +441,7 @@ export function SalesInvoiceHeaderForm({
                         </CField>
 
                         <CField label="SDN Remarks" className="col-span-6">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} />
+                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} maxLength={250} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} />
                         </CField>
                         <CField label="Remarks" className="col-span-6">
                             <textarea
@@ -499,8 +499,8 @@ export function SalesInvoiceHeaderForm({
 
                     <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-2">
                         <CField label="Delivery Contact"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.so_dlvr_contact} onChange={(e) => updateField("so_dlvr_contact", e.target.value)} /></CField>
-                        <CField label="Delivery Tel"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.so_dlvr_mobile} onChange={(e) => updateField("so_dlvr_mobile", e.target.value)} /></CField>
-                        <CField label="Delivery Email"><Input className="h-7 text-xs" type="email" disabled={headerAndLineDisabled} value={form.so_dlvr_email} onChange={(e) => updateField("so_dlvr_email", e.target.value)} /></CField>
+                        <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} maxLength={20} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", cleanPhone(e.target.value))} /></CField>
+                                       <CField label="Delivery Email Address"><Input    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} maxLength={100} type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", (e.target.value))} /></CField>
                         <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(e) => updateField("so_dlvr_term", e.target.value)} /></CField>
                     </HeaderBlock>
 

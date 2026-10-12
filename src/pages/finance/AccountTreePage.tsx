@@ -168,18 +168,9 @@ const ACCOUNT_FORM_SECTIONS: Array<{
     fields: [
       { name: "ac_name", label: "Account Name", maxLength: 100 },
       { name: "l4_code", label: "Level 4 Code", maxLength: 8 },
-      { name: "dept_code", label: "Department Code" },
-      { name: "curr_code", label: "Currency Code" },
-      { name: "pl_bl_code", label: "BS / PL Code" },
-      // { name: "ac_status", label: "Status" },
-    ],
-  },
-  {
-    title: "Address and Contact",
-    fields: [
-      { name: "address_1", label: "Address 1", type: "textarea", maxLength: 255 },
-      { name: "address_2", label: "Address 2", type: "textarea", maxLength: 100 },
-      { name: "address_3", label: "Address 3", type: "textarea", maxLength: 100 },
+       { name: "address_1", label: "Address 1", maxLength: 255 },
+      { name: "address_2", label: "Address 2", maxLength: 100 },
+      { name: "address_3", label: "Address 3", maxLength: 100 },
       { name: "city_name", label: "City", maxLength: 100 },
       { name: "territory_code", label: "Territory Code" },
       { name: "country_code", label: "Country Code" },
@@ -188,8 +179,27 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "fax", label: "Fax", maxLength: 50 },
       { name: "e_mail", label: "Email", type: "email", maxLength: 50 },
       { name: "contact_person", label: "Contact Person", maxLength: 50 },
+      { name: "dept_code", label: "Department Code" },
+      { name: "curr_code", label: "Currency Code" },
+      // { name: "ac_status", label: "Status" },
     ],
   },
+  // {
+  //   title: "Address and Contact",
+  //   fields: [
+  //     { name: "address_1", label: "Address 1", maxLength: 255 },
+  //     { name: "address_2", label: "Address 2", maxLength: 100 },
+  //     { name: "address_3", label: "Address 3", maxLength: 100 },
+  //     { name: "city_name", label: "City", maxLength: 100 },
+  //     { name: "territory_code", label: "Territory Code" },
+  //     { name: "country_code", label: "Country Code" },
+  //     { name: "phone", label: "Phone", maxLength: 50 },
+  //     { name: "mobile_no", label: "Mobile No", maxLength: 50 },
+  //     { name: "fax", label: "Fax", maxLength: 50 },
+  //     { name: "e_mail", label: "Email", type: "email", maxLength: 50 },
+  //     { name: "contact_person", label: "Contact Person", maxLength: 50 },
+  //   ],
+  // },
   {
     title: "Credit and Bank",
     fields: [
@@ -216,6 +226,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
   {
     title: "BI and Expense",
     fields: [
+      { name: "pl_bl_code", label: "BS / PL Code" },
       { name: "bi_main_group", label: "BI Main Group", maxLength: 50 },
       { name: "bi_sub_group", label: "BI Sub Group", maxLength: 50 },
       { name: "bi_exp_type", label: "BI Exp Type", maxLength: 100 },

@@ -1736,6 +1736,35 @@ export async function getVisaExpiryReportExcelDownload(params: ReportParams): Pr
   window.URL.revokeObjectURL(url);
 }
 
+
+// ----------Employee Assessment Report — HTML (inline preview)----------------
+export async function getEmployeeAssessmentReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Assessment Report — Excel download----------------
+export async function getEmployeeAssessmentReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeAssessmentReport_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export async function TransationReport(params: ReportParams) {
   const html = await openReportInTab(
     "/api/finance/transactions/reports/wms-TransactionProductReport/html",

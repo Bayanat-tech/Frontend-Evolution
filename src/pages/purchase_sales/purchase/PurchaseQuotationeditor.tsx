@@ -106,13 +106,20 @@ export function PurchaseQuotationEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
@@ -224,6 +231,7 @@ export function PurchaseQuotationEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
+          tx_compnt_perc_1: Number(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1 || 0),
           tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
@@ -401,7 +409,7 @@ export function PurchaseQuotationEditor({
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
     return runAction("draft", async () => {
-      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
   };
   // const handleSubmitClick = () => {
@@ -447,12 +455,12 @@ export function PurchaseQuotationEditor({
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
   };
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED", PO_DOC_TYPE.PQO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation cancelled");
 
   // ---- Reject handlers ----
@@ -473,7 +481,7 @@ export function PurchaseQuotationEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", PO_DOC_TYPE.PQA, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", PO_DOC_TYPE.PQO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
     }, "Purchase Quotation rejected");
   };
@@ -530,7 +538,7 @@ export function PurchaseQuotationEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", PO_DOC_TYPE.PQA, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", PO_DOC_TYPE.PQO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
     }, "Purchase Quotation sent back");
   };
@@ -711,7 +719,7 @@ export function PurchaseQuotationEditor({
                     <PurchaseOrderHeaderForm
                       calculateDiscount={applyDiscountCalculation}
                       form={form}
-                      docType={PO_DOC_TYPE.PQA}
+                      docType={PO_DOC_TYPE.PQO}
                       setForm={setForm}
                       updateField={updateField}
                       disabled={disabled}
@@ -728,7 +736,7 @@ export function PurchaseQuotationEditor({
                   rows={rows}
                   form={form}
                   setdetails={setRows}
-                  docType={PO_DOC_TYPE.PQA}
+                  docType={PO_DOC_TYPE.PQO}
                   updateRow={updateRow}
                   addRow={addRow}
                   removeRow={removeRow}
