@@ -1,18 +1,21 @@
 /**
- * HR Reports – single file
+ * HR Reports – complete single file
  * Pages: Joiner | Register | Leavers | Tenure
  * Endpoint: POST /api/hr/reports/:type/:report   (type = html | excel)
- *
- * Uses NewReportPage + NewReportDialog
+ * LOV: getDynamicLookup → /api/wms/common/proc_build_dynamic_sql_common
+ * Company Code: from useAuth()
+ * Layout: 4 columns per row
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { NewReportDialog, NewReportPage, ReportFieldConfig } from "../../../components/new_report_format";
 import { api } from "../../../api/client";
+import { getDynamicLookup } from "../../../api/lookups";
+import { useAuth } from "../../../state/AuthContext";
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Shared types & hook
+   Shared types & helpers
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export type ReportKey = "joiner" | "register" | "leavers" | "tenure";
@@ -31,10 +34,35 @@ function toApiValue(v: string | string[] | boolean | undefined): string {
   return s || ALL;
 }
 
+/** Keys that hold dates: join_from/join_to, sep_from/sep_to, as_of_date */
+const DATE_KEY = /(_from|_to|_date)$/;
+
+/**
+ * Normalise any date value to a 'YYYY-MM-DD' string, or "" when empty/invalid.
+ * Pure string handling – no Date object, so no timezone shift.
+ * Accepts 'YYYY-MM-DD[...]', 'DD/MM/YYYY', 'DD-MM-YYYY'.
+ */
+function toDateString(v: string | string[] | boolean | undefined): string {
+  const raw = Array.isArray(v) ? String(v[0] ?? "") : v == null || typeof v === "boolean" ? "" : String(v);
+  const s = raw.trim();
+  if (!s) return "";
+
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+
+  return "";
+}
+
 function buildPayload(values: FilterValues): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(values)) {
-    if (typeof v === "boolean") {
+    if (DATE_KEY.test(k)) {
+      // dates are sent as 'YYYY-MM-DD' (or "" when not set) – never "All"
+      out[k] = toDateString(v);
+    } else if (typeof v === "boolean") {
       out[k] = v ? "Y" : "N";
     } else {
       out[k] = toApiValue(v);
@@ -43,12 +71,75 @@ function buildPayload(values: FilterValues): Record<string, string> {
   return out;
 }
 
+/* ───────────────────────── LOV helper using getDynamicLookup ───────────────────────── */
+
+type LovOption = { value: string; label: string; code?: string };
+
+interface DynamicQueryParams {
+  parameter: string;
+  loginid?: string;
+  code1?: string;   // COMPANY_CODE
+  code2?: string;   // DIV_CODE
+  code3?: string;   // DEPT_CODE
+  code4?: string;   // SECTION_CODE
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string;
+  date2?: string;
+  date3?: string;
+  date4?: string;
+}
+
+async function fetchHrLov(
+  parameter: string,
+  companyCode: string,
+  filters: { div_code?: string; dept_code?: string; section_code?: string } = {}
+): Promise<LovOption[]> {
+  if (!companyCode) return [];
+
+  try {
+    const params: DynamicQueryParams = {
+      parameter,
+      code1: companyCode,                       // P_COMPANY_CODE / P_CODE1
+      code2: filters.div_code || undefined,     // P_DIV_CODE / P_CODE2
+      code3: filters.dept_code || undefined,    // P_DEPT_CODE / P_CODE3
+      code4: filters.section_code || undefined, // P_SECTION_CODE / P_CODE4
+    };
+
+    const rows = await getDynamicLookup(params);
+
+    return (rows || []).map((r: any) => ({
+      value: String(
+        r.VALUE ?? r.value ?? r.CODE ?? r.code ??
+        r.DIV_CODE ?? r.DEPT_CODE ?? r.SECTION_CODE ??
+        r.EMPLOYEE_ID ?? r.GRADE_CODE ?? r.DESG_CODE ?? ""
+      ),
+      label: String(
+        r.LABEL ?? r.label ?? r.NAME ?? r.name ??
+        r.DIV_NAME ?? r.DEPT_NAME ?? r.SECTION_NAME ??
+        r.RPT_NAME ?? r.GRADE_NAME ?? r.DESG_NAME ?? r.VALUE ?? ""
+      ),
+      code: r.CODE ?? r.code,
+    }));
+  } catch (err) {
+    console.error(`LOV error [${parameter}]:`, err);
+    return [];
+  }
+}
+
+/* ───────────────────────── Shared hook ───────────────────────── */
+
 function useHrReport(
   reportKey: ReportKey,
   title: string,
   fields: ReportFieldConfig[],
   initialExtra?: FilterValues
 ) {
+  const { user } = useAuth();
+  const companyCode = user?.company_code ?? "";
+
   const [values, setValues] = useState<FilterValues>(() => {
     const init: FilterValues = { ...(initialExtra || {}) };
     fields.forEach((f) => {
@@ -63,16 +154,156 @@ function useHrReport(
     return init;
   });
 
+  const [fieldOptions, setFieldOptions] = useState<Record<string, LovOption[]>>({});
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
 
-  const onChange = useCallback((key: string, value: any) => {
-    setValues((prev) => ({ ...prev, [key]: value }));
-    setError(null);
-  }, []);
+  // ── Base LOVs (Division, Grade, Designation) ──
+  useEffect(() => {
+    if (!companyCode) return;
+    let cancelled = false;
+
+    (async () => {
+      setOptionsLoading(true);
+      try {
+        const [divs, grades, desgs] = await Promise.all([
+          fetchHrLov("HR_REPORT_DIVISION", companyCode),
+          fetchHrLov("HR_REPORT_GRADE", companyCode),
+          fetchHrLov("HR_REPORT_DESIGNATION", companyCode),
+        ]);
+        if (cancelled) return;
+        setFieldOptions((prev) => ({
+          ...prev,
+          div_code: [{ value: ALL, label: "All" }, ...divs],
+          grade_code: [{ value: ALL, label: "All" }, ...grades],
+          desg_code: [{ value: ALL, label: "All" }, ...desgs],
+          labour_desg_code: [{ value: ALL, label: "All" }, ...desgs],
+        }));
+      } finally {
+        if (!cancelled) setOptionsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyCode]);
+
+  // ── Cascading: Department depends on Division ──
+  useEffect(() => {
+    if (!companyCode) return;
+    const div = toApiValue(values.div_code);
+    let cancelled = false;
+
+    (async () => {
+      const depts = await fetchHrLov("HR_REPORT_DEPARTMENT", companyCode, {
+        div_code: div === ALL ? undefined : div,
+      });
+      if (cancelled) return;
+      setFieldOptions((prev) => ({
+        ...prev,
+        dept_code: [{ value: ALL, label: "All" }, ...depts],
+      }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [values.div_code, companyCode]);
+
+  // ── Cascading: Section depends on Division + Department ──
+  useEffect(() => {
+    if (!companyCode) return;
+    const div = toApiValue(values.div_code);
+    const dept = toApiValue(values.dept_code);
+    let cancelled = false;
+
+    (async () => {
+      const secs = await fetchHrLov("HR_REPORT_SECTION", companyCode, {
+        div_code: div === ALL ? undefined : div,
+        dept_code: dept === ALL ? undefined : dept,
+      });
+      if (cancelled) return;
+      setFieldOptions((prev) => ({
+        ...prev,
+        section_code: [{ value: ALL, label: "All" }, ...secs],
+      }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [values.div_code, values.dept_code, companyCode]);
+
+  // ── Employee LOV (only for Register & Tenure) ──
+  useEffect(() => {
+    if (!companyCode) return;
+    if (reportKey !== "register" && reportKey !== "tenure") return;
+
+    const div = toApiValue(values.div_code);
+    const dept = toApiValue(values.dept_code);
+    const sect = toApiValue(values.section_code);
+    let cancelled = false;
+
+    (async () => {
+      const emps = await fetchHrLov("HR_REPORT_EMPLOYEE", companyCode, {
+        div_code: div === ALL ? undefined : div,
+        dept_code: dept === ALL ? undefined : dept,
+        section_code: sect === ALL ? undefined : sect,
+      });
+      if (cancelled) return;
+      setFieldOptions((prev) => ({
+        ...prev,
+        employee_code: [{ value: ALL, label: "All" }, ...emps],
+        employee_id: [{ value: ALL, label: "All" }, ...emps],
+      }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [values.div_code, values.dept_code, values.section_code, companyCode, reportKey]);
+
+  // Merge dynamic options into fields
+  const fieldsWithOptions = useMemo(() => {
+    return fields.map((f) => {
+      if (f.type === "multiselect" && fieldOptions[f.key]) {
+        return { ...f, options: fieldOptions[f.key], loading: optionsLoading };
+      }
+      return f;
+    });
+  }, [fields, fieldOptions, optionsLoading]);
+
+  const onChange = useCallback(
+    (key: string, value: any) => {
+      setValues((prev) => {
+        const next = { ...prev, [key]: value };
+        // Reset children when parent changes
+        if (key === "div_code") {
+          next.dept_code = [ALL];
+          next.section_code = [ALL];
+          if (reportKey === "register" || reportKey === "tenure") {
+            next.employee_code = [ALL];
+            next.employee_id = [ALL];
+          }
+        }
+        if (key === "dept_code") {
+          next.section_code = [ALL];
+          if (reportKey === "register" || reportKey === "tenure") {
+            next.employee_code = [ALL];
+            next.employee_id = [ALL];
+          }
+        }
+        return next;
+      });
+      setError(null);
+    },
+    [reportKey]
+  );
 
   const onClearAll = useCallback(() => {
     const init: FilterValues = { ...(initialExtra || {}) };
@@ -160,12 +391,13 @@ function useHrReport(
 
   return {
     title,
-    fields,
+    fields: fieldsWithOptions,
     values,
     onChange,
     onClearAll,
     onGenerate,
     loading,
+    optionsLoading,
     error,
     setError,
     dialogOpen,
@@ -177,7 +409,7 @@ function useHrReport(
   };
 }
 
-/* Shared shell that renders NewReportPage + NewReportDialog */
+/* Shared shell – 4 columns per row */
 function HrReportShell({ r }: { r: ReturnType<typeof useHrReport> }) {
   return (
     <>
@@ -189,9 +421,10 @@ function HrReportShell({ r }: { r: ReturnType<typeof useHrReport> }) {
         onClearAll={r.onClearAll}
         onGenerate={r.onGenerate}
         loading={r.loading}
+        optionsLoading={r.optionsLoading}
         error={r.error}
         onClearError={() => r.setError(null)}
-        fieldsPerRow={3}
+        fieldsPerRow={4}
       />
       <NewReportDialog
         open={r.dialogOpen}
@@ -213,12 +446,12 @@ function HrReportShell({ r }: { r: ReturnType<typeof useHrReport> }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const JOINER_FIELDS: ReportFieldConfig[] = [
-  { key: "div_code", label: "Division", type: "multiselect", colSpan: 4 },
-  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 4 },
-  { key: "section_code", label: "Section", type: "multiselect", colSpan: 4 },
-  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 4 },
-  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 4 },
-  { key: "labour_desg_code", label: "Formal Designation", type: "multiselect", colSpan: 4 },
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 3 },
+  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 3 },
+  { key: "labour_desg_code", label: "Formal Designation", type: "multiselect", colSpan: 3 },
   {
     key: "join_from",
     label: "Join Date Range",
@@ -230,7 +463,7 @@ const JOINER_FIELDS: ReportFieldConfig[] = [
     key: "emp_status",
     label: "Employee Status",
     type: "select",
-    colSpan: 4,
+    colSpan: 3,
     options: [
       { value: "A", label: "Active Employees" },
       { value: "All", label: "All Employees" },
@@ -240,7 +473,7 @@ const JOINER_FIELDS: ReportFieldConfig[] = [
     key: "group_by",
     label: "Group Criteria",
     type: "select",
-    colSpan: 4,
+    colSpan: 3,
     options: [
       { value: "DIV", label: "Division" },
       { value: "DEPT", label: "Department" },
@@ -264,10 +497,10 @@ export function EmployeeJoinerReportPage() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const REGISTER_FIELDS: ReportFieldConfig[] = [
-  { key: "div_code", label: "Division", type: "multiselect", colSpan: 4 },
-  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 4 },
-  { key: "section_code", label: "Section", type: "multiselect", colSpan: 4 },
-  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 4 },
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
   {
     key: "join_from",
     label: "Join Date Range",
@@ -279,7 +512,7 @@ const REGISTER_FIELDS: ReportFieldConfig[] = [
     key: "emp_status",
     label: "Employee Status",
     type: "select",
-    colSpan: 4,
+    colSpan: 3,
     options: [
       { value: "A", label: "Active Employees" },
       { value: "All", label: "All Employees" },
@@ -321,12 +554,12 @@ export function EmployeeRegisterReportPage() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const LEAVERS_FIELDS: ReportFieldConfig[] = [
-  { key: "div_code", label: "Division", type: "multiselect", colSpan: 4 },
-  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 4 },
-  { key: "section_code", label: "Section", type: "multiselect", colSpan: 4 },
-  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 4 },
-  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 4 },
-  { key: "labour_desg_code", label: "Formal Designation", type: "multiselect", colSpan: 4 },
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 3 },
+  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 3 },
+  { key: "labour_desg_code", label: "Formal Designation", type: "multiselect", colSpan: 3 },
   {
     key: "sep_from",
     label: "Separation Date Range",
@@ -338,14 +571,14 @@ const LEAVERS_FIELDS: ReportFieldConfig[] = [
     key: "reason_category",
     label: "Reason Category",
     type: "select",
-    colSpan: 4,
+    colSpan: 3,
     options: [{ value: "All", label: "All" }],
   },
   {
     key: "group_by",
     label: "Group Criteria",
     type: "select",
-    colSpan: 4,
+    colSpan: 3,
     options: [
       { value: "DIV", label: "Division" },
       { value: "DEPT", label: "Department" },
@@ -371,13 +604,13 @@ export function EmployeeLeaversReportPage() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const TENURE_FIELDS: ReportFieldConfig[] = [
-  { key: "div_code", label: "Division", type: "multiselect", colSpan: 4 },
-  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 4 },
-  { key: "section_code", label: "Section", type: "multiselect", colSpan: 4 },
-  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 4 },
-  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 4 },
-  { key: "employee_id", label: "Employee Code", type: "multiselect", colSpan: 4 },
-  { key: "as_of_date", label: "To Date", type: "date", colSpan: 4 },
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 3 },
+  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 3 },
+  { key: "employee_id", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  { key: "as_of_date", label: "To Date", type: "date", colSpan: 3 },
   {
     key: "show_age",
     label: "Show Age",
@@ -397,7 +630,7 @@ export function EmployeeTenureReportPage() {
   return <HrReportShell r={r} />;
 }
 
-/* Optional default export if you only need one entry */
+/* Default export */
 export default {
   EmployeeJoinerReportPage,
   EmployeeRegisterReportPage,

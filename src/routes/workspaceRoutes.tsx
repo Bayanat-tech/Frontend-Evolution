@@ -242,7 +242,7 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name : 'Hr Employee Joining Report',
-    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/joiner"),
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/joining_report"),
     element : () => <EmployeeJoinerReportPage />
   },
     {
@@ -252,17 +252,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name : 'Hr Employee Register Report',
-    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/register"),
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/register_report"),
     element : () => <EmployeeRegisterReportPage />
   },
   {
     name : 'Hr Employee Leaver Report',
-    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leavers"),
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/leaver_report"),
     element : () => <EmployeeLeaversReportPage />
   },
   {
     name : 'Hr Employee Tenure Report',
-    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/tenure"),
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/tenure_report"),
     element : () => <EmployeeTenureReportPage />
   },
   {
