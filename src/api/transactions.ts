@@ -1764,6 +1764,39 @@ export async function getEmployeeAssessmentReportExcelDownload(params: ReportPar
   window.URL.revokeObjectURL(url);
 }
 
+
+// ----------Employee Ticket Eligibility — HTML (inline preview)----------------
+export async function getEmployeeTicketEligibilityReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Assessment Report — Excel download----------------
+export async function getEmployeeTicketEligibilityReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
 export async function TransationReport(params: ReportParams) {
   const html = await openReportInTab(
     "/api/finance/transactions/reports/wms-TransactionProductReport/html",

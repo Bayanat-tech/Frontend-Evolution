@@ -219,6 +219,7 @@ import { MaterialIssuesPage } from "../pages/purchase_sales/production/Materiall
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
+import EmployeeTicketEligibilityPage from "../pages/hr/Reports/Employeeticketeligibilitypage";
 
 
 type WorkspaceRouteContext = {
@@ -1489,6 +1490,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <EmployeeAssessmentReportPage />
   },
   
+
+   {
+    name: "Employee Ticket Eligibility",
+    match: ({ pathname }) => isEmployeeTicketEligibilityRoute(pathname),
+    element: () => <EmployeeTicketEligibilityPage />
+  },
+  
   {
     name: "Product BOM",
     match: ({ pathname }) => isProductBomRoute(pathname),
@@ -1525,6 +1533,18 @@ function isEmployeeAssessmentReportRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/employee assessment report") ||
     compact.includes("reportsemployeeemployeeassessmentreport") ||
     compact.includes("reportsemployeeemployeeassessment")
+  );
+}
+
+
+
+function isEmployeeTicketEligibilityRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee ticket eligibility") ||
+    compact.includes("reportsemployeeticketeligibility") ||
+    compact.includes("reportsemployeeticketeligibility")
   );
 }
 
