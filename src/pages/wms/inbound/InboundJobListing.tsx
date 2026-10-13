@@ -182,7 +182,7 @@ export function InboundJobListing() {
       await postWmsInbound("inboundjob", {
         job_type:            form.job_type || "IMP",
         company_code:        form.company_code || companyCode,
-        job_date:            now,
+        job_date:            String(form.schedule_date),
         job_class:           form.job_class || "N",
         dept_code:           String(form.dept_code || ""),
         transport_mode:      String(form.transport_mode || "S"),
@@ -219,7 +219,7 @@ export function InboundJobListing() {
         bcf_code: "", request_category: "", load_point: "",
         updated_by:   user?.loginid || "Admin",
         created_by:   user?.loginid || "Admin",
-        created_at:   String(form.schedule_date || today),
+        created_at:   String(form.schedule_date),
         prin_code:    String(form.prin_code || ""),
         schedule_date: String(form.schedule_date || today),
       });
