@@ -213,6 +213,7 @@ import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesa
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import PostDateCheque from "../pages/finance/PostDateCheque";
 import { AttendanceRegisterReportPage, EmployeeAccrualBalanceReportPage, EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeePayUnitReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
+import HrAbsenceReport from "../pages/hr/Reports/HrAbsenceReport";
 import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
 import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
@@ -270,6 +271,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/joining_report"),
     element : () => <EmployeeJoinerReportPage />
   },
+
+  {
+  name: "HR Absence Report",
+  match: ({ pathname }) => isHrAbsenceReportRoute(pathname),
+  element: () => <HrAbsenceReport />,
+},
     {
     name : 'Hr Leave Entitlement Master',
     match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leave_entitlement"),
@@ -285,6 +292,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/leaver_report"),
     element : () => <EmployeeLeaversReportPage />
   },
+
+    {
+    name : 'Attendance Register Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/attendance_register"),
+    element : () => <AttendanceRegisterReportPage />
+   },
+
   {
     name : 'Hr Employee Tenure Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/tenure_report"),
@@ -3039,5 +3053,17 @@ function isPendingPurchaseOrderRoute(pathname: string) {
 
   return normalized.includes(
     "/workspace/ims/purchase_sales/reports/pending_purchase_order"
+  );
+}
+
+function isHrAbsenceReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/absence report") ||
+    normalized.includes("/hcm/hcm/reports/employee/absence%20report") ||
+    normalized.includes("/hcm/hcm/reports/employee/absence_report") ||
+    normalized.includes("/hcm/hcm/reports/employee/absence-report") ||
+    compact.includes("employeeabsencereport")
   );
 }
