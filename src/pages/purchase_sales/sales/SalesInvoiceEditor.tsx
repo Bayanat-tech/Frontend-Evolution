@@ -457,6 +457,23 @@ export function SalesInvoiceEditor({
     if (!form.curr_code) return setError("Currency is required");
     if (!form.inv_no) return setError("Invoice Number is required");
     if (!form.inv_date) return setError("Invoice Date is required");
+      for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
     return runAction(
       "draft",
@@ -497,22 +514,32 @@ export function SalesInvoiceEditor({
       return !(total > 0);
     });
     if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+      return setError("Please enter a valid quantity and unit price for all line items — total amount must be greater than 0");
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    setShowSubmitConfirm(true);
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
