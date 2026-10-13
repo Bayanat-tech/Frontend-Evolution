@@ -78,6 +78,27 @@ export interface ApiResponse<T = unknown> {
 /* API                                                                        */
 /* -------------------------------------------------------------------------- */
 
+async function processBulkSalary(
+  companyCode: string,
+  employeeIds: string,
+  divCode: string,
+  loginId: string
+): Promise<ApiResponse> {
+  const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
+    parameter: "PROC_BULK_PROCESS_SALARY",
+    loginid: loginId || "",
+    val1s1: companyCode || "",       // P_VAL1S1 (Company Code)
+    val1s2: employeeIds,             // P_VAL1S2 (Employee IDs - comma separated)
+    // val1s3 is the OUT parameter (L_PROCESS_FLAG), so we skip it
+    val1s4: divCode || "",           // P_VAL1S4 (Division Code)
+  });
+
+  if (!res.data.success)
+    throw new Error(res.data.message || "Failed to bulk process salary");
+
+  return res.data;
+}
+
 async function fetchPayrollProcessingData(params: {
   companyCode: string;
   divCode: string;
@@ -252,7 +273,7 @@ export default function PayrollProcessingPage() {
   }, [loadQuery.data, empId]);
 
   /* ── Process Payroll ───────────────────────────────────────────────────── */
-  const handleProcessPayroll = useCallback(async () => {
+const handleProcessPayroll = useCallback(async () => {
   if (!divCode) {
     alert("Division is required.");
     return;
@@ -278,27 +299,19 @@ export default function PayrollProcessingPage() {
       return;
     }
 
+    // 1. Extract employee IDs and join them into a comma-separated string
+    const employeeIdsStr = selectedRows
+      .map((row) => row.employee_id)
+      .filter(Boolean)
+      .join(",");
 
-    for (const row of selectedRows) {
-      await processEmployeePayroll(
-        companyCode,
-        divCode,
-        row.employee_id,
-        loginid,
-        "P" 
-      );
+    // 2. Call the bulk process procedure (NOW HITTING THE CORRECT ENDPOINT)
+    await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
 
-      await calcEmployeeSalary(
-    companyCode,
-    divCode,
-    row.employee_id,
-    loginid,
-    "P"
-  );
-    }
+    // 3. Adjust Pay COLA for the company
+    await adjustPayColaForCompany(companyCode, loginid);
 
-     await adjustPayColaForCompany(companyCode, loginid);
-
+    // 4. Update local state
     setRows((prev) =>
       prev.map((r) =>
         selectedRows.some(

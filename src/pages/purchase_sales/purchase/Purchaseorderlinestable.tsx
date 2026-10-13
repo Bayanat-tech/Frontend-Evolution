@@ -198,6 +198,7 @@ export function PurchaseOrderLinesTable({
       if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
     });
   }, [defaultZone, rows, headerAndLineDisabled]);
+  
   return (
     <div
       className="commercial-lines-card rounded-md border bg-card min-w-0"

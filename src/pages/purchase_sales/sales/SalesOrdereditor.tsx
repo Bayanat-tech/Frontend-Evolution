@@ -190,7 +190,7 @@ export function SalesOrderEditor({
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
-           address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
           address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
           address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
@@ -223,7 +223,11 @@ export function SalesOrderEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
-          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          // tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1),
+                    tx_cat_code: text(headerRaw.tx_cat_code || detailRows[0]?.tx_cat_code || current.tx_cat_code),
+          tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || detailRows[0]?.tx_compntcat_code_1 || current.tx_compntcat_code_1),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || detailRows[0]?.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
