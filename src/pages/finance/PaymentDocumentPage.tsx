@@ -1045,7 +1045,7 @@ function PaymentDocumentEditor({
               if (balance && !balance.error && balance.original_amount > 0) {
                 return {
                   ...m,
-                  ref_no: (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
+                  ref_no: (m as Record<string, unknown>).ref_no || (balance as any).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
@@ -1057,11 +1057,11 @@ function PaymentDocumentEditor({
           }),
         );
 
-        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        // Filter out fully paid invoices (outstanding <= 0) when creating a new transaction
         if (!editMode) {
           mapped = mapped.filter((m) => {
-            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
-            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+            const bal = Number(m.c_bal_amt_org ?? m.inv_amt ?? 0);
+            return bal > 0.001;
           });
         }
 
@@ -1258,11 +1258,6 @@ function PaymentDocumentEditor({
               missingFields.push("Valid Allocated Amount");
             } else if (amt > 0) {
               if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
-              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
-              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
-                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
-              }
             }
           }
 
@@ -1272,7 +1267,7 @@ function PaymentDocumentEditor({
             setInvalidChildRowIds(new Set([c.id]));
             setInvalidChildFields({ [c.id]: missingFields });
             return setError(
-              `Kindly check allocation fields: ${missingFields.join("; ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
             );
           }
         }
@@ -1329,12 +1324,7 @@ function PaymentDocumentEditor({
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? {
-                ...row,
-                inv_amt: balance.original_amount,
-                c_bal_amt_org: balance.outstanding_amount,
-                ref_no: (balance as any).ref_no || row.ref_no || "",
-              }
+            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -2922,9 +2912,6 @@ function groupChildren(form: TransactionHeader) {
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
       cleaned.amount = Number(cleaned.amount || 0);
       cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
-      if (table === "invoice") {
-        cleaned.indicator_origin = "N";
-      }
       grouped[table].push(cleaned);
     });
   });

@@ -316,18 +316,16 @@ export function SmartInlineAllocationTable({
             rows.map((row) => {
               const isRowInvalid = Boolean(invalidChildRowIds?.has(row.id));
               const missingList = invalidChildFields?.[row.id] || [];
-              const maxOutstanding = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
-              const isExceeding = childTable === "invoice" && maxOutstanding > 0 && Number(row.amount || 0) > maxOutstanding + 0.001;
               const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
               const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
               const isExpTypeMissing = isRowInvalid && (missingList.includes("exp_type_code") || missingList.includes("Expense Type") || !text(row.exp_type_code).trim());
-              const isAmtMissing = isExceeding || (isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || missingList.includes("Valid Allocated Amount") || (childTable !== "invoice" && Number(row.amount || 0) <= 0)));
+              const isAmtMissing = isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || missingList.includes("Valid Allocated Amount") || (childTable !== "invoice" && Number(row.amount || 0) <= 0));
 
               return (
                 <tr
                   key={row.id}
                   className={`border-b border-[#dce7f2] transition-colors ${
-                    isRowInvalid || isExceeding ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
+                    isRowInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
                   }`}
                 >
                   {/* # Column */}
@@ -402,12 +400,11 @@ export function SmartInlineAllocationTable({
                         <div className="flex items-center gap-1">
                           <input
                             className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
-                              isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40 text-rose-800" : "border-slate-300"
+                              isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
                             }`}
                             disabled={disabled}
                             type="number"
                             step="0.001"
-                            title={isExceeding ? `Allocated amount cannot exceed outstanding balance (${formatAmount(maxOutstanding)})` : undefined}
                             value={Number(row.amount || 0)}
                             onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
                             onKeyDown={(e) => {

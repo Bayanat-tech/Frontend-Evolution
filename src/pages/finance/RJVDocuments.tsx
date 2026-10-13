@@ -1033,47 +1033,12 @@ function JVDocument({
       return setError(`Reverse Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
     }
 
-    // Validation on child allocations (Expense, Invoice, Job)
     for (const d of form.detail) {
       const children = (form.children[d.id] || []) as TransactionChildRow[];
       if (children.length > 0) {
-        for (const [idx, c] of children.entries()) {
-          const rowNum = c.dtl_sr_no || idx + 1;
-          const missingFields: string[] = [];
-          if (d.child_table === "expense") {
-            if (!c.exp_type_code?.trim()) missingFields.push("Expense Type");
-            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
-          } else if (d.child_table === "job") {
-            if (!c.job_no?.trim()) missingFields.push("Job No");
-            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
-          } else if (d.child_table === "invoice") {
-            const amt = Number(c.amount || 0);
-            if (amt < 0) {
-              missingFields.push("Valid Allocated Amount");
-            } else if (amt > 0) {
-              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
-              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
-              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
-                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
-              }
-            }
-          }
-
-          if (missingFields.length > 0) {
-            setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
-            setSelectedDetailId(d.id);
-            return setError(
-              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
-            );
-          }
-        }
-
         const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
         const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
         if (Math.abs(childSum - lineAmt) > 0.001) {
-          setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
-          setSelectedDetailId(d.id);
           return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
         }
       }
@@ -1120,12 +1085,7 @@ function JVDocument({
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? {
-                ...row,
-                inv_amt: balance.original_amount,
-                c_bal_amt_org: balance.outstanding_amount,
-                ref_no: (balance as any).ref_no || row.ref_no || "",
-              }
+            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -2056,9 +2016,6 @@ function groupChildren(form: TransactionHeader) {
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
       cleaned.amount = Number(cleaned.amount || 0);
       cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
-      if (table === "invoice") {
-        cleaned.indicator_origin = "N";
-      }
       grouped[table].push(cleaned);
     });
   });
