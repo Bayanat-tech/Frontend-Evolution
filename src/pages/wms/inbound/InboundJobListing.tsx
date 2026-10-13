@@ -134,7 +134,7 @@ export function InboundJobListing() {
               className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
               title="Open job"
               onClick={(event) => {
-                event.stopPropagation(); // Prevent row click
+                event.stopPropagation(); // Prevent row clicks
                 navigate(`view/${value(row.original, "job_no")}/job_details?principal_code=${value(row.original, "prin_code")}`);
               }}
             >
