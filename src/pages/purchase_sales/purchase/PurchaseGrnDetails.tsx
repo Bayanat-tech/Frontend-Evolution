@@ -188,9 +188,9 @@ export function PurchaseGrnDetailsTable({
                             <th style={plainHeaderStyle(undefined, 0)}></th>
                             <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#dbeafe")}>PO Primary</th>
                             <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>PO Lowest</th>
-                            <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
-                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Rvd Primary</th>
-                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Rvd Lowest</th>
+                            <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Recived Primary</th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Recived Lowest</th>
                             <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
                         </tr>
                         {/* Row 2: every column title */}
@@ -209,7 +209,7 @@ export function PurchaseGrnDetailsTable({
                             <th className=" px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
                             <th className="px-2 py-2 text-center" style={plainHeaderStyle(80, GROUP_ROW_HEIGHT)}>Qty</th>
                             <th className="px-2 py-2 text-center" style={plainHeaderStyle(50, GROUP_ROW_HEIGHT)}>Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Rvd Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90, GROUP_ROW_HEIGHT)}>Recived Quantity</th>
                             <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160, GROUP_ROW_HEIGHT)}>Remarks</th>
                             <th className="px-2 py-2 text-center" style={plainHeaderStyle(60, GROUP_ROW_HEIGHT)}>Action</th>
                         </tr>
