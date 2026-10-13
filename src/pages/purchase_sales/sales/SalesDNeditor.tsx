@@ -529,7 +529,7 @@ export function SalesDNEditor({
           <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
             <div className="flex min-h-10 items-center justify-between gap-3">
               <FinanceDocumentIdentity
-                title="Purchase GRN"
+                title="Delivery Note"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
                 total={formatAmount(finalTotal)}
@@ -613,14 +613,13 @@ export function SalesDNEditor({
                         <Printer size={15} /> Print
                       </Button>
                       <Button
-                        aria-label="Excel"
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        onClick={() => void handleExcel()}
-                      >
-                        <Download size={15} />
-                      </Button>
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+>
+  <Download size={15} />
+  Excel
+</Button>
                     </>
                   )}
                   <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>

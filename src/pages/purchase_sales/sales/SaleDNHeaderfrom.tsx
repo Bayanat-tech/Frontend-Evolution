@@ -284,15 +284,15 @@ export function SalesDNHeaderForm({
             <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
             
               <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
                 </CField>
 
                 <CField label="Remarks" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
                 <CField label="Delivery Term" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
                 </CField>
                 </HeaderBlock>
         </div>

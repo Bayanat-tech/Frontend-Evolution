@@ -71,6 +71,7 @@ export function PurchaseInvoiceEditor({
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
+  const prevTaxType = useRef<string | null>(null);
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
@@ -106,6 +107,7 @@ export function PurchaseInvoiceEditor({
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);
+    prevTaxType.current = initialForm.tx_compnt_1_expmt || "";
     setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
@@ -119,25 +121,34 @@ export function PurchaseInvoiceEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
       })
     );
+
+
   }, [
     form.tx_compntcat_code_1,
     form.tx_cat_code,
     form.tx_compnt_1_expmt,
+    form.tx_compnt_perc_1
 
   ]);
-
   useEffect(() => {
     let mounted = true;
     async function loadExisting() {
@@ -168,6 +179,7 @@ export function PurchaseInvoiceEditor({
         }
         if (!mounted) return;
 
+        prevTaxType.current = text(headerRaw.tx_compnt_1_expmt);
         setForm((current) => ({
           ...current,
           doc_no: text(headerRaw.pi_doc_no) || text(docNo),
@@ -222,11 +234,13 @@ export function PurchaseInvoiceEditor({
           inv_date: toDateInputValue(headerRaw.inv_date),
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
-          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
+          po_tx_compnt_1_expmt: text(headerRaw.po_tx_compnt_1_expmt),
           tx_cat_name: text(headerRaw.tx_cat_name),
-        
+         tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || detailRows[0]?.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           tx_compntcat_name_1: text(headerRaw.tx_compntcat_name_1),
-          tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1),
+          tx_compnt_perc_1: headerRaw.tx_compnt_perc_1 == null
+            ? current.tx_compnt_perc_1
+            : numberOrZero(headerRaw.tx_compnt_perc_1),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
@@ -375,7 +389,7 @@ export function PurchaseInvoiceEditor({
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
+        tx_compnt_perc_1: form.tx_compnt_perc_1 ?? (form.tx_compnt_1_expmt === "S" ? 5 : 0),
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));

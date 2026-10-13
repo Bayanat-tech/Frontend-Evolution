@@ -27,6 +27,7 @@ type LookupFieldProps = {
   multiSelect?: boolean;
   showLabelInCompact?: boolean;
   renderRowActions?: (row: LookupRow) => ReactNode;
+  popoverWidth?: number;
   className?: string;
 };
 
@@ -49,6 +50,7 @@ export function LookupField({
   enforceRequired,
   multiSelect,
   renderRowActions,
+  popoverWidth,
   className,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
@@ -82,10 +84,12 @@ export function LookupField({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    const minIdealWidth = 540;
+    const autoMinWidth = columns.length <= 2 ? 390 : 540;
+    const minIdealWidth = popoverWidth ?? autoMinWidth;
+    const maxAllowedWidth = popoverWidth ?? 780;
     const width = Math.min(
       Math.max(rect.width, minIdealWidth),
-      Math.min(780, viewportWidth - 24),
+      Math.min(maxAllowedWidth, viewportWidth - 24),
     );
 
     // Leave a comfortable 28px margin from top and bottom screen edges (taskbar safety)
@@ -488,14 +492,14 @@ export function LookupField({
             </div>
 
             {/* Pagination & Action Footer */}
-            <div className="lookup-footer flex-none px-3 py-2 border-t border-slate-200 bg-slate-50/95 flex items-center justify-between text-xs text-slate-600 gap-2 flex-wrap">
-              <span className="text-[11.5px] font-medium text-slate-500 whitespace-nowrap">
-                Showing <strong className="text-slate-800">{startRecord}–{endRecord}</strong> of <strong className="text-slate-800">{filteredRows.length.toLocaleString()}</strong>
+            <div className="lookup-footer flex-none px-3 py-1.5 border-t border-slate-200 bg-slate-50/95 flex items-center justify-between text-xs text-slate-600 gap-2">
+              <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap shrink-0">
+                Showing <strong className="text-slate-800 font-semibold">{startRecord}–{endRecord}</strong> of <strong className="text-slate-800 font-semibold">{filteredRows.length.toLocaleString()}</strong>
               </span>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <select
-                  className="h-7 px-2 rounded-md border border-slate-300 bg-white text-[11px] font-semibold text-slate-700 focus:outline-none focus:border-[#00378C] cursor-pointer shadow-2xs"
+                  className="h-6.5 px-1.5 rounded border border-slate-300 bg-white text-[10.5px] font-medium text-slate-700 focus:outline-none focus:border-[#00378C] cursor-pointer shadow-2xs"
                   value={rowsPerPage}
                   onChange={(e) => {
                     setRowsPerPage(Number(e.target.value));
@@ -504,18 +508,18 @@ export function LookupField({
                   }}
                   title="Rows per page"
                 >
-                  {[10, 25, 50, 100, 250, 500].map((size) => (
+                  {[10, 25, 50, 100].map((size) => (
                     <option key={size} value={size}>
-                      {size} / page
+                      {size} / pg
                     </option>
                   ))}
                 </select>
 
                 {totalPages > 1 && (
-                  <div className="inline-flex items-center gap-1">
+                  <div className="inline-flex items-center gap-0.5">
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === 1}
                       onClick={() => {
                         setPage(1);
@@ -523,11 +527,11 @@ export function LookupField({
                       }}
                       title="First page"
                     >
-                      <ChevronsLeft size={14} />
+                      <ChevronsLeft size={13} />
                     </button>
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === 1}
                       onClick={() => {
                         setPage((current) => Math.max(1, current - 1));
@@ -535,14 +539,14 @@ export function LookupField({
                       }}
                       title="Previous page"
                     >
-                      <ChevronLeft size={14} />
+                      <ChevronLeft size={13} />
                     </button>
-                    <span className="text-[11px] font-semibold text-slate-700 px-1.5 whitespace-nowrap min-w-[42px] text-center">
-                      {page} / {totalPages}
+                    <span className="text-[10.5px] font-semibold text-slate-700 px-1 whitespace-nowrap min-w-[34px] text-center">
+                      {page}/{totalPages}
                     </span>
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === totalPages}
                       onClick={() => {
                         setPage((current) => Math.min(totalPages, current + 1));
@@ -550,11 +554,11 @@ export function LookupField({
                       }}
                       title="Next page"
                     >
-                      <ChevronRight size={14} />
+                      <ChevronRight size={13} />
                     </button>
                     <button
                       type="button"
-                      className="h-7 px-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
+                      className="h-6.5 w-6 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-[#00378C]/40 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center"
                       disabled={page === totalPages}
                       onClick={() => {
                         setPage(totalPages);
@@ -562,14 +566,14 @@ export function LookupField({
                       }}
                       title="Last page"
                     >
-                      <ChevronsRight size={14} />
+                      <ChevronsRight size={13} />
                     </button>
                   </div>
                 )}
 
                 <button
                   type="button"
-                  className="h-7 px-3 rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 text-[11px] font-semibold transition-colors cursor-pointer ml-1 shadow-2xs"
+                  className="h-6.5 px-2.5 rounded bg-slate-200 text-slate-800 hover:bg-slate-300 text-[10.5px] font-semibold transition-colors cursor-pointer ml-0.5 shadow-2xs"
                   onClick={() => {
                     setOpen(false);
                     setQuery("");

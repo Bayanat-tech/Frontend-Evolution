@@ -61,6 +61,7 @@ export type TransactionHeader = {
   cheque_bank?: string;
   ac_payee?: string;
   tx_compntcat_code_1?: string;
+  tx_compntcat_name_1?: string;
   tx_compnt_1_expmt?: string;
   files?: unknown[];
   detail: TransactionDetail[];
@@ -115,6 +116,7 @@ export type TransactionChildRow = Record<string, unknown> & {
   isEditMode?: boolean;
   IsDeletable?: boolean;
   inv_no?: string;
+  ref_no?: string;
   inv_date?: string;
   inv_amt?: number | null;
   c_bal_amt_org?: number | null;
@@ -1728,6 +1730,35 @@ export async function getVisaExpiryReportExcelDownload(params: ReportParams): Pr
   const link = document.createElement("a");
   link.href = url;
   link.download = `VisaExpiryReport_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+// ----------Employee Assessment Report — HTML (inline preview)----------------
+export async function getEmployeeAssessmentReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Assessment Report — Excel download----------------
+export async function getEmployeeAssessmentReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeAssessmentReport_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();

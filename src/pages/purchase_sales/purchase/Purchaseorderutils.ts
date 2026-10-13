@@ -875,6 +875,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     buyer: form.buyer,
     wo_number: form.wo_number,
     tx_compnt_1_expmt: form.tx_compnt_1_expmt,
+    tx_compnt_perc_1: numberOrZero(form.tx_compnt_perc_1),
     curr_code: form.curr_code,
     curr_name: form.curr_name,
     ex_rate: form.ex_rate,
