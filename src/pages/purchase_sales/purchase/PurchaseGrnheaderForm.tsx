@@ -252,15 +252,15 @@ export function PurchaseGrnHeaderForm({
             <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
 
   <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms}   maxLength={250} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
                 </CField>
 
                <CField label="Remarks" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled} value={form.remarks}   maxLength={250} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
                 <CField label="Delivery Term" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term}   maxLength={250} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
                 </CField>
             
             </HeaderBlock>

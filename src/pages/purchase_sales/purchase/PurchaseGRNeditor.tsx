@@ -464,7 +464,7 @@ export function PurchaseGRNEditor({
           <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
             <div className="flex min-h-10 items-center justify-between gap-3">
               <FinanceDocumentIdentity
-                title="Purchase GRN"
+                title="Goods Receipt Note"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
                 total={formatAmount(finalTotal)}
