@@ -458,13 +458,14 @@ export function PurchaseOrderHeaderForm({
               label="Payment Terms"
               className={String(docType ?? "").trim().toUpperCase() === "LPO" ? "col-span-4" : "col-span-6"}
             >
-              <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.payment_terms} onChange={(e) => updateField("payment_terms", e.target.value)} />
+              <Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.payment_terms} onChange={(e) => updateField("payment_terms", e.target.value)} />
             </CField>
 
             <CField label="Remarks" className="col-span-6">
               <textarea
                 className={`${String(docType ?? "").trim().toUpperCase() === "LPO" ? "h-[70px]" : "h-[100px]"} w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs`}
                 disabled={headerAndLineDisabled}
+                maxLength={250}
                 value={form.remarks || ""}
                 onChange={(e) => updateField("remarks", e.target.value)}
               />
@@ -522,7 +523,7 @@ export function PurchaseOrderHeaderForm({
                 {(docTypeUpper === "JO" && <CField label="Delivery Date" ><Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.dlvr_date} onChange={(e) => updateField("dlvr_date", e.target.value)} /></CField>)}
                 <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.dlvr_mobile} maxLength={20} onChange={(e) => updateField("dlvr_mobile", cleanPhone(e.target.value))} /></CField>
                 <CField label="Delivery Email Address"><Input className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", (e.target.value))} /></CField>
-                <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
+                <CField label="Delivery Term"><Input className="h-7 text-xs"   maxLength={250} disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
               </>
             )}
           </HeaderBlock>

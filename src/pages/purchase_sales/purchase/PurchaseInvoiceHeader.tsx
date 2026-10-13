@@ -449,11 +449,11 @@ export function PurchaseInvoiceHeaderForm({
                             </Select>
                         </CField>
                         <CField label="Payment Terms" className="col-span-6">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(e) => updateField("po_payment_terms", e.target.value)} />
+                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.po_payment_terms} onChange={(e) => updateField("po_payment_terms", e.target.value)} />
                         </CField>
 
                         <CField label="GRN Remarks" className="col-span-6">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} />
+                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} />
                         </CField>
                         <CField label="Remarks" className="col-span-6">
                             <textarea
@@ -510,10 +510,10 @@ export function PurchaseInvoiceHeaderForm({
                     </HeaderBlock>
 
                     <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
-                        <CField label="Delivery Contact Person"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
-                        <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.dlvr_mobile} maxLength={20} onChange={(e) => updateField("dlvr_mobile", cleanPhone(e.target.value))} /></CField>
-                                       <CField label="Delivery Email Address"><Input    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", (e.target.value))} /></CField>
-                        <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(e) => updateField("po_dlvr_term", e.target.value)} /></CField>
+                        <CField label="Delivery Contact Person"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_contact} onChange={(e) => updateField("po_dlvr_contact", e.target.value)} /></CField>
+                        <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.po_dlvr_mobile} maxLength={20} onChange={(e) => updateField("po_dlvr_mobile", cleanPhone(e.target.value))} /></CField>
+                        <CField label="Delivery Email Address"><Input    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`}  type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.po_dlvr_email} onChange={(e) => updateField("po_dlvr_email", (e.target.value))} /></CField>
+                        <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_term}   maxLength={250} onChange={(e) => updateField("po_dlvr_term", e.target.value)} /></CField>
                     </HeaderBlock>
 
                     {/* Discount + Tax side by side */}
