@@ -159,7 +159,7 @@ const loadRows = async (clearNotice = true) => {
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_SORDER_ENTRY_TAB_List",
+      parameter: "PS_SDN_ENTRY_TAB_LIST",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
@@ -184,7 +184,7 @@ const loadRows = async (clearNotice = true) => {
     const results = await Promise.all(
       visibleTabs.map(async (tabValue) => {
         const response = await getDynamicLookup({
-          parameter: "PS_SORDER_ENTRY_TAB_List",
+          parameter: "PS_SDN_ENTRY_TAB_LIST",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
