@@ -316,16 +316,18 @@ export function SmartInlineAllocationTable({
             rows.map((row) => {
               const isRowInvalid = Boolean(invalidChildRowIds?.has(row.id));
               const missingList = invalidChildFields?.[row.id] || [];
+              const maxOutstanding = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+              const isExceeding = childTable === "invoice" && maxOutstanding > 0 && Number(row.amount || 0) > maxOutstanding + 0.001;
               const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
               const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
               const isExpTypeMissing = isRowInvalid && (missingList.includes("exp_type_code") || missingList.includes("Expense Type") || !text(row.exp_type_code).trim());
-              const isAmtMissing = isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || missingList.includes("Valid Allocated Amount") || (childTable !== "invoice" && Number(row.amount || 0) <= 0));
+              const isAmtMissing = isExceeding || (isRowInvalid && (missingList.includes("amount") || missingList.includes("Amount") || missingList.includes("Allocated Amount") || missingList.includes("Valid Allocated Amount") || (childTable !== "invoice" && Number(row.amount || 0) <= 0)));
 
               return (
                 <tr
                   key={row.id}
                   className={`border-b border-[#dce7f2] transition-colors ${
-                    isRowInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
+                    isRowInvalid || isExceeding ? "bg-rose-50/70 border-l-4 border-l-rose-500" : "bg-white hover:bg-[#f1f7fd]"
                   }`}
                 >
                   {/* # Column */}
@@ -397,37 +399,52 @@ export function SmartInlineAllocationTable({
 
                       {/* Allocated Amount with compact Full button */}
                       <td className="px-1 py-0.5">
-                        <div className="flex items-center gap-1">
-                          <input
-                            className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
-                              isAmtMissing ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40" : "border-slate-300"
-                            }`}
-                            disabled={disabled}
-                            type="number"
-                            step="0.001"
-                            value={Number(row.amount || 0)}
-                            onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }
-                            }}
-                          />
-                          {Number(row.c_bal_amt_org || row.inv_amt || 0) > 0 && (
-                            <button
-                              type="button"
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1">
+                            <input
+                              className={`h-[25px] w-full rounded border bg-white px-2 py-0 text-xs font-mono font-semibold text-right text-slate-900 focus:border-[#00378C] focus:outline-none transition-colors ${
+                                isAmtMissing || isExceeding ? "!border-rose-500 !ring-2 !ring-rose-400 bg-rose-50/40 text-rose-800" : "border-slate-300"
+                              }`}
                               disabled={disabled}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) });
+                              type="number"
+                              step="0.001"
+                              max={maxOutstanding > 0 ? maxOutstanding : undefined}
+                              title={isExceeding ? `Allocated amount cannot exceed outstanding balance (${formatAmount(maxOutstanding)})` : undefined}
+                              value={Number(row.amount || 0)}
+                              onChange={(e) => onChange(row.id, { amount: Number(e.target.value || 0) })}
+                              onBlur={(e) => {
+                                const val = Number(e.target.value || 0);
+                                if (childTable === "invoice" && maxOutstanding > 0 && val > maxOutstanding) {
+                                  onChange(row.id, { amount: maxOutstanding });
+                                }
                               }}
-                              className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
-                              title="Allocate full outstanding amount"
-                            >
-                              Full
-                            </button>
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }
+                              }}
+                            />
+                            {Number(row.c_bal_amt_org || row.inv_amt || 0) > 0 && (
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) });
+                                }}
+                                className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
+                                title="Allocate full outstanding amount"
+                              >
+                                Full
+                              </button>
+                            )}
+                          </div>
+                          {isExceeding && (
+                            <span className="text-[10px] text-rose-600 font-semibold leading-tight text-right whitespace-nowrap">
+                              Max allowed: {formatAmount(maxOutstanding)}
+                            </span>
                           )}
                         </div>
                       </td>
