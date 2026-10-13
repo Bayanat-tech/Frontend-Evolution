@@ -179,8 +179,8 @@ export function SalesDnDetailsTable({
                             <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#e2e8f0")}>SO Lowest</th>
                             {/* Unit Price, Quantity */}
                             <th colSpan={2} style={plainHeaderStyle(undefined, 0)}></th>
-                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Rvd Primary</th>
-                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Rvd Lowest</th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#bbf7d0")}>Recived Primary</th>
+                            <th colSpan={2} className="px-2 py-1 text-center" style={groupHeaderStyle("#fde68a")}>Recived Lowest</th>
                             {/* Delivered Quantity, Remarks, Action */}
                             <th colSpan={3} style={plainHeaderStyle(undefined, 0)}></th>
                         </tr>
