@@ -99,7 +99,6 @@ function buildLabel(code: string, name: string): string {
   if (!c && !n) return "";
   if (!c) return n;
   if (!n) return c;
-  // If name already begins with the code, use it as-is
   if (n === c) return c;
   if (n.startsWith(c + " ") || n.startsWith(c + "-") || n.startsWith(c + " - ")) {
     return n;
@@ -400,6 +399,7 @@ export function KpiGroupPage() {
     });
   }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
 
+  // ✅ Dedupe rows inside each designation group (by KPI_CODE, fallback KPI_DESC)
   const designationGroups = useMemo<DesignationGroup[]>(() => {
     const map = new Map<string, DesignationGroup>();
     filteredRows.forEach((r) => {
@@ -417,8 +417,28 @@ export function KpiGroupPage() {
       }
       const g = map.get(key)!;
       g.rows.push(r);
-      g.totalWeightage += number(r.STANDARD_WEIGHTAGE);
     });
+
+    // Dedupe within each designation group
+    map.forEach((group) => {
+      const seen = new Set<string>();
+      group.rows = group.rows.filter((r) => {
+        const kpiCode = text(r.KPI_CODE).trim();
+        const kpiDesc = text(r.KPI_DESC).trim().toLowerCase();
+        const dedupKey = kpiCode || kpiDesc;
+        if (!dedupKey) return true;
+        if (seen.has(dedupKey)) return false;
+        seen.add(dedupKey);
+        return true;
+      });
+
+      // Recompute weightage after dedupe
+      group.totalWeightage = group.rows.reduce(
+        (sum, r) => sum + number(r.STANDARD_WEIGHTAGE),
+        0
+      );
+    });
+
     return Array.from(map.values()).sort((a, b) =>
       a.designationLabel.localeCompare(b.designationLabel)
     );
@@ -617,7 +637,8 @@ export function KpiGroupPage() {
   };
 
   // ═════════════════════════════════════════════════════════
-  // SAVE
+  // SAVE — ✅ Min 3 / Max 6 validation REMOVED
+  //         Only duplicate-activity check remains
   // ═════════════════════════════════════════════════════════
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
@@ -628,17 +649,8 @@ export function KpiGroupPage() {
     if (!form.DESG_CODE.trim()) { toast.warning("Designation is required"); return; }
     if (!form.KPI_DESC.trim()) { toast.warning("KPI Description is required"); return; }
 
+    // Only duplicate check — no activity count limits
     if (form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
-      const validActivities = activities.filter((a) => a.desc.trim());
-      if (validActivities.length < 3) {
-        toast.warning(`Minimum 3 KPI Items (Activities) required. Currently: ${validActivities.length}`);
-        return;
-      }
-      if (validActivities.length > 6) {
-        toast.warning(`Maximum 6 KPI Items (Activities) allowed. Currently: ${validActivities.length}`);
-        return;
-      }
-
       const dupIndices = findDuplicateActivityIndices(activities);
       if (dupIndices.length > 0) {
         setDuplicateIndices(dupIndices);
@@ -1379,7 +1391,6 @@ export function KpiGroupPage() {
                           size="sm"
                           variant="outline"
                           onClick={addActivity}
-                          disabled={activities.length >= 6}
                           className="gap-1"
                         >
                           <Plus size={14} /> Add Activity
