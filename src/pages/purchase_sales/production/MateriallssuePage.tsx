@@ -14,7 +14,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "../../purchase_sales/sales/SalesOrdereditor";
-import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
+import { MIS_CONFIG, SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
@@ -477,7 +477,7 @@ const loadRows = async (clearNotice = true) => {
           <MaterialIssueEditor
 
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={SO_CONFIG}
+            config={MIS_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
