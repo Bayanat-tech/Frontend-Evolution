@@ -64,7 +64,9 @@ export function SmartInlineAllocationTable({
     e?.preventDefault();
     e?.stopPropagation();
     rows.forEach((r) => {
-      const maxAmt = Number(r.c_bal_amt_org || r.inv_amt || 0);
+      const invAmt = Number(r.inv_amt || 0);
+      const rawOutstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : invAmt);
+      const maxAmt = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
       if (maxAmt > 0) {
         onChange(r.id, { amount: maxAmt });
       }
@@ -79,8 +81,10 @@ export function SmartInlineAllocationTable({
     for (const r of rows) {
       if (remaining <= 0) break;
       const currentAllocated = Number(r.amount) || 0;
-      const maxAllowed = Number(r.c_bal_amt_org || r.inv_amt || 0);
-      const canAdd = maxAllowed > currentAllocated ? maxAllowed - currentAllocated : remaining;
+      const invAmt = Number(r.inv_amt || 0);
+      const rawOutstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : invAmt);
+      const maxAllowed = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
+      const canAdd = maxAllowed > currentAllocated ? maxAllowed - currentAllocated : 0;
       const toAdd = Math.min(remaining, canAdd);
       if (toAdd > 0) {
         onChange(r.id, { amount: currentAllocated + toAdd });
@@ -419,14 +423,14 @@ export function SmartInlineAllocationTable({
                                 }
                               }}
                             />
-                            {Number(row.c_bal_amt_org || row.inv_amt || 0) > 0 && (
+                            {maxOutstanding > 0 && (
                               <button
                                 type="button"
                                 disabled={disabled}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  onChange(row.id, { amount: Number(row.c_bal_amt_org || row.inv_amt || 0) });
+                                  onChange(row.id, { amount: maxOutstanding });
                                 }}
                                 className="h-[23px] px-1.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 transition-colors cursor-pointer shrink-0"
                                 title="Allocate full outstanding amount"
