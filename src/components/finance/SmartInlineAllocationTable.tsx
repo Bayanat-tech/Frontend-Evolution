@@ -316,7 +316,9 @@ export function SmartInlineAllocationTable({
             rows.map((row) => {
               const isRowInvalid = Boolean(invalidChildRowIds?.has(row.id));
               const missingList = invalidChildFields?.[row.id] || [];
-              const maxOutstanding = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+              const invAmt = Number(row.inv_amt || 0);
+              const rawOutstanding = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : invAmt);
+              const maxOutstanding = invAmt > 0 ? Math.min(invAmt, Math.max(0, rawOutstanding)) : Math.max(0, rawOutstanding);
               const isExceeding = childTable === "invoice" && maxOutstanding > 0 && Number(row.amount || 0) > maxOutstanding + 0.001;
               const isInvNoMissing = isRowInvalid && (missingList.includes("inv_no") || missingList.includes("Invoice No") || !text(row.inv_no).trim());
               const isJobNoMissing = isRowInvalid && (missingList.includes("job_no") || missingList.includes("Job No") || !text(row.job_no).trim());
@@ -381,20 +383,12 @@ export function SmartInlineAllocationTable({
 
                       {/* Invoice Amount */}
                       <td className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-700 truncate">
-                        {row.inv_amt != null && Number(row.inv_amt) > 0
-                          ? formatAmount(Number(row.inv_amt))
-                          : Number(row.amount || 0) > 0
-                            ? formatAmount(Number(row.amount || 0))
-                            : "-"}
+                        {invAmt > 0 ? formatAmount(invAmt) : "-"}
                       </td>
 
                       {/* Outstanding */}
                       <td className="px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 truncate">
-                        {row.c_bal_amt_org != null && Number(row.c_bal_amt_org) > 0
-                          ? formatAmount(Number(row.c_bal_amt_org))
-                          : Number(row.amount || 0) > 0
-                            ? formatAmount(Number(row.amount || 0))
-                            : "-"}
+                        {maxOutstanding > 0 ? formatAmount(maxOutstanding) : "-"}
                       </td>
 
                       {/* Allocated Amount with compact Full button */}
