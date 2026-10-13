@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Download, FileText, Loader2, Printer, X } from "lucide-react";
 import { PurchaseOrderForm } from "./Purchaseordertypes";
 import {
@@ -14,7 +14,7 @@ import {
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 
-// The 3 report types available in the dropdown/radio group.
+// The 3 report types available in the radio group.
 type PurchaseQuotationPrintReportType = "QUOTATION" | "QUOTATION_WITH_RATES" | "COMPARE_QUOTATION";
 
 const REPORT_OPTIONS: { displayValue: string; dataValue: PurchaseQuotationPrintReportType }[] = [
@@ -30,104 +30,24 @@ function formatDate(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-// ─── Shared styles — BISC blue theme (same palette as PO Order Register) ───
+// ─── Small presentational helpers (BISC royal-blue theme) ───────────────────
 
-const BORDER = "#aebdce";
-const BG = "#f4f7fb";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  fontSize: 12,
-  padding: "8px 10px",
-  border: `1px solid ${BORDER}`,
-  borderRadius: 7,
-  background: BG,
-  color: "#172033",
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-const readOnlyBoxStyle: React.CSSProperties = {
-  ...inputStyle,
-  color: "#172033",
-  fontWeight: 500,
-};
-
-function FloatLabel({ label, required, children, bgColor = "#fff" }: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-  bgColor?: string;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ position: "relative", marginTop: 6 }}>
-      <span style={{
-        position: "absolute", top: -8, left: 10, fontSize: 11, color: "#61748d",
-        background: bgColor, padding: "0 4px", zIndex: 1, textTransform: "uppercase",
-        letterSpacing: "0.05em", fontWeight: 600,
-      }}>
-        {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
-      </span>
+    <div className="min-w-0">
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
       {children}
     </div>
   );
 }
 
-const RadioGroup: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  options: { displayValue: string; dataValue: string }[];
-}> = ({ value, onChange, options }) => (
-  <div
-    style={{
-      display: "flex",
-      flexWrap: "nowrap",
-      alignItems: "center",
-      gap: 20,
-      padding: "8px 10px",
-      overflowX: "auto",
-    }}
-  >
-    {options.map((opt) => (
-      <label
-        key={opt.dataValue}
-        onClick={() => onChange(opt.dataValue)}
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          cursor: "pointer",
-          userSelect: "none",
-          whiteSpace: "nowrap",
-          fontSize: 12,
-          fontWeight: 500,
-          color: "#172033",
-        }}
-      >
-        <span
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 16,
-            height: 16,
-            borderRadius: "999px",
-            border: `2px solid ${value === opt.dataValue ? "#1d4ed8" : "#9ca3af"}`,
-            flexShrink: 0,
-          }}
-        >
-          {value === opt.dataValue && (
-            <span style={{ width: 8, height: 8, borderRadius: "999px", background: "#1d4ed8" }} />
-          )}
-        </span>
-        <span style={{ color: value === opt.dataValue ? "#1d4ed8" : "#172033" }}>
-          {opt.displayValue}
-        </span>
-      </label>
-    ))}
-  </div>
-);
+function ReadOnlyBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-xs">
+      {children}
+    </div>
+  );
+}
 
 export function PurchaseQuotationPrintDialog({
   open,
@@ -148,10 +68,18 @@ export function PurchaseQuotationPrintDialog({
   const [loadingAction, setLoadingAction] = useState<"print" | "excel" | null>(null);
   const [reportError, setReportError] = useState("");
 
-  // ── Report preview dialog state (backed by NewReportDialog: raw HTML, no blob URL / new tab) ──
+  const busy = loadingAction !== null;
 
+  // Escape closes the dialog (ignored while a request is running)
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && loadingAction === null) onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose, loadingAction]);
 
- 
   if (!open) return null;
 
   const docNo = String(form.doc_no || "");
@@ -172,36 +100,34 @@ export function PurchaseQuotationPrintDialog({
     reportType === "COMPARE_QUOTATION" ? getPurchaseQuotationCompareReportExcel :
     getPurchaseQuotationReportExcel;
 
-  // ── Print now opens the in-app preview dialog instead of a new window ───
+  // ── Print opens the in-app preview dialog instead of a new window ───
   const handlePrint = async () => {
-  if (!docNo) {
-    setReportError("Doc No is missing — cannot fetch the report.");
-    return;
-  }
-  setReportError("");
-  setLoadingAction("print");
+    if (!docNo) {
+      setReportError("Doc No is missing — cannot fetch the report.");
+      return;
+    }
+    setReportError("");
+    setLoadingAction("print");
 
-  const reportLabel = REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue || "Purchase Quotation";
-  const preview = openPurchaseReport(`${reportLabel} ${docNo}`.trim());
+    const reportLabel = REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue || "Purchase Quotation";
+    const preview = openPurchaseReport(`${reportLabel} ${docNo}`.trim());
 
-  try {
-    const html = await getHtmlFn()(buildApiParams());
-    preview.ready({
-      html,
-      filename: `${reportType.toLowerCase()}_${docNo}_${new Date().toISOString().slice(0, 10)}`,
-     orientation: "landscape",
-      onExcel: async () => {
-        await getExcelFn()(buildApiParams());
-      },
-    });
-  } catch (err: any) {
-    preview.fail(new Error(err?.message || "Failed to load report."));
-  } finally {
-    setLoadingAction(null);
-  }
-};
-
-  
+    try {
+      const html = await getHtmlFn()(buildApiParams());
+      preview.ready({
+        html,
+        filename: `${reportType.toLowerCase()}_${docNo}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "landscape",
+        onExcel: async () => {
+          await getExcelFn()(buildApiParams());
+        },
+      });
+    } catch (err: any) {
+      preview.fail(new Error(err?.message || "Failed to load report."));
+    } finally {
+      setLoadingAction(null);
+    }
+  };
 
   const handleExcel = async () => {
     if (!docNo) {
@@ -219,138 +145,144 @@ export function PurchaseQuotationPrintDialog({
     }
   };
 
-  
-
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center",
-      justifyContent: "center", background: "rgba(0,0,0,0.5)", padding: 16,
-      fontFamily: "system-ui, sans-serif",
-    }}>
-      <style>{`
-        .pq-print-btn-primary:hover { background: #002e76 !important; }
-        .pq-print-btn-outline:hover { background: #EBF4FF !important; border-color: #00449b !important; color: #00449b !important; }
-      `}</style>
-
-      <div style={{
-        width: "100%", maxWidth: 760, maxHeight: "90vh", display: "flex", flexDirection: "column",
-        overflow: "hidden", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12,
-        boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
-      }}>
-        {/* Card header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <FileText size={17} color="#00449b" />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#172033" }}>
-              Print Preview {docNo ? `— ${docNo}` : ""}
-            </span>
-          </div>
-          <button onClick={onClose} aria-label="Close" style={{
-            padding: 6, border: "none", background: "none", color: "#6b7280", cursor: "pointer",
-            display: "flex", alignItems: "center",
-          }}>
-            <X size={17} />
-          </button>
-        </div>
-
-        {/* Scrollable content */}
-        <div style={{ overflow: "auto", padding: "10px 16px 16px" }}>
-          {/* Field-row: header details, same look as SalesInvoicePrintDialog */}
-          <div style={{ background: BG, borderRadius: 8, padding: "10px 12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <FloatLabel label="Doc No" bgColor={BG}>
-                  <div style={readOnlyBoxStyle}>{docNo || "—"}</div>
-                </FloatLabel>
+    <>
+      {/* Backdrop — click outside closes */}
+      <div
+        className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[2px] transition-all"
+        onClick={() => !busy && onClose()}
+      >
+        {/* Card */}
+        <div
+          className="flex max-h-[90vh] w-full max-w-[640px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Royal blue header */}
+          <div className="flex items-center justify-between bg-gradient-to-r from-[#00378C] to-[#0c4a9e] px-5 py-4 text-white">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white shadow-xs backdrop-blur-xs">
+                <FileText size={20} />
               </div>
-              <div style={{ minWidth: 0 }}>
-                <FloatLabel label="Date" bgColor={BG}>
-                  <div style={readOnlyBoxStyle}>{formatDate(form.doc_date) || "—"}</div>
-                </FloatLabel>
+              <div>
+                <h3 className="m-0 text-base font-semibold leading-tight tracking-tight text-white">
+                  Print Preview{docNo ? ` — ${docNo}` : ""}
+                </h3>
+                <p className="m-0 mt-0.5 text-xs text-blue-100/80">
+                  Choose a print type, then print or export to Excel
+                </p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              aria-label="Close"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
-            <div style={{ marginTop: 12 }}>
-              <FloatLabel label="Party" bgColor={BG}>
-                <div style={readOnlyBoxStyle}>
+          {/* Document details strip */}
+          <div className="border-b border-slate-200 bg-slate-50 p-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Doc No">
+                <ReadOnlyBox>{docNo || "—"}</ReadOnlyBox>
+              </Field>
+              <Field label="Date">
+                <ReadOnlyBox>{formatDate(form.doc_date) || "—"}</ReadOnlyBox>
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Field label="Party">
+                <ReadOnlyBox>
                   {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "—"}
-                </div>
-              </FloatLabel>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <FloatLabel label="Print Type" bgColor={BG}>
-                <div style={{ border: `1px solid ${BORDER}`, borderRadius: 7, background: "#fff", boxSizing: "border-box" }}>
-                  <RadioGroup value={reportType} onChange={(v) => setReportType(v as PurchaseQuotationPrintReportType)} options={REPORT_OPTIONS} />
-                </div>
-              </FloatLabel>
+                </ReadOnlyBox>
+              </Field>
             </div>
           </div>
 
-          {/* Info line — the real report data comes from the server on Print/Excel click */}
-          <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginTop: 12 }}>
-            <FloatLabel label="Selected Report" bgColor={BG}>
-              <div style={{ ...inputStyle, minHeight: 40, display: "flex", alignItems: "center" }}>
-                <span style={{ fontWeight: 600 }}>
-                  {REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue}
-                </span>
+          {/* Print type — clickable cards */}
+          <div className="overflow-y-auto p-4">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Print Type</div>
+            <div role="radiogroup" aria-label="Print type" className="grid gap-2 sm:grid-cols-3">
+              {REPORT_OPTIONS.map((opt) => {
+                const active = reportType === opt.dataValue;
+                return (
+                  <button
+                    key={opt.dataValue}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={busy}
+                    onClick={() => setReportType(opt.dataValue)}
+                    className={`group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs font-semibold transition-all ${
+                      busy ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                    } ${
+                      active
+                        ? "border-[#00378C] bg-blue-50 text-[#00378C] shadow-xs"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-[#00378C] hover:bg-blue-50/50 hover:shadow-xs"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        active ? "border-[#00378C]" : "border-slate-300 group-hover:border-[#00378C]"
+                      }`}
+                    >
+                      {active && <span className="h-2 w-2 rounded-full bg-[#00378C]" />}
+                    </span>
+                    <span className="min-w-0 leading-tight">{opt.displayValue}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {reportError && (
+              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {reportError}
               </div>
-            </FloatLabel>
+            )}
+
+            <p className="m-0 mt-3 text-[11px] text-slate-400">
+              The live report for Doc No {docNo || "—"} is fetched from the server when you click Print or Excel.
+            </p>
           </div>
 
-          {reportError && (
-            <div style={{
-              marginTop: 10, padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca",
-              borderRadius: 6, color: "#dc2626", fontSize: 12,
-            }}>
-              {reportError}
-            </div>
-          )}
-
-          <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, marginLeft: 4 }}>
-            Choose a "Print Type" above, then use Print or Excel below to fetch the live report for Doc No {docNo || "—"}.
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/80 px-4 py-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <X size={13} /> Close
+            </button>
+            <button
+              type="button"
+              onClick={handleExcel}
+              disabled={busy}
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-[#00378C] hover:bg-blue-50 hover:text-[#00378C] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingAction === "excel" ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              {loadingAction === "excel" ? "Exporting..." : "Excel"}
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              disabled={busy}
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#00378C] bg-[#00378C] px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#002a6b] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loadingAction === "print" ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
+              {loadingAction === "print" ? "Opening..." : "Print"}
+            </button>
           </div>
-        </div>
-
-        {/* Action bar */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: `1px solid ${BORDER}` }}>
-          <button onClick={onClose} className="pq-print-btn-outline" style={{
-            padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
-          }}>
-            <X size={13} /> Close
-          </button>
-          <button
-            onClick={handleExcel}
-            disabled={loadingAction !== null}
-            className="pq-print-btn-outline"
-            style={{
-              padding: "7px 16px", border: `1px solid ${BORDER}`, background: "#fff",
-              cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.6 : 1,
-              display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
-            }}
-          >
-            {loadingAction === "excel" ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            {loadingAction === "excel" ? "Exporting..." : "Excel"}
-          </button>
-          <button
-            onClick={handlePrint}
-            disabled={loadingAction !== null}
-            className="pq-print-btn-primary"
-            style={{
-              padding: "7px 16px", border: "1px solid #00449b", background: "#00449b",
-              cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.8 : 1,
-              display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff",
-              transition: "background 0.2s",
-            }}
-          >
-            {loadingAction === "print" ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-            {loadingAction === "print" ? "Opening..." : "Print"}
-          </button>
         </div>
       </div>
 
-     <PurchaseReportPreview />
-    </div>
+      {/* Sibling (not a child) of the backdrop, so clicks inside the preview
+          never bubble up and close this dialog. */}
+      <PurchaseReportPreview />
+    </>
   );
 }

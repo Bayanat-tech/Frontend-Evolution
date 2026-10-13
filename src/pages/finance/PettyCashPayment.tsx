@@ -423,7 +423,13 @@ function PettyCashPaymentDocument({
                       const resp = await getFinanceOutstanding(mapped.div_code, invNo);
                       const balance = resp?.balances?.[0];
                       if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                        childRows[idx] = {
+                          ...childRows[idx],
+                          ref_no: childRows[idx].ref_no || (balance as any).ref_no || "",
+                          inv_amt: balance.original_amount,
+                          c_bal_amt_org: balance.outstanding_amount,
+                          paid_amt: balance.paid_amount,
+                        } as TransactionChildRow;
                       }
                     } catch {
                       // ignore individual failures
@@ -903,6 +909,7 @@ function PettyCashPaymentDocument({
               if (balance && !balance.error && balance.original_amount > 0) {
                 return {
                   ...m,
+                  ref_no: (m as Record<string, unknown>).ref_no || (balance as any).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
@@ -913,6 +920,14 @@ function PettyCashPaymentDocument({
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org ?? m.inv_amt ?? 0);
+            return bal > 0.001;
+          });
+        }
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -1038,6 +1053,10 @@ function PettyCashPaymentDocument({
       }
     }
 
+    setInvalidLineIds(new Set());
+    setInvalidChildRowIds(new Set());
+    setInvalidChildFields({});
+
     // Missing field validation on lines (new row without details / missing account or zero amount)
     const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
     if (invalidLines.length > 0) {
@@ -1063,8 +1082,12 @@ function PettyCashPaymentDocument({
             if (!c.job_no?.trim()) missingFields.push("Job No");
             if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
           } else if (d.child_table === "invoice") {
-            if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Allocated Amount");
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+            }
           }
 
           if (missingFields.length > 0) {

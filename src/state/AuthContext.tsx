@@ -45,6 +45,7 @@ function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
     loginid1: user.loginid1 || user.LOGINID1 || user.loginid || user.LOGINID,
     company_code: user.company_code || user.COMPANY_CODE,
     company_name: user.company_name || user.COMPANY_NAME || user.company_code || user.COMPANY_CODE,
+    company_logo: user.company_logo || user.COMPANY_LOGO,
     tenantId: tenantId || user.tenantId,
     tenant_name: user.tenant_name || user.TENANT_NAME || user.tenantName || user.TENANTNAME || tenantId || user.tenantId,
   };

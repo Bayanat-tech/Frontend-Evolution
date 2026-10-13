@@ -15,7 +15,7 @@ export async function getSalesDNReportHtml(params: {
   doc_no: string | number;
 }): Promise<string> {
   const { data } = await api.post<string>(
-    "/api/purchase-sales/reports/sales/SDN",
+    "/api/finance/transactions/reports/SalesDNReport/html",
     {
       company_code: params.company_code,
       doc_type: params.doc_type || "SDN",
@@ -38,7 +38,7 @@ export async function downloadSalesDNExcel(params: {
   doc_no: string | number;
 }): Promise<void> {
   const res = await api.post(
-    "/api/purchase-sales/reports/sales/SDN/excel",
+    "/api/finance/transactions/reports/SalesDNReport/excel",
     {
       company_code: params.company_code,
       doc_type: params.doc_type || "SDN",
