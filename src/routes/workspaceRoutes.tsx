@@ -217,6 +217,7 @@ import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLR
 import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseReturnPage";
 import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+import HrRetirementReport from "../pages/hr/Reports/HrRetirementReport";
 
 
 type WorkspaceRouteContext = {
@@ -258,6 +259,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Salary Advance Recovery",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/advance/deduction_letter"),
     element: () => <SalaryAdvanceRecoveryPage />,
+  },
+
+  {
+  name: "HR Retirement Report",
+  match: ({ pathname }) => isHrRetirementReportRoute(pathname),
+  element: () => <HrRetirementReport />,
   },
 
   {
@@ -2893,6 +2900,19 @@ function isProductCategoryRoute(pathname: string) {
     normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
   );
 }
+
+function isHrRetirementReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/retirement report") ||
+    normalized.includes("/hcm/hcm/reports/employee/retirement%20report") ||
+    normalized.includes("/hcm/hcm/reports/employee/retirement_report") ||
+    normalized.includes("/hcm/hcm/reports/employee/retirement-report") ||
+    compact.includes("employeeretirementreport")
+  );
+}
+
 
 function isZoneMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
