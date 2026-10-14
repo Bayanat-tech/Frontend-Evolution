@@ -370,7 +370,7 @@ export function SmartInlineAllocationTable({
                           className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 font-mono text-xs text-slate-700 focus:border-[#00378C] focus:outline-none transition-colors"
                           disabled={disabled}
                           placeholder="Voucher No"
-                          value={text(row.ref_no || (row as any).doc_no)}
+                          value={text(row.ref_no || (row as any).voucher_doc_no || "")}
                           onChange={(e) => onChange(row.id, { ref_no: e.target.value })}
                         />
                       </td>

@@ -406,26 +406,25 @@ function PettyCashPaymentDocument({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, mapped.ac_code, docType);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType);
                       const balance = resp?.balances?.[0];
                       if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = {
-                          ...childRows[idx],
-                          ref_no: childRows[idx].ref_no || (balance as any).ref_no || "",
+                        targetRows[idx] = {
+                          ...child,
+                          ref_no: (balance as any).ref_no || child.ref_no || "",
                           inv_amt: balance.original_amount,
                           c_bal_amt_org: balance.outstanding_amount,
                           paid_amt: balance.paid_amount,
@@ -438,11 +437,11 @@ function PettyCashPaymentDocument({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
