@@ -345,7 +345,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
               />
             </div>
           }
-          initialSorting={[{ id: "doc_date", desc: true }]}
+          initialSorting={[{ id: "doc_no", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}

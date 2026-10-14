@@ -1420,28 +1420,28 @@ const limitProps = (f: keyof FormState) => ({
                     {/* Remarks: Wide textarea across entire bottom of Document Details */}
                    
                     <CField label="Remarks" className="col-span-2">
-  <div
-    className="relative"
-    onMouseEnter={() => setRemarksHover(true)}
-    onMouseLeave={() => setRemarksHover(false)}
-  >
-    <textarea
-      className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
-      disabled={isCancelled}
-      value={form.remarks || ""}
-      maxLength={250}
-      placeholder="Remarks / Notes"
-      onFocus={() => setRemarksFocus(true)}
-      onBlur={() => setRemarksFocus(false)}
-      onChange={(e) => update("remarks", e.target.value)}
-    />
-    {(remarksHover || remarksFocus) && !isCancelled && (
-      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-lg bg-[#00378C] px-3 py-2 font-mono text-[11px] text-white shadow-lg">
-        {(form.remarks || "").length} / 250 characters ({250 - (form.remarks || "").length} left)
-      </div>
-    )}
-  </div>
-</CField>
+                      <div
+                       className="relative"
+                       onMouseEnter={() => setRemarksHover(true)}
+                       onMouseLeave={() => setRemarksHover(false)}
+                      >
+                     <textarea
+                        className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                        disabled={isCancelled}
+                        value={form.remarks || ""}
+                        maxLength={250}
+                        placeholder="Remarks / Notes"
+                        onFocus={() => setRemarksFocus(true)}
+                        onBlur={() => setRemarksFocus(false)}
+                        onChange={(e) => update("remarks", e.target.value)}
+                      />
+                        {(remarksHover || remarksFocus) && !isCancelled && (
+                          <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+                           {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
+                          </div>
+                        )}
+                        </div>
+                    </CField>
                   </HeaderBlock>
                 </div>
 

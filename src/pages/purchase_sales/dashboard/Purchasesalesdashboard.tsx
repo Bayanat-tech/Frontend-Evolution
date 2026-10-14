@@ -8,8 +8,10 @@ import PurchaseSalesChart from "./Purchasesaleschart";
 import StageChart from "./Stagechart";
 import TopParties from "./Topparties";
 import { PurchaseWorkflow, SalesWorkflow } from "./Workflow";
+import { useAuth } from "../../../state/AuthContext";
 
 const sum = (rows: MonthlyAmount[]) => rows.reduce((a, r) => a + (r.totalAmount || 0), 0);
+
 
 const MONTHS = [
   "Full Year", "January", "February", "March", "April", "May", "June",
@@ -62,7 +64,7 @@ function FilterSelect({
   );
 }
 
-export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { companyCode?: string }) {
+export default function PurchaseSalesDashboard({ companyCode }: { companyCode?: string }) {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 0 = full year
@@ -71,15 +73,18 @@ export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { compan
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
+  const { user } = useAuth();
 
+  // Use the logged-in user's company as the default
+  const effectiveCompanyCode =
+    companyCode || user?.COMPANY_CODE || "";
   const load = useCallback(
     async (signal?: AbortSignal) => {
       setLoading(true);
       setError(null);
       try {
-        setData(await getPurchaseSalesDashboard(companyCode, year, month, signal));
+        setData(await getPurchaseSalesDashboard( effectiveCompanyCode, year, month, signal));
         setUpdatedAt(new Date());
       } catch (e: any) {
         if (e?.name === "CanceledError" || e?.name === "AbortError") return;
@@ -88,7 +93,7 @@ export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { compan
         setLoading(false);
       }
     },
-    [companyCode, year, month]
+    [effectiveCompanyCode, year, month]
   );
 
   useEffect(() => {
@@ -104,7 +109,7 @@ export default function PurchaseSalesDashboard({ companyCode = "BSG" }: { compan
       {/* CHANGED: filters passed into the banner via the filters prop */}
       <div className="shrink-0">
         <DashboardHeader
-          companyCode={companyCode}
+          companyCode={effectiveCompanyCode}
           data={data}
           loading={loading}
           updatedAt={updatedAt}

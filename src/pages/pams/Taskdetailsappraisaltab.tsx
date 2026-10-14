@@ -59,13 +59,14 @@ const S = {
   wrapper: {
     width: "100%", height: "420px", overflowY: "auto" as const,
     border: "1px solid #ddd", fontFamily: "inherit", fontSize: "11px",
+    position: "relative" as const,
   },
   table: { width: "100%", borderCollapse: "collapse" as const, tableLayout: "fixed" as const },
   th: {
     background: "#f8f8f8", borderBottom: "1px solid #ddd", borderRight: "1px solid #eee",
     padding: "8px 10px", textAlign: "left" as const, fontWeight: 600,
     fontSize: "11px", color: "#333", position: "sticky" as const,
-    top: 0, zIndex: 1, whiteSpace: "nowrap" as const,
+    top: 0, zIndex: 2, whiteSpace: "nowrap" as const,
   },
   tdParent: {
     borderBottom: "1px solid #eee", padding: 0,
@@ -76,9 +77,11 @@ const S = {
     verticalAlign: "middle" as const, background: "#fafafa",
     fontSize: "11px", color: "#666",
   },
+  // Sticky footer cells
   tdPinned: {
     borderTop: "2px solid #ddd", padding: "8px 10px",
-    background: "#f8f8f8", fontWeight: 600, fontSize: "11px",
+    background: "#f8f8f8", fontWeight: 700, fontSize: "11px",
+    position: "sticky" as const, bottom: 0, zIndex: 2,
   },
   cellPad: { padding: "8px 10px" },
   toggleBtn: {
@@ -93,12 +96,12 @@ const S = {
     padding: "3px 6px", fontSize: "11px", textAlign: "center" as const,
     outline: "none", backgroundColor: "#fff", cursor: "pointer",
   },
-  totalGreen: { color: "#2e7d32", fontWeight: 600 },
+  totalGreen: { color: "#2e7d32", fontWeight: 700 },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
   activityLine: { display: "flex", gap: "6px", padding: "2px 0", lineHeight: 1.4, alignItems: "flex-start" as const },
 
   activityBullet: {
-    color: "#3b82f6", // Blue color
+    color: "#3b82f6",
     flexShrink: 0,
     fontWeight: "bold",
     fontSize: "12px",
@@ -161,7 +164,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
-  // ── Grand total ────────────────────────────────────────────────────────────
+  // ── Grand total (Total column) ─────────────────────────────────────────────
   const grandTotal = useMemo(() => {
     let t = 0;
     rows.forEach((row) => {
@@ -169,6 +172,21 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
       t += rowStates[key]?.TOTAL ?? num(row.TOTAL);
     });
     return Math.round(t);
+  }, [rows, rowStates]);
+
+  // ── Grand total (Standard Weightage column) ────────────────────────────────
+  const grandWeightage = useMemo(() => {
+    let w = 0;
+    rows.forEach((row) => {
+      const key = text(row.KPI_CODE);
+      const state = rowStates[key];
+      const val =
+        state?.STANDARD_WEIGHTAGE === "" || state?.STANDARD_WEIGHTAGE === undefined
+          ? num(row.STANDARD_WEIGHTAGE)
+          : num(state.STANDARD_WEIGHTAGE);
+      w += val;
+    });
+    return Math.round(w * 100) / 100;
   }, [rows, rowStates]);
 
   useEffect(() => {
@@ -206,6 +224,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
           <col style={{ width: "120px" }} />
           <col style={{ width: "100px" }} />
         </colgroup>
+
         <thead>
           <tr>
             <th style={S.th}>S.No</th>
@@ -215,6 +234,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
             <th style={{ ...S.th, textAlign: "center" }}>Total</th>
           </tr>
         </thead>
+
         <tbody>
           {loading ? (
             <tr><td colSpan={5} style={S.emptyMsg}>Loading task details...</td></tr>
@@ -293,13 +313,24 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
             );
           })}
         </tbody>
+
+        {/* ─── Sticky Footer ─────────────────────────────────────────────── */}
         <tfoot>
           <tr>
             <td style={S.tdPinned} />
             <td style={S.tdPinned}>Total</td>
+
+            {/* Standard Weightage total */}
+            <td style={{ ...S.tdPinned, textAlign: "center", color: "#082A89" }}>
+              {grandWeightage > 0 ? grandWeightage : "—"}
+            </td>
+
             <td style={S.tdPinned} />
-            <td style={S.tdPinned} />
-            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalGreen }}>{grandTotal}</td>
+
+            {/* Total column total */}
+            <td style={{ ...S.tdPinned, textAlign: "center", ...S.totalGreen }}>
+              {grandTotal}
+            </td>
           </tr>
         </tfoot>
       </table>

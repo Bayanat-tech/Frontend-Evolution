@@ -340,7 +340,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalRows={totalRows}
-              initialSorting={[{ id: "doc_date", desc: true }]}
+              initialSorting={[{ id: "doc_no", desc: true }]}
               columnFilters={columnFilters}
               onColumnFiltersChange={(filters) => {
                 setColumnFilters(filters);
@@ -495,6 +495,8 @@ function PaymentDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [remarksHover, setRemarksHover] = useState(false);
+  const [remarksFocus, setRemarksFocus] = useState(false);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -1667,21 +1669,43 @@ if (tooLong.length) {
                           </div>
                         )}
 
-                        {/* Remarks: Wide textarea across entire bottom of Document Details */}
-                        <CField
-                          label="Remarks"
-                          className="col-span-2"
-                          error={limitErr("remarks")}
-                        >
-                          <textarea
-                            className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                            disabled={disabled}
-                            value={form.remarks || ""}
-                            maxLength={250}
-                            placeholder="Remarks / Notes"
-                            onChange={(event) => updateField("remarks", event.target.value)}
-                          />
-                        </CField>
+                        {/* Remarks: Wide textarea across entire bottom of Document Details */}                       
+<CField
+  label="Remarks"
+  className="col-span-2"
+  error={limitErr("remarks")}
+>
+  <div
+    className="w-full"
+    onMouseEnter={() => setRemarksHover(true)}
+    onMouseLeave={() => setRemarksHover(false)}
+  >
+    <textarea
+      className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${
+        limitErr("remarks")
+          ? "!border-rose-500 !ring-rose-400"
+          : ""
+      }`}
+      disabled={disabled}
+      value={form.remarks || ""}
+      maxLength={250}
+      placeholder="Remarks / Notes"
+      onFocus={() => setRemarksFocus(true)}
+      onBlur={() => setRemarksFocus(false)}
+      onChange={(event) =>
+        updateField("remarks", event.target.value)
+      }
+    />
+
+    {(remarksHover || remarksFocus) && !disabled && (
+      <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+        {(form.remarks || "").length} / 250 characters (
+        {250 - (form.remarks || "").length} left)
+      </div>
+    )}
+  </div>
+</CField>
+
                       </HeaderBlock>
                     </div>
 

@@ -668,55 +668,55 @@ footer={
           </Field>
         </div>
 
-{hasActualResumeDate(initialRow) && (
-  <div className="mt-2 flex w-fit flex-col rounded-lg border-2 border-gray-200 p-3">
-    <h3 className="mb-2 text-sm font-medium text-gray-700">Leave Resumption Details</h3>
+        {hasActualResumeDate(initialRow) && (
+          <div className="mt-2 flex w-fit flex-col rounded-lg border-2 border-gray-200 p-3">
+            <h3 className="mb-2 text-sm font-medium text-gray-700">Leave Resumption Details</h3>
 
-    <div
-      className={`grid grid-cols-1 items-end gap-y-4 ${
-        tenantName === "ALMS"
-          ? "sm:grid-cols-[auto_200px_200px] sm:gap-x-10"
-          : "sm:grid-cols-[auto_200px] sm:gap-x-10"
-      }`}
-    >
-      <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={form.actualresumedate ? true : form.resumework === "Y"}
-          onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
-          disabled={fieldsDisabled}
-        />
-        <span>Resume Work</span>
-      </label>
+            <div
+              className={`grid grid-cols-1 items-end gap-y-4 ${
+                tenantName === "ALMS"
+                  ? "sm:grid-cols-[auto_200px_200px] sm:gap-x-10"
+                  : "sm:grid-cols-[auto_200px] sm:gap-x-10"
+              }`}
+            >
+              <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.actualresumedate ? true : form.resumework === "Y"}
+                  onChange={(event) => update("resumework", event.target.checked ? "Y" : "N")}
+                  disabled={fieldsDisabled}
+                />
+                <span>Resume Work</span>
+              </label>
 
-      <div className="w-[200px]">
-        <Field label="Actual Resume Date">
-          <Input
-            type="date"
-            value={form.actualresumedate}
-            onChange={(event) => update("actualresumedate", event.target.value)}
-            disabled={fieldsDisabled}
-            className="!w-[200px]"
-          />
-        </Field>
-      </div>
+              <div className="w-[200px]">
+                <Field label="Actual Resume Date">
+                  <Input
+                    type="date"
+                    value={form.actualresumedate}
+                    onChange={(event) => update("actualresumedate", event.target.value)}
+                    disabled={fieldsDisabled}
+                    className="!w-[200px]"
+                  />
+                </Field>
+              </div>
 
-      {tenantName === "ALMS" && (
-        <div className="w-[200px]">
-          <Field label="Duty Resume Date">
-            <Input
-              type="date"
-              value={form.dutyresumedate}
-              onChange={(event) => update("dutyresumedate", event.target.value)}
-              disabled={fieldsDisabled}
-              className="!w-[200px]"
-            />
-          </Field>
-        </div>
-      )}
-    </div>
-  </div>
-)}
+              {tenantName === "ALMS" && (
+                <div className="w-[200px]">
+                  <Field label="Duty Resume Date">
+                    <Input
+                      type="date"
+                      value={form.dutyresumedate}
+                      onChange={(event) => update("dutyresumedate", event.target.value)}
+                      disabled={fieldsDisabled}
+                      className="!w-[200px]"
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:items-start">
         {/* Leave Details */}
@@ -750,19 +750,28 @@ footer={
             </div>
           )}
 
-          <Field label="Employee">
-            <Select value={form.employeeCode} onChange={(event) => handleEmployeeChange(event.target.value)} disabled={fieldsDisabled || loadingEmployees}>
-              <option value="">{loadingEmployees ? "Loading employees..." : "Select employee"}</option>
-              {employees.map((employee) => {
-                const code = getEmployeeCode(employee);
-                return (
-                  <option key={code} value={code}>
-                    {code} - {getEmployeeName(employee)}
-                  </option>
-                );
-              })}
-            </Select>
-          </Field>
+            <Field label="Employee">
+              <Select
+                value={form.employeeCode}
+                onChange={(event) => handleEmployeeChange(event.target.value)}
+                disabled={fieldsDisabled || loadingEmployees}
+              >
+                <option value="">
+                  {loadingEmployees ? "Loading employees..." : "Select employee"}
+                </option>
+                {employees.map((employee) => {
+                  console.log("employee keys:", Object.keys(employee), employee);
+                  const code = getEmployeeCode(employee);
+                  const alternateId = employee.ALTERNATE_ID||employee.alternate_id;
+                  const name = getEmployeeName(employee);
+                  return (
+                    <option key={code} value={code}>
+                      {alternateId ? `${alternateId} - ${name}` : name}
+                    </option>
+                  );
+                })}
+              </Select>
+            </Field>
 
           <Field label="Leave Type *">
             <Select value={form.leaveType} onChange={(event) => update("leaveType", event.target.value)} disabled={fieldsDisabled || !form.employeeCode || loadingLeaveTypes}>
@@ -1037,19 +1046,19 @@ function getEmployeeCode(employee: HrEmployee) {
   return String(employee.EMPLOYEE_ID || employee.EMPLOYEE_CODE || employee.ALTERNATE_ID || "");
 }
 
+function getAlternateId(employee: HrEmployee) {
+  return String(employee.ALTERNATE_ID || "");
+}
+
 function getEmployeeName(employee: HrEmployee) {
   return String(employee.RPT_NAME || employee.EMPLOYEE_NAME || employee.Employee_Name || employee.EMPLOYEE_ID || "");
 }
 
-function resolveEmployeeName(employees: HrEmployee[], employeeId: string) {
-  if (!employeeId) return "";
-  const employee = employees.find((item) => getEmployeeCode(item) === employeeId);
-  return employee ? `${employeeId} - ${getEmployeeName(employee)}` : employeeId;
-}
+
 
 function getLeaveTypeLabel(leaveType: HrLeaveEntitlement) {
   const code = String(leaveType.LEAVE_TYPE || "");
-  const desc = String(leaveType.LEAVE_DESC || leaveType.LEAVE_TYPE_DESC || code);
+  const desc = String(leaveType.LEAVE_TYPE_DESC || code);
   return code && desc !== code ? `${code} - ${desc}` : desc;
 }
 
@@ -1101,7 +1110,7 @@ function employeeTreeSql(loginId: string) {
 
 function leaveEntitlementSql(employeeId: string) {
   return `
-    SELECT DISTINCT LEAVE_TYPE, LEAVE_DESC, LEAVE_TYPE_DESC
+    SELECT DISTINCT LEAVE_TYPE, LEAVE_TYPE_DESC
     FROM VW_HR_EMP_LEAVE_ENTITLE_AWARE
     WHERE EMPLOYEE_ID = '${escapeSql(employeeId)}'
       AND LEAVE_TYPE IS NOT NULL
@@ -1258,7 +1267,7 @@ function getYesNoValue(value: string): "N" | "Y" | "" {
 
   function getApproverDisplay2(row: Record<string, unknown> | null, nameKey: string, fallbackId: string) {
     const name = row ? String(row[nameKey] || "").trim() : "";
-    if (name) return fallbackId ? `${fallbackId} - ${name}` : name;
+    if (name) return fallbackId ? `${name}` : name;
     return fallbackId || "";
   }
 

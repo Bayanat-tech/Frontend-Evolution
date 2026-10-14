@@ -752,7 +752,7 @@ export function PurchaseInvoiceEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Invoice...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
