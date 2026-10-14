@@ -223,9 +223,11 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import HrRetirementReport from "../pages/hr/Reports/HrRetirementReport";
 
+
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 import HrDashboard from "../pages/hr/dashboard/HRDashboard";
 import HrDocumentReport from "../pages/hr/Reports/HrDocumentReport";
+import HrLabourCardExpiryReport from "../pages/hr/Reports/HrLabourCardExpiry";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -298,6 +300,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name : 'Hr Employee Leaver Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/leaver_report"),
     element : () => <EmployeeLeaversReportPage />
+  },
+
+  {
+  name: "HR Labour Card Expiry Listing Report",
+  match: ({ pathname }) => isHrLabourCardExpiryRoute(pathname),
+  element: () => <HrLabourCardExpiryReport />,
   },
 
     {
@@ -3084,5 +3092,19 @@ function isHrDocumentReportRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/document_report") ||
     normalized.includes("/hcm/hcm/reports/employee/document-report") ||
     compact.includes("employeedocumentreport")
+  );
+}
+
+
+function isHrLabourCardExpiryRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/labour_card_expiry_listing") ||
+    normalized.includes("/hcm/hcm/reports/employee/labour%20card%20expiry%20listing") ||
+    normalized.includes("/hcm/hcm/reports/employee/labour-card-expiry-listing") ||
+    normalized.includes("/hcm/hcm/reports/employee/labour_card_expiry") ||
+    compact.includes("labourcardexpirylisting") ||
+    compact.includes("labourcardexpiry")
   );
 }
