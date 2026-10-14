@@ -83,7 +83,7 @@ export function QuotationComparisonPage({
           code1: companyCode,
           loginid,
           code2: divCode,
-          code3: "PQA",
+          code3: "PQO",
         });
 
         if (mounted) {

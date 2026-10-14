@@ -69,3 +69,30 @@ export async function meRequest() {
     throw new Error(getErrorMessage(error, "Unable to load user profile."));
   }
 }
+
+export async function getCompanyLogoRequest(companyCode: string): Promise<string> {
+  if (!companyCode) return "";
+  try {
+    const response = await api.get<{
+      success: boolean;
+      data?: {
+        COMPANY_LOGO?: string;
+        COMPANY_LOGO_AWSURL?: string;
+        company_logo?: string;
+        company_logo_awsurl?: string;
+      };
+    }>(`/api/auth/company-logo`, {
+      params: { company_code: companyCode },
+    });
+    const d = response.data?.data;
+    return (
+      d?.COMPANY_LOGO ||
+      d?.company_logo ||
+      d?.COMPANY_LOGO_AWSURL ||
+      d?.company_logo_awsurl ||
+      ""
+    );
+  } catch {
+    return "";
+  }
+}

@@ -151,7 +151,7 @@ export function MaterialDetailsTable({
   const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
-  const finalTotal = grandTotal + totalTaxAmount;
+  const finalTotal = grandTotal;
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const discountScope = form.discount_scoope || "ITEM";
   const [lineSearch, setLineSearch] = useState("");
@@ -520,18 +520,18 @@ export function MaterialDetailsTable({
           <span className="text-muted-foreground">Amount</span>
           <strong className="text-emerald-600">{formatAmount(totalAmountDisct)}</strong>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Discount</span>
           <strong>{formatAmount(TotalDiscAmount(rows))}</strong>
-        </div>
+        </div> */}
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Total Amount Excluding Tax</span>
           <strong>{formatAmount(grandTotal)}</strong>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Tax</span>
           <strong>{formatAmount(totalTaxAmount)}</strong>
-        </div>
+        </div> */}
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
           <span className="font-semibold text-[#00378C]">Total Amount Including Tax</span>
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>

@@ -159,7 +159,8 @@ function extractApiErrorMessage(error: unknown, fallback: string) {
 
 export async function getMasterLookup(appCode: string, master: string) {
   try {
-    const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
+    // const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
+    const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}?limit=5000`);
     if (!response.data.success) throw new Error(response.data.details || response.data.message || `Unable to load ${master}`);
     return response.data.data?.tableData || [];
   } catch (error) {

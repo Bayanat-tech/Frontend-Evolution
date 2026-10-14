@@ -116,6 +116,7 @@ export type TransactionChildRow = Record<string, unknown> & {
   isEditMode?: boolean;
   IsDeletable?: boolean;
   inv_no?: string;
+  ref_no?: string;
   inv_date?: string;
   inv_amt?: number | null;
   c_bal_amt_org?: number | null;
@@ -308,13 +309,15 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
-export async function getFinanceOutstanding(divCode: string, invNos: string | string[]) {
+export async function getFinanceOutstanding(divCode: string, invNos: string | string[], acCode?: string, docType?: string) {
   const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
     "/api/finance/transactions/invoice_outstanding",
     {
       params: {
         div_code: divCode,
         inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
+        ...(acCode ? { ac_code: acCode } : {}),
+        ...(docType ? { doc_type: docType } : {}),
       },
     },
   );
@@ -1729,6 +1732,35 @@ export async function getVisaExpiryReportExcelDownload(params: ReportParams): Pr
   const link = document.createElement("a");
   link.href = url;
   link.download = `VisaExpiryReport_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+// ----------Employee Assessment Report — HTML (inline preview)----------------
+export async function getEmployeeAssessmentReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Assessment Report — Excel download----------------
+export async function getEmployeeAssessmentReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeAssessmentReport_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();

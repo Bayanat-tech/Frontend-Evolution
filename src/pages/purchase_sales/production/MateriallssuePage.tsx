@@ -14,7 +14,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "../../purchase_sales/sales/SalesOrdereditor";
-import { SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
+import { MIS_CONFIG, SDN_CONFIG, SO_CONFIG, SO_DOC_TYPE } from "../../purchase_sales/sales/SalesOrdertypes";
 import { TabStrip } from "../../../components/commonComponents";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
@@ -159,7 +159,7 @@ const loadRows = async (clearNotice = true) => {
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_SORDER_ENTRY_TAB_List",
+      parameter: "PS_SDN_ENTRY_TAB_LIST",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
@@ -184,7 +184,7 @@ const loadRows = async (clearNotice = true) => {
     const results = await Promise.all(
       visibleTabs.map(async (tabValue) => {
         const response = await getDynamicLookup({
-          parameter: "PS_SORDER_ENTRY_TAB_List",
+          parameter: "PS_SDN_ENTRY_TAB_LIST",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
           code3: tabValue,
@@ -477,7 +477,7 @@ const loadRows = async (clearNotice = true) => {
           <MaterialIssueEditor
 
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={SO_CONFIG}
+            config={MIS_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
