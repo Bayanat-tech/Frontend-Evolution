@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { X, Shield, Activity, Upload, Plus, Loader2, FileText, Download, Trash2, Hash } from "lucide-react";
+import { X, Shield, Activity, Upload, Plus, Loader2, FileText, Download, Trash2, Hash, CheckCircle2, Clock, Ban } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -153,61 +153,135 @@ function ApprovalTab({
   const [data, setData]         = useState<ApprovalData | null>(null);
   const [form, setForm]         = useState({
     cr_no:         "",
-    ac_status:     "",
-    ac_active:     "Y",
-    approved_by:   user?.loginid,
+    ac_status:     "A",
+    ac_active:     "A",
+    approved_by:   "",
     approved_date: "",
   });
 
   useEffect(() => {
-  let active = true;
-  (async () => {
-    setLoading(true);
+    let active = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const result = await getAccountTreeNode(5, acCode) as ApprovalData;
+        if (!active) return;
+        setData(result);
+        const isActiveY = String(result?.AC_ACTIVE || "").trim().toUpperCase() === "Y";
+        setForm({
+          cr_no:       result.CR_NO       || "",
+          ac_status:   result.AC_STATUS   || "A",
+          ac_active:   isActiveY ? "Y" : "A",
+          approved_by: result.APPROVED_BY || "",
+          approved_date: result.APPROVED_DATE
+            ? new Date(result.APPROVED_DATE).toISOString().split("T")[0]
+            : "",
+        });
+      } catch (err) {
+        if (active)
+          setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to load" });
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [acCode]);
+
+  const handleApprove = async () => {
+    setSaving(true);
+    const todayFormatted = new Date().toLocaleDateString("en-GB");
+    const approver = user?.loginid || "";
     try {
- 
-    const result = await getAccountTreeNode(5, acCode) as ApprovalData;
-      if (!active) return;
-      setData(result);
-      setForm({
-        cr_no:       result.CR_NO       || "",
-        ac_status:   result.AC_STATUS   || "A",
-        ac_active:   result.AC_ACTIVE   || "Y",
-        approved_by: result.APPROVED_BY || "",
-        approved_date: result.APPROVED_DATE
-           ? new Date(result.APPROVED_DATE).toISOString().split("T")[0]  // → YYYY-MM-DD for input[type=date]
-           : "",
+      await CreateLevel5ApprovalDetails({
+        parameter: "PROC_UPDATE_MS_ACCODES_APPROVAL",
+        loginid:   approver,
+        val1s1:    data?.COMPANY_CODE  || user?.company_code || "",   
+        val1s2:    acCode,                       
+        val1s3:    form.ac_status      || "A",   
+        val1s4:    approver,   
+        val1s5:    todayFormatted, 
+        val1s6:    form.cr_no          || "",   
+        val1s7:    "Y",  
       });
+      setForm((f) => ({
+        ...f,
+        ac_active: "Y",
+        approved_by: approver,
+        approved_date: new Date().toISOString().split("T")[0],
+      }));
+      if (data) {
+        setData({
+          ...data,
+          AC_ACTIVE: "Y",
+          APPROVED_BY: approver,
+          APPROVED_DATE: todayFormatted,
+        });
+      }
+      setNotice({ type: "success", message: `Account ${acCode} approved successfully! It is now active in Document Setup.` });
     } catch (err) {
-      if (active)
-        setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to load" });
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to approve account" });
     } finally {
-      if (active) setLoading(false);
+      setSaving(false);
     }
-  })();
-  return () => { active = false; };
-}, [acCode]);
+  };
+
+  const handleRevoke = async () => {
+    setSaving(true);
+    try {
+      await CreateLevel5ApprovalDetails({
+        parameter: "PROC_UPDATE_MS_ACCODES_APPROVAL",
+        loginid:   user?.loginid || "",
+        val1s1:    data?.COMPANY_CODE  || user?.company_code || "",   
+        val1s2:    acCode,                       
+        val1s3:    form.ac_status      || "A",   
+        val1s4:    "",   
+        val1s5:    "", 
+        val1s6:    form.cr_no          || "",   
+        val1s7:    "A",  
+      });
+      setForm((f) => ({
+        ...f,
+        ac_active: "A",
+        approved_by: "",
+        approved_date: "",
+      }));
+      if (data) {
+        setData({
+          ...data,
+          AC_ACTIVE: "A",
+          APPROVED_BY: "",
+          APPROVED_DATE: "",
+        });
+      }
+      setNotice({ type: "success", message: `Account ${acCode} approval revoked. It is now hidden from Document Setup.` });
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to revoke approval" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSave = async () => {
-  setSaving(true);
-  try {
-    await CreateLevel5ApprovalDetails({
-      parameter: "PROC_UPDATE_MS_ACCODES_APPROVAL",
-      loginid:   user?.loginid || "",
-      val1s1:    data?.COMPANY_CODE  || "",   
-      val1s2:    acCode,                       
-      val1s3:    form.ac_status      || "",   
-      val1s4:    form.approved_by    || "",   
-      val1s5: new Date().toLocaleDateString("en-GB"), 
-      val1s6:    form.cr_no          || "",   
-      val1s7:    form.ac_active      || "Y",  
-    });
-    setNotice({ type: "success", message: "Approval details updated successfully" });
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to save" });
-  } finally {
-    setSaving(false);
-  }
- };
+    setSaving(true);
+    try {
+      await CreateLevel5ApprovalDetails({
+        parameter: "PROC_UPDATE_MS_ACCODES_APPROVAL",
+        loginid:   user?.loginid || "",
+        val1s1:    data?.COMPANY_CODE  || user?.company_code || "",   
+        val1s2:    acCode,                       
+        val1s3:    form.ac_status      || "A",   
+        val1s4:    form.approved_by    || "",   
+        val1s5:    form.approved_date ? new Date(form.approved_date).toLocaleDateString("en-GB") : "", 
+        val1s6:    form.cr_no          || "",   
+        val1s7:    form.ac_active      || "A",  
+      });
+      setNotice({ type: "success", message: "Account details updated successfully" });
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to save" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -217,22 +291,92 @@ function ApprovalTab({
     );
   }
 
+  const isApproved = form.ac_active === "Y";
+
   return (
-    <div className="account-approval-tab p-4">
+    <div className="account-approval-tab flex flex-col gap-5 p-5">
       {/* Read-only header block */}
       <div className="account-summary-grid">
-        <ReadOnlyField label="Ac Code"     value={data?.AC_CODE   || ""} />
+        <ReadOnlyField label="Ac Code"     value={data?.AC_CODE   || acCode} />
         <ReadOnlyField label="Ac Name"     value={data?.AC_NAME   || ""} wide />
-        <ReadOnlyField label="Create User" value={data?.APPROVED_BY || ""} />
-        <ReadOnlyField label="Create Date"
+        <ReadOnlyField label="Approver"    value={form.approved_by || data?.APPROVED_BY || "Not approved yet"} />
+        <ReadOnlyField label="Approval Date"
           value={data?.APPROVED_DATE
             ? new Date(data.APPROVED_DATE).toLocaleDateString("en-GB")
-            : "—"}
+            : form.approved_date || "—"}
         />
       </div>
 
+      {/* Modern Approval Workflow Banner */}
+      {isApproved ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 transition-all dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-emerald-900 dark:text-emerald-200">Account Approved</span>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                    Active in Document Setup
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-emerald-700/90 dark:text-emerald-400">
+                  Approved by <strong className="font-semibold">{form.approved_by || data?.APPROVED_BY || user?.loginid}</strong>
+                  {form.approved_date || data?.APPROVED_DATE ? ` on ${new Date(data?.APPROVED_DATE || Date.now()).toLocaleDateString("en-GB")}` : ""}.
+                  This account is eligible for transactions and Document Setup.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={handleRevoke}
+              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/40 dark:hover:bg-rose-950/40"
+            >
+              {saving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Ban size={14} className="mr-1.5" />}
+              Revoke Approval
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 transition-all dark:border-amber-900/50 dark:bg-amber-950/20">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                <Clock size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-amber-900 dark:text-amber-200">Pending Approval</span>
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                    Hidden from Setup
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-amber-700/90 dark:text-amber-400">
+                  This account has not been approved yet. It will NOT appear in Document Setup or account lookups until approved.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving}
+              onClick={handleApprove}
+              className="bg-emerald-600 font-medium text-white shadow-sm hover:bg-emerald-700"
+            >
+              {saving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <CheckCircle2 size={15} className="mr-1.5" />}
+              Approve Account
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Editable fields */}
-      <div className="account-approval-section grid grid-cols-3 gap-3 max-md:grid-cols-1">
+      <div className="account-approval-section grid grid-cols-2 gap-4 max-md:grid-cols-1">
         <label className="field">
           <span>CR Number</span>
           <Input
@@ -245,45 +389,22 @@ function ApprovalTab({
         </label>
 
         <label className="field">
-          <span>Approval</span>
-          <Select
-            value={form.ac_active}
-            onChange={(e) => setForm((f) => ({ ...f, ac_active: e.target.value }))}
-          >
-            <option value="">— Select —</option>
-            <option value="Y">Approved</option>
-            <option value="A">Not Approved</option>
-          </Select>
-        </label>
-
-        <label className="field">
           <span>Account Status</span>
           <Select
             value={form.ac_status}
             onChange={(e) => setForm((f) => ({ ...f, ac_status: e.target.value }))}
           >
-            <option value="">— Select —</option>
             <option value="A">Active</option>
-            <option value="C">Inactive</option>
+            <option value="C">Inactive / Closed</option>
           </Select>
         </label>
-
-
-        {/* <label className="field">
-          <span>Approved Date</span>
-          <Input
-            type="date"
-            value={form.approved_date}
-            onChange={(e) => setForm((f) => ({ ...f, approved_date: e.target.value }))}
-          />
-        </label> */}
       </div>
 
       {/* Footer */}
-      <div className="account-details-footer mt-4 flex items-center justify-between border-t pt-3">
+      <div className="account-details-footer mt-2 flex items-center justify-between border-t pt-3">
         <span className="text-xs text-muted-foreground">Changes apply to account {acCode}</span>
         <Button disabled={saving} onClick={handleSave}>
-          {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save"}
+          {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save Details"}
         </Button>
       </div>
     </div>
