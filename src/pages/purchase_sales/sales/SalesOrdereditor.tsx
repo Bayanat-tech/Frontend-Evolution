@@ -46,6 +46,7 @@ import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocu
 import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { downloadSalesInvoiceExcel } from "./SalesInvoiceReport";
 
 
 export type { PurchaseOrderEditorState };
@@ -102,6 +103,7 @@ export function SalesOrderEditor({
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [printOpen, setPrintOpen] = useState(false);
 
 
 
@@ -569,6 +571,18 @@ export function SalesOrderEditor({
     }, "Sales Order sent back");
   };
 
+  const handleExcel = async () => {
+      if (!form.doc_no) return;
+      try {
+        await getSoOrderReportExcel({
+          doc_no: String(form.doc_no),
+          company_code: user?.company_code,
+        });
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Excel export failed");
+      }
+    };
+
   const actionBarBusy = actionLoading !== null || saving;
 
   return (
@@ -676,19 +690,17 @@ export function SalesOrderEditor({
                   )}
                   {form.doc_no && (
                     <>
-                      {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                      <Button
-                        aria-label="Excel"
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        onClick={() => void handleExportExcel()}
-                        disabled={reportPreviewExporting}
-                      >
-                        {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
+                    </Button>
+                   <Button
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+>
+  <Download size={15} />
+  Excel
+</Button>
                     </>
                   )}
                   <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>

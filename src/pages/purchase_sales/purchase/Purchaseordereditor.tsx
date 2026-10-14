@@ -613,6 +613,18 @@ export function PurchaseOrderEditor({
     }, "Purchase order sent back");
   };
 
+  const handleExcel = async () => {
+      if (!form.doc_no) return;
+      try {
+        await getPoOrderReportExcel({
+          doc_no: String(form.doc_no),
+          company_code: user?.company_code,
+        });
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Excel export failed");
+      }
+    };
+
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
 
@@ -735,7 +747,7 @@ export function PurchaseOrderEditor({
                     <Button type="button" variant="secondary" onClick={handlePrint}>
                     <Printer size={15} /> Print
                   </Button>
-                    <Button
+                    {/* <Button
                       aria-label="Excel"
                       title="Excel"
                       type="button"
@@ -745,7 +757,15 @@ export function PurchaseOrderEditor({
                       disabled={reportPreviewExporting}
                     >
                       <Download size={15} />
-                    </Button>
+                    </Button> */}
+                    <Button
+                                          type="button"
+                                          variant="secondary"
+                                          onClick={() => void handleExcel()}
+                                        >
+                                          <Download size={15} />
+                                          Excel
+                                        </Button>
                   </>
                 )}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>

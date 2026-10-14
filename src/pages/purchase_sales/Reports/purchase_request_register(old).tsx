@@ -9,7 +9,6 @@ import { LookupField } from "../../../components/ui/LookupField";
 import { Input } from "../../../components/ui/Input";
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
-import { NewReportDialog } from "../../../components/new_report_format";
 import {
     getPrRegisterOldSummaryReportHtml,
     getPrRegisterOldSummaryReportExcel,
@@ -19,7 +18,6 @@ import {
 import { openPurchaseReport } from "./PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "./Purchasereportpreview";
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
-import { toInputDate } from "../../../hooks/apiDate";
 
 interface PrRegisterOldParams {
     loginid: string;
@@ -41,29 +39,46 @@ const STATUS_OPTIONS: { displayValue: string; dataValue: string }[] = [
     { displayValue: "REJECTED", dataValue: "REJECTED" },
 ];
 
-// ─── Field wrapper + DateField (same as PoOrderRegisterPage) ───────────────
+// ─── Field wrapper ──────────────────────────────────────────────────────────
+// NOTE: this is a <div>, not a <label>. A <label> forwards clicks to the first
+// input inside it, which interferes with the BiscDatePicker calendar.
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+        <div className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
             {label}
             {children}
-        </label>
+        </div>
     );
 }
 
-function DateField({ value, onChange, max, min }: { value: string; onChange: (v: string) => void; max?: string; min?: string }) {
-    return (
-        <input
-            type="date"
-            className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-            value={value}
-            min={min}
-            max={max}
-            onChange={(e) => onChange(e.target.value)}
-        />
-    );
-}
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// Converts whatever BiscDatePicker gives (string / Date / event) into yyyy-mm-dd.
+// Parsed manually so dd/mm/yyyy is never mis-read as mm/dd/yyyy.
+const pickValue = (v: any): string => {
+    if (v === null || v === undefined || v === "") return "";
+
+    // Date object -> use LOCAL parts (toISOString would shift the day in India time)
+    if (v instanceof Date) {
+        return isNaN(v.getTime()) ? "" : `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}`;
+    }
+
+    // Event object
+    if (typeof v === "object") return pickValue(v?.target?.value);
+
+    const s = String(v).trim();
+
+    // yyyy-mm-dd (also yyyy-mm-ddTHH:mm...)
+    let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (m) return `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}`;
+
+    // dd/mm/yyyy or dd-mm-yyyy
+    m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) return `${m[3]}-${pad2(+m[2])}-${pad2(+m[1])}`;
+
+    return "";
+};
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -72,10 +87,9 @@ export default function PrRegisterOldPage() {
     const companyCode = user?.company_code ?? "";
     const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    const [fromDateIso, setFromDateIso] = useState("");
-    const [toDateIso, setToDateIso] = useState("");
-      const [fromDate, setFromDate] = useState("");
-      const [toDate, setToDate] = useState("");
+    // Dates are stored as yyyy-mm-dd
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
 
     // User ID (lookup, same pattern as Supplier in PoOrderRegister)
     const [userId, setUserId] = useState("");
@@ -96,6 +110,9 @@ export default function PrRegisterOldPage() {
     const lastRequestRef = useRef<PrRegisterOldParams | null>(null);
     const lastReportTypeRef = useRef<"SUMMARY" | "DETAILS">("SUMMARY");
 
+    // Derived values (declared AFTER the state they use)
+    const fromDateIso = fromDate;
+    const toDateIso = toDate;
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
     const buildRequestParams = (): PrRegisterOldParams => ({
@@ -151,30 +168,13 @@ export default function PrRegisterOldPage() {
             setLoading(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRangeValid, fromDateIso, toDateIso, userId, searchText, status, reportType, companyCode, loginId]);
-
-    // const closeReportPreview = () => {
-    //     setReportPreviewOpen(false);
-    //     setReportHtml(null);
-    //     setReportPreviewError("");
-    // };
-
-    // const handleReportPreviewExcel = async () => {
-    //     if (!lastRequestRef.current) return;
-    //     setReportPreviewExporting(true);
-    //     try {
-    //         const fetchExcel = getReportExcelFn(lastReportTypeRef.current);
-    //         await fetchExcel(lastRequestRef.current);
-    //     } catch (exportError: any) {
-    //         setReportPreviewError(exportError?.message ?? "Error while exporting to Excel");
-    //     } finally {
-    //         setReportPreviewExporting(false);
-    //     }
-    // };
+    }, [dateRangeValid, fromDate, toDate, userId, searchText, status, reportType, companyCode, loginId]);
 
     function resetFilters() {
-        setFromDateIso(""); setToDateIso("");
-        setUserId(""); setUserName("");
+        setFromDate("");
+        setToDate("");
+        setUserId("");
+        setUserName("");
         setSearchText("");
         setStatus(STATUS_OPTIONS[0].dataValue);
         setReportType("SUMMARY");
@@ -192,25 +192,28 @@ export default function PrRegisterOldPage() {
                 <ReportFilterHeader onClear={resetFilters} />
 
                 <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {/* <Field label="From Date">
-                        <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
+                    <Field label="From">
+                        <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
+                            <BiscDatePicker
+                                value={fromDate}
+                                onChange={(v: any) => setFromDate(pickValue(v))}
+                            />
+                        </ClearableDate>
                     </Field>
 
-                    <Field label="To Date">
-                        <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
-                    </Field> */}
-
-                    <Field label="From">
-                                            <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
-                                                <BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} />
-                                            </ClearableDate>
-                                        </Field>
-                                        <Field label="To">
-                                            <ClearableDate value={toDate} onClear={() => setToDate("")}>
-                                                <BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} />
-                                            </ClearableDate>
-                                        </Field>
-
+                    <Field label="To">
+                        <ClearableDate value={toDate} onClear={() => setToDate("")}>
+                            <BiscDatePicker
+                                value={toDate}
+                                onChange={(v: any) => setToDate(pickValue(v))}
+                            />
+                        </ClearableDate>
+                        {!dateRangeValid && (
+                            <span className="text-[11px] normal-case text-red-600">
+                                "To" date must be on or after "From" date
+                            </span>
+                        )}
+                    </Field>
 
                     <Field label="User ID">
                         <LookupField
@@ -256,6 +259,7 @@ export default function PrRegisterOldPage() {
                             ))}
                         </select>
                     </Field>
+
                     <div className="sm:col-span-1">
                         <Field label="Report Type">
                             <div
@@ -295,8 +299,6 @@ export default function PrRegisterOldPage() {
                             </div>
                         </Field>
                     </div>
-
-
                 </div>
 
                 <div className="freight-report-actions">

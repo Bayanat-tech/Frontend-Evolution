@@ -53,6 +53,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import {  getPurchaseInvoiceReportExcel } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -211,7 +212,7 @@ export function PurchaseInvoiceEditor({
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-   curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
           dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
           dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
@@ -234,7 +235,7 @@ export function PurchaseInvoiceEditor({
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
           tx_cat_name: text(headerRaw.tx_cat_name),
-        
+
           tx_compntcat_name_1: text(headerRaw.tx_compntcat_name_1),
           tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1),
           discount_scoope:
@@ -299,9 +300,9 @@ export function PurchaseInvoiceEditor({
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
-    const finalTotal = grandTotal + totalTaxAmount;
+  const finalTotal = grandTotal + totalTaxAmount;
 
   const updateField = (
     field: keyof PurchaseOrderForm,
@@ -551,6 +552,19 @@ export function PurchaseInvoiceEditor({
     }, "Purchase Invoice sent back");
   };
 
+
+  const handleExcel = async () => {
+    if (!form.doc_no) return;
+    try {
+      await getPurchaseInvoiceReportExcel({
+        doc_no: String(form.doc_no),
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
+
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
 
@@ -604,7 +618,7 @@ export function PurchaseInvoiceEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                
+
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
@@ -667,8 +681,19 @@ export function PurchaseInvoiceEditor({
                 </div>
                 {form.doc_no && (
                   <>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                      Excel
+                    </Button>
 
-                    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                    {/* <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button> */}
                   </>
                 )}
 
