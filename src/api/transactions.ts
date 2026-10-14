@@ -168,11 +168,14 @@ export type CompanyInfo = {
 
 export type FinanceOutstandingBalance = {
   inv_no: string;
+  doc_no?: string;
+  ref_no?: string;
   original_amount: number;
   paid_amount: number;
   outstanding_amount: number;
   payment_percentage: number;
   is_fully_paid: boolean;
+  is_cancelled?: boolean;
   error?: string;
 };
 
