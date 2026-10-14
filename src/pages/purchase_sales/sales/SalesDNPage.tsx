@@ -286,7 +286,6 @@ useEffect(() => {
       { accessorKey: "div_code", header: "Div" },
       { accessorKey: "ac_code", header: "A/c Code" },
       { accessorKey: "ac_name", header: "A/c Name" },
-      { accessorKey: "curr_code", header: "Currency" },
       {
         accessorKey: "canceled",
         header: "Status",

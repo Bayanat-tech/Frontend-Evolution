@@ -309,13 +309,15 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
-export async function getFinanceOutstanding(divCode: string, invNos: string | string[]) {
+export async function getFinanceOutstanding(divCode: string, invNos: string | string[], acCode?: string, docType?: string) {
   const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
     "/api/finance/transactions/invoice_outstanding",
     {
       params: {
         div_code: divCode,
         inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
+        ...(acCode ? { ac_code: acCode } : {}),
+        ...(docType ? { doc_type: docType } : {}),
       },
     },
   );
