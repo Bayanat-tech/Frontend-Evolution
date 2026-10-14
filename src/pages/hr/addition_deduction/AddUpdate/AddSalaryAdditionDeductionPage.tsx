@@ -2,7 +2,7 @@
 //
 // Salary Addition/Deduction form — GradeMaster-style:
 //  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
-//  • Freight-style tabs + SectionPanel / Field building blocks
+//  • Single page (no tabs): SectionPanel / Field building blocks stacked top to bottom
 //  • Form owns validation + upsert; toast for feedback
 //  • No bottom button row — List / Close / Save live in the page header
 
@@ -32,8 +32,6 @@ type Props = {
   existingData?: any;
   onClose: (shouldRefetch?: boolean) => void;
 };
-
-const TABS = ["Document Details", "Addition / Deduction Lines"];
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -89,7 +87,6 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
     const readonly = mode === "view";
     const isEdit = mode === "edit";
 
-    const [tab, setTab] = useState(0);
     const [detailRows, setDetailRows] = useState<SalaryAdditionDeductionDetailRow[]>([]);
     const [errors, setErrors] = useState<{ docDate?: string }>({});
 
@@ -189,14 +186,8 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       if (!formik.values.docDate) next.docDate = "Doc Date is required";
       setErrors(next);
 
-      if (next.docDate) {
-        setTab(0);
-        return next.docDate;
-      }
-      if (detailRows.length === 0) {
-        setTab(1);
-        return "Please add at least one detail line";
-      }
+      if (next.docDate) return next.docDate;
+      if (detailRows.length === 0) return "Please add at least one detail line";
       return null;
     };
 
@@ -212,8 +203,8 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       try {
         const header = {
           company_code: user?.company_code ?? "",
-          doc_type: values.docType || "ADV",
-          doc_no: values.docNo ? Number(values.docNo) : 0,
+          doc_type: values.docType ,
+          doc_no: values.docNo ? Number(values.docNo) :  null ,
           doc_date: values.docDate ? new Date(values.docDate).toISOString() : new Date().toISOString(),
           ref_no: values.refNo || "",
           name_from: values.nameFrom || "",
@@ -231,8 +222,8 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
 
         const details = detailRows.map((row, index) => ({
           company_code: user?.company_code ?? "",
-          doc_type: values.docType || "ADV",
-          doc_no: values.docNo ? Number(values.docNo) : 0,
+          doc_type: values.docType ,
+          doc_no: values.docNo ? Number(values.docNo) : null,
           sr_no: Number(row.srNo) || index + 1,
           employee_id: row.employeeId || "",
           emplyee_code: row.employeeId || "",
@@ -271,269 +262,257 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
     });
 
     // ── UI ──────────────────────────────────────────────────
+    // Single page: every section is always visible, stacked top to bottom.
     return (
       <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-        <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
-          <div className="freight-tabs-list flex overflow-x-auto">
-            {TABS.map((label, index) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setTab(index)}
-                aria-pressed={tab === index}
-                className={`freight-workspace-tab ${tab === index ? "active" : ""}`}
+        {/* ── Document Information ── */}
+        <SectionPanel title="Document Information" icon={FileText}>
+          <div className="grid gap-3 md:grid-cols-4">
+            <Field label="Doc No">
+              <Input
+                {...text("docNo")}
+                disabled={readonly || isEdit}
+                placeholder={isEdit ? "" : "Auto"}
+              />
+            </Field>
+            <Field label="Doc Date" required error={errors.docDate}>
+              <Input type="date" {...text("docDate")} />
+            </Field>
+
+            <Field label="Doc Type">
+              <Select
+                name="docType"
+                value={formik.values.docType}
+                onChange={formik.handleChange}
+                disabled={readonly}
               >
-                {label}
-                {index === 1 && ` (${detailRows.length})`}
-              </button>
-            ))}
+                <option value="ADD">Addition</option>
+                <option value="DED">Deduction</option>
+              </Select>
+            </Field>
+            
+            <Field label="Ref No">
+              <Input {...text("refNo")} />
+            </Field>
           </div>
+        </SectionPanel>
 
-          <div className="freight-tabs-panel border-t p-3 grid gap-3">
-            {/* ══ TAB 0 — Document Details ══ */}
-            {tab === 0 && (
-              <>
-                <SectionPanel title="Document Information" icon={FileText}>
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <Field label="Doc No">
-                      <Input
-                        {...text("docNo")}
-                        disabled={readonly || isEdit}
-                        placeholder={isEdit ? "" : "Auto"}
-                      />
-                    </Field>
-                    <Field label="Doc Date" required error={errors.docDate}>
-                      <Input type="date" {...text("docDate")} />
-                    </Field>
-                    <Field label="Doc Type">
-                      <Input {...text("docType")} />
-                    </Field>
-                    <Field label="Ref No">
-                      <Input {...text("refNo")} />
-                    </Field>
-                  </div>
-                </SectionPanel>
+        {/* ── From | To ── */}
+        <div className="grid gap-2 md:grid-cols-2">
+          <SectionPanel title="From" icon={UserRound}>
+            <div className="grid gap-3">
+              <Field label="Name From">
+                <Input {...text("nameFrom")} />
+              </Field>
+              <Field label="Addr From">
+                <Input {...text("addrFrom")} />
+              </Field>
+            </div>
+          </SectionPanel>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <SectionPanel title="From" icon={UserRound}>
-                    <div className="grid gap-3">
-                      <Field label="Name From">
-                        <Input {...text("nameFrom")} />
-                      </Field>
-                      <Field label="Addr From">
-                        <Input {...text("addrFrom")} />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-
-                  <SectionPanel title="To" icon={UserRound}>
-                    <div className="grid gap-3">
-                      <Field label="Name To">
-                        <Input {...text("nameTo")} />
-                      </Field>
-                      <Field label="Addr To">
-                        <Input {...text("addrTo")} />
-                      </Field>
-                    </div>
-                  </SectionPanel>
-                </div>
-
-                <SectionPanel title="Letter & Signatory" icon={StickyNote}>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Field label="Letter Subject" className="md:col-span-2">
-                      <Input {...text("lettrSubject")} />
-                    </Field>
-                    <Field label="Remarks 1">
-                      <Input {...text("remarks1")} />
-                    </Field>
-                    <Field label="Remarks 2">
-                      <Input {...text("remarks2")} />
-                    </Field>
-                    <Field label="Signatory Name">
-                      <Input {...text("signatoryName")} />
-                    </Field>
-                    <Field label="Signatory Position">
-                      <Input {...text("signatoryPosition")} />
-                    </Field>
-                  </div>
-                </SectionPanel>
-              </>
-            )}
-
-            {/* ══ TAB 1 — Lines ══ */}
-            {tab === 1 && (
-              <SectionPanel
-                title={`Addition / Deduction Lines (${detailRows.length})`}
-                icon={ListChecks}
-              >
-                {!readonly && (
-                  <div className="mb-2 flex justify-end">
-                    <Button type="button" size="sm" variant="outline" onClick={handleAddDetailRow}>
-                      <Plus size={12} /> Add Line
-                    </Button>
-                  </div>
-                )}
-                <div className="overflow-auto rounded-md border">
-                  <table className="w-full min-w-[900px] text-[12px]">
-                    <thead className="bg-secondary/60">
-                      <tr>
-                        <th className="px-2 py-2 text-left w-12">No</th>
-                        <th className="px-2 py-2 text-left w-56">Employee</th>
-                        <th className="px-2 py-2 text-left w-44">Pay Unit</th>
-                        <th className="px-2 py-2 text-left">Description</th>
-                        <th className="px-2 py-2 text-left w-32">Amount</th>
-                        <th className="px-2 py-2 text-left w-40">Effective From</th>
-                        <th className="px-2 py-2 text-left w-24">Cancel</th>
-                        {!readonly && <th className="px-2 py-2 text-left w-12">Action</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailRows.length === 0 ? (
-                        <tr>
-                          <td
-                            className="px-3 py-6 text-center text-muted-foreground"
-                            colSpan={readonly ? 7 : 8}
-                          >
-                            {readonly ? "No lines" : "No lines — click Add Line"}
-                          </td>
-                        </tr>
-                      ) : (
-                        detailRows.map((row, index) => (
-                          <tr className="border-t" key={String(row.srNo)}>
-                            <td className="px-2 py-1 text-xs">{index + 1}</td>
-                            <td className="px-2 py-1">
-                              <LookupField
-                                label="Employee"
-                                compact
-                                disabled={readonly}
-                                value={row.employeeId}
-                                displayValue={row.employee}
-                                columns={[
-                                  { field: "employee_code", header: "Employee Code" },
-                                  { field: "rpt_name", header: "Employee Name" },
-                                ]}
-                                valueField="employee_code"
-                                displayFields={["rpt_name"]}
-                                loadOptions={loadEmployees}
-                                onChange={(value: any, opt: any) =>
-                                  updateRow(row.srNo, {
-                                    employeeId: String(
-                                      opt?.employee_id ??
-                                        opt?.EMPLOYEE_ID ??
-                                        opt?.employee_code ??
-                                        opt?.EMPLOYEE_CODE ??
-                                        value ??
-                                        "",
-                                    ),
-                                    employee: String(
-                                      opt?.rpt_name ??
-                                        opt?.RPT_NAME ??
-                                        opt?.employee_name ??
-                                        opt?.EMPLOYEE_NAME ??
-                                        "",
-                                    ),
-                                  })
-                                }
-                              />
-                            </td>
-                            <td className="px-2 py-1">
-                              <LookupField
-                                label="Pay Unit"
-                                compact
-                                disabled={readonly}
-                                value={row.payUnit}
-                                columns={[
-                                  { field: "value_code", header: "Value Code" },
-                                  { field: "value_desc", header: "Description" },
-                                ]}
-                                valueField="value_code"
-                                displayFields={["value_code", "value_desc"]}
-                                loadOptions={loadPayUnits}
-                                onChange={(value: any, selected: any) =>
-                                  updateRow(row.srNo, {
-                                    payUnit: String(value ?? ""),
-                                    description: String(
-                                      selected?.value_desc ??
-                                        selected?.VALUE_DESC ??
-                                        row.description ??
-                                        "",
-                                    ),
-                                  })
-                                }
-                              />
-                            </td>
-                            <td className="px-2 py-1">
-                              <Input
-                                disabled={readonly}
-                                value={row.description}
-                                onChange={(e) => updateRow(row.srNo, { description: e.target.value })}
-                              />
-                            </td>
-                            <td className="px-2 py-1">
-                              <Input
-                                type="number"
-                                step="0.001"
-                                disabled={readonly}
-                                value={String(row.amount ?? "")}
-                                onChange={(e) => updateRow(row.srNo, { amount: e.target.value })}
-                              />
-                            </td>
-                            <td className="px-2 py-1">
-                              <Input
-                                type="date"
-                                disabled={readonly}
-                                value={row.effectiveFrom}
-                                onChange={(e) => updateRow(row.srNo, { effectiveFrom: e.target.value })}
-                              />
-                            </td>
-                            <td className="px-2 py-1">
-                              <Select
-                                disabled={readonly}
-                                value={row.cancel}
-                                onChange={(e) => updateRow(row.srNo, { cancel: e.target.value })}
-                              >
-                                <option value="No">No</option>
-                                <option value="Yes">Yes</option>
-                              </Select>
-                            </td>
-                            {!readonly && (
-                              <td className="px-2 py-1">
-                                <button
-                                  type="button"
-                                  title="Remove line"
-                                  onClick={() => handleRemoveDetailRow(row.srNo)}
-                                  className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                    {detailRows.length > 0 && (
-                      <tfoot className="border-t bg-secondary/40">
-                        <tr>
-                          <td className="px-2 py-2 text-right font-medium" colSpan={4}>
-                            Total Amount
-                          </td>
-                          <td className="px-2 py-2 font-semibold text-primary">
-                            {totalAmount.toLocaleString(undefined, {
-                              minimumFractionDigits: 3,
-                              maximumFractionDigits: 3,
-                            })}
-                          </td>
-                          <td colSpan={readonly ? 2 : 3} />
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-              </SectionPanel>
-            )}
-          </div>
+          <SectionPanel title="To" icon={UserRound}>
+            <div className="grid gap-3">
+              <Field label="Name To">
+                <Input {...text("nameTo")} />
+              </Field>
+              <Field label="Addr To">
+                <Input {...text("addrTo")} />
+              </Field>
+            </div>
+          </SectionPanel>
         </div>
+
+        {/* ── Letter & Signatory ── */}
+        <SectionPanel title="Letter & Signatory" icon={StickyNote}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Letter Subject" className="md:col-span-2">
+              <Input {...text("lettrSubject")} />
+            </Field>
+            <Field label="Remarks 1">
+              <Input {...text("remarks1")} />
+            </Field>
+            <Field label="Remarks 2">
+              <Input {...text("remarks2")} />
+            </Field>
+            <Field label="Signatory Name">
+              <Input {...text("signatoryName")} />
+            </Field>
+            <Field label="Signatory Position">
+              <Input {...text("signatoryPosition")} />
+            </Field>
+          </div>
+        </SectionPanel>
+
+        {/* ── Addition / Deduction Lines ── */}
+        <SectionPanel
+          title={`Addition / Deduction Lines (${detailRows.length})`}
+          icon={ListChecks}
+        >
+          {!readonly && (
+            <div className="mb-2 flex justify-end">
+              <Button type="button" size="sm" variant="outline" onClick={handleAddDetailRow}>
+                <Plus size={12} /> Add Line
+              </Button>
+            </div>
+          )}
+          <div className="overflow-auto rounded-md border">
+            <table className="w-full min-w-[900px] text-[12px]">
+              <thead className="bg-secondary/60">
+                <tr>
+                  <th className="px-2 py-2 text-left w-12">No</th>
+                  <th className="px-2 py-2 text-left w-56">Employee</th>
+                  <th className="px-2 py-2 text-left w-44">Pay Unit</th>
+                  <th className="px-2 py-2 text-left">Description</th>
+                  <th className="px-2 py-2 text-left w-32">Amount</th>
+                  <th className="px-2 py-2 text-left w-40">Effective From</th>
+                  <th className="px-2 py-2 text-left w-24">Cancel</th>
+                  {!readonly && <th className="px-2 py-2 text-left w-12">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {detailRows.length === 0 ? (
+                  <tr>
+                    <td
+                      className="px-3 py-6 text-center text-muted-foreground"
+                      colSpan={readonly ? 7 : 8}
+                    >
+                      {readonly ? "No lines" : "No lines — click Add Line"}
+                    </td>
+                  </tr>
+                ) : (
+                  detailRows.map((row, index) => (
+                    <tr className="border-t" key={String(row.srNo)}>
+                      <td className="px-2 py-1 text-xs">{index + 1}</td>
+                      <td className="px-2 py-1">
+                        <LookupField
+                          label="Employee"
+                          compact
+                          disabled={readonly}
+                          value={row.employeeId}
+                          displayValue={row.employee}
+                          columns={[
+                            { field: "employee_code", header: "Employee Code" },
+                            { field: "rpt_name", header: "Employee Name" },
+                          ]}
+                          valueField="employee_code"
+                          displayFields={["rpt_name"]}
+                          loadOptions={loadEmployees}
+                          onChange={(value: any, opt: any) =>
+                            updateRow(row.srNo, {
+                              employeeId: String(
+                                opt?.employee_id ??
+                                  opt?.EMPLOYEE_ID ??
+                                  opt?.employee_code ??
+                                  opt?.EMPLOYEE_CODE ??
+                                  value ??
+                                  "",
+                              ),
+                              employee: String(
+                                opt?.rpt_name ??
+                                  opt?.RPT_NAME ??
+                                  opt?.employee_name ??
+                                  opt?.EMPLOYEE_NAME ??
+                                  "",
+                              ),
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <LookupField
+                          label="Pay Unit"
+                          compact
+                          disabled={readonly}
+                          value={row.payUnit}
+                          columns={[
+                            { field: "value_code", header: "Value Code" },
+                            { field: "value_desc", header: "Description" },
+                          ]}
+                          valueField="value_code"
+                          displayFields={["value_code", "value_desc"]}
+                          loadOptions={loadPayUnits}
+                          onChange={(value: any, selected: any) =>
+                            updateRow(row.srNo, {
+                              payUnit: String(value ?? ""),
+                              description: String(
+                                selected?.value_desc ??
+                                  selected?.VALUE_DESC ??
+                                  row.description ??
+                                  "",
+                              ),
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <Input
+                          disabled={readonly}
+                          value={row.description}
+                          onChange={(e) => updateRow(row.srNo, { description: e.target.value })}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <Input
+                          type="number"
+                          step="0.001"
+                          disabled={readonly}
+                          value={String(row.amount ?? "")}
+                          onChange={(e) => updateRow(row.srNo, { amount: e.target.value })}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <Input
+                          type="date"
+                          disabled={readonly}
+                          value={row.effectiveFrom}
+                          onChange={(e) => updateRow(row.srNo, { effectiveFrom: e.target.value })}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <Select
+                          disabled={readonly}
+                          value={row.cancel}
+                          onChange={(e) => updateRow(row.srNo, { cancel: e.target.value })}
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </Select>
+                      </td>
+                      {!readonly && (
+                        <td className="px-2 py-1">
+                          <button
+                            type="button"
+                            title="Remove line"
+                            onClick={() => handleRemoveDetailRow(row.srNo)}
+                            className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {detailRows.length > 0 && (
+                <tfoot className="border-t bg-secondary/40">
+                  <tr>
+                    <td className="px-2 py-2 text-right font-medium" colSpan={4}>
+                      Total Amount
+                    </td>
+                    <td className="px-2 py-2 font-semibold text-primary">
+                      {totalAmount.toLocaleString(undefined, {
+                        minimumFractionDigits: 3,
+                        maximumFractionDigits: 3,
+                      })}
+                    </td>
+                    <td colSpan={readonly ? 2 : 3} />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </SectionPanel>
       </div>
     );
   },
