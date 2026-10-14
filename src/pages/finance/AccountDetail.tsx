@@ -305,9 +305,7 @@ function ActivitiesTab({
   const [rows, setRows]         = useState<Activity[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editRow, setEditRow]   = useState<Activity | null>(null);
-  const [newAct, setNewAct]     = useState({ 
-   act_code: "", act_desc: ""
- });
+  const [newActs, setNewActs] = useState([{ act_code: "", act_desc: "" }]);
   const nextSrNo = rows.reduce((max, row) => Math.max(max, Number(row.SRNO) || 0), 0) + 1;
   const loginId = user?.loginid || user?.username || "";
   const today = new Date().toISOString().slice(0, 10);
@@ -326,35 +324,35 @@ function ActivitiesTab({
 
   useEffect(() => { void load(); }, [acCode]);
 
-  const handleAdd = async () => {
-    if (!newAct.act_code.trim() || !newAct.act_desc.trim()) {
-      setNotice({ type: "error", message: "Activity Code and Description are required." });
-      return;
-    }
-    setAdding(true);
-    try {
+ const handleAdd = async () => {
+  if (newActs.some((a) => !a.act_code.trim() || !a.act_desc.trim())) {
+    setNotice({ type: "error", message: "Activity Code and Description are required in every row." });
+    return;
+  }
+  setAdding(true);
+  try {
     await upsertLevel5Activities({
-    company_code: user?.company_code || "",
-    ac_code: acCode,
-    loginid: user?.loginid || "",
-    records: [{
-    srno: nextSrNo,
-    act_code: newAct.act_code,
-    act_desc: newAct.act_desc,
-    user_id: loginId || undefined,
-    user_dt: today,
-  }],
-  });
-      setNotice({ type: "success", message: "Activity added successfully" });
-      setNewAct({ act_code: "", act_desc: "" });
-      setShowForm(false);
-      await load();
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to add activity" });
-    } finally {
-      setAdding(false);
-    }
-  };
+      company_code: user?.company_code || "",
+      ac_code: acCode,
+      loginid: user?.loginid || "",
+      records: newActs.map((a, i) => ({
+        srno: nextSrNo + i,
+        act_code: a.act_code,
+        act_desc: a.act_desc,
+        user_id: loginId || undefined,
+        user_dt: today,
+      })),
+    });
+    setNotice({ type: "success", message: `${newActs.length} activit${newActs.length === 1 ? "y" : "ies"} added successfully` });
+    setNewActs([{ act_code: "", act_desc: "" }]);
+    setShowForm(false);
+    await load();
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to add activity" });
+  } finally {
+    setAdding(false);
+  }
+};
 
   const handleEdit = async () => {
     if (!editRow) return;
@@ -416,13 +414,20 @@ function ActivitiesTab({
         <p className="text-sm text-muted-foreground">
           {loading ? "Loading…" : `${rows.length} activit${rows.length === 1 ? "y" : "ies"}`}
         </p>
+      
         <Button
-          size="icon"
-          variant="outline"
-          onClick={() => setShowForm((v) => !v)}
-          title="Add activity"
-          aria-label="Add activity"
-        >
+         size="icon"
+         variant="outline"
+  onClick={() => {
+    if (!showForm) {
+      setShowForm(true);
+    } else {
+      setNewActs((rows) => [...rows, { act_code: "", act_desc: "" }]);
+    }
+  }}
+  title="Add activity"
+  aria-label="Add activity"
+>
           <Plus size={16} />
         </Button>
       </div>
@@ -438,45 +443,50 @@ function ActivitiesTab({
           <th className="px-2 py-2">Activity Description</th>
           <th className="px-2 py-2 w-32">UserID</th>
           <th className="px-2 py-2 w-40">User Date</th>
+          <th className="px-2 py-2 w-10"></th>
         </tr>
       </thead>
 
       <tbody>
-        <tr>
-          <td className="p-1">
-            <Input value={nextSrNo} disabled />
-          </td>
-
-          <td className="p-1">
-            <Input
-              maxLength={10}
-              value={newAct.act_code}
-              className={newAct.act_code && newAct.act_code.length > 10 ? "!border-rose-500 !ring-rose-400" : ""}
-              onChange={(e) =>
-                setNewAct((f) => ({ ...f, act_code: e.target.value }))
-              }
-            />
-          </td>
-
-          <td className="p-1">
-            <Input
-              maxLength={100}
-              value={newAct.act_desc}
-              className={newAct.act_desc && newAct.act_desc.length > 100 ? "!border-rose-500 !ring-rose-400" : ""}
-              onChange={(e) =>
-                setNewAct((f) => ({ ...f, act_desc: e.target.value }))
-              }
-            />
-          </td>
-
-          <td className="p-1">
-            <Input value={loginId} disabled />
-          </td>
-
-          <td className="p-1">
-            <Input type="date" value={today} disabled />
-          </td>
-        </tr>
+        {newActs.map((a, i) => (
+  <tr key={i}>
+    <td className="p-1"><Input value={nextSrNo + i} disabled /></td>
+    <td className="p-1">
+      <Input
+        maxLength={5}
+        value={a.act_code}
+        className={a.act_code.length > 5 ? "!border-rose-500 !ring-rose-400" : ""}
+        onChange={(e) =>
+          setNewActs((rows) => rows.map((r, idx) => idx === i ? { ...r, act_code: e.target.value } : r))
+        }
+      />
+    </td>
+    <td className="p-1">
+      <Input
+        maxLength={100}
+        value={a.act_desc}
+        className={a.act_desc.length > 100 ? "!border-rose-500 !ring-rose-400" : ""}
+        onChange={(e) =>
+          setNewActs((rows) => rows.map((r, idx) => idx === i ? { ...r, act_desc: e.target.value } : r))
+        }
+      />
+    </td>
+    <td className="p-1"><Input value={loginId} disabled /></td>
+    <td className="p-1"><Input type="date" value={today} disabled /></td>
+    <td className="p-1">
+      {newActs.length > 1 && (
+        <Button
+          size="icon"
+          variant="ghost"
+          type="button"
+          onClick={() => setNewActs((rows) => rows.filter((_, idx) => idx !== i))}
+        >
+          <Trash2 size={14} />
+        </Button>
+      )}
+    </td>
+  </tr>
+))}
       </tbody>
     </table>
 
@@ -485,15 +495,11 @@ function ActivitiesTab({
         variant="outline"
         onClick={() => {
           setShowForm(false);
-          setNewAct({
-            act_code: "",
-            act_desc: "",
-          });
+          setNewActs([{ act_code: "", act_desc: "" }]);
         }}
       >
         Cancel
       </Button>
-
       <Button disabled={adding} onClick={handleAdd}>
         Save
       </Button>
@@ -515,12 +521,13 @@ function ActivitiesTab({
                 <th className="px-2 py-2">Activity Description</th>
                 <th className="px-2 py-2 w-32">UserID</th>
                 <th className="px-2 py-2 w-40">User Date</th>
+                <th className="px-2 py-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
                <tr>
                 <td className="p-1"><Input value={editRow.SRNO} disabled /></td>
-                <td className="p-1"><Input maxLength={10} value={editRow.ACT_CODE} className={editRow.ACT_CODE && editRow.ACT_CODE.length > 10 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_CODE: e.target.value } : r)} /></td>
+                <td className="p-1"><Input maxLength={5} value={editRow.ACT_CODE} className={editRow.ACT_CODE && editRow.ACT_CODE.length > 5 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_CODE: e.target.value } : r)} /></td>
                 <td className="p-1"><Input maxLength={100} value={editRow.ACT_DESC} className={editRow.ACT_DESC && editRow.ACT_DESC.length > 100 ? "!border-rose-500 !ring-rose-400" : ""} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_DESC: e.target.value } : r)} /></td>
                 <td className="p-1"><Input value={editRow.USER_ID || ""} onChange={(e) => setEditRow((r) => r ? { ...r, USER_ID: e.target.value } : r)} /></td>
                 <td className="p-1">
