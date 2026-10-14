@@ -269,7 +269,7 @@ const SalaryAdditionDeductionMainPage = () => {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
-                HR Transactions - {title}
+              {title}
               </h1>
               <span className="text-xs text-muted-foreground">
                 {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
@@ -301,9 +301,11 @@ const SalaryAdditionDeductionMainPage = () => {
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => openForm("add")} disabled={saving}>
-            <Plus size={14} /> Add
-          </Button>
+          {!formOpen && (
+            <Button type="button" size="sm" variant="outline" onClick={() => openForm("add")} disabled={saving} >
+              <Plus size={14} /> Add
+            </Button>
+          )}
           {formOpen && (
             <>
               <Button type="button" size="sm" variant="outline" onClick={closeForm} disabled={saving}>
