@@ -420,7 +420,7 @@ function PettyCashPaymentDocument({
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
                       if (balance) {
                         if (balance.error || (balance as any).is_cancelled) {
@@ -916,7 +916,7 @@ function PettyCashPaymentDocument({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
               if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
@@ -1153,7 +1153,7 @@ function PettyCashPaymentDocument({
   const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
       console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
-      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType);
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
       return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
