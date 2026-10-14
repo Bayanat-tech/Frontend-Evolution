@@ -89,6 +89,8 @@ function getVal(row: AnyRow, ...keys: string[]): string {
 
 // ═════════════════════════════════════════════════════════
 // EDI Row-level validation
+//    ✅ FIXED: Min 3 KPI Groups per DESG (Max limit REMOVED)
+//    ✅ Duplicate KPI Group detection
 // ═════════════════════════════════════════════════════════
 function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
   const desgGroups = new Map<
@@ -134,6 +136,9 @@ function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
     if (!backendError && dg) {
       const distinctGroups = dg.kpiGroups.size;
 
+      // ─────────────────────────────────────────────
+      // Check 1: Duplicate KPI Group (same name, multiple weightages)
+      // ─────────────────────────────────────────────
       let duplicateGroupName: string | null = null;
       dg.kpiGroups.forEach((info, gname) => {
         if (info.weightages.size > 1 && !duplicateGroupName) {
@@ -148,12 +153,18 @@ function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
             .join(", ");
           computedError = `Duplicate KPI Group "${r.kpi_group}" in DESG ${r.desg_code} — appears with multiple weightages: ${wts}`;
         }
-      } else if (distinctGroups < 3) {
+      }
+      // ─────────────────────────────────────────────
+      // Check 2: Min 3 KPI Groups per DESG
+      //          ✅ Max 6 rule REMOVED
+      // ─────────────────────────────────────────────
+      else if (distinctGroups < 3) {
         computedError = `DESG ${r.desg_code} has only ${distinctGroups} KPI Group(s). Min 3 required.`;
-      } else if (distinctGroups > 6) {
-        computedError = `DESG ${r.desg_code} has ${distinctGroups} KPI Groups. Max 6 allowed.`;
       }
 
+      // ─────────────────────────────────────────────
+      // Check 3: Blank KPI group name
+      // ─────────────────────────────────────────────
       if (!computedError && !grp) {
         computedError = "KPI Group name is blank.";
       }
@@ -191,7 +202,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ STEP 1: Dedupe rows on frontend (removes stale duplicate rows from DB)
+  // ✅ STEP 1: Dedupe rows on frontend
   const dedupedEdiRows = useMemo<EdiRow[]>(() => {
     const seen = new Set<string>();
     return ediRows.filter((r) => {
@@ -227,13 +238,12 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
   );
 
   // ═════════════════════════════════════════════════════════
-  // ✅ STEP 2: HARD CLEAR — 3 attempts + verification
+  // HARD CLEAR — 3 attempts + verification
   // ═════════════════════════════════════════════════════════
   const clearStaging = async (): Promise<boolean> => {
     const MAX_ATTEMPTS = 3;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      // Try to delete
       try {
         await pamsDelete({
           parameter: "clear_kpi_edi",
@@ -244,7 +254,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         console.warn(`clear attempt ${attempt} threw:`, e);
       }
 
-      // Verify
       try {
         const check: any = await pamsSelect({
           parameter: "get_kpi_edi",
@@ -276,7 +285,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         return true;
       }
 
-      // Small delay between retries
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((res) => setTimeout(res, 300));
       }
@@ -285,7 +293,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     return false;
   };
 
-  // Manual force clear button
   const handleForceClear = async () => {
     try {
       setIsLoading(true);
@@ -422,7 +429,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
   };
 
   // ═════════════════════════════════════════════════════════
-  // UPLOAD TO EDI STAGING — BLOCKS if clear fails
+  // UPLOAD TO EDI STAGING
   // ═════════════════════════════════════════════════════════
   const CHUNK_SIZE = 100;
 
@@ -431,7 +438,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
       setIsLoading(true);
       setUploadError(null);
 
-      // ✅ Pre-check: fetch existing rows
       const existingCheck: any = await pamsSelect({
         parameter: "get_kpi_edi",
         loginid: user?.loginid ?? "",
@@ -449,7 +455,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         });
 
         if (existingMyRows.length > 0) {
-          // There is existing data — try to clear
           const cleared = await clearStaging();
           if (!cleared) {
             setUploadError(
@@ -463,7 +468,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         }
       }
 
-      // Prepare rows
       const filled: AnyRow[] = [];
       let lastDesg: AnyRow = {};
       let lastKpiGroup = "";
@@ -907,7 +911,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
               Download the template for reference.
             </p>
             <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-              <strong>Note:</strong> Each designation must have <strong>3 to 6 KPI Groups</strong>.
+              <strong>Note:</strong> Each designation must have <strong>at least 3 KPI Groups</strong>.
               Duplicate KPI Groups within a designation are not allowed.
             </p>
             <div className="mt-4 flex justify-center gap-2">
