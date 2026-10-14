@@ -1675,11 +1675,7 @@ if (tooLong.length) {
   className="col-span-2"
   error={limitErr("remarks")}
 >
-  <div
-    className="w-full"
-    onMouseEnter={() => setRemarksHover(true)}
-    onMouseLeave={() => setRemarksHover(false)}
-  >
+  <div className="w-full">
     <textarea
       className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${
         limitErr("remarks")
@@ -1697,7 +1693,7 @@ if (tooLong.length) {
       }
     />
 
-    {(remarksHover || remarksFocus) && !disabled && (
+    {remarksFocus && !disabled && (
       <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
         {(form.remarks || "").length} / 250 characters (
         {250 - (form.remarks || "").length} left)

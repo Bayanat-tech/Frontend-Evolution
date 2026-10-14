@@ -833,7 +833,6 @@ const limitProps = (f: keyof FormState) => ({
   
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
-  const [remarksHover, setRemarksHover] = useState(false);
   const [remarksFocus, setRemarksFocus] = useState(false);
 
   const filteredLines = useMemo(() => {
@@ -1050,6 +1049,19 @@ const limitProps = (f: keyof FormState) => ({
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen w-full min-w-0 ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
+        {settledPaidAmount > 0 && (
+          <div className="mb-1 flex items-center justify-between gap-2 rounded border border-amber-200/90 bg-amber-50/90 px-2.5 py-0.5 text-[11px] text-amber-900 shadow-2xs leading-tight">
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <AlertCircle size={13} className="text-amber-600 shrink-0" />
+              <span className="truncate">
+                <strong>Active Payments ({formatAmount(settledPaidAmount)}):</strong> Settled against this invoice. Party, currency & rate locked. Cannot cancel until payments unallocated.
+              </span>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-100/80 border border-amber-300/80 rounded px-1.5 py-0.2">
+              Locked
+            </span>
+          </div>
+        )}
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={docType === "PI" ? "Purchase Invoice" : META[docType]?.title || "Commercial"}
@@ -1108,17 +1120,6 @@ const limitProps = (f: keyof FormState) => ({
           </div>
         </div>
       </CardHeader>
-      {settledPaidAmount > 0 && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-amber-900 text-xs shrink-0">
-          <div className="flex items-center gap-2 font-medium">
-            <AlertCircle size={15} className="text-amber-600 shrink-0" />
-            <span>
-              <strong>Active Payments Exist:</strong> Payments totaling{" "}
-              <strong className="font-mono font-bold text-amber-800">{formatAmount(settledPaidAmount)}</strong> have been settled against this invoice. Party account, currency, and exchange rate are locked. Invoice cannot be cancelled until payments are unallocated/reversed.
-            </span>
-          </div>
-        </div>
-      )}
       {isCancelled && (
         <div className="cancelled-document-banner" role="status">
           <div>
@@ -1424,27 +1425,23 @@ const limitProps = (f: keyof FormState) => ({
                     {/* Remarks: Wide textarea across entire bottom of Document Details */}
                    
                     <CField label="Remarks" className="col-span-2">
-                      <div
-                       className="relative"
-                       onMouseEnter={() => setRemarksHover(true)}
-                       onMouseLeave={() => setRemarksHover(false)}
-                      >
-                     <textarea
-                        className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
-                        disabled={isCancelled}
-                        value={form.remarks || ""}
-                        maxLength={250}
-                        placeholder="Remarks / Notes"
-                        onFocus={() => setRemarksFocus(true)}
-                        onBlur={() => setRemarksFocus(false)}
-                        onChange={(e) => update("remarks", e.target.value)}
-                      />
-                        {(remarksHover || remarksFocus) && !isCancelled && (
+                      <div className="relative">
+                        <textarea
+                          className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                          disabled={isCancelled}
+                          value={form.remarks || ""}
+                          maxLength={250}
+                          placeholder="Remarks / Notes"
+                          onFocus={() => setRemarksFocus(true)}
+                          onBlur={() => setRemarksFocus(false)}
+                          onChange={(e) => update("remarks", e.target.value)}
+                        />
+                        {remarksFocus && !isCancelled && (
                           <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
-                           {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
+                            {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
                           </div>
                         )}
-                        </div>
+                      </div>
                     </CField>
                   </HeaderBlock>
                 </div>

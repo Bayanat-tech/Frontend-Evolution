@@ -56,6 +56,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     const checkAndShowTooltip = useCallback(() => {
       if (!showOverflowTooltip) return;
+      if (!isFocusedRef.current) return;
       // Skip non-text or security inputs
       if (type === "password" || type === "number" || type === "date" || type === "checkbox" || type === "radio" || type === "hidden") {
         setTooltip(null);
@@ -66,7 +67,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (!el) return;
       const val = String(el.value ?? props.value ?? "");
 
-      // If maxLength is defined, always show the character limit card
+      // If maxLength is defined, always show the character limit card when focused
       if (props.maxLength != null) {
         updateTooltipPosition(val);
         return;
@@ -114,13 +115,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className,
           )}
           onMouseEnter={(e) => {
-            checkAndShowTooltip();
             onMouseEnter?.(e);
           }}
           onMouseLeave={(e) => {
-            if (!isFocusedRef.current) {
-              hideTooltip();
-            }
             onMouseLeave?.(e);
           }}
           onFocus={(e) => {
