@@ -397,6 +397,30 @@ export function PurchaseGRNEditor({
     }
   };
 
+
+
+
+  const handleExcel = async () => {
+  if (!form.doc_no) {
+    setError("Save the GRN before exporting to Excel");
+    return;
+  }
+  setExportingExcel(true);
+  setError("");
+  try {
+    await exportGrnPrintReportExcel({
+      parameter: "GRN_Print",
+      loginid: user?.loginid || user?.username || "ADMIN",
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.GRN,
+      doc_no: String(form.doc_no),
+    } as any);
+  } catch (e: any) {
+    setError(e?.response?.data?.message || e?.message || "Excel export failed");
+  } finally {
+    setExportingExcel(false);
+  }
+};
   const openRejectDialog = () => {
     setRejectError("");
     setRejectReason("");
@@ -568,16 +592,14 @@ export function PurchaseGRNEditor({
                       {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
                     </Button>
                     <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={handleExportGrnExcel}
-                      disabled={exportingExcel}
-                      title="Download Excel"
-                    >
-                      {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                    </Button>
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+  disabled={exportingExcel}
+>
+  {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+  Excel
+</Button>
                   </>
                 )}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
