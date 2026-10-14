@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, FileText,
-  Save, Send, CheckCircle2, XCircle, Undo2, Printer, LogOut, X,
+  Save, Send, CheckCircle2, XCircle, Undo2, Printer,
 } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsUpdateRatings } from "../../api/pams";
@@ -162,18 +162,6 @@ const S = {
     whiteSpace: "nowrap" as const,
     transition: "background 0.18s, transform 0.1s",
   },
-  actionBtnClose: {
-    display: "inline-flex" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    padding: "7px 10px",
-    background: "#082A89",
-    color: "#fff",
-    border: "none",
-    borderRadius: "7px",
-    cursor: "pointer" as const,
-    transition: "background 0.18s, transform 0.1s",
-  },
 
   // Tabs + Panel
   tabBar: {
@@ -293,51 +281,6 @@ const S = {
     justifyContent: "flex-end" as const,
     gap: "8px",
   },
-  reportModalOverlay: {
-    position: "fixed" as const,
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    display: "flex" as const,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
-    zIndex: 10000,
-    padding: "20px",
-  },
-  reportModalContent: {
-    backgroundColor: "#fff",
-    borderRadius: "8px",
-    width: "90%",
-    maxWidth: "1200px",
-    height: "90%",
-    display: "flex" as const,
-    flexDirection: "column" as const,
-    overflow: "hidden" as const,
-  },
-  reportModalHeader: {
-    display: "flex" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    padding: "15px 20px",
-    borderBottom: "1px solid #e5e7eb",
-    backgroundColor: "#f8fafc",
-  },
-  reportModalBody: { flex: 1, overflow: "auto" as const, padding: "20px" },
-  reportModalFooter: {
-    padding: "15px 20px",
-    borderTop: "1px solid #e5e7eb",
-    display: "flex" as const,
-    justifyContent: "flex-end" as const,
-    gap: "10px",
-  },
-  closeModalBtn: {
-    background: "none",
-    border: "none",
-    fontSize: "24px",
-    cursor: "pointer" as const,
-    color: "#6b7280",
-    padding: "0 8px",
-    lineHeight: 1,
-  },
 };
 
 // ─── Final Rating Chip ────────────────────────────────────────────────────────
@@ -425,7 +368,6 @@ const AppraisalViewTabsPage: React.FC = () => {
   const skillRowsRef = useRef<Row[]>([]);
   const appraiserCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
   const appraiseeCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
-  const reportPrintRef = useRef<HTMLDivElement>(null);
 
   const isFinalized = finalApproved === "YES";
   const employeeIsHOD =
@@ -441,7 +383,6 @@ const AppraisalViewTabsPage: React.FC = () => {
 
   const finalRating = calcFinalRating(taskTotal, characterTotal, weightageConfig);
   const showFinalRating = taskTotal > 0 && characterTotal > 0;
-  const [reportReady, setReportReady] = useState(false);
 
   // ── Fetch ──
   useEffect(() => {
@@ -574,22 +515,13 @@ const AppraisalViewTabsPage: React.FC = () => {
     }
   };
 
-  const handlePrintReport = () => {
-    if (!reportReady || !reportPrintRef.current) return;
-    const fileName = `Performance-Report-${docNo}-${new Date().toISOString().slice(0, 10)}`;
-    const printStyles = `@page { size: A4 portrait; margin: 10mm 8mm; } * { box-sizing: border-box; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; } thead { display: table-header-group; }`;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><title>${fileName}</title><style>${printStyles}</style></head><body>${reportPrintRef.current.outerHTML}</body></html>`);
-    win.document.close(); win.focus(); win.print(); win.close();
-  };
-
   const handleAppraiserCommentChange = useCallback((val: string, level: number) => {
     appraiserCommentRef.current = { text: val, level };
   }, []);
   const handleAppraiseeCommentChange = useCallback((val: string, level: number) => {
     appraiseeCommentRef.current = { text: val, level };
   }, []);
+  const handleReportClose = useCallback(() => setShowReportModal(false), []);
 
   if (loading) {
     return (
@@ -735,33 +667,10 @@ const AppraisalViewTabsPage: React.FC = () => {
               onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
               onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
               onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-              onClick={() => { setReportReady(false); setShowReportModal(true); }}
+              onClick={() => setShowReportModal(true)}
             >
               <Printer size={13} /> Print
             </button>
-
-            {/* <button
-              style={S.actionBtn}
-              onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-              onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-              onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-              onClick={() => navigate(-1)}
-            >
-              <LogOut size={13} /> Exit
-            </button> */}
-
-            {/* <button
-              style={S.actionBtnClose}
-              onMouseEnter={e => (e.currentTarget.style.background = "#0b38a8")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#082A89")}
-              onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-              onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-              onClick={() => navigate(-1)}
-              title="Close"
-            >
-              <X size={14} />
-            </button> */}
           </div>
         </div>
       </div>
@@ -864,34 +773,12 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── Report Modal ── */}
+      {/* ── Report: PerformanceReportDesign opens its own NewReportDialog (no extra wrapper modal) ── */}
       {showReportModal && (
-        <div style={S.reportModalOverlay} onClick={() => setShowReportModal(false)}>
-          <div style={S.reportModalContent} onClick={e => e.stopPropagation()}>
-            <div style={S.reportModalHeader}>
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#082A89" }}>
-                Performance Report — {docNo}
-              </h3>
-              <button
-                style={S.closeModalBtn}
-                onClick={() => setShowReportModal(false)}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#082A89"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#6b7280"; }}
-              >×</button>
-            </div>
-            <div style={S.reportModalBody}>
-              <PerformanceReportDesign
-                required_values={{ doc_no: docNo ?? "", employee_code: employeeCode, company_code: "BSG" }}
-                printRef={reportPrintRef}
-                onReady={setReportReady}
-              />
-            </div>
-            <div style={S.reportModalFooter}>
-              <button style={S.outlineBtn} onClick={() => setShowReportModal(false)}>Close</button>
-              <button style={S.solidBtn()} onClick={handlePrintReport}>🖨️ Print Report</button>
-            </div>
-          </div>
-        </div>
+        <PerformanceReportDesign
+          required_values={{ doc_no: docNo ?? "", employee_code: employeeCode, company_code: "BSG" }}
+          onClose={handleReportClose}
+        />
       )}
     </div>
   );
