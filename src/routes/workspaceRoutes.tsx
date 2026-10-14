@@ -228,6 +228,7 @@ import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessment
 import HrDashboard from "../pages/hr/dashboard/HRDashboard";
 import HrDocumentReport from "../pages/hr/Reports/HrDocumentReport";
 import HrLabourCardExpiryReport from "../pages/hr/Reports/HrLabourCardExpiry";
+import HrEmployeeHeadCountList from "../pages/hr/Reports/HrEmployeeHeadCountList";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -351,6 +352,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "HR Retirement Report",
   match: ({ pathname }) => isHrRetirementReportRoute(pathname),
   element: () => <HrRetirementReport />,
+  },
+
+  {
+  name: "HR Employee Head Count List Report",
+  match: ({ pathname }) => isHrEmployeeHeadCountListRoute(pathname),
+  element: () => <HrEmployeeHeadCountList />,
   },
 
   {
@@ -3106,5 +3113,18 @@ function isHrLabourCardExpiryRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/labour_card_expiry") ||
     compact.includes("labourcardexpirylisting") ||
     compact.includes("labourcardexpiry")
+  );
+}
+
+function isHrEmployeeHeadCountListRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee_head_count_list") ||
+    normalized.includes("/hcm/hcm/reports/employee/employee%20head%20count%20list") ||
+    normalized.includes("/hcm/hcm/reports/employee/employee-head-count-list") ||
+    normalized.includes("/hcm/hcm/reports/employee/employee_head_count") ||
+    compact.includes("employeeheadcountlist") ||
+    compact.includes("employeeheadcount")
   );
 }
