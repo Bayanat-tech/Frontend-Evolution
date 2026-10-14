@@ -46,6 +46,7 @@ import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocu
 import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { downloadSalesInvoiceExcel } from "./SalesInvoiceReport";
 
 
 export type { PurchaseOrderEditorState };
@@ -102,6 +103,7 @@ export function SalesOrderEditor({
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
   const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [printOpen, setPrintOpen] = useState(false);
 
 
 
@@ -225,7 +227,7 @@ export function SalesOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           // tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1),
-                    tx_cat_code: text(headerRaw.tx_cat_code || detailRows[0]?.tx_cat_code || current.tx_cat_code),
+          tx_cat_code: text(headerRaw.tx_cat_code || detailRows[0]?.tx_cat_code || current.tx_cat_code),
           tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || detailRows[0]?.tx_compntcat_code_1 || current.tx_compntcat_code_1),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || detailRows[0]?.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           discount_scoope:
@@ -438,6 +440,23 @@ export function SalesOrderEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
@@ -455,32 +474,32 @@ export function SalesOrderEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
@@ -572,6 +591,18 @@ export function SalesOrderEditor({
       setSendBackDialogOpen(false);
     }, "Sales Order sent back");
   };
+
+  const handleExcel = async () => {
+      if (!form.doc_no) return;
+      try {
+        await getSoOrderReportExcel({
+          doc_no: String(form.doc_no),
+          company_code: user?.company_code,
+        });
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Excel export failed");
+      }
+    };
 
   const actionBarBusy = actionLoading !== null || saving;
 
@@ -680,19 +711,17 @@ export function SalesOrderEditor({
                   )}
                   {form.doc_no && (
                     <>
-                      {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                      <Button
-                        aria-label="Excel"
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        onClick={() => void handleExportExcel()}
-                        disabled={reportPreviewExporting}
-                      >
-                        {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
+                    </Button>
+                   <Button
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+>
+  <Download size={15} />
+  Excel
+</Button>
                     </>
                   )}
                   <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -717,7 +746,7 @@ export function SalesOrderEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Order...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

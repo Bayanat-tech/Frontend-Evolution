@@ -168,11 +168,14 @@ export type CompanyInfo = {
 
 export type FinanceOutstandingBalance = {
   inv_no: string;
+  doc_no?: string;
+  ref_no?: string;
   original_amount: number;
   paid_amount: number;
   outstanding_amount: number;
   payment_percentage: number;
   is_fully_paid: boolean;
+  is_cancelled?: boolean;
   error?: string;
 };
 
@@ -309,13 +312,22 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
-export async function getFinanceOutstanding(divCode: string, invNos: string | string[]) {
+export async function getFinanceOutstanding(
+  divCode: string,
+  invNos: string | string[],
+  acCode?: string,
+  docType?: string,
+  excludeDocNo?: string
+) {
   const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
     "/api/finance/transactions/invoice_outstanding",
     {
       params: {
         div_code: divCode,
         inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
+        ...(acCode ? { ac_code: acCode } : {}),
+        ...(docType ? { doc_type: docType } : {}),
+        ...(excludeDocNo ? { exclude_doc_no: excludeDocNo } : {}),
       },
     },
   );
@@ -518,6 +530,14 @@ export async function cancelTransactionDocument(docNo: string, docType: Transact
     params: { doc_no: docNo, doc_type: docType },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to cancel document");
+  return response.data;
+}
+
+export async function cancelLpoDocument(docNo: string, docType: TransactionType) {
+  const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_LPO", {}, {
+    params: { doc_no: docNo, doc_type: docType },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to cancel LPO");
   return response.data;
 }
 

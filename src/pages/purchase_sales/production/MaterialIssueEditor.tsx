@@ -48,6 +48,7 @@ import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { MaterialHeaderForm } from "./MaterialHeader";
+import { MaterialDetailsTable } from "./MaterialDetailsTable";
 
 
 export type { PurchaseOrderEditorState };
@@ -743,7 +744,7 @@ if (rect) {
                   </div>
                 )}
 
-                <PurchaseOrderLinesTable
+                <MaterialDetailsTable
                   rows={rows}
                   form={form}
                   setdetails={setRows}

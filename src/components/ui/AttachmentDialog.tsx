@@ -186,7 +186,6 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      // contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
       contentClassName="w-[min(96vw,1100px)] max-h-[86vh] attachment-dialog"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}

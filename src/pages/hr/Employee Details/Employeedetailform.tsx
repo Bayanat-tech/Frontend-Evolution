@@ -14,17 +14,14 @@ import { getDynamicLookup } from "../../../api/lookups";
 import type { TEmployeeDetails } from "./EmployeeDetails.types";
 import { UpdHrEmployee } from "../../../api/hr";
 
-/* ✅ Expose save() to the parent (header Save button) */
 export type EmployeeFormHandle = {
   save: () => Promise<void>;
-  /** Expand every section, or collapse them all if they're already all open. */
   toggleAll: () => void;
 };
 
 interface EditEmployeeDetailsFormProps {
   existingData: TEmployeeDetails;
   onClose: (refetch?: boolean) => void;
-  /** Reports whether every section is open, so the header button can label itself. */
   onAllOpenChange?: (allOpen: boolean) => void;
 }
 
@@ -45,7 +42,6 @@ const LOOKUP_PARAMS = {
 type LookupKey = keyof typeof LOOKUP_PARAMS;
 type LookupRow = Record<string, unknown>;
 
-// keys of TEmployeeDetails that hold plain strings (used by the text-field helper)
 type TextKey = {
   [K in keyof TEmployeeDetails]-?: [NonNullable<TEmployeeDetails[K]>] extends [never]
     ? never
@@ -70,7 +66,6 @@ const SECTION_IDS: SectionId[] = [
   "name", "personal", "employment", "contact", "reporting", "permanent", "local", "emergency", "licence",
 ];
 
-// Sections the user is most likely to need start open; the rest start collapsed.
 const DEFAULT_OPEN: Record<SectionId, boolean> = {
   name: true,
   personal: true,
@@ -100,27 +95,23 @@ function fromInputDate(value: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   SectionPanel — Freight structure, collapsible.
-   Controlled by the form so "Expand all / Collapse all" and
-   validation can open sections. Body is hidden (not unmounted),
-   so entered values are never lost.
-   ───────────────────────────────────────────────────────────── */
 function SectionPanel({
   title,
   icon: Icon,
   open,
   onToggle,
+  className = "",
   children,
 }: {
   title: string;
   icon: LucideIcon;
   open: boolean;
   onToggle: () => void;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
+    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -208,8 +199,20 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allOpen]);
 
-    const section = (id: SectionId, title: string, icon: LucideIcon, children: ReactNode) => (
-      <SectionPanel title={title} icon={icon} open={openSections[id]} onToggle={() => toggleSection(id)}>
+    const section = (
+      id: SectionId,
+      title: string,
+      icon: LucideIcon,
+      children: ReactNode,
+      className?: string,
+    ) => (
+      <SectionPanel
+        title={title}
+        icon={icon}
+        open={openSections[id]}
+        onToggle={() => toggleSection(id)}
+        className={className}
+      >
         {children}
       </SectionPanel>
     );
@@ -370,14 +373,13 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
       toggleAll: () => setAllSections(!allOpen),
     }));
 
-    // ── UI ────────────────────────────────────────────────────────────────
     return (
-      <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+      <div className="freight-workspace-ui freight-dense-form freight-ui-standard grid grid-cols-1 items-start gap-2 lg:grid-cols-2">
         {section(
           "name",
           "Name",
           User,
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             {lookupField("title", "Title", "title", "value_code", "value_desc", true)}
             {textField("first_name", "First Name", { required: true })}
             {textField("second_name", "Second Name")}
@@ -393,7 +395,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           "personal",
           "Personal Information",
           IdCard,
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             {lookupField("gender", "Gender", "gender", "value_code", "value_desc", true)}
             {/* Date of Birth intentionally hidden (was commented out in the old form) */}
             {textField("birth_place", "Place of Birth")}
@@ -420,7 +422,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           "employment",
           "Employment & Health",
           BadgeCheck,
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="OT Applicable">
               <Select value={form.ot_applicable} onChange={(e) => set("ot_applicable", e.target.value)}>
                 <option value="">Select...</option>
@@ -439,7 +441,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           "contact",
           "Contact Details",
           Contact,
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             {textField("mobile_no", "Mobile No")}
             {textField("mobile_no2", "Mobile No (Alt)")}
             {textField("email_official", "Official Email", { type: "email" })}
@@ -451,7 +453,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           "reporting",
           "Reporting",
           Users,
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             {textField("supervisor_empid", "Supervisor")}
             {textField("dept_head_emp_id", "Dept Head")}
             {textField("manager_code", "Manager Code")}
@@ -459,13 +461,25 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
         )}
 
         {section(
+          "licence",
+          "Driving Licence",
+          Car,
+          <div className="grid gap-3 sm:grid-cols-2">
+            {textField("driving_license_no", "Licence No")}
+            {textField("dl_issue_place", "Place of Issue")}
+            {dateField("dl_issue_date", "Date of Issue")}
+            {dateField("dl_valid_upto", "Valid Upto")}
+          </div>,
+        )}
+
+        {section(
           "permanent",
           "Permanent Address",
           Home,
-          <div className="grid gap-3 md:grid-cols-4">
-            {textField("perm_address1", "Address Line 1", { className: "md:col-span-2" })}
-            {textField("perm_address2", "Address Line 2", { className: "md:col-span-2" })}
-            {textField("perm_address3", "Address Line 3", { className: "md:col-span-2" })}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {textField("perm_address1", "Address Line 1", { className: "sm:col-span-2" })}
+            {textField("perm_address2", "Address Line 2", { className: "sm:col-span-2" })}
+            {textField("perm_address3", "Address Line 3", { className: "sm:col-span-2" })}
             {textField("perm_phone", "Phone")}
             {textField("perm_mobile", "Mobile")}
           </div>,
@@ -475,15 +489,16 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
           "local",
           "Local Address",
           MapPin,
-          <div className="grid gap-3 md:grid-cols-4">
-            {textField("local_address1", "Address Line 1", { className: "md:col-span-2" })}
-            {textField("local_address2", "Address Line 2", { className: "md:col-span-2" })}
-            {textField("local_address3", "Address Line 3", { className: "md:col-span-2" })}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {textField("local_address1", "Address Line 1", { className: "sm:col-span-2" })}
+            {textField("local_address2", "Address Line 2", { className: "sm:col-span-2" })}
+            {textField("local_address3", "Address Line 3", { className: "sm:col-span-2" })}
             {textField("local_phone", "Phone")}
             {textField("local_mobile", "Mobile")}
           </div>,
         )}
 
+        {/* Emergency spans both page columns, so its fields use the original 4-col row */}
         {section(
           "emergency",
           "Emergency Contact",
@@ -496,18 +511,7 @@ export const EditEmployeeDetailsForm = forwardRef<EmployeeFormHandle, EditEmploy
             {textField("emgr_mobile", "Mobile")}
             {textField("emgr_contact_person", "Contact Person", { className: "md:col-span-2" })}
           </div>,
-        )}
-
-        {section(
-          "licence",
-          "Driving Licence",
-          Car,
-          <div className="grid gap-3 md:grid-cols-4">
-            {textField("driving_license_no", "Licence No")}
-            {textField("dl_issue_place", "Place of Issue")}
-            {dateField("dl_issue_date", "Date of Issue")}
-            {dateField("dl_valid_upto", "Valid Upto")}
-          </div>,
+          "lg:col-span-2",
         )}
       </div>
     );
