@@ -11295,7 +11295,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .lookup-popover {
-  max-height: 520px !important;
+  max-height: 520px;
 }
 
 .lookup-popover .lookup-search-input {
