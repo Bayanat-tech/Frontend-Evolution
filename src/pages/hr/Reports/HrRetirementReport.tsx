@@ -6,19 +6,19 @@
 // This page intentionally mirrors that file's structure field-for-field so the
 // cascade behaves identically (Division → Department → Section → Employee).
 //
-// Lookup parameter names come from PROC_BUILD_DYNAMIC_EDUCATION_QUALIFICATION
-// (same proc the Education page uses), because the retirement report shares
-// the org-hierarchy filter chain with that page:
+// Lookup parameter names:
 //   • Division   → EDUCATION_QUALIFICATION_DIVISION_LIST
 //                  (code1 = company)                              → div_code, div_name
-//   • Department → EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE
+//   • Department → MS_EMP_HR_LEAVE_ENTITLEMENT_DEPARTMENT
 //                  (code1 = company, code2 = div_code)            → dept_code, dept_name
 //   • Section    → EDUCATION_QUALIFICATION_MS_HR_SECTION
 //                  (code1 = company, code2 = div_code, code3 = dept_code)
 //                                                                 → section_code, section_name
-//   • Employee   → EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER
+//   • Employee   → MS_EMP_HR_LEAVE_ENTITLEMENT_EMPLOYEE_LIST
 //                  (code1 = company, code2 = div_code, code3 = dept_code, code4 = section_code)
-//                                                                 → employee_id, employee_name
+//                  DIV / DEPT / SECTION are all OPTIONAL in this proc, so the
+//                  employee list loads with any combination of filters
+//                                                                 → EMPLOYEE_ID, EMPLOYEE_CODE, RPT_NAME
 
 import React, {
   useCallback,
@@ -236,20 +236,18 @@ export const HrRetirementReport = forwardRef<HrRetirementReportHandle, Props>(
       [companyCode, loginid, divCode, deptCode],
     );
 
+    // Employee list uses the Leave Entitlement proc: DIV / DEPT / SECTION are
+    // all optional there, so employees load with any filter combination.
     const loadEmployees = useCallback(
       async (q?: string) => {
         if (!companyCode) return [];
         const data = await getDynamicLookup(
-          buildPayload(
-            "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
-            loginid,
-            {
-              code1: companyCode,
-              code2: divCode || undefined,
-              code3: deptCode || undefined,
-              code4: sectionCode || undefined,
-            },
-          ),
+          buildPayload("MS_EMP_HR_LEAVE_ENTITLEMENT_EMPLOYEE_LIST", loginid, {
+            code1: companyCode,
+            code2: divCode || undefined,
+            code3: deptCode || undefined,
+            code4: sectionCode || undefined,
+          }),
         );
         return matches(data, q);
       },
@@ -316,7 +314,6 @@ export const HrRetirementReport = forwardRef<HrRetirementReportHandle, Props>(
       resetMessages();
       setEmployeeId(value);
 
-      // Education proc returns employee_id + employee_name (lowercase).
       // Leave Entitlement proc returns EMPLOYEE_CODE + RPT_NAME (uppercase).
       // Read both cases tolerantly.
       const code = val(row, "employee_id", "EMPLOYEE_ID", "employee_code", "EMPLOYEE_CODE");
@@ -632,12 +629,12 @@ export const HrRetirementReport = forwardRef<HrRetirementReportHandle, Props>(
                   label=""
                   value={employeeId}
                   displayValue={employeeDisplay || undefined}
-                  /* Education proc returns EMPLOYEE_ID and RPT_NAME (via
-                     aliases in the SQL). Use the same column names as
-                     HREmployeeLeaveEntitlement for consistency. */
+                  /* Leave Entitlement employee proc returns EMPLOYEE_ID,
+                     EMPLOYEE_CODE and RPT_NAME (uppercase). Same columns as
+                     HREmployeeLeaveEntitlement. */
                   columns={[
-                    { field: "employee_id", header: "Code" },
-                    { field: "employee_name", header: "Name" },
+                    { field: "EMPLOYEE_CODE", header: "Code" },
+                    { field: "RPT_NAME", header: "Name" },
                   ]}
                   valueField="EMPLOYEE_ID"
                   displayFields={["EMPLOYEE_CODE", "RPT_NAME"]}

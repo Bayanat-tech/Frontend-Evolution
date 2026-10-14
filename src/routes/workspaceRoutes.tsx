@@ -225,6 +225,7 @@ import HrRetirementReport from "../pages/hr/Reports/HrRetirementReport";
 
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 import HrDashboard from "../pages/hr/dashboard/HRDashboard";
+import HrDocumentReport from "../pages/hr/Reports/HrDocumentReport";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -282,6 +283,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leave_entitlement"),
     element : () => <HREmployeeLeaveEntitlement />
   },
+
+  {
+  name: "HR Document Report",
+  match: ({ pathname }) => isHrDocumentReportRoute(pathname),
+  element: () => <HrDocumentReport />,
+},
   {
     name : 'Hr Employee Register Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/register_report"),
@@ -3065,5 +3072,17 @@ function isHrAbsenceReportRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/absence_report") ||
     normalized.includes("/hcm/hcm/reports/employee/absence-report") ||
     compact.includes("employeeabsencereport")
+  );
+}
+
+function isHrDocumentReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/document report") ||
+    normalized.includes("/hcm/hcm/reports/employee/document%20report") ||
+    normalized.includes("/hcm/hcm/reports/employee/document_report") ||
+    normalized.includes("/hcm/hcm/reports/employee/document-report") ||
+    compact.includes("employeedocumentreport")
   );
 }
