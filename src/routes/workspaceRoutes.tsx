@@ -212,7 +212,7 @@ import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotat
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import PostDateCheque from "../pages/finance/PostDateCheque";
-import { AttendanceRegisterReportPage, EmployeeAccrualBalanceReportPage, EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeePayUnitReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
+import { AirTicketRequestReportPage, AttendanceRegisterReportPage, EmployeeAccrualBalanceReportPage, EmployeeAirfareReportPage, EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeeListingReportPage, EmployeePayUnitReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage, PassportExpiryReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
 import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
 import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
@@ -252,6 +252,26 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name : 'Attendance Register Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/attendance_register"),
     element : () => <AttendanceRegisterReportPage />
+  },
+  {
+    name : 'Passport Expiry Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/passport_expiry_listing"),
+    element : () => <PassportExpiryReportPage />
+  },
+  {
+    name : 'Employee Listing',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/employee_listing"),
+    element : () => <EmployeeListingReportPage />
+  },
+  {
+    name : 'Employee airfare report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/payroll/employee_airfare"),
+    element : () => <EmployeeAirfareReportPage />
+  },
+    {
+    name : 'Passport Expiry Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/leave/air_ticket_request_list"),
+    element : () => <AirTicketRequestReportPage />
   },
   {
     name : 'Employee Accural Balance Report',
