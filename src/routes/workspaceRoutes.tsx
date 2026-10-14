@@ -242,6 +242,15 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  // ── PAMS Dashboard on /workspace/ems/ems ──
+  {
+    name: "PAMS Dashboard",
+    match: ({ pathname }) => isPamsDashboardRoute(pathname),
+    element: () => <PamsDashboard />,
+  },
+
+  
     {
     name: "HR Dashboard",
     // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
@@ -1012,16 +1021,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <Purchase_Request_page initialTab={0} />
   },
 
-  // ============================================================
-  // ── PAMS ROUTES ─────────────────────────────────────────────
-  // ⚠️ IMPORTANT ORDERING RULE:
-  //    More specific routes MUST come before generic ones.
-  //    "Appraisal List" matcher uses substring `activityrequestappraisal`
-  //    which would also match `appraisal_listing` URLs. Therefore all
-  //    summary / listing report routes MUST appear before it.
-  // ============================================================
 
-  // ✅ PAMS Reporting pages — MUST come BEFORE "PAMS Appraisal List"
+
+  // PAMS Reporting pages — MUST come BEFORE "PAMS Appraisal List"
   {
     name: "PAMS Appraisal Summary Report",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
@@ -1043,8 +1045,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PamsBulkAppraisalPage />,
   },
 
-  // ✅ NEW: PAMS Appraisal List — now runs AFTER the summary reports,
-  //    and additionally excludes `*_listing` / `*listing*` paths defensively.
   {
     name: "PAMS Appraisal List",
     match: (context) => {
@@ -1560,6 +1560,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PrRegisterOldPage />,
   }
 ];
+
+function isPamsDashboardRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().trim().replace(/\/+$/, "");
+  return normalized === "/workspace/ems/ems";
+}
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");

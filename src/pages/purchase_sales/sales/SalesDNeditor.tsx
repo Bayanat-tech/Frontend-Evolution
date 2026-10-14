@@ -319,7 +319,26 @@ export function SalesDNEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
+  const handleSaveAsDraft = () =>{
+        if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+      for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
+    
     runAction(
       "draft",
       async () => {
@@ -334,6 +353,7 @@ export function SalesDNEditor({
       },
       "Sales Delivery Note saved as draft",
     );
+  }
 
   // const handleSubmit = () => {
   //   if (!form.div_code) return setError("Division is required");
@@ -365,29 +385,33 @@ export function SalesDNEditor({
   // };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
-  const handleSubmitClick = () => {
+ const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
 
-    const invalidRow = rows.find((row) => computeQuantity(row) <= 0);
-    if (invalidRow) {
-      return setError("Delivered Quantity must be greater than 0 for all line items");
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Delivery Note updated successfully" : "Sales Delivery Note created successfully");
@@ -651,7 +675,7 @@ export function SalesDNEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Delivery Note...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
