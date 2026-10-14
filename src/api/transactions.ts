@@ -533,6 +533,14 @@ export async function cancelTransactionDocument(docNo: string, docType: Transact
   return response.data;
 }
 
+export async function cancelLpoDocument(docNo: string, docType: TransactionType) {
+  const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_LPO", {}, {
+    params: { doc_no: docNo, doc_type: docType },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to cancel LPO");
+  return response.data;
+}
+
 export async function deleteTransactionDocument(docNos: string[], docType: TransactionType) {
   const response = await api.delete<ApiResponse<unknown>>(`/api/finance/transactions/document/${docType}`, {
     params: { doc_no: JSON.stringify(docNos) },
