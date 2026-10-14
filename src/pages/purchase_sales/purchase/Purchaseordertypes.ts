@@ -441,6 +441,11 @@ export const GRN_CONFIG: PurchaseConfig = {
   headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
 };
+export const MRT_CONFIG: PurchaseConfig = {
+  docType: PO_DOC_TYPE.MRT,
+  headerParameter: "PS_GRN_ENTRY_MATERIAL_HEADER_PAGE",
+  detailParameter: "PS_GRN_ENTRY_MATERIAL_DETAIL_PAGE",
+};
 
 export const JO_CONFIG: PurchaseConfig = {
   docType: PO_DOC_TYPE.JO,

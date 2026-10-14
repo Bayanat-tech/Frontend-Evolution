@@ -29,6 +29,7 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
@@ -339,7 +340,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalRows={totalRows}
-              initialSorting={[{ id: "doc_date", desc: true }]}
+              initialSorting={[{ id: "doc_no", desc: true }]}
               columnFilters={columnFilters}
               onColumnFiltersChange={(filters) => {
                 setColumnFilters(filters);
@@ -494,6 +495,8 @@ function PaymentDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [remarksHover, setRemarksHover] = useState(false);
+  const [remarksFocus, setRemarksFocus] = useState(false);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -535,24 +538,41 @@ function PaymentDocumentEditor({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -561,11 +581,11 @@ function PaymentDocumentEditor({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -1061,21 +1081,35 @@ const limitProps = (f: keyof TransactionHeader) => ({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+          });
+        }
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -1083,8 +1117,9 @@ const limitProps = (f: keyof TransactionHeader) => ({
           let remaining = parentAmt;
           mapped = mapped.map((row) => {
             if (remaining <= 0) return { ...row, amount: 0 };
-            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
-            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
@@ -1220,6 +1255,10 @@ if (tooLong.length) {
   return setError(`You have exceeded the character limit for Remarks on Line #${tooLong[0].serial_no || 1}.`);
 }
 
+    setInvalidLineIds(new Set());
+    setInvalidChildRowIds(new Set());
+    setInvalidChildFields({});
+
     // Missing field validation on lines (new row without details / missing account or zero amount)
     const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
     if (invalidLines.length > 0) {
@@ -1245,8 +1284,17 @@ if (tooLong.length) {
             if (!c.job_no?.trim()) missingFields.push("Job No");
             if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
           } else if (d.child_table === "invoice") {
-            if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Allocated Amount");
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              }
+            }
           }
 
           if (missingFields.length > 0) {
@@ -1286,11 +1334,11 @@ if (tooLong.length) {
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -1306,13 +1354,41 @@ if (tooLong.length) {
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
+          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+        setError(errMsg);
+        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            ? {
+                ...row,
+                inv_no: balance.inv_no || row.inv_no,
+                ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+                inv_amt: balance.original_amount,
+                c_bal_amt_org: balance.outstanding_amount,
+              }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -1593,21 +1669,43 @@ if (tooLong.length) {
                           </div>
                         )}
 
-                        {/* Remarks: Wide textarea across entire bottom of Document Details */}
-                        <CField
-                          label="Remarks"
-                          className="col-span-2"
-                          error={limitErr("remarks")}
-                        >
-                          <textarea
-                            className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                            disabled={disabled}
-                            value={form.remarks || ""}
-                            maxLength={250}
-                            placeholder="Remarks / Notes"
-                            onChange={(event) => updateField("remarks", event.target.value)}
-                          />
-                        </CField>
+                        {/* Remarks: Wide textarea across entire bottom of Document Details */}                       
+<CField
+  label="Remarks"
+  className="col-span-2"
+  error={limitErr("remarks")}
+>
+  <div
+    className="w-full"
+    onMouseEnter={() => setRemarksHover(true)}
+    onMouseLeave={() => setRemarksHover(false)}
+  >
+    <textarea
+      className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${
+        limitErr("remarks")
+          ? "!border-rose-500 !ring-rose-400"
+          : ""
+      }`}
+      disabled={disabled}
+      value={form.remarks || ""}
+      maxLength={250}
+      placeholder="Remarks / Notes"
+      onFocus={() => setRemarksFocus(true)}
+      onBlur={() => setRemarksFocus(false)}
+      onChange={(event) =>
+        updateField("remarks", event.target.value)
+      }
+    />
+
+    {(remarksHover || remarksFocus) && !disabled && (
+      <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+        {(form.remarks || "").length} / 250 characters (
+        {250 - (form.remarks || "").length} left)
+      </div>
+    )}
+  </div>
+</CField>
+
                       </HeaderBlock>
                     </div>
 
@@ -2786,6 +2884,9 @@ function groupChildren(form: TransactionHeader) {
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
       cleaned.amount = Number(cleaned.amount || 0);
       cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+      }
       grouped[table].push(cleaned);
     });
   });

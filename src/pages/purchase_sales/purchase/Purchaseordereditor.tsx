@@ -231,6 +231,7 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -476,9 +477,28 @@ export function PurchaseOrderEditor({
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+   const hasValidLinesforprod = rows.some((row) => text(row.prod_code).trim().length > 0);
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+      for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const lineNo = i + 1;
+
+    if (!text(row.prod_code).trim()) {
+      return setError(`Line ${lineNo}: Product should not be empty`);
+    }
+
+    const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+    if (!(netQty > 0)) {
+      return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+    }
+
+    if (!(numberOrZero(row.unit_price) > 0)) {
+      return setError(`Line ${lineNo}: Rate should not be 0`);
+    }
+  }
+
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
@@ -492,38 +512,64 @@ export function PurchaseOrderEditor({
   //   setShowSubmitConfirm(true);
   // };
 
-  const handleSubmitClick = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
-    }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
-  };
+  //   const invalidRow = rows.find((row) => {
+  //     const qtyPuom = numberOrZero(row.qty_puom);
+  //     const uppp = numberOrZero(row.uppp);
+  //     const qtyLuom = numberOrZero(row.qty_luom);
+  //     const unitPrice = numberOrZero(row.unit_price);
+  //     const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+  //     return !(total > 0);
+  //   });
+  //   if (invalidRow) {
+  //     return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+  //   }
+  //   const rect = submitBtnRef.current?.getBoundingClientRect();
+  //   if (rect) {
+  //     setSubmitConfirmPos({
+  //       top: rect.bottom + 8,
+  //       right: window.innerWidth - rect.right,
+  //     });
+  //   }
+  //   setShowSubmitConfirm(true);
+  // };
+const handleSubmitClick = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-  const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
-      return setError("Line item discount cannot exceed line item amount");
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const lineNo = i + 1;
+
+    if (!text(row.prod_code).trim()) {
+      return setError(`Line ${lineNo}: Product should not be empty`);
     }
+
+    const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+    if (!(netQty > 0)) {
+      return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+    }
+
+    if (!(numberOrZero(row.unit_price) > 0)) {
+      return setError(`Line ${lineNo}: Rate should not be 0`);
+    }
+  }
+
+  return confirmSubmit();
+};
+
+
+ const confirmSubmit = () => {
+  if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
+    return setError("Line item discount cannot exceed line item amount");
+  }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
@@ -689,7 +735,7 @@ export function PurchaseOrderEditor({
                       {actionLoading === "draft" ? "Saving..." : "Save Draft"}
                     </Button>
                   )}
-                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
+                  {/* <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
                     {isPendingTab && (
                       <Button
                         type="button"
@@ -722,7 +768,21 @@ export function PurchaseOrderEditor({
                         </div>,
                         document.body
                       )}
-                  </div>
+                  </div> */}
+                         {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
 
                   {isPendingTab && canSendBackOrReject && (
                     <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -788,7 +848,7 @@ export function PurchaseOrderEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Order...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

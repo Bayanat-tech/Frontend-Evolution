@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, X } from "lucide-react";
+import { Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -29,6 +29,7 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
@@ -528,24 +529,41 @@ function JVDocument({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -554,11 +572,11 @@ function JVDocument({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -868,21 +886,35 @@ function JVDocument({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+          });
+        }
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -890,8 +922,9 @@ function JVDocument({
           let remaining = parentAmt;
           mapped = mapped.map((row) => {
             if (remaining <= 0) return { ...row, amount: 0 };
-            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
-            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
@@ -1014,12 +1047,47 @@ function JVDocument({
       return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
     }
 
+    // Validation on child allocations (Expense, Invoice, Job)
     for (const d of form.detail) {
       const children = (form.children[d.id] || []) as TransactionChildRow[];
       if (children.length > 0) {
+        for (const [idx, c] of children.entries()) {
+          const rowNum = c.dtl_sr_no || idx + 1;
+          const missingFields: string[] = [];
+          if (d.child_table === "expense") {
+            if (!c.exp_type_code?.trim()) missingFields.push("Expense Type");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "job") {
+            if (!c.job_no?.trim()) missingFields.push("Job No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "invoice") {
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              }
+            }
+          }
+
+          if (missingFields.length > 0) {
+            setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+            setSelectedDetailId(d.id);
+            return setError(
+              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+            );
+          }
+        }
+
         const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
         const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
         if (Math.abs(childSum - lineAmt) > 0.001) {
+          setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+          setSelectedDetailId(d.id);
           return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
         }
       }
@@ -1041,11 +1109,11 @@ function JVDocument({
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -1061,13 +1129,41 @@ function JVDocument({
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
+          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+        setError(errMsg);
+        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            ? {
+                ...row,
+                inv_no: balance.inv_no || row.inv_no,
+                ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+                inv_amt: balance.original_amount,
+                c_bal_amt_org: balance.outstanding_amount,
+              }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -1164,6 +1260,12 @@ function JVDocument({
                     <span className="font-semibold text-[#00378C]">Doc Date:</span>
                     <span className="font-medium">{formatDate(form.doc_date)}</span>
                   </span>
+                  {form.ref_no && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-[#00378C]">Ref No:</span>
+                      <span className="font-medium bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">{form.ref_no}</span>
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1.5">
                     <span className="font-semibold text-[#00378C]">Currency:</span>
                     <span className="font-medium">{form.curr_code || "-"} ({Number(form.ex_rate || 1).toFixed(4)})</span>
@@ -1186,43 +1288,87 @@ function JVDocument({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5 mb-3">
-                <div className="finance-payment-header-block">
-                  <div className="finance-section-title">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                {/* Card 1: Document Details */}
+                <div className="finance-payment-header-block flex flex-col h-full">
+                  <div className="finance-section-title flex items-center">
                     <span className="finance-section-icon"><FileText size={11} /></span>
-                    <span>Document & Currency Details</span>
+                    <span>Document Details</span>
                   </div>
-                  <div className="finance-payment-header-fields">
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
                     <Field label="Doc Date" required>
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                     </Field>
-                    <LookupField
-                      label="Currency"
-                      required
-                      value={form.curr_code}
-                      displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                      columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                      valueField="curr_code"
-                      displayFields={["curr_code", "curr_name"]}
-                      loadOptions={getCurrencyRows}
-                      disabled={disabled}
-                      onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
-                    />
-                    <Field label="Exchange Rate" required>
-                      <Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
+                    <Field
+                      label="Ref No"
+                      error={form.ref_no && form.ref_no.length > 30 ? `Max 30 (${form.ref_no.length})` : undefined}
+                    >
+                      <Input
+                        disabled={disabled}
+                        maxLength={30}
+                        value={form.ref_no || ""}
+                        placeholder="Ref No"
+                        className={`h-7 text-xs ${form.ref_no && form.ref_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                        onChange={(event) => updateField("ref_no", event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Ref Date">
+                      <BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} />
                     </Field>
                     <Field
                       label="Remarks"
-                      className="col-span-2 max-md:col-span-1"
+                      className="col-span-3"
                       error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
                     >
                       <Input
                         disabled={disabled}
                         value={form.remarks || ""}
                         maxLength={250}
-                        placeholder="Remarks"
-                        className={form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
+                        placeholder="Remarks / Narration"
+                        className={`h-7 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
                         onChange={(event) => updateField("remarks", event.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Card 2: Currency & Exchange Rate */}
+                <div className="finance-payment-header-block flex flex-col h-full">
+                  <div className="finance-section-title flex items-center">
+                    <span className="finance-section-icon"><Coins size={11} /></span>
+                    <span>Currency & Rate</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-1.5">
+                    <div>
+                      <LookupField
+                        label="Currency *"
+                        required
+                        enforceRequired
+                        value={form.curr_code}
+                        displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                        columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                        valueField="curr_code"
+                        displayFields={["curr_code", "curr_name"]}
+                        loadOptions={getCurrencyRows}
+                        disabled={disabled}
+                        onChange={(value, row) => setForm((current) => ({
+                          ...current,
+                          curr_code: value,
+                          curr_name: text(getLookupValue(row || {}, "curr_name")),
+                          ex_rate: Number(row?.ex_rate ?? 1)
+                        }))}
+                      />
+                    </div>
+                    <Field label="Exchange Rate *" required>
+                      <Input
+                        disabled={disabled}
+                        required
+                        type="number"
+                        style={{ textAlign: "right" }}
+                        step="0.0001"
+                        className="h-7 text-xs font-mono"
+                        value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(4) : ""}
+                        onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))}
                       />
                     </Field>
                   </div>
@@ -1283,21 +1429,21 @@ function JVDocument({
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
-                  <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
-                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
-                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
-                      <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
-                      <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Dept</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="px-2 py-2 text-center text-white w-14">Action</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
+                      <th className="px-2 py-2 text-center w-[110px]">Allocations</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
+                      <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {showAllColumns && <th className="px-2 py-2 text-left">Dept</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      <th className="px-2 py-2 text-center w-14">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1441,7 +1587,17 @@ function JVDocument({
                           {showAllColumns && (
                             <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                           )}
-                          <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                          <td className="px-2 py-1 text-center">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              title="Delete line"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                              onClick={() => removeDetailRow(detail.id)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         </tr>
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
@@ -1470,19 +1626,43 @@ function JVDocument({
                   </tbody>
                 </table>
               </div>
-              <div className="commercial-lines-footer flex justify-end">
-                <div className="commercial-summary-chips">
-                  <div className={`commercial-summary-chip ${Math.abs(total) > 0.001 ? "border-destructive text-destructive bg-red-50" : "border-emerald-200 text-emerald-700 bg-emerald-50"}`}>
-                    <span className="commercial-summary-label">Balance</span>
-                    <span className="commercial-summary-value font-bold">{formatAmount(total)}</span>
+              <div className="commercial-lines-footer flex flex-wrap items-center justify-between gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  {isBalanced ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Balanced Journal Voucher
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-rose-500" />
+                      Out of Balance: Difference {formatAmount(Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3))))}
+                    </span>
+                  )}
+                </div>
+
+                <div className="commercial-line-totals flex items-center gap-2.5">
+                  <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Debit</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-emerald-700">{formatAmount(debitTotal)}</strong>
                   </div>
-                  <div className="commercial-summary-chip">
-                    <span className="commercial-summary-label">Tax Amount</span>
-                    <span className="commercial-summary-value">{formatAmount(totalTax)}</span>
+                  <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600">Total Credit</span>
+                    <strong className="font-mono text-sm font-bold tabular-nums text-blue-700">{formatAmount(creditTotal)}</strong>
                   </div>
-                  <div className="commercial-summary-chip commercial-summary-net">
-                    <span className="commercial-summary-label">Net Total</span>
-                    <span className="commercial-summary-value font-bold text-[#00378C]">{formatAmount(total + totalTax)}</span>
+                  {totalTax > 0 && (
+                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
+                      <span className="text-xs font-semibold text-slate-600">Tax</span>
+                      <strong className="font-mono text-sm font-bold tabular-nums text-slate-700">{formatAmount(totalTax)}</strong>
+                    </div>
+                  )}
+                  <div className={`flex min-h-9 items-center gap-2 rounded-md border px-3 py-1 shadow-2xs ${
+                    isBalanced ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-300 bg-rose-50 text-rose-800"
+                  }`}>
+                    <span className="text-xs font-bold">Difference</span>
+                    <strong className="font-mono text-sm font-extrabold tabular-nums">
+                      {formatAmount(Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3))))}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -2177,6 +2357,9 @@ function groupChildren(form: TransactionHeader) {
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
       cleaned.amount = Number(cleaned.amount || 0);
       cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+      }
       grouped[table].push(cleaned);
     });
   });

@@ -47,7 +47,7 @@ export function LeaveRegisterPage() {
       })
       .catch((error) => setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load employees" }))
       .finally(() => setLoading(false));
-  }, [loginId]);
+    }, [loginId]);
 
   useEffect(() => {
     if (!employeeId) return;
@@ -74,12 +74,13 @@ export function LeaveRegisterPage() {
     try {
       const [balanceRows, historyRows] = await Promise.all([
         executeHrRawSql<Row>(leaveBalanceSql(employeeId)),
-        getHrLeaveHistory({
-          employeeId,
-          leaveType: leaveType === "ALL" ? undefined : leaveType,
-          leaveStartDateFrom: fromDate || undefined,
-          leaveEndDateTo: toDate || undefined,
-        }),
+        // getHrLeaveHistory({
+        //   employeeId,
+        //   leaveType: leaveType === "ALL" ? undefined : leaveType,
+        //   leaveStartDateFrom: fromDate || undefined,
+        //   leaveEndDateTo: toDate || undefined,
+        // }),
+        executeHrRawSql<Row>(leaveHistorySql(employeeId,leaveType,fromDate,toDate,))
       ]);
       setBalances(balanceRows);
       setHistory(historyRows);
@@ -89,6 +90,22 @@ export function LeaveRegisterPage() {
       setLoading(false);
     }
   };
+
+  function leaveHistorySql(employeeId: string , leaveType?:string, formDate?:string, toDate?:string) {
+    return `
+        SELECT *
+        FROM VW_HR_EMP_LEAVE_HIST
+        WHERE EMPLOYEE_ID = '${employeeId}'
+        AND ('${leaveType}' = 'ALL' OR LEAVE_TYPE = '${leaveType}')
+        AND (
+                '${formDate}' IS NULL OR '${toDate}' IS NULL
+                OR LEAVE_REQUEST_DATE BETWEEN 
+                    TO_DATE('${formDate}','YYYY-MM-DD') 
+                    AND TO_DATE('${toDate}','YYYY-MM-DD')
+            )
+        ORDER BY LEAVE_START_DATE DESC
+    `;
+  }
 
     const visibleBalances = useMemo(() => {
     return balances.filter((row) => {
@@ -252,7 +269,7 @@ export function LeaveRegisterPage() {
               <option value="">Select employee</option>
               {employees.map((employee) => (
                 <option key={String(employee.EMPLOYEE_ID || "")} value={String(employee.EMPLOYEE_ID || "")}>
-                  {String(employee.EMPLOYEE_ID || "")} - {String(employee.RPT_NAME || employee.EMPLOYEE_NAME || "")}
+                  {String(employee.ALTERNATE_ID || "")} - {String(employee.RPT_NAME || employee.EMPLOYEE_NAME || "")}
                 </option>
               ))}
             </Select>
@@ -413,6 +430,7 @@ function leaveBalanceSql(employeeId: string) {
       AND LEAVE_TYPE NOT IN ('001', '008', 'ABS' )
   `;
 }
+
 
 function escapeSql(value: string) {
   return value.replace(/'/g, "''");
