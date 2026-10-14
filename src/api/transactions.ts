@@ -1796,6 +1796,37 @@ export async function getEmployeeTicketEligibilityReportExcelDownload(params: Re
 
 
 
+// ----------Employee Address List— HTML (inline preview)----------------
+export async function getEmployeeAddressListReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAddressListReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Address List — Excel download----------------
+export async function getEmployeeAddressListReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAddressListReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
 
 export async function TransationReport(params: ReportParams) {
   const html = await openReportInTab(

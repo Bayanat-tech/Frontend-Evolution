@@ -220,6 +220,7 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 import EmployeeTicketEligibilityPage from "../pages/hr/Reports/Employeeticketeligibilitypage";
+import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
 
 
 type WorkspaceRouteContext = {
@@ -1496,6 +1497,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isEmployeeTicketEligibilityRoute(pathname),
     element: () => <EmployeeTicketEligibilityPage />
   },
+
+
+  {
+    name: "Employee Address List",
+    match: ({ pathname }) => isEmployeeAddressListRoute(pathname),
+    element: () => <EmployeeAddressListPage/>
+  },
   
   {
     name: "Product BOM",
@@ -1545,6 +1553,18 @@ function isEmployeeTicketEligibilityRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/employee ticket eligibility") ||
     compact.includes("reportsemployeeticketeligibility") ||
     compact.includes("reportsemployeeticketeligibility")
+  );
+}
+
+
+
+function isEmployeeAddressListRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee address list") ||
+    compact.includes("reportsemployeeaddresslist") ||
+    compact.includes("reportsemployeeaddresslist")
   );
 }
 
@@ -2987,3 +3007,5 @@ function isPendingPurchaseOrderRoute(pathname: string) {
     "/workspace/ims/purchase_sales/reports/pending_purchase_order"
   );
 }
+
+

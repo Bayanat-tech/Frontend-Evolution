@@ -28,9 +28,9 @@ const LOOKUP = {
   division: "EDUCATION_QUALIFICATION_DIVISION_LIST",
   department: "EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE",
   section: "EDUCATION_QUALIFICATION_MS_HR_SECTION",
-  grade: "MST_HR_MS_HR_Grade_Page",
-  designation: "EDUCATION_QUALIFICATION_DESIGNATION_LIST",
-  formalDesignation: "MS_EMP_HR_EMPLOYEE_LABOUR_DESG",
+  grade: "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
+  designation: "EDUCATION_QUALIFICATION_TICKET_ELIG_DESIGNATION",
+  formalDesignation: "EDUCATION_QUALIFICATION_TICKET_ELIG_FORMAL_DESIGNATION",
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -97,9 +97,46 @@ function buildParams(
   };
 }
 
-/** A lookup returns one-parent-code only, so cascade only when exactly one parent is picked. */
-const single = (codes: string[]): string =>
-  codes.length === 1 && codes[0] !== ALL_SENTINEL ? codes[0] : "";
+/** Selected parent codes, or [""] (= no restriction) when nothing / "All" is selected. */
+const parents = (codes: string[]): string[] =>
+  codes.length === 0 || codes.includes(ALL_SENTINEL) ? [""] : codes;
+
+/**
+ * The lookups accept one parent code per call (code2 = division, code3 = department,
+ * code4 = section), so call once per selected parent combination and merge the rows.
+ */
+async function loadMerged(
+  parameter: string,
+  loginId: string,
+  companyCode: string,
+  divs: string[] = [],
+  depts: string[] = [],
+  sects: string[] = []
+): Promise<any[]> {
+  const calls: Promise<any>[] = [];
+  for (const d of parents(divs))
+    for (const dp of parents(depts))
+      for (const s of parents(sects))
+        calls.push(getDynamicLookup(buildParams(parameter, loginId, companyCode, d, dp, s)));
+  const results = await Promise.all(calls.slice(0, 30)); // safety cap
+  return results.flatMap((r) => (Array.isArray(r) ? r : []));
+}
+
+/** When a parent changes, drop selected values that are no longer in the reloaded options. */
+function usePrune(
+  options: MultiSelectOption[],
+  loading: boolean,
+  value: string[],
+  setValue: (v: string[]) => void
+) {
+  useEffect(() => {
+    if (loading || !value.length) return;
+    const valid = new Set(options.map((o) => o.value));
+    const kept = value.filter((v) => v === ALL_SENTINEL || valid.has(v));
+    if (kept.length !== value.length) setValue(kept);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, loading]);
+}
 
 /** Loads options for a MultiSelect; reloads when `deps` change. */
 function useOptions(
@@ -117,7 +154,14 @@ function useOptions(
       setLoading(true);
       try {
         const rows = await load();
-        if (alive) setOptions(mapOptions(rows, codeKeys, nameKeys));
+        if (alive) {
+          const seen = new Set<string>();
+          setOptions(
+            mapOptions(rows, codeKeys, nameKeys).filter((o) =>
+              seen.has(o.value) ? false : (seen.add(o.value), true)
+            )
+          );
+        }
       } catch {
         if (alive) setOptions([]);
       } finally {
@@ -201,34 +245,46 @@ export default function EmployeeTicketEligibilityPage() {
     ["div_code"], ["div_name"], [loginId, companyCode]
   );
 
+  const divKey = divisions.join(",");
+  const deptKey = departments.join(",");
+  const sectKey = sections.join(",");
+
+  // Department  <- Division
   const departmentLookup = useOptions(
-    () => getDynamicLookup(buildParams(LOOKUP.department, loginId, companyCode, single(divisions))),
-    ["dept_code"], ["dept_name"], [loginId, companyCode, divisions.join(",")]
+    () => loadMerged(LOOKUP.department, loginId, companyCode, divisions),
+    ["dept_code"], ["dept_name"], [loginId, companyCode, divKey]
   );
 
+  // Section  <- Division, Department
   const sectionLookup = useOptions(
-    () =>
-      getDynamicLookup(
-        buildParams(LOOKUP.section, loginId, companyCode, single(divisions), single(departments))
-      ),
-    ["section_code"], ["section_name"],
-    [loginId, companyCode, divisions.join(","), departments.join(",")]
+    () => loadMerged(LOOKUP.section, loginId, companyCode, divisions, departments),
+    ["section_code"], ["section_name"], [loginId, companyCode, divKey, deptKey]
   );
 
+  // Grade / Designation / Formal Designation  <- Division, Department, Section
+  // Each lookup is called with code2 = division, code3 = department, code4 = section
   const gradeLookup = useOptions(
-    () => getDynamicLookup(buildParams(LOOKUP.grade, loginId, companyCode)),
-    ["grade_code"], ["grade_name"], [loginId, companyCode]
+    () => loadMerged(LOOKUP.grade, loginId, companyCode, divisions, departments, sections),
+    ["grade_code"], ["grade_name"], [loginId, companyCode, divKey, deptKey, sectKey]
   );
 
   const designationLookup = useOptions(
-    () => getDynamicLookup(buildParams(LOOKUP.designation, loginId, companyCode)),
-    ["desg_code"], ["desg_name"], [loginId, companyCode]
+    () => loadMerged(LOOKUP.designation, loginId, companyCode, divisions, departments, sections),
+    ["desg_code"], ["desg_name"], [loginId, companyCode, divKey, deptKey, sectKey]
   );
 
   const formalLookup = useOptions(
-    () => getDynamicLookup(buildParams(LOOKUP.formalDesignation, loginId, companyCode)),
-    ["labour_desg_code", "desg_code"], ["labour_desg_name", "desg_name"], [loginId, companyCode]
+    () => loadMerged(LOOKUP.formalDesignation, loginId, companyCode, divisions, departments, sections),
+    ["labour_desg_code", "desg_code"], ["labour_desg_name", "desg_name"],
+    [loginId, companyCode, divKey, deptKey, sectKey]
   );
+
+  // Remove child selections that no longer belong to the chosen parents
+  usePrune(departmentLookup.options, departmentLookup.loading, departments, setDepartments);
+  usePrune(sectionLookup.options, sectionLookup.loading, sections, setSections);
+  usePrune(gradeLookup.options, gradeLookup.loading, grades, setGrades);
+  usePrune(designationLookup.options, designationLookup.loading, designations, setDesignations);
+  usePrune(formalLookup.options, formalLookup.loading, formalDesgs, setFormalDesgs);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false);
