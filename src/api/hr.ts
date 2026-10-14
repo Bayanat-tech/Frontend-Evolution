@@ -100,9 +100,9 @@ export async function getHrLeaveFlow(master: string, loginid: string, page = 1, 
   return response.data.data || { tableData: [], count: 0 };
 }
 
-export async function getHrEmployees(loginId?: string) {
+export async function getHrEmployees(supervisor_empid?: string) {
   const response = await withHrFallback((prefix) => api.get<ApiResponse<HrEmployee[]> | HrEmployee[]>(`${prefix}/gm/employees`, {
-    params: loginId ? { loginid: loginId } : undefined,
+    params: supervisor_empid ? { supervisor_empid: supervisor_empid } : undefined,
   }));
   return normalizeApiRows<HrEmployee>(response.data, "Unable to load employees");
 }

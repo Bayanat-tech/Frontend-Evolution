@@ -53,6 +53,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocumentIdentity";
 import { createPortal } from "react-dom";
+import {  getPurchaseInvoiceReportExcel } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -236,6 +237,7 @@ export function PurchaseInvoiceEditor({
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
           po_tx_compnt_1_expmt: text(headerRaw.po_tx_compnt_1_expmt),
           tx_cat_name: text(headerRaw.tx_cat_name),
+
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || detailRows[0]?.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           tx_compntcat_name_1: text(headerRaw.tx_compntcat_name_1),
           tx_compnt_perc_1: headerRaw.tx_compnt_perc_1 == null
@@ -611,6 +613,19 @@ export function PurchaseInvoiceEditor({
     }, "Purchase Invoice sent back");
   };
 
+
+  const handleExcel = async () => {
+    if (!form.doc_no) return;
+    try {
+      await getPurchaseInvoiceReportExcel({
+        doc_no: String(form.doc_no),
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
+
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
 
@@ -727,8 +742,19 @@ export function PurchaseInvoiceEditor({
                 </div>
                 {form.doc_no && (
                   <>
+                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                      Excel
+                    </Button>
 
-                    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                    {/* <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button> */}
                   </>
                 )}
 
@@ -752,7 +778,7 @@ export function PurchaseInvoiceEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Invoice...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

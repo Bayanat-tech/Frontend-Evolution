@@ -729,11 +729,20 @@ const confirmSubmit = () => {
                     </Button>
                   )}
                   {form.doc_no && (
-                    <>
-                      <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                      <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                    </>
-                  )}
+  <>
+    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+      <Printer size={15} /> Print
+    </Button>
+    <Button
+      aria-label="Excel"
+      type="button"
+      variant="secondary"
+      onClick={() => setPrintOpen(true)}
+    >
+      <Download size={15} /> Excel
+    </Button>
+  </>
+)}
                   <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                     <Paperclip size={15} /> Files
                   </Button>
@@ -906,6 +915,14 @@ const confirmSubmit = () => {
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
       />
+
+      <PurchaseQuotationPrintDialog
+  open={printOpen}
+  onClose={() => setPrintOpen(false)}
+  form={form}
+  companyCode={user?.company_code || ""}
+  docType={PO_DOC_TYPE.PQO}
+/>
 
     </>
   );

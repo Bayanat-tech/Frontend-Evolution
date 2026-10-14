@@ -168,11 +168,14 @@ export type CompanyInfo = {
 
 export type FinanceOutstandingBalance = {
   inv_no: string;
+  doc_no?: string;
+  ref_no?: string;
   original_amount: number;
   paid_amount: number;
   outstanding_amount: number;
   payment_percentage: number;
   is_fully_paid: boolean;
+  is_cancelled?: boolean;
   error?: string;
 };
 
@@ -309,7 +312,13 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
-export async function getFinanceOutstanding(divCode: string, invNos: string | string[], acCode?: string, docType?: string) {
+export async function getFinanceOutstanding(
+  divCode: string,
+  invNos: string | string[],
+  acCode?: string,
+  docType?: string,
+  excludeDocNo?: string
+) {
   const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
     "/api/finance/transactions/invoice_outstanding",
     {
@@ -318,6 +327,7 @@ export async function getFinanceOutstanding(divCode: string, invNos: string | st
         inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
         ...(acCode ? { ac_code: acCode } : {}),
         ...(docType ? { doc_type: docType } : {}),
+        ...(excludeDocNo ? { exclude_doc_no: excludeDocNo } : {}),
       },
     },
   );

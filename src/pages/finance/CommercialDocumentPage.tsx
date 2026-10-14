@@ -24,7 +24,8 @@ import {
   downloadDocumentReportExcel,
   upsertBulkAccountEntryApi,
   openDocumentReportv1,
-  cancelLpoDocument
+  cancelLpoDocument,
+  getFinanceOutstanding
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -578,6 +579,7 @@ function CommercialEditor({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
 
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
@@ -757,6 +759,26 @@ function CommercialEditor({
             return row;
           });
           setForm(mapForm(docType, header, enrichedDetail));
+
+          // Check settled payments against this invoice
+          if (editor.mode === "edit" && editor.row.doc_no) {
+            try {
+              const resp = await getFinanceOutstanding(
+                editor.row.div_code,
+                [editor.row.doc_no, (editor.row as any).ref_no].filter(Boolean),
+                undefined,
+                docType
+              );
+              const bal = resp?.balances?.[0];
+              if (bal && Number(bal.paid_amount || 0) > 0.0001) {
+                setSettledPaidAmount(Number(bal.paid_amount));
+              } else {
+                setSettledPaidAmount(0);
+              }
+            } catch {
+              setSettledPaidAmount(0);
+            }
+          }
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
@@ -992,6 +1014,12 @@ const limitProps = (f: keyof FormState) => ({
     return;
   }
 
+  const netTotal = total + taxTotal;
+  if (settledPaidAmount > 0 && netTotal < settledPaidAmount - 0.001) {
+    setError(`Invoice net total (${formatAmount(netTotal)}) cannot be less than already settled payments (${formatAmount(settledPaidAmount)}). Please adjust the payment vouchers or issue a debit/credit note first.`);
+    return;
+  }
+
   setSaving(true);
   setError("");
   try {
@@ -1054,10 +1082,16 @@ const limitProps = (f: keyof FormState) => ({
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
             {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCancelConfirmOpen(true)}
+                disabled={saving || Boolean(settledPaidAmount > 0)}
+                title={settledPaidAmount > 0 ? `Cannot cancel invoice: active payments of ${formatAmount(settledPaidAmount)} exist` : "Cancel Document"}
+              >
+                <Ban size={15} /> Cancel
+              </Button>
+            )}
             <Button
               disabled={saving}
               aria-label="Close"
@@ -1074,6 +1108,17 @@ const limitProps = (f: keyof FormState) => ({
           </div>
         </div>
       </CardHeader>
+      {settledPaidAmount > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-amber-900 text-xs shrink-0">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertCircle size={15} className="text-amber-600 shrink-0" />
+            <span>
+              <strong>Active Payments Exist:</strong> Payments totaling{" "}
+              <strong className="font-mono font-bold text-amber-800">{formatAmount(settledPaidAmount)}</strong> have been settled against this invoice. Party account, currency, and exchange rate are locked. Invoice cannot be cancelled until payments are unallocated/reversed.
+            </span>
+          </div>
+        </div>
+      )}
       {isCancelled && (
         <div className="cancelled-document-banner" role="status">
           <div>
@@ -1154,7 +1199,7 @@ const limitProps = (f: keyof FormState) => ({
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -1413,7 +1458,7 @@ const limitProps = (f: keyof FormState) => ({
                         label="Currency *"
                         required
                         enforceRequired
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         value={form.curr_code ?? ""}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1445,7 +1490,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     <CField label="Ex Rate" required error={fieldErrors.ex_rate}>
                       <ExchangeRateInput
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         required
                         value={form.ex_rate}
                         onChange={(rate) => update("ex_rate", rate)}

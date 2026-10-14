@@ -33,6 +33,7 @@ import {
   openDocumentReportv1,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
 } from "../../api/transactions";
 import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -503,30 +504,41 @@ function PaymentDocumentEditor({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, mapped.ac_code, docType);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = {
-                          ...childRows[idx],
-                          ref_no: childRows[idx].ref_no || (balance as any).ref_no || "",
-                          inv_amt: balance.original_amount,
-                          c_bal_amt_org: balance.outstanding_amount,
-                          paid_amt: balance.paid_amount,
-                        } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -535,11 +547,11 @@ function PaymentDocumentEditor({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -1040,30 +1052,33 @@ function PaymentDocumentEditor({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
-                  ref_no: (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
 
-        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
-        if (!editMode) {
-          mapped = mapped.filter((m) => {
-            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
-            return bal > 0.001 || Number(m.amount || 0) > 0.001;
-          });
-        }
+        // Filter out fully paid or cancelled invoices (outstanding <= 0 and not allocated)
+        mapped = mapped.filter((m) => {
+          const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+          return bal > 0.001 || (editMode && Number(m.amount || 0) > 0.001);
+        });
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -1258,11 +1273,18 @@ function PaymentDocumentEditor({
             if (amt < 0) {
               missingFields.push("Valid Allocated Amount");
             } else if (amt > 0) {
-              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
-              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
-              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
-                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              if (!c.inv_no?.trim()) {
+                missingFields.push("Invoice No");
+              } else if (c.inv_amt == null) {
+                missingFields.push(`Invoice "${c.inv_no}" not found or invalid for this account`);
+              } else {
+                const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+                const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+                if (maxAllowed <= 0.001) {
+                  missingFields.push(`Invoice "${c.inv_no}" is already fully settled (0.000 outstanding)`);
+                } else if (amt > maxAllowed + 0.001) {
+                  missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+                }
               }
             }
           }
@@ -1307,8 +1329,8 @@ function PaymentDocumentEditor({
   const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
       console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
-      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -1327,8 +1349,12 @@ function PaymentDocumentEditor({
     const parentDetail = form.detail.find((d) => d.id === parentDetailId);
     void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) {
-        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        // If invoice is not found, cancelled, or does not belong to this account, clear invalid invoice amount and notify
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no payable balance.`)
+          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+        setError(errMsg);
         setForm((current) => {
           const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
             row.id === childId
@@ -1344,17 +1370,29 @@ function PaymentDocumentEditor({
         });
         return;
       }
+      setError("");
       setForm((current) => {
-        const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
-          row.id === childId
-            ? {
-                ...row,
-                inv_amt: balance.original_amount,
-                c_bal_amt_org: balance.outstanding_amount,
-                ref_no: (balance as any).ref_no || row.ref_no || "",
-              }
-            : row,
-        );
+        const parentLine = current.detail.find((d) => d.id === parentDetailId);
+        const lineTotal = Number(parentLine?.amount || 0);
+        const currentChildren = (current.children[parentDetailId] || []) as TransactionChildRow[];
+        const allocatedByOthers = currentChildren
+          .filter((r) => r.id !== childId)
+          .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        const remainingOnLine = Math.max(0, lineTotal - allocatedByOthers);
+
+        const rows = currentChildren.map((row) => {
+          if (row.id !== childId) return row;
+          const currentAmt = Number(row.amount || 0);
+          const autoAmt = currentAmt > 0 ? currentAmt : (remainingOnLine > 0 ? Math.min(balance.outstanding_amount, remainingOnLine) : balance.outstanding_amount);
+          return {
+            ...row,
+            inv_no: balance.inv_no || row.inv_no,
+            ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+            inv_amt: balance.original_amount,
+            c_bal_amt_org: balance.outstanding_amount,
+            amount: autoAmt,
+          };
+        });
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
       });
     });
@@ -1365,16 +1403,24 @@ function PaymentDocumentEditor({
     const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
     if (childRows.length === 0) return false;
 
-    // In edit mode: outstanding may be 0 because THIS doc already holds the allocation.
-    // Use max(c_bal_amt_org, child.amount) per row as the effective ceiling.
+    // Check individual row ceilings: if any row exceeds its invoice ceiling, flag error
+    const anyRowExceeds = childRows.some((r) => {
+      const allocated = Number(r.amount || 0);
+      if (allocated <= 0) return false;
+      const outstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : r.inv_amt || 0);
+      const ceiling = editMode ? Math.max(outstanding, allocated) : outstanding;
+      return allocated > ceiling + 0.001;
+    });
+    if (anyRowExceeds) return true;
+
+    // Check total line ceiling vs detail amount
     const effectiveCeiling = childRows.reduce((sum, r) => {
       const outstanding = Number(r.c_bal_amt_org) || 0;
       const allocated = Number(r.amount) || 0;
-      // effective ceiling = outstanding + what this doc already allocated to it
       return sum + Math.max(outstanding, allocated);
     }, 0);
 
-    return Number(detail.amount || 0) > effectiveCeiling + 0.001; // small epsilon for float
+    return Number(detail.amount || 0) > effectiveCeiling + 0.001;
   });
 
   return (

@@ -126,7 +126,6 @@ export function PamsBulkAppraisalPage() {
 
     setLoading(true);
     try {
-      // 1. Populate / clone from prev period if employee has zero rows
       await pamsSelect({
         parameter: "populate_dept_kpi",
         loginid,
@@ -136,7 +135,6 @@ export function PamsBulkAppraisalPage() {
         code4: selectedPeriod,
       });
 
-      // 2. Sync newly added master KPIs for this employee's designation
       await pamsSelect({
         parameter: "populate_new_dept_kpi",
         loginid,
@@ -146,7 +144,6 @@ export function PamsBulkAppraisalPage() {
         code4: selectedPeriod,
       });
 
-      // 3. Load final rows
       const data = await pamsSelect({
         parameter: "kpi_assignment_page",
         loginid,
@@ -321,9 +318,6 @@ export function PamsBulkAppraisalPage() {
     const failed: string[] = [];
 
     try {
-      // ══════════════════════════════════════════════════════════
-      // STEP 0: Source ke paas data hai ya nahi — verify karo
-      // ══════════════════════════════════════════════════════════
       const sourceRows = await pamsSelect({
         parameter: "kpi_assignment_page",
         loginid,
@@ -341,10 +335,6 @@ export function PamsBulkAppraisalPage() {
         return;
       }
 
-      // ══════════════════════════════════════════════════════════
-      // STEP 1: PEHLE SAARE TARGETS KO COPY KARO
-      //         (Ye critical hai — docs create karne se PEHLE)
-      // ══════════════════════════════════════════════════════════
       const copiedTargets: string[] = [];
 
       for (const target of processAllTargets) {
@@ -356,8 +346,8 @@ export function PamsBulkAppraisalPage() {
             parameter: "copy_kpi_to_employee",
             loginid,
             code1: companyCode,
-            code2: selectedEmployee,  // Source
-            code3: targetEmp,          // Target
+            code2: selectedEmployee,
+            code3: targetEmp,
             code4: selectedPeriod,
           });
 
@@ -369,7 +359,6 @@ export function PamsBulkAppraisalPage() {
             throw new Error(copyMsg.replace(/^ERROR:\s*/i, ""));
           }
 
-    
           const verify = await pamsSelect({
             parameter: "kpi_assignment_page",
             loginid,
@@ -390,11 +379,6 @@ export function PamsBulkAppraisalPage() {
         }
       }
 
-      // ══════════════════════════════════════════════════════════
-      // STEP 2: AB DOCS CREATE KARO — Source + Copied Targets
-      // ══════════════════════════════════════════════════════════
-
-      // 2a. Source ka doc
       try {
         await pamsCommonProcedure({
           parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
@@ -409,7 +393,6 @@ export function PamsBulkAppraisalPage() {
         failed.push(`Source (${selectedEmployee}): ${msg}`);
       }
 
-      // 2b. Copied targets ke docs
       for (const targetEmp of copiedTargets) {
         try {
           await pamsCommonProcedure({
@@ -429,9 +412,6 @@ export function PamsBulkAppraisalPage() {
         }
       }
 
-      // ══════════════════════════════════════════════════════════
-      // Refresh processed list
-      // ══════════════════════════════════════════════════════════
       try {
         const hdrData = await pamsSelect({
           parameter: "appraisal_hdr_employees",
@@ -445,7 +425,6 @@ export function PamsBulkAppraisalPage() {
         setProcessedEmployees(codes);
       } catch { /* silent */ }
 
-      // Result toast
       if (failed.length === 0) {
         toast.success(
           `Successfully processed ${okCount} employee(s) for period ${selectedPeriod}.`
@@ -458,7 +437,6 @@ export function PamsBulkAppraisalPage() {
         );
       }
 
-      // Reset
       setSelectedEmployee("");
       setSelectedEmployeeLabel("");
       setRows([]);
@@ -1317,28 +1295,14 @@ function KpiEditorModal({
       }
     }
 
+    // ✅ Activity count validation (min 3 / max 6) REMOVED from this page.
+    //    It now lives on the KPI Group page.
     const finalActivities = needsActivities
       ? activities.map((a) => a.trim()).filter(Boolean)
       : [];
 
+    // ✅ Only check for duplicate activities (kept as-is)
     if (needsActivities) {
-      if (finalActivities.length < 3) {
-        toast.warning("Minimum 3 KPI items (activities) are required per designation/role.");
-        return;
-      }
-      if (finalActivities.length > 6) {
-        toast.warning("Maximum 6 KPI items (activities) are allowed per designation/role.");
-        return;
-      }
-
-      const invalidItem = finalActivities.find((a) => a.length < 5);
-      if (invalidItem) {
-        toast.warning(
-          `KPI item "${invalidItem}" is too short. Please make it measurable and descriptive (min 5 characters).`
-        );
-        return;
-      }
-
       const seen = new Set<string>();
       const duplicates: string[] = [];
       for (const act of finalActivities) {
@@ -1534,24 +1498,20 @@ function KpiEditorModal({
           <Field label="Activities" required>
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <span className={`text-xs ${activities.length < 3 || activities.length > 6 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                <span className="text-xs text-muted-foreground">
                   {activities.length === 0
                     ? "Add activities below"
-                    : ``}
+                    : `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addActivityRow}
-                  disabled={activities.length >= 6}
-                >
+                {/* ✅ No disabled limit now — min/max validation moved to KPI Group page */}
+                <Button type="button" size="sm" onClick={addActivityRow}>
                   <Plus size={13} /> Add Activity
                 </Button>
               </div>
 
               {activities.length === 0 ? (
                 <p className="rounded border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                  Click "Add Activity" to add one. Minimum 3, Maximum 6 required.
+                  Click "Add Activity" to add one.
                 </p>
               ) : (
                 <div className="grid gap-1.5">

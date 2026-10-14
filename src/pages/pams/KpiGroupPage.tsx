@@ -99,7 +99,6 @@ function buildLabel(code: string, name: string): string {
   if (!c && !n) return "";
   if (!c) return n;
   if (!n) return c;
-  // If name already begins with the code, use it as-is
   if (n === c) return c;
   if (n.startsWith(c + " ") || n.startsWith(c + "-") || n.startsWith(c + " - ")) {
     return n;
@@ -238,8 +237,12 @@ export function KpiGroupPage() {
   const [viewMode, setViewMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // "Cannot delete" informational dialog (blocked by appraisal docs)
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
-  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
+  // "Are you sure?" confirmation dialog
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabKey>("groups");
   const isGroupsTab = activeTab === "groups";
@@ -400,6 +403,7 @@ export function KpiGroupPage() {
     });
   }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
 
+  // ✅ Dedupe rows inside each designation group (by KPI_CODE, fallback KPI_DESC)
   const designationGroups = useMemo<DesignationGroup[]>(() => {
     const map = new Map<string, DesignationGroup>();
     filteredRows.forEach((r) => {
@@ -417,8 +421,28 @@ export function KpiGroupPage() {
       }
       const g = map.get(key)!;
       g.rows.push(r);
-      g.totalWeightage += number(r.STANDARD_WEIGHTAGE);
     });
+
+    // Dedupe within each designation group
+    map.forEach((group) => {
+      const seen = new Set<string>();
+      group.rows = group.rows.filter((r) => {
+        const kpiCode = text(r.KPI_CODE).trim();
+        const kpiDesc = text(r.KPI_DESC).trim().toLowerCase();
+        const dedupKey = kpiCode || kpiDesc;
+        if (!dedupKey) return true;
+        if (seen.has(dedupKey)) return false;
+        seen.add(dedupKey);
+        return true;
+      });
+
+      // Recompute weightage after dedupe
+      group.totalWeightage = group.rows.reduce(
+        (sum, r) => sum + number(r.STANDARD_WEIGHTAGE),
+        0
+      );
+    });
+
     return Array.from(map.values()).sort((a, b) =>
       a.designationLabel.localeCompare(b.designationLabel)
     );
@@ -629,16 +653,6 @@ export function KpiGroupPage() {
     if (!form.KPI_DESC.trim()) { toast.warning("KPI Description is required"); return; }
 
     if (form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
-      const validActivities = activities.filter((a) => a.desc.trim());
-      if (validActivities.length < 3) {
-        toast.warning(`Minimum 3 KPI Items (Activities) required. Currently: ${validActivities.length}`);
-        return;
-      }
-      if (validActivities.length > 6) {
-        toast.warning(`Maximum 6 KPI Items (Activities) allowed. Currently: ${validActivities.length}`);
-        return;
-      }
-
       const dupIndices = findDuplicateActivityIndices(activities);
       if (dupIndices.length > 0) {
         setDuplicateIndices(dupIndices);
@@ -723,13 +737,24 @@ export function KpiGroupPage() {
 
   // ═════════════════════════════════════════════════════════
   // DELETE
+  //  Step 1: user clicks delete icon → open confirmation dialog
+  //  Step 2: user clicks "Yes, Delete" → run safe_delete check
+  //          • If blocked by appraisal docs → show "Cannot Delete" dialog
+  //          • Otherwise → row is deleted, success toast, refresh
   // ═════════════════════════════════════════════════════════
-  const handleDeleteClick = async (row: Row) => {
+  const handleDeleteClick = (row: Row) => {
+    setConfirmDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteTarget) return;
+
+    const row = confirmDeleteTarget;
     const kpiCode = text(row.KPI_CODE);
     const kpiDesc = text(row.KPI_DESC);
     const kpiTypeCode = text(row.KPI_TYPE_CODE);
 
-    setDeleteCheckLoading(true);
+    setDeleting(true);
     try {
       const result = await pamsSelect({
         parameter: "safe_delete_kpi",
@@ -739,11 +764,11 @@ export function KpiGroupPage() {
         code3: kpiTypeCode,
       });
 
-      const res = String(
-        (result?.[0] as Record<string, unknown>)?.RESULT ?? ""
-      );
+      const res = String((result?.[0] as Record<string, unknown>)?.RESULT ?? "");
 
       if (res.toUpperCase().startsWith("ERROR_DOC_EXISTS")) {
+        // Close confirm dialog, open the "cannot delete" info dialog
+        setConfirmDeleteTarget(null);
         setDeleteTarget(row);
         return;
       }
@@ -752,6 +777,7 @@ export function KpiGroupPage() {
       }
 
       toast.success(`"${kpiDesc || kpiCode}" deleted successfully`);
+      setConfirmDeleteTarget(null);
       await loadRows();
     } catch (error: any) {
       const raw = String(error?.message || error?.details || error || "");
@@ -759,12 +785,8 @@ export function KpiGroupPage() {
         raw.length > 200 ? raw.slice(0, 200) + "..." : raw || "Unable to delete"
       );
     } finally {
-      setDeleteCheckLoading(false);
+      setDeleting(false);
     }
-  };
-
-  const confirmDelete = async () => {
-    setDeleteTarget(null);
   };
 
   const kpiTypeOptions = kpiTypeList.map(normalizeRow);
@@ -1079,9 +1101,9 @@ export function KpiGroupPage() {
                                     <button
                                       type="button"
                                       title="Delete"
-                                      onClick={() => void handleDeleteClick(row)}
-                                      disabled={deleteCheckLoading || saving}
-                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                                      onClick={() => handleDeleteClick(row)}
+                                      disabled={deleting || saving}
+                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                       <Trash2 size={13} />
                                     </button>
@@ -1379,7 +1401,6 @@ export function KpiGroupPage() {
                           size="sm"
                           variant="outline"
                           onClick={addActivity}
-                          disabled={activities.length >= 6}
                           className="gap-1"
                         >
                           <Plus size={14} /> Add Activity
@@ -1458,6 +1479,73 @@ export function KpiGroupPage() {
         </div>
       </Dialog>
 
+      {/* ─────────────────────────────────────────────────────
+          Confirm Delete Dialog
+      ───────────────────────────────────────────────────── */}
+      <Dialog
+        open={Boolean(confirmDeleteTarget)}
+        compact
+        tone="danger"
+        title="Confirm Delete"
+        onClose={() => {
+          if (!deleting) setConfirmDeleteTarget(null);
+        }}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDeleteTarget(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              disabled={deleting}
+            >
+              <Trash2 size={14} />
+              {deleting ? "Deleting..." : "Yes, Delete"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="m-0 text-sm font-medium text-foreground">
+                Are you sure you want to delete this record?
+              </p>
+              <p className="m-0 mt-1 text-xs text-muted-foreground">
+                This action cannot be undone. The record will be permanently removed
+                from the system.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">KPI Code</span>
+              <span className="font-medium text-foreground">
+                {text(confirmDeleteTarget?.KPI_CODE) || "—"}
+              </span>
+            </div>
+            <div className="mt-1 flex justify-between gap-3">
+              <span className="text-muted-foreground">Description</span>
+              <span className="max-w-[60%] truncate text-right font-medium text-foreground">
+                {text(confirmDeleteTarget?.KPI_DESC) || "—"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ─────────────────────────────────────────────────────
+          Cannot Delete Dialog (blocked by appraisal docs)
+      ───────────────────────────────────────────────────── */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact

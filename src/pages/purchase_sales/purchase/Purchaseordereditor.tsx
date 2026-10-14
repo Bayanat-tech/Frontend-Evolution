@@ -659,6 +659,18 @@ const handleSubmitClick = () => {
     }, "Purchase order sent back");
   };
 
+  const handleExcel = async () => {
+      if (!form.doc_no) return;
+      try {
+        await getPoOrderReportExcel({
+          doc_no: String(form.doc_no),
+          company_code: user?.company_code,
+        });
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Excel export failed");
+      }
+    };
+
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
 
@@ -795,7 +807,7 @@ const handleSubmitClick = () => {
                     <Button type="button" variant="secondary" onClick={handlePrint}>
                     <Printer size={15} /> Print
                   </Button>
-                    <Button
+                    {/* <Button
                       aria-label="Excel"
                       title="Excel"
                       type="button"
@@ -805,7 +817,15 @@ const handleSubmitClick = () => {
                       disabled={reportPreviewExporting}
                     >
                       <Download size={15} />
-                    </Button>
+                    </Button> */}
+                    <Button
+                                          type="button"
+                                          variant="secondary"
+                                          onClick={() => void handleExcel()}
+                                        >
+                                          <Download size={15} />
+                                          Excel
+                                        </Button>
                   </>
                 )}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -828,7 +848,7 @@ const handleSubmitClick = () => {
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Order...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
