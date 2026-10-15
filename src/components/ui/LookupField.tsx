@@ -92,14 +92,13 @@ export function LookupField({
       Math.min(maxAllowedWidth, viewportWidth - 24),
     );
 
-    // Leave a comfortable 28px margin from top and bottom screen edges (taskbar safety)
-    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - 28);
-    const spaceAbove = Math.max(0, rect.top - 28);
-
-    // If trigger is in the lower half of viewport or space below is tight (< 380px), open ABOVE!
-    const opensAbove = (spaceBelow < 380 && spaceAbove >= 200) || (spaceAbove > spaceBelow);
-    const availableSpace = opensAbove ? spaceAbove : spaceBelow;
-    const maxHeight = Math.min(520, Math.max(220, availableSpace));
+    // Prefer below; only flip when it cannot fit a usable results list.
+    const gap = 4;
+    const viewportMargin = 12;
+    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - viewportMargin);
+    const spaceAbove = Math.max(0, rect.top - gap - viewportMargin);
+    const opensAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const maxHeight = Math.min(520, opensAbove ? spaceAbove : spaceBelow);
 
     let left = rect.left;
     if (left + width > viewportWidth - 12) {
@@ -111,21 +110,15 @@ export function LookupField({
     const nextStyle: CSSProperties = {
       position: "fixed",
       left,
+      top: opensAbove ? "auto" : rect.bottom + gap,
+      bottom: opensAbove ? viewportHeight - rect.top + gap : "auto",
       width,
       maxHeight,
       zIndex: 9999,
     };
 
-    if (opensAbove) {
-      nextStyle.bottom = viewportHeight - rect.top + 4;
-      nextStyle.top = "auto";
-    } else {
-      nextStyle.top = rect.bottom + 4;
-      nextStyle.bottom = "auto";
-    }
-
     setPopoverStyle(nextStyle);
-  }, []);
+  }, [columns.length, popoverWidth]);
 
   useEffect(() => {
     if (!open) return;

@@ -11,6 +11,7 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
     return () => { window.removeEventListener("scroll", hide, true); window.removeEventListener("resize", hide); };
   }, []);
   const show = (el: HTMLTextAreaElement) => {
+    if (document.activeElement !== el) return setPreview(null);
     if (props.maxLength == null && (!el.value || el.value.length < 12)) return setPreview(null);
     const rect = el.getBoundingClientRect();
     const above = rect.bottom + 150 > window.innerHeight;
@@ -20,8 +21,8 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
     <textarea {...props}
       onFocus={(event) => { show(event.currentTarget); onFocus?.(event); }}
       onBlur={(event) => { setPreview(null); onBlur?.(event); }}
-      onMouseEnter={(event) => { show(event.currentTarget); onMouseEnter?.(event); }}
-      onMouseLeave={(event) => { if (document.activeElement !== event.currentTarget) setPreview(null); onMouseLeave?.(event); }}
+      onMouseEnter={(event) => { onMouseEnter?.(event); }}
+      onMouseLeave={(event) => { onMouseLeave?.(event); }}
       onChange={(event) => { show(event.currentTarget); onChange?.(event); }}
     />
     {preview && createPortal(<div role="tooltip" style={{ position: "fixed", zIndex: 99999, left: preview.left, top: preview.top, transform: preview.above ? "translateY(-100%)" : undefined, width: "min(480px, calc(100vw - 16px))", pointerEvents: "none" }} className="rounded-xl bg-[#00378C] p-4 text-sm text-white shadow-xl">

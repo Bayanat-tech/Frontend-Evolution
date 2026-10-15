@@ -6,7 +6,6 @@ import { Loader2, Search, X } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { LookupField } from "../../../components/ui/LookupField";
-import { Input } from "../../../components/ui/Input";
 import { Button } from "../../../components/ui/Button";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 import {
@@ -16,7 +15,6 @@ import {
 import { openPurchaseReport } from "./PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "./Purchasereportpreview";
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
-import { toInputDate } from "../../../hooks/apiDate";
 
 interface PoOrderRegisterParams {
     loginid: string;
@@ -42,18 +40,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     );
 }
 
-function DateField({ value, onChange, max, min }: { value: string; onChange: (v: string) => void; max?: string; min?: string }) {
-    return (
-        <input
-            type="date"
-            className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm"
-            value={value}
-            min={min}
-            max={max}
-            onChange={(e) => onChange(e.target.value)}
-        />
-    );
-}
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// Converts whatever BiscDatePicker gives (string / Date / event) into yyyy-mm-dd.
+// Parsed manually so dd/mm/yyyy is never mis-read as mm/dd/yyyy.
+const pickValue = (v: any): string => {
+    if (v === null || v === undefined || v === "") return "";
+
+    // Date object -> use LOCAL parts (toISOString would shift the day in India time)
+    if (v instanceof Date) {
+        return isNaN(v.getTime()) ? "" : `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}`;
+    }
+
+    // Event object
+    if (typeof v === "object") return pickValue(v?.target?.value);
+
+    const s = String(v).trim();
+
+    // yyyy-mm-dd (also yyyy-mm-ddTHH:mm...)
+    let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (m) return `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}`;
+
+    // dd/mm/yyyy or dd-mm-yyyy
+    m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) return `${m[3]}-${pad2(+m[2])}-${pad2(+m[1])}`;
+
+    return "";
+};
 
 // ─── Product Multi-Select (checkbox list, self-contained) ──────────────────
 
@@ -86,8 +99,6 @@ function ProductMultiSelectField({
     const triggerRef = useRef<HTMLDivElement | null>(null);
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const selectAllRef = useRef<HTMLInputElement | null>(null);
-
-
 
     const selectedValues = React.useMemo(
         () => value.split(",").map((v) => v.trim()).filter(Boolean),
@@ -189,7 +200,6 @@ function ProductMultiSelectField({
         .join(", ");
 
     return (
-
         <div className="freight-product-select" style={{ position: "relative" }}>
             <label className="mb-1 block text-[11px] font-semibold uppercase text-muted-foreground">
                 {label}
@@ -296,12 +306,11 @@ export default function PoOrderRegisterPage() {
     const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "");
     const loginId = String(userRecord.loginid || userRecord.username || "ADMIN");
 
-    const [fromDateIso, setFromDateIso] = useState("");
-    const [toDateIso, setToDateIso] = useState("");
+    // State (must be declared BEFORE anything that uses it)
     const [acCode, setAcCode] = useState("");
     const [acName, setAcName] = useState("");
-    const [fromDate, setFromDate] = useState("");
-    const [toDate, setToDate] = useState("");
+    const [fromDate, setFromDate] = useState(""); // yyyy-mm-dd
+    const [toDate, setToDate] = useState("");     // yyyy-mm-dd
     const [poNumber, setPoNumber] = useState("");
     const [prodCodeFrom, setProdCodeFrom] = useState("");
     const [reportCriteria, setReportCriteria] = useState<"SO_REF_ONLY" | "ALL">("ALL");
@@ -312,9 +321,10 @@ export default function PoOrderRegisterPage() {
 
     const lastRequestRef = useRef<PoOrderRegisterParams | null>(null);
 
-
+    // Derived values (declared AFTER the state they use)
+    const fromDateIso = fromDate;
+    const toDateIso = toDate;
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
-
 
     useEffect(() => {
         let cancelled = false;
@@ -361,7 +371,6 @@ export default function PoOrderRegisterPage() {
         return () => { cancelled = true; };
     }, [acCode, companyCode, loginId]);
 
-
     const buildRequestParams = (): PoOrderRegisterParams => ({
         loginid: loginId,
         company_code: companyCode,
@@ -403,13 +412,13 @@ export default function PoOrderRegisterPage() {
             setLoading(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRangeValid, fromDateIso, toDateIso, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
-
-
+    }, [dateRangeValid, fromDate, toDate, acCode, poNumber, prodCodeFrom, reportCriteria, companyCode, loginId]);
 
     function resetFilters() {
-        setFromDateIso(""); setToDateIso("");
-        setAcCode(""); setAcName("");
+        setFromDate("");
+        setToDate("");
+        setAcCode("");
+        setAcName("");
         setPoNumber("");
         setProdCodeFrom("");
         setReportCriteria("ALL");
@@ -427,23 +436,27 @@ export default function PoOrderRegisterPage() {
                 <ReportFilterHeader onClear={resetFilters} />
 
                 <div className="freight-report-fields grid gap-4 p-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {/* <Field label="Date From">
-                        <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
-                    </Field>
-
-                    <Field label="Date To">
-                        <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
-                    </Field> */}
-
                     <Field label="From">
                         <ClearableDate value={fromDate} onClear={() => setFromDate("")}>
-                            <BiscDatePicker value={toInputDate(fromDate)} onChange={setFromDate} />
+                            <BiscDatePicker
+                                value={fromDate}
+                                onChange={(v: any) => setFromDate(pickValue(v))}
+                            />
                         </ClearableDate>
                     </Field>
+
                     <Field label="To">
                         <ClearableDate value={toDate} onClear={() => setToDate("")}>
-                            <BiscDatePicker value={toInputDate(toDate)} onChange={setToDate} />
+                            <BiscDatePicker
+                                value={toDate}
+                                onChange={(v: any) => setToDate(pickValue(v))}
+                            />
                         </ClearableDate>
+                        {!dateRangeValid && (
+                            <span className="text-[11px] normal-case text-red-600">
+                                "To" date must be on or after "From" date
+                            </span>
+                        )}
                     </Field>
 
                     <Field label="Supplier">
@@ -471,10 +484,6 @@ export default function PoOrderRegisterPage() {
                         />
                     </Field>
 
-                    {/* <Field label="PO Number">
-                        <Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="number" />
-                    </Field> */}
-
                     <Field label="PO Number">
                         <select
                             className="h-8 w-full rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
@@ -499,9 +508,6 @@ export default function PoOrderRegisterPage() {
                         </select>
                     </Field>
 
-
-
-
                     <ProductMultiSelectField
                         label="Product"
                         value={prodCodeFrom}
@@ -522,7 +528,6 @@ export default function PoOrderRegisterPage() {
 
                     <div>
                         <Field label="Report Criteria">
-
                             <div
                                 className="flex flex-row items-center gap-x-7 rounded-md px-3 py-1.5 shadow-sm"
                                 style={{ border: "1px solid #aebdce", background: "#f4f7fb", minHeight: "36px" }}
@@ -558,8 +563,6 @@ export default function PoOrderRegisterPage() {
                                     </div>
                                 ))}
                             </div>
-
-
                         </Field>
                     </div>
                 </div>

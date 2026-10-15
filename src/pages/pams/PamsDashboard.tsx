@@ -286,19 +286,66 @@ const PamsDashboard = () => {
 
   // ── Queries ────────────────────────────────────────────────
   const { data: Total_Employees } = useQuery<EmployeeData[]>({
-    queryKey: ['total_employees', ddivision, ddepartment],
-    queryFn: () => pamsSelect<EmployeeData>({ parameter: 'employee_hierarchy_total', loginid: user?.loginid ?? '', code1: user?.company_code ?? '', code2: ddivision, code3: ddepartment }),
+    queryKey: ['total_employees', ddivision, ddepartment, dperiod], // 1. Added dperiod
+    enabled: !!ddivision && !!ddepartment && !!dperiod, // 2. Only run when all filters are selected
+    queryFn: async () => {
+      // 3. Use the exact view and period filter like the other working cards
+      const sql = `
+
+      
+        SELECT COUNT(*) AS TOTAL_EMPLOYEES 
+        FROM VW_PAMS_DASH_BOARD 
+        WHERE ('${ddivision}' = 'All' OR div_code = '${ddivision}') 
+          AND ('${ddepartment}' = 'All' OR dept_code = '${ddepartment}') 
+          AND PERIOD_NUMBER = '${dperiod}'
+      `;
+      return (await executeWmsInboundSql(sql)) as unknown as EmployeeData[];
+    },
   });
 
+  console.log('Total_Employees', user);
+
   const { data: Division } = useQuery<EmployeeDivision[]>({
-    queryKey: ['division'],
-    queryFn: () => pamsSelect<EmployeeDivision>({ parameter: 'employee_division', loginid: user?.loginid ?? '', code1: user?.company_code ?? '' }),
+    queryKey: ['division', user?.LOGINID],
+    queryFn: async () => {
+      const sql = `
+        SELECT DISTINCT E.DIV_CODE, DIV.DIV_NAME
+        FROM MS_HR_EMPLOYEE@SELECTAWARE E
+        JOIN MS_HR_DIVISION@SELECTAWARE DIV
+          ON DIV.COMPANY_CODE = E.COMPANY_CODE
+         AND DIV.DIV_CODE = E.DIV_CODE
+        WHERE E.DEPT_HEAD_EMP_ID = ( SELECT EMPLOYEE_ID FROM MS_HR_EMPLOYEE@SELECTAWARE  WHERE EMPLOYEE_CODE = '${user?.LOGINID ?? ''}')
+        ORDER BY E.DIV_CODE
+      `;
+      const response = await executeWmsInboundSql(sql);
+      return (response ?? []) as unknown as EmployeeDivision[];
+    },
+    enabled: !!user?.LOGINID,
   });
 
   const { data: Department } = useQuery<EmployeeDepartment[]>({
-    queryKey: ['department', ddivision],
-    queryFn: () => pamsSelect<EmployeeDepartment>({ parameter: 'employee_department', loginid: user?.loginid ?? '', code1: user?.company_code ?? '', code2: ddivision }),
+    queryKey: ['department', user?.LOGINID, ddivision],
+    queryFn: async () => {
+      // If a specific division is selected, filter by it. Otherwise, show all departments for this employee.
+      const divCondition = ddivision && ddivision !== 'All' ? `AND D.DIV_CODE = '${ddivision}'` : '';
+      
+      const sql = `
+        SELECT DISTINCT
+               E.DEPT_CODE,
+               D.DEPT_NAME
+        FROM MS_HR_EMPLOYEE@SELECTAWARE E
+        JOIN MS_HR_DEPARTMENT@SELECTAWARE D
+          ON D.COMPANY_CODE = E.COMPANY_CODE
+         AND D.DEPT_CODE = E.DEPT_CODE
+        WHERE E.DEPT_HEAD_EMP_ID = ( SELECT EMPLOYEE_ID FROM MS_HR_EMPLOYEE@SELECTAWARE  WHERE EMPLOYEE_CODE = '${user?.LOGINID ?? ''}' ${divCondition} )
+        ORDER BY E.DEPT_CODE
+      `;
+      const response = await executeWmsInboundSql(sql);
+      return (response ?? []) as unknown as EmployeeDepartment[];
+    },
+    enabled: !!user?.LOGINID,
   });
+
 
   const { data: PeriodResponse } = useQuery<ApiResponse<PeriodData> | null>({
     queryKey: ['period'],

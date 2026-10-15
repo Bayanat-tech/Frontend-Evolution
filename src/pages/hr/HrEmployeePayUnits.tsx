@@ -402,7 +402,7 @@ export function HrEmployeePayUnits() {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">HR Employee - Pay Units</h1>
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Employee Pay Units</h1>
               <span className="text-xs text-muted-foreground">
                 {rows.length.toLocaleString()} Row{rows.length === 1 ? "" : "s"}
               </span>

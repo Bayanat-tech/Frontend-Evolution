@@ -1,6 +1,6 @@
 /**
  * HR Reports – complete single file
- * Pages: Joiner | Register | Leavers | Tenure | Attendance Register | Accrual Balance | Pay Unit List
+ * Pages: Joiner | Register | Leavers | Tenure | Attendance Register | Accrual Balance | Pay Unit List | Passport Expiry | Air Ticket Request | Employee Listing | Airfare
  * Endpoint: POST /api/hr/reports/:type/:report   (type = html | excel)
  * LOV: getDynamicLookup → /api/wms/common/proc_build_dynamic_sql_common
  * Company Code: from useAuth()
@@ -25,13 +25,27 @@ export type ReportKey =
   | "tenure"
   | "attendance"
   | "accrual"
-  | "payunit";
+  | "payunit"
+  | "passport"
+  | "airticket"
+  | "listing"
+  | "airfare";
 export type FilterValues = Record<string, string | string[] | boolean>;
 
 const ALL = "All";
 
 /** Reports that show an employee LOV (and must reset it when Division/Department change) */
-const EMP_LOV_REPORTS: ReportKey[] = ["register", "tenure", "attendance", "accrual", "payunit"];
+const EMP_LOV_REPORTS: ReportKey[] = [
+  "register",
+  "tenure",
+  "attendance",
+  "accrual",
+  "payunit",
+  "passport",
+  "airticket",
+  "listing",
+  "airfare",
+];
 
 function toApiValue(v: string | string[] | boolean | undefined): string {
   if (v == null || v === false) return ALL;
@@ -44,7 +58,7 @@ function toApiValue(v: string | string[] | boolean | undefined): string {
   return s || ALL;
 }
 
-/** Keys that hold dates: join_from/join_to, sep_from/sep_to, period_from/period_to, as_of_date */
+/** Keys that hold dates: join_from/join_to, sep_from/sep_to, period_from/period_to, pp_expiry_from/pp_expiry_to, as_of_date */
 const DATE_KEY = /(_from|_to|_date)$/;
 
 /** Employee range keys look like *_from / *_to but are NOT dates */
@@ -149,6 +163,16 @@ async function fetchHrLov(
   }
 }
 
+/** Prepend a single "All" option and remove any existing "All" from the backend response */
+function withAllOption(items: LovOption[]): LovOption[] {
+  const filtered = (items || []).filter(
+    (o) =>
+      String(o.value).toLowerCase() !== "all" &&
+      String(o.label).toLowerCase() !== "all"
+  );
+  return [{ value: ALL, label: "All" }, ...filtered];
+}
+
 /* ───────────────────────── Shared hook ───────────────────────── */
 
 function useHrReport(
@@ -182,7 +206,7 @@ function useHrReport(
   const [dialogOpen, setDialogOpen] = useState(false);
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
 
-  // ── Base LOVs (Division, Grade, Designation) ──
+  // ── Base LOVs (Division, Grade, Designation, Category) ──
   useEffect(() => {
     if (!companyCode) return;
     let cancelled = false;
@@ -190,18 +214,21 @@ function useHrReport(
     (async () => {
       setOptionsLoading(true);
       try {
-        const [divs, grades, desgs] = await Promise.all([
+        const [divs, grades, desgs, cats] = await Promise.all([
           fetchHrLov("HR_REPORT_DIVISION", companyCode),
           fetchHrLov("HR_REPORT_GRADE", companyCode),
           fetchHrLov("HR_REPORT_DESIGNATION", companyCode),
+          // fetchHrLov swallows errors → stays empty if this LOV is not defined yet
+          fetchHrLov("HR_REPORT_CATEGORY", companyCode),
         ]);
         if (cancelled) return;
         setFieldOptions((prev) => ({
           ...prev,
-          div_code: [{ value: ALL, label: "All" }, ...divs],
-          grade_code: [{ value: ALL, label: "All" }, ...grades],
-          desg_code: [{ value: ALL, label: "All" }, ...desgs],
-          labour_desg_code: [{ value: ALL, label: "All" }, ...desgs],
+          div_code: withAllOption(divs),
+          grade_code: withAllOption(grades),
+          desg_code: withAllOption(desgs),
+          labour_desg_code: withAllOption(desgs),
+          category_code: withAllOption(cats),
         }));
       } finally {
         if (!cancelled) setOptionsLoading(false);
@@ -226,7 +253,7 @@ function useHrReport(
       if (cancelled) return;
       setFieldOptions((prev) => ({
         ...prev,
-        dept_code: [{ value: ALL, label: "All" }, ...depts],
+        dept_code: withAllOption(depts),
       }));
     })();
 
@@ -250,7 +277,7 @@ function useHrReport(
       if (cancelled) return;
       setFieldOptions((prev) => ({
         ...prev,
-        section_code: [{ value: ALL, label: "All" }, ...secs],
+        section_code: withAllOption(secs),
       }));
     })();
 
@@ -259,7 +286,7 @@ function useHrReport(
     };
   }, [values.div_code, values.dept_code, companyCode]);
 
-  // ── Employee LOV (Register, Tenure, Attendance, Accrual, Pay Unit) ──
+  // ── Employee LOV (Register, Tenure, Attendance, Accrual, Pay Unit, Passport, Air Ticket, Listing, Airfare) ──
   useEffect(() => {
     if (!companyCode) return;
     if (!EMP_LOV_REPORTS.includes(reportKey)) return;
@@ -276,7 +303,7 @@ function useHrReport(
         section_code: sect === ALL ? undefined : sect,
       });
       if (cancelled) return;
-      const withAll = [{ value: ALL, label: "All" }, ...emps];
+      const withAll = withAllOption(emps);
       setFieldOptions((prev) => ({
         ...prev,
         employee_code: withAll,
@@ -761,6 +788,186 @@ export function EmployeePayUnitReportPage() {
   return <HrReportShell r={r} />;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. Passport Expiry Listing
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PASSPORT_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 3 },
+  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  {
+    key: "pp_expiry_from",
+    label: "Passport Expiry",
+    type: "daterange",
+    toKey: "pp_expiry_to",
+    colSpan: 3,
+  },
+  {
+    key: "emp_status",
+    label: "Employee Status",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "A", label: "Active Employees" },
+      { value: "All", label: "All Employees" },
+    ],
+  },
+];
+
+export function PassportExpiryReportPage() {
+  const r = useHrReport("passport", "Passport Expiry Listing", PASSPORT_FIELDS, {
+    emp_status: "A",
+  });
+  return <HrReportShell r={r} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. Air Ticket Request Listing  (Status wise / Agent wise)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const AIRTICKET_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  {
+    key: "req_from",
+    label: "Ticket Request",
+    type: "daterange",
+    toKey: "req_to",
+    colSpan: 3,
+  },
+  {
+    key: "group_by",
+    label: "Listing Type",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "STATUS", label: "Status wise Listing" },
+      { value: "AGENT", label: "Agent wise Listing" },
+    ],
+  },
+];
+
+export function AirTicketRequestReportPage() {
+  const r = useHrReport("airticket", "Air Ticket Request List", AIRTICKET_FIELDS, {
+    group_by: "STATUS",
+  });
+  return <HrReportShell r={r} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. Employee Listing  (grouped by Designation / Grade / Division / …)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const LISTING_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "grade_code", label: "Grade", type: "multiselect", colSpan: 3 },
+  { key: "desg_code", label: "Designation", type: "multiselect", colSpan: 3 },
+  { key: "labour_desg_code", label: "Formal Designation", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  { key: "category_code", label: "Category", type: "multiselect", colSpan: 3 },
+  {
+    key: "join_from",
+    label: "Join Date Range",
+    type: "daterange",
+    toKey: "join_to",
+    colSpan: 6,
+  },
+  {
+    key: "emp_status",
+    label: "Employee Status",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "A", label: "Active Employees" },
+      { value: "All", label: "All Employees" },
+    ],
+  },
+  {
+    key: "group_by",
+    label: "Group Criteria",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "DESG", label: "Designation" },
+      { value: "GRADE", label: "Grade" },
+      { value: "GRADE_DESG", label: "Grade + Designation" },
+      { value: "DIV", label: "Division" },
+      { value: "DEPT", label: "Department" },
+      { value: "SECT", label: "Section" },
+      { value: "LABOUR_DESG", label: "Formal Designation" },
+      { value: "CATEGORY", label: "Category" },
+    ],
+  },
+];
+
+export function EmployeeListingReportPage() {
+  const r = useHrReport("listing", "Employee Listing", LISTING_FIELDS, {
+    emp_status: "A",
+    group_by: "DESG",
+  });
+  return <HrReportShell r={r} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   11. Employee Airfare Report  (Payroll → Exception Reports → Employee Airfare)
+   Filters: Division | Department | Section | Employee Code | Pay Month | Pay Year | History
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const AIRFARE_FIELDS: ReportFieldConfig[] = [
+  { key: "div_code", label: "Division", type: "multiselect", colSpan: 3 },
+  { key: "dept_code", label: "Department", type: "multiselect", colSpan: 3 },
+  { key: "section_code", label: "Section", type: "multiselect", colSpan: 3 },
+  { key: "employee_code", label: "Employee Code", type: "multiselect", colSpan: 3 },
+  {
+    key: "pay_month",
+    label: "Pay Month",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "All", label: "All" },
+      { value: "1", label: "January" },
+      { value: "2", label: "February" },
+      { value: "3", label: "March" },
+      { value: "4", label: "April" },
+      { value: "5", label: "May" },
+      { value: "6", label: "June" },
+      { value: "7", label: "July" },
+      { value: "8", label: "August" },
+      { value: "9", label: "September" },
+      { value: "10", label: "October" },
+      { value: "11", label: "November" },
+      { value: "12", label: "December" },
+    ],
+  },
+  { key: "pay_year", label: "Pay Year", type: "text", colSpan: 3 },
+  {
+    key: "history",
+    label: "History Report",
+    type: "select",
+    colSpan: 3,
+    options: [
+      { value: "N", label: "No" },
+      { value: "Y", label: "Yes" },
+    ],
+  },
+];
+
+export function EmployeeAirfareReportPage() {
+  const r = useHrReport("airfare", "Employee Airfare Report", AIRFARE_FIELDS, {
+    pay_month: "All",
+    history: "N",
+  });
+  return <HrReportShell r={r} />;
+}
+
 /* Default export */
 export default {
   EmployeeJoinerReportPage,
@@ -770,4 +977,8 @@ export default {
   AttendanceRegisterReportPage,
   EmployeeAccrualBalanceReportPage,
   EmployeePayUnitReportPage,
+  PassportExpiryReportPage,
+  AirTicketRequestReportPage,
+  EmployeeListingReportPage,
+  EmployeeAirfareReportPage,
 };

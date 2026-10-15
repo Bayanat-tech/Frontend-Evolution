@@ -23,7 +23,9 @@ import {
   getPurchaseHeader,
   downloadDocumentReportExcel,
   upsertBulkAccountEntryApi,
-  openDocumentReportv1
+  openDocumentReportv1,
+  cancelLpoDocument,
+  getFinanceOutstanding
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -272,7 +274,9 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     try {
-      await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type || docType);
+      const cancelType = cancelTarget.doc_type || docType;
+       if (docType === "PO") await cancelLpoDocument(cancelTarget.doc_no, cancelType);
+        else await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
       await loadRows();
@@ -575,6 +579,7 @@ function CommercialEditor({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
 
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
@@ -646,7 +651,8 @@ function CommercialEditor({
     setSaving(true);
     setError("");
     try {
-      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      if (form.doc_type === "PO") await cancelLpoDocument(form.doc_no, form.doc_type);
+       else await cancelTransactionDocument(form.doc_no, form.doc_type);
       setCancelConfirmOpen(false);
       await onSaved("Document cancelled successfully");
     } catch (cancelError) {
@@ -753,6 +759,26 @@ function CommercialEditor({
             return row;
           });
           setForm(mapForm(docType, header, enrichedDetail));
+
+          // Check settled payments against this invoice
+          if (editor.mode === "edit" && editor.row.doc_no) {
+            try {
+              const resp = await getFinanceOutstanding(
+                editor.row.div_code,
+                [editor.row.doc_no, (editor.row as any).ref_no].filter(Boolean),
+                undefined,
+                docType
+              );
+              const bal = resp?.balances?.[0];
+              if (bal && Number(bal.paid_amount || 0) > 0.0001) {
+                setSettledPaidAmount(Number(bal.paid_amount));
+              } else {
+                setSettledPaidAmount(0);
+              }
+            } catch {
+              setSettledPaidAmount(0);
+            }
+          }
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
@@ -807,7 +833,6 @@ const limitProps = (f: keyof FormState) => ({
   
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
-  const [remarksHover, setRemarksHover] = useState(false);
   const [remarksFocus, setRemarksFocus] = useState(false);
 
   const filteredLines = useMemo(() => {
@@ -988,6 +1013,12 @@ const limitProps = (f: keyof FormState) => ({
     return;
   }
 
+  const netTotal = total + taxTotal;
+  if (settledPaidAmount > 0 && netTotal < settledPaidAmount - 0.001) {
+    setError(`Invoice net total (${formatAmount(netTotal)}) cannot be less than already settled payments (${formatAmount(settledPaidAmount)}). Please adjust the payment vouchers or issue a debit/credit note first.`);
+    return;
+  }
+
   setSaving(true);
   setError("");
   try {
@@ -1018,6 +1049,19 @@ const limitProps = (f: keyof FormState) => ({
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen w-full min-w-0 ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
+        {settledPaidAmount > 0 && (
+          <div className="mb-1 flex items-center justify-between gap-2 rounded border border-amber-200/90 bg-amber-50/90 px-2.5 py-0.5 text-[11px] text-amber-900 shadow-2xs leading-tight">
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <AlertCircle size={13} className="text-amber-600 shrink-0" />
+              <span className="truncate">
+                <strong>Active Payments ({formatAmount(settledPaidAmount)}):</strong> Settled against this invoice. Party, currency & rate locked. Cannot cancel until payments unallocated.
+              </span>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-100/80 border border-amber-300/80 rounded px-1.5 py-0.2">
+              Locked
+            </span>
+          </div>
+        )}
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={docType === "PI" ? "Purchase Invoice" : META[docType]?.title || "Commercial"}
@@ -1050,10 +1094,16 @@ const limitProps = (f: keyof FormState) => ({
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
             {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCancelConfirmOpen(true)}
+                disabled={saving || Boolean(settledPaidAmount > 0)}
+                title={settledPaidAmount > 0 ? `Cannot cancel invoice: active payments of ${formatAmount(settledPaidAmount)} exist` : "Cancel Document"}
+              >
+                <Ban size={15} /> Cancel
+              </Button>
+            )}
             <Button
               disabled={saving}
               aria-label="Close"
@@ -1150,7 +1200,7 @@ const limitProps = (f: keyof FormState) => ({
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -1252,13 +1302,20 @@ const limitProps = (f: keyof FormState) => ({
                           ]}
                           valueField="DOC_NO"
                           displayFields={["DOC_NO"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Account_LPO_REF_DOC",
-                              code1: user?.company_code || "",
-                              number1: form.div_code ? Number(form.div_code) : undefined,
-                            })
-                          }
+                          loadOptions={async () => {
+                            const rows = await getDynamicFinanceLookup({
+                             parameter: "Account_LPO_REF_DOC",
+                             code1: user?.company_code || "",
+                             number1: form.div_code ? Number(form.div_code) : undefined,
+                            });
+                            return [...rows].sort((a, b) =>
+                             String(b["DOC_NO"] ?? b["doc_no"] ?? "").localeCompare(
+                             String(a["DOC_NO"] ?? a["doc_no"] ?? ""),
+                             undefined,
+                             { numeric: true }
+                            )
+                           );
+                          }}
                           onChange={async (value, row) => {
                             if (!value || !row) {
                               setForm((c) => ({ ...c, ref_doc_no: "" }));
@@ -1375,27 +1432,23 @@ const limitProps = (f: keyof FormState) => ({
                     {/* Remarks: Wide textarea across entire bottom of Document Details */}
                    
                     <CField label="Remarks" className="col-span-2">
-                      <div
-                       className="relative"
-                       onMouseEnter={() => setRemarksHover(true)}
-                       onMouseLeave={() => setRemarksHover(false)}
-                      >
-                     <textarea
-                        className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
-                        disabled={isCancelled}
-                        value={form.remarks || ""}
-                        maxLength={250}
-                        placeholder="Remarks / Notes"
-                        onFocus={() => setRemarksFocus(true)}
-                        onBlur={() => setRemarksFocus(false)}
-                        onChange={(e) => update("remarks", e.target.value)}
-                      />
-                        {(remarksHover || remarksFocus) && !isCancelled && (
+                      <div className="relative">
+                        <textarea
+                          className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                          disabled={isCancelled}
+                          value={form.remarks || ""}
+                          maxLength={250}
+                          placeholder="Remarks / Notes"
+                          onFocus={() => setRemarksFocus(true)}
+                          onBlur={() => setRemarksFocus(false)}
+                          onChange={(e) => update("remarks", e.target.value)}
+                        />
+                        {remarksFocus && !isCancelled && (
                           <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
-                           {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
+                            {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
                           </div>
                         )}
-                        </div>
+                      </div>
                     </CField>
                   </HeaderBlock>
                 </div>
@@ -1409,7 +1462,7 @@ const limitProps = (f: keyof FormState) => ({
                         label="Currency *"
                         required
                         enforceRequired
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         value={form.curr_code ?? ""}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1441,7 +1494,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     <CField label="Ex Rate" required error={fieldErrors.ex_rate}>
                       <ExchangeRateInput
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         required
                         value={form.ex_rate}
                         onChange={(rate) => update("ex_rate", rate)}
