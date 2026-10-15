@@ -399,7 +399,7 @@ useEffect(() => {
         </div>
       </div> */}
             <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase GRN</h6>
+          <h6 className="m-0 text-xl font-semibold tracking-tight">Goods Receipt Note</h6>
         </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />

@@ -272,7 +272,7 @@ export function PurchaseOrderHeaderForm({
                       ...current,
                       ref_no: value,
                       doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
-                      doc_no: text(getLookupValue(row || {}, "doc_no")),
+                      // doc_no: text(getLookupValue(row || {}, "doc_no")),
                       ac_code: text(getLookupValue(row || {}, "ac_code")),
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
                       dept_code: text(getLookupValue(row || {}, "dept_code")),
