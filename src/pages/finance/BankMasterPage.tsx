@@ -10,6 +10,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
+import { isValidEmail, isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 
 type BankRow = {
   bank_code: string;
@@ -205,6 +206,18 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
       setError("Bank Code, Bank Name, Main Bank Code and Address are required.");
       return;
     }
+    if (!isValidEmail(form.email)) {
+      setError("Please enter a valid email address (e.g. name@example.com).");
+      return;
+    }
+    if (!isValidPhoneNumber(form.phone)) {
+      setError("Phone must contain numbers only.");
+      return;
+    }
+    if (!isValidPhoneNumber(form.fax)) {
+      setError("Fax must contain numbers only.");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -234,9 +247,28 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
         <Field label="Short Name" value={form.bank_short_name} onChange={(value) => setField("bank_short_name", value)} disabled={readOnly} />
         <Field label="Main Bank Code" value={form.main_bank_code} onChange={(value) => setField("main_bank_code", value)} disabled={readOnly} required />
         <Field label="Country Code" value={form.country_code} onChange={(value) => setField("country_code", value)} disabled={readOnly} />
-        <Field label="Phone" value={form.phone} onChange={(value) => setField("phone", value)} disabled={readOnly} />
-        <Field label="Fax" value={form.fax} onChange={(value) => setField("fax", value)} disabled={readOnly} />
-        <Field label="Email" value={form.email} onChange={(value) => setField("email", value)} disabled={readOnly} />
+        <Field
+          label="Phone"
+          value={form.phone}
+          onChange={(value) => setField("phone", sanitizePhoneNumber(value))}
+          disabled={readOnly}
+          error={!isValidPhoneNumber(form.phone) ? "Must contain numbers only" : undefined}
+        />
+        <Field
+          label="Fax"
+          value={form.fax}
+          onChange={(value) => setField("fax", sanitizePhoneNumber(value))}
+          disabled={readOnly}
+          error={!isValidPhoneNumber(form.fax) ? "Must contain numbers only" : undefined}
+        />
+        <Field
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={(value) => setField("email", value)}
+          disabled={readOnly}
+          error={!isValidEmail(form.email) ? "Invalid email format (e.g. name@domain.com)" : undefined}
+        />
         <label className="field">
           <span>Address <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span></span>
           <textarea className="ui-textarea" value={form.bank_addr1} onChange={(event) => setField("bank_addr1", event.target.value)} disabled={readOnly} />
@@ -254,14 +286,37 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
   );
 }
 
-function Field({ label, value, onChange, disabled, required }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; required?: boolean }) {
+function Field({
+  label,
+  value,
+  onChange,
+  disabled,
+  required,
+  type = "text",
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  required?: boolean;
+  type?: string;
+  error?: string;
+}) {
   return (
     <label className="field">
       <span>
         {label}
         {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
+      <Input
+        type={type}
+        value={value}
+        className={error ? "!border-rose-500 !ring-rose-400" : ""}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+      />
+      {error && <span className="text-[10px] text-destructive mt-0.5">{error}</span>}
     </label>
   );
 }

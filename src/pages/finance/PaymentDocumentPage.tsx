@@ -50,6 +50,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
@@ -154,12 +155,23 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -1222,8 +1234,14 @@ function PaymentDocumentEditor({
     if (form.party_phone && form.party_phone.length > 30) {
       return setError("You have exceeded the character limit for Party Phone (max 30 characters).");
     }
+    if (form.party_phone && form.party_phone.trim() && !isValidPhoneNumber(form.party_phone)) {
+      return setError("Party Phone must contain numbers only.");
+    }
     if (form.party_fax && form.party_fax.length > 30) {
       return setError("You have exceeded the character limit for Party Fax (max 30 characters).");
+    }
+    if (form.party_fax && form.party_fax.trim() && !isValidPhoneNumber(form.party_fax)) {
+      return setError("Party Fax must contain numbers only.");
     }
     if (form.remarks && form.remarks.length > 250) {
       return setError("You have exceeded the character limit for Remarks.");
@@ -1761,27 +1779,29 @@ function PaymentDocumentEditor({
                       </Field>
                       <Field
                         label="Party Phone"
-                        error={form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined}
+                        error={(form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined) || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           disabled={disabled}
                           value={form.party_phone || ""}
-                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_phone", e.target.value)}
+                          className={((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_phone", sanitizePhoneNumber(e.target.value))}
                           placeholder="Phone"
                         />
                       </Field>
                       <Field
                         label="Party Fax"
-                        error={form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined}
+                        error={(form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined) || (form.party_fax && !isValidPhoneNumber(form.party_fax) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           disabled={disabled}
                           value={form.party_fax || ""}
-                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_fax", e.target.value)}
+                          className={((form.party_fax && form.party_fax.length > 30) || (form.party_fax && !isValidPhoneNumber(form.party_fax))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_fax", sanitizePhoneNumber(e.target.value))}
                           placeholder="Fax"
                         />
                       </Field>

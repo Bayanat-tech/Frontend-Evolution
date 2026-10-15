@@ -214,7 +214,7 @@ export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInf
   return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
 }
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100, columnFilters?: { field: string; values: string }[]) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100, columnFilters?: { field: string; values: string | { from?: string; to?: string } }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
@@ -229,7 +229,21 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
 
   if (columnFilters?.length) {
     columnFilters.forEach(({ field, values }) => {
-      if (values.trim()) {
+      if (typeof values === "object" && values !== null) {
+        const { from, to } = values as { from?: string; to?: string };
+        if (from || to) {
+          filters.push([{ field_name: field, field_value: { from, to }, operator: "datebetween" }]);
+        }
+      } else if (typeof values === "string" && values.trim()) {
+        try {
+          const parsed = JSON.parse(values);
+          if (parsed && typeof parsed === "object" && (parsed.from || parsed.to)) {
+            filters.push([{ field_name: field, field_value: parsed, operator: "datebetween" }]);
+            return;
+          }
+        } catch {
+          // not JSON, regular string
+        }
         filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
       }
     });
