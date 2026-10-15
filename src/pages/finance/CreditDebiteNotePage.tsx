@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { AlertCircle, Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
+import { AlertCircle, Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, User, X } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -1054,14 +1054,19 @@ const limitProps = (f: keyof TransactionHeader) => ({
   const selectedDetail = form.detail.find((row) => row.id === selectedDetailId) || form.detail[0];
   const selectedChildren = selectedDetail ? (form.children[selectedDetail.id] as TransactionChildRow[] | undefined) || [] : [];
 
-  const loadChildrenForDetail = async (detail: TransactionDetail) => {
+  const loadChildrenForDetail = async (detail: TransactionDetail, overridePartyAcCode?: string) => {
     if (!detail.child_table) return;
     setChildLoading(true);
     setError("");
     try {
       const divCode = detail.div_code || form.div_code;
+      const partyAcCode = overridePartyAcCode || (
+        (docType === "CN" || docType === "DN")
+          ? (form.ac_code || detail.ac_code)
+          : (detail.ac_code || form.ac_code)
+      );
       const rows = await getFinanceMasterRows(detail.child_table, {
-        code: detail.ac_code,
+        code: partyAcCode,
         extra_param1: divCode,
         extra_param2: docType,
         extra_param3: form.doc_no || "0",
@@ -1081,7 +1086,7 @@ const limitProps = (f: keyof TransactionHeader) => ({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
+              const resp = await getFinanceOutstanding(divCode, invNo, partyAcCode, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
               if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
@@ -1111,6 +1116,25 @@ const limitProps = (f: keyof TransactionHeader) => ({
           });
         }
 
+        // Deduplicate invoices so the same voucher / invoice reference is only shown once
+        const seenInvoices = new Set<string>();
+        mapped = mapped.filter((m) => {
+          const docKey = text(m.doc_no).trim().toUpperCase();
+          const refKey = text(m.ref_no).trim().toUpperCase();
+          const invKey = text(m.inv_no).trim().toUpperCase();
+          const primaryId = docKey || refKey || invKey;
+          if (!primaryId) return true;
+          if ((docKey && seenInvoices.has(`D_${docKey}`)) ||
+              (refKey && seenInvoices.has(`R_${refKey}`)) ||
+              (invKey && seenInvoices.has(`I_${invKey}`))) {
+            return false;
+          }
+          if (docKey) seenInvoices.add(`D_${docKey}`);
+          if (refKey) seenInvoices.add(`R_${refKey}`);
+          if (invKey) seenInvoices.add(`I_${invKey}`);
+          return true;
+        });
+
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
         if (parentAmt > 0) {
@@ -1123,6 +1147,20 @@ const limitProps = (f: keyof TransactionHeader) => ({
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
+        }
+
+        // If header inv_no is empty and we loaded invoices, auto-fill header inv_no from the first invoice
+        if (!form.inv_no && mapped.length > 0) {
+          const firstInv = mapped[0];
+          const firstInvNo = text(firstInv.inv_no || firstInv.ref_no);
+          const firstInvDate = firstInv.inv_date;
+          if (firstInvNo) {
+            setForm((current) => ({
+              ...current,
+              inv_no: current.inv_no || firstInvNo,
+              inv_date: current.inv_date || firstInvDate || current.inv_date,
+            }));
+          }
         }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
@@ -1336,8 +1374,9 @@ if (tooLong.length) {
 
   const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
-      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      const resolvedAc = acCode || ((docType === "CN" || docType === "DN") ? form.ac_code : undefined);
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode: resolvedAc, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, resolvedAc, docType, editMode ? form.doc_no : undefined);
       return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
@@ -1355,12 +1394,15 @@ if (tooLong.length) {
       return;
     }
     const parentDetail = form.detail.find((d) => d.id === parentDetailId);
-    void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
+    const partyAcCode = (docType === "CN" || docType === "DN")
+      ? (form.ac_code || parentDetail?.ac_code)
+      : (parentDetail?.ac_code || form.ac_code);
+    void fetchOutstanding(invNo, partyAcCode).then((data) => {
       const balance = data?.balances?.[0];
       if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
         const errMsg = balance?.error || (balance as any)?.is_cancelled
           ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
-          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+          : `Invoice "${invNo}" not found for account ${partyAcCode || ""}.`;
         setError(errMsg);
         // If invoice is not found or does not belong to this account, clear invalid invoice amount
         setForm((current) => {
@@ -1584,6 +1626,11 @@ if (tooLong.length) {
                                   ...current,
                                   cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
                                 }));
+                                form.detail.forEach((d) => {
+                                  if (d.child_table === "invoice") {
+                                    void loadChildrenForDetail(d, value);
+                                  }
+                                });
                               }
                             }}
                           />
@@ -1675,11 +1722,7 @@ if (tooLong.length) {
   className="col-span-2"
   error={limitErr("remarks")}
 >
-  <div
-    className="w-full"
-    onMouseEnter={() => setRemarksHover(true)}
-    onMouseLeave={() => setRemarksHover(false)}
-  >
+  <div className="w-full">
     <textarea
       className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${
         limitErr("remarks")
@@ -1697,7 +1740,7 @@ if (tooLong.length) {
       }
     />
 
-    {(remarksHover || remarksFocus) && !disabled && (
+    {remarksFocus && !disabled && (
       <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
         {(form.remarks || "").length} / 250 characters (
         {250 - (form.remarks || "").length} left)
@@ -1941,7 +1984,7 @@ if (tooLong.length) {
                       <th className="finance-amount-cell px-2 py-2 text-right text-white w-24 min-w-[100px]">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white w-28 min-w-[110px]">Job No</th>}
                       {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white w-32 min-w-[110px]">Base Amount</th>}
-                      <th className="px-2 py-2 text-center text-white w-14">Action</th>
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2160,7 +2203,17 @@ if (tooLong.length) {
                           {showAllColumns && (
                             <td className="finance-amount-cell w-32 min-w-[110px] px-2 py-1"><Input className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                           )}
-                          <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                          <td className="finance-sticky-col-right px-1 py-1 text-center w-[76px] min-w-[76px] max-w-[76px]">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              title="Delete row"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                              onClick={() => removeDetailRow(detail.id)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         </tr>
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
@@ -2884,7 +2937,9 @@ function groupChildren(form: TransactionHeader) {
       cleaned.dtl_sr_no = childIndex + 1;
       cleaned.doc_date = form.doc_date;
       cleaned.div_code = form.div_code;
-      cleaned.ac_code = detail.ac_code;
+      cleaned.ac_code = (table === "invoice" && (form.doc_type === "CN" || form.doc_type === "DN"))
+        ? (form.ac_code || detail.ac_code)
+        : (detail.ac_code || form.ac_code);
       cleaned.sign_ind = detail.sign_ind;
       cleaned.curr_code = cleaned.curr_code || form.curr_code;
       cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
