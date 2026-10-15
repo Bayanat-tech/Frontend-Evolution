@@ -284,13 +284,21 @@ export function KpiGroupPage() {
     ? KPI_CHARACTERISTIC_TYPE_CODE
     : KPI_ACTIVITY_TYPE_CODE;
 
-  // ═════════════════════════════════════════════════════════
-  // LOAD ROWS
-  // ═════════════════════════════════════════════════════════
   const loadRows = async () => {
+    if (!selectedDivision || !selectedDepartment) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const data = await pamsSelect({ parameter: "kpi", loginid, code1: companyCode });
+      const data = await pamsSelect({
+        parameter: "kpi",
+        loginid,
+        code1: companyCode,
+        code2: selectedDivision,   
+        code3: selectedDepartment, 
+      });
       setRows(data.map(normalizeRow));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load KPI Groups");
@@ -299,10 +307,15 @@ export function KpiGroupPage() {
     }
   };
 
+
   useEffect(() => {
-    void loadRows();
+    if (selectedDivision && selectedDepartment) {
+      void loadRows();
+    } else {
+      setRows([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginid, companyCode]);
+  }, [selectedDivision, selectedDepartment, loginid, companyCode]);
 
   useEffect(() => {
     void (async () => {
@@ -393,17 +406,19 @@ export function KpiGroupPage() {
     })();
   }, [selectedDivision, loginid, companyCode]);
 
+
   const filteredRows = useMemo(() => {
     if (!selectedDivision || !selectedDepartment) return [];
+    const selDiv = selectedDivision.trim().toUpperCase();
+    const selDept = selectedDepartment.trim().toUpperCase();
     return rows.filter((r) => {
-      const div = text(r.DIVISION_CODE ?? r.DIV_CODE);
-      const dept = text(r.DEPARTMENT_CODE ?? r.DEPT_CODE);
-      const typeCode = text(r.KPI_TYPE_CODE);
-      return div === selectedDivision && dept === selectedDepartment && typeCode === tabTypeCode;
+      const div = text(r.DIVISION_CODE ?? r.DIV_CODE).trim().toUpperCase();
+      const dept = text(r.DEPARTMENT_CODE ?? r.DEPT_CODE).trim().toUpperCase();
+      const typeCode = text(r.KPI_TYPE_CODE).trim();
+      return div === selDiv && dept === selDept && typeCode === tabTypeCode;
     });
   }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
 
-  // ✅ Dedupe rows inside each designation group (by KPI_CODE, fallback KPI_DESC)
   const designationGroups = useMemo<DesignationGroup[]>(() => {
     const map = new Map<string, DesignationGroup>();
     filteredRows.forEach((r) => {
@@ -473,7 +488,13 @@ export function KpiGroupPage() {
       return next;
     });
 
-  const loadActivities = async (kpiCode: string) => {
+ 
+  const loadActivities = async (
+    kpiCode: string,
+    divCode: string,
+    deptCode: string,
+    desgCode: string
+  ) => {
     if (!kpiCode) {
       setActivities([]);
       return;
@@ -484,6 +505,9 @@ export function KpiGroupPage() {
         loginid,
         code1: companyCode,
         code2: kpiCode,
+        code3: divCode || "NULL",     
+        code4: deptCode || "NULL",    
+        code5: desgCode || "NULL",    
       });
       setActivities(
         data.map((r: Row) => ({
@@ -563,6 +587,7 @@ export function KpiGroupPage() {
   const openEdit = async (row: Row) => {
     const divCode = text(row.DIVISION_CODE ?? row.DIV_CODE);
     const deptCode = text(row.DEPARTMENT_CODE ?? row.DEPT_CODE);
+    const desgCode = text(row.DESG_CODE);
 
     setEditMode(true);
     setViewMode(false);
@@ -588,19 +613,21 @@ export function KpiGroupPage() {
       DIVISION_CODE: divCode,
       DEPARTMENT_CODE: deptCode,
       SECTION_CODE: text(row.SECTION_CODE),
-      DESG_CODE: text(row.DESG_CODE),
+      DESG_CODE: desgCode,
       STANDARD_WEIGHTAGE: number(row.STANDARD_WEIGHTAGE),
     });
 
     setFormOpen(true);
     if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
-      await loadActivities(text(row.KPI_CODE));
+  
+      await loadActivities(text(row.KPI_CODE), divCode, deptCode, desgCode);
     }
   };
 
   const openView = async (row: Row) => {
     const divCode = text(row.DIVISION_CODE ?? row.DIV_CODE);
     const deptCode = text(row.DEPARTMENT_CODE ?? row.DEPT_CODE);
+    const desgCode = text(row.DESG_CODE);
 
     setEditMode(false);
     setViewMode(true);
@@ -626,13 +653,14 @@ export function KpiGroupPage() {
       DIVISION_CODE: divCode,
       DEPARTMENT_CODE: deptCode,
       SECTION_CODE: text(row.SECTION_CODE),
-      DESG_CODE: text(row.DESG_CODE),
+      DESG_CODE: desgCode,
       STANDARD_WEIGHTAGE: number(row.STANDARD_WEIGHTAGE),
     });
 
     setFormOpen(true);
     if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
-      await loadActivities(text(row.KPI_CODE));
+   
+      await loadActivities(text(row.KPI_CODE), divCode, deptCode, desgCode);
     }
   };
 
@@ -670,6 +698,7 @@ export function KpiGroupPage() {
     setSaving(true);
 
     try {
+      // ── Save / Update KPI master ─────────────────────────
       await pamsSave({
         parameter: "kpi_ins_upd",
         loginid,
@@ -686,15 +715,21 @@ export function KpiGroupPage() {
 
       let kpiCode = form.KPI_CODE;
       if (!kpiCode) {
-        const refreshed = await pamsSelect({ parameter: "kpi", loginid, code1: companyCode });
+        const refreshed = await pamsSelect({
+          parameter: "kpi",
+          loginid,
+          code1: companyCode,
+          code2: form.DIVISION_CODE,   
+          code3: form.DEPARTMENT_CODE, 
+        });
         const matches = refreshed
           .map(normalizeRow)
           .filter(
             (r) =>
               text(r.KPI_DESC) === form.KPI_DESC &&
-              text(r.DIVISION_CODE) === form.DIVISION_CODE &&
-              text(r.DEPARTMENT_CODE) === form.DEPARTMENT_CODE &&
-              text(r.DESG_CODE) === form.DESG_CODE
+              text(r.DIVISION_CODE).trim() === form.DIVISION_CODE.trim() &&
+              text(r.DEPARTMENT_CODE).trim() === form.DEPARTMENT_CODE.trim() &&
+              text(r.DESG_CODE).trim() === form.DESG_CODE.trim()
           )
           .sort((a, b) => Number(text(b.KPI_CODE)) - Number(text(a.KPI_CODE)));
 
@@ -702,14 +737,20 @@ export function KpiGroupPage() {
       }
 
       if (kpiCode && form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
+        
         if (editMode) {
-          await pamsSave({
+          await pamsDelete({
             parameter: "kpi_item_delete_all",
             loginid,
-            val1s1: companyCode,
-            val1s2: kpiCode,
+            code1: companyCode,
+            code2: kpiCode,
+            code3: form.DIVISION_CODE || "NULL",   
+            code4: form.DEPARTMENT_CODE || "NULL", 
+            code5: form.DESG_CODE || "NULL",       
           });
         }
+
+        // Insert new activities via pamsSave — div/dept/desg bhi pass
         let srno = 1;
         for (const act of activities) {
           if (!act.desc.trim()) continue;
@@ -719,6 +760,9 @@ export function KpiGroupPage() {
             val1s1: companyCode,
             val1s2: kpiCode,
             val1s3: act.desc,
+            val1s4: form.DIVISION_CODE || "",   
+            val1s5: form.DEPARTMENT_CODE || "", 
+            val1s6: form.DESG_CODE || "",      
             val1n1: srno,
           });
           srno++;
@@ -737,10 +781,6 @@ export function KpiGroupPage() {
 
   // ═════════════════════════════════════════════════════════
   // DELETE
-  //  Step 1: user clicks delete icon → open confirmation dialog
-  //  Step 2: user clicks "Yes, Delete" → run safe_delete check
-  //          • If blocked by appraisal docs → show "Cannot Delete" dialog
-  //          • Otherwise → row is deleted, success toast, refresh
   // ═════════════════════════════════════════════════════════
   const handleDeleteClick = (row: Row) => {
     setConfirmDeleteTarget(row);
@@ -767,7 +807,6 @@ export function KpiGroupPage() {
       const res = String((result?.[0] as Record<string, unknown>)?.RESULT ?? "");
 
       if (res.toUpperCase().startsWith("ERROR_DOC_EXISTS")) {
-        // Close confirm dialog, open the "cannot delete" info dialog
         setConfirmDeleteTarget(null);
         setDeleteTarget(row);
         return;

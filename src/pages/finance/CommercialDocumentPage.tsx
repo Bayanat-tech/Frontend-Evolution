@@ -38,6 +38,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
@@ -956,6 +957,9 @@ const limitProps = (f: keyof FormState) => ({
   if (form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim())) {
     hErr.dlvr_email = "Invalid email format";
   }
+  if (form.dlvr_mobile && form.dlvr_mobile.trim() && !isValidPhoneNumber(form.dlvr_mobile)) {
+    hErr.dlvr_mobile = "Mobile must contain numbers only";
+  }
 
   // Character limit validations
   // if (form.ref_no && form.ref_no.length > 30) {
@@ -1259,8 +1263,8 @@ const limitProps = (f: keyof FormState) => ({
                       <Input {...limitProps("dlvr_contact")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
                     </CField>
 
-                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile")}>
-                      <Input {...limitProps("dlvr_mobile")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
+                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile") || fieldErrors.dlvr_mobile}>
+                      <Input {...limitProps("dlvr_mobile")} type="tel" className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", sanitizePhoneNumber(e.target.value))} />
                     </CField>
 
                     <CField label="E-mail" className="col-span-1" error={(form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim()) ? "Invalid email format" : limitErr("dlvr_email")) || fieldErrors.dlvr_email}>
@@ -1302,13 +1306,20 @@ const limitProps = (f: keyof FormState) => ({
                           ]}
                           valueField="DOC_NO"
                           displayFields={["DOC_NO"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Account_LPO_REF_DOC",
-                              code1: user?.company_code || "",
-                              number1: form.div_code ? Number(form.div_code) : undefined,
-                            })
-                          }
+                          loadOptions={async () => {
+                            const rows = await getDynamicFinanceLookup({
+                             parameter: "Account_LPO_REF_DOC",
+                             code1: user?.company_code || "",
+                             number1: form.div_code ? Number(form.div_code) : undefined,
+                            });
+                            return [...rows].sort((a, b) =>
+                             String(b["DOC_NO"] ?? b["doc_no"] ?? "").localeCompare(
+                             String(a["DOC_NO"] ?? a["doc_no"] ?? ""),
+                             undefined,
+                             { numeric: true }
+                            )
+                           );
+                          }}
                           onChange={async (value, row) => {
                             if (!value || !row) {
                               setForm((c) => ({ ...c, ref_doc_no: "" }));

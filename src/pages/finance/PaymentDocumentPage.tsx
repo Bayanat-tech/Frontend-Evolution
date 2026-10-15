@@ -50,6 +50,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
@@ -154,12 +155,23 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -1222,8 +1234,14 @@ function PaymentDocumentEditor({
     if (form.party_phone && form.party_phone.length > 30) {
       return setError("You have exceeded the character limit for Party Phone (max 30 characters).");
     }
+    if (form.party_phone && form.party_phone.trim() && !isValidPhoneNumber(form.party_phone)) {
+      return setError("Party Phone must contain numbers only.");
+    }
     if (form.party_fax && form.party_fax.length > 30) {
       return setError("You have exceeded the character limit for Party Fax (max 30 characters).");
+    }
+    if (form.party_fax && form.party_fax.trim() && !isValidPhoneNumber(form.party_fax)) {
+      return setError("Party Fax must contain numbers only.");
     }
     if (form.remarks && form.remarks.length > 250) {
       return setError("You have exceeded the character limit for Remarks.");
@@ -1761,27 +1779,29 @@ function PaymentDocumentEditor({
                       </Field>
                       <Field
                         label="Party Phone"
-                        error={form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined}
+                        error={(form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined) || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           disabled={disabled}
                           value={form.party_phone || ""}
-                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_phone", e.target.value)}
+                          className={((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_phone", sanitizePhoneNumber(e.target.value))}
                           placeholder="Phone"
                         />
                       </Field>
                       <Field
                         label="Party Fax"
-                        error={form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined}
+                        error={(form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined) || (form.party_fax && !isValidPhoneNumber(form.party_fax) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           disabled={disabled}
                           value={form.party_fax || ""}
-                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_fax", e.target.value)}
+                          className={((form.party_fax && form.party_fax.length > 30) || (form.party_fax && !isValidPhoneNumber(form.party_fax))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_fax", sanitizePhoneNumber(e.target.value))}
                           placeholder="Fax"
                         />
                       </Field>
@@ -2847,6 +2867,9 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
     doc_type: docType,
     ex_rate: Number(form.ex_rate || 1),
     detail: form.detail.map((row, index) => {
+      const rowCurr = row.curr_code || form.curr_code;
+      const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
+      const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || form.ex_rate || 1);
       const detail = {
         company_code: row.company_code || companyCode,
         doc_type: docType,
@@ -2855,8 +2878,8 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         doc_date: form.doc_date,
         ac_code: row.ac_code,
         remarks: row.remarks || "",
-        curr_code: form.curr_code,
-        ex_rate: Number(row.ex_rate || form.ex_rate || 1),
+        curr_code: rowCurr,
+        ex_rate: effectiveExRate,
         amount: Math.abs(Number(row.amount || 0)),
         sign_ind: row.sign_ind,
         tx_compntcat_code_1: row.tx_compntcat_code_1 || "N/A",
@@ -2868,7 +2891,7 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         job_no: row.job_no || "",
         dept_code: row.dept_code || "",
         div_code: form.div_code,
-        lcur_amount: Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || form.ex_rate || 1) * Number(row.sign_ind || 1),
+        lcur_amount: Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1),
       };
       return detail as TransactionDetail;
     }),
@@ -2913,19 +2936,25 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
   delete (header as Record<string, unknown>).detail;
   delete (header as Record<string, unknown>).children;
 
-  const details = originalForm.detail.map((row, index) => ({
-    ...row,
-    company_code: row.company_code || companyCode,
-    doc_type: docType,
-    doc_no: docNo,
-    serial_no: row.serial_no || index + 1,
-    doc_date: originalForm.doc_date,
-    header_ac_code: originalForm.ac_code,
-    curr_code: row.curr_code || originalForm.curr_code,
-    ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
-    div_code: row.div_code || originalForm.div_code,
-  }));
+  const details = originalForm.detail.map((row, index) => {
+    const rowCurr = row.curr_code || originalForm.curr_code;
+    const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(originalForm.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(originalForm.curr_code).trim().toUpperCase());
+    const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || originalForm.ex_rate || 1);
+    const effectiveLcurAmt = Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1);
+    return {
+      ...row,
+      company_code: row.company_code || companyCode,
+      doc_type: docType,
+      doc_no: docNo,
+      serial_no: row.serial_no || index + 1,
+      doc_date: originalForm.doc_date,
+      header_ac_code: originalForm.ac_code,
+      curr_code: rowCurr,
+      ex_rate: effectiveExRate,
+      lcur_amount: effectiveLcurAmt,
+      div_code: row.div_code || originalForm.div_code,
+    };
+  });
 
   const seenDetailSerials = new Set<number>();
   const uniqueDetails = details.map((row, index) => {
@@ -2982,12 +3011,22 @@ function groupChildren(form: TransactionHeader) {
       cleaned.div_code = form.div_code;
       cleaned.ac_code = detail.ac_code;
       cleaned.sign_ind = detail.sign_ind;
-      cleaned.curr_code = cleaned.curr_code || form.curr_code;
-      cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
-      cleaned.amount = Number(cleaned.amount || 0);
-      cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+
       if (table === "invoice") {
         cleaned.indicator_origin = "N";
+        cleaned.curr_code = form.curr_code;
+        const isBaseCurr = String(form.curr_code).trim().toUpperCase() === "INR" || Number(form.ex_rate || 1) === 1;
+        cleaned.ex_rate = isBaseCurr ? 1 : Number(form.ex_rate || 1);
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      } else {
+        const rowCurr = cleaned.curr_code || form.curr_code;
+        const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
+        const effectiveExRate = isBaseCurr ? 1 : Number(cleaned.ex_rate || form.ex_rate || 1);
+        cleaned.curr_code = rowCurr;
+        cleaned.ex_rate = effectiveExRate;
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * effectiveExRate * Number(detail.sign_ind || 1);
       }
       grouped[table].push(cleaned);
     });

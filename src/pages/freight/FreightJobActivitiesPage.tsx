@@ -1,3 +1,4 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, ListPlus, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
@@ -226,15 +227,9 @@ export function FreightJobActivitiesPage({
       }
     });
 
-    for (const l of lines) {
-      if (l.other_services && l.other_services.length > 250) {
-        notify({ type: "error", text: "You have exceeded the character limit for Service Description." });
-        return;
-      }
-      if (l.remarks && l.remarks.length > 250) {
-        notify({ type: "error", text: "You have exceeded the character limit for Remarks." });
-        return;
-      }
+    for (const [index, line] of lines.entries()) {
+      const schemaError = freightValidationError("TN_INVOICE_DET", line);
+      if (schemaError) { notify({ type: "error", text: `Activity line ${index + 1}: ${schemaError}` }); return; }
     }
 
     if (invalidIndices.length > 0) {
@@ -347,9 +342,7 @@ export function FreightJobActivitiesPage({
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))}>
-          <ArrowLeft size={14} />List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
@@ -578,14 +571,14 @@ export function FreightJobActivitiesPage({
     tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code"),
   }));
 }} />
-                  <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+                  <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })}  maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}  maxBytes={freightTextLimit("TN_INVOICE_DET", "other_services")} />
                   <MoneyInput value={line.quantity} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
                   <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
                   <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
                   <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
-                  <Input className="h-7 text-xs" placeholder="Agent" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+                  <Input className="h-7 text-xs" placeholder="Agent" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })}  maxLength={freightTextLimit("TN_INVOICE_DET", "broker_code")}  maxBytes={freightTextLimit("TN_INVOICE_DET", "broker_code")} />
                   <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
-                  <Input className="h-7 text-xs" placeholder="Transporter" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+                  <Input className="h-7 text-xs" placeholder="Transporter" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })}  maxLength={freightTextLimit("TN_INVOICE_DET", "transporter_code")}  maxBytes={freightTextLimit("TN_INVOICE_DET", "transporter_code")} />
                   <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
                   <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-red-600" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}>
                     <Trash2 size={13} />

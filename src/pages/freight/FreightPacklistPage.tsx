@@ -1,3 +1,5 @@
+import { Textarea as TextAreaControl } from "../../components/ui/Textarea";
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
@@ -21,6 +23,8 @@ import {
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -509,9 +513,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
-          <ArrowLeft size={14} /> List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={() => setView("list")} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         {pack.job_no && !readOnly && (
           <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}>
             <Plus size={14} /> New {screenTitle}
@@ -550,7 +552,8 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
+          enableExport={false}
+          actionButton={<FinanceListActionsMenu onExport={() => exportToCsv(rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]))), columns, `freight-${modeKey}-${directionKey}-packlist.csv`)} onRefresh={() => void loadRows()} />}
           exportFilename={`freight-${modeKey}-${directionKey}-packlist.csv`}
           onRowClick={openPack}
         />
@@ -999,7 +1002,13 @@ function Field({ label, value, onChange, type = "text", readOnly = false, requir
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
       <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
-      <Input
+      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={safeValue}
+        required={required}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={safeValue}
+        required={required}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
         className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
         type={type}
         value={safeValue}
@@ -1008,7 +1017,7 @@ function Field({ label, value, onChange, type = "text", readOnly = false, requir
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+      />)}
     </label>
   );
 }
@@ -1041,7 +1050,7 @@ function Textarea({ label, value, onChange, className = "", rows = 2, required }
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
       <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
-      <textarea
+      <TextAreaControl
         rows={rows}
         className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-normal text-foreground shadow-none"
         value={value}
@@ -1278,7 +1287,9 @@ function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Disp
               <Input className="h-7 text-right text-xs" type="number" value={row.no_of_pkgs} onChange={(event) => update(rowIndex, "no_of_pkgs", event.target.value)} />
               <Input className="h-7 text-xs" value={row.puom} onChange={(event) => update(rowIndex, "puom", event.target.value)} />
               <Input className="h-7 text-xs" value={row.contn_desc} onChange={(event) => update(rowIndex, "contn_desc", event.target.value)} />
-              <Input className="h-7 text-xs" type="date" value={row.contn_pick_date} onChange={(event) => update(rowIndex, "contn_pick_date", event.target.value)} />
+              <FreightDatePicker className="freight-calendar-field"
+        value={row.contn_pick_date}
+        onChange={(nextValue) => update(rowIndex, "contn_pick_date", nextValue)} />
               <Input className="h-7 text-xs" value={row.bl_no} onChange={(event) => update(rowIndex, "bl_no", event.target.value)} />
               <Button type="button" size="icon" variant="ghost" title="Remove container" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, srno: String(index + 1) })))}><Trash2 size={14} /></Button>
             </> : <>
