@@ -13,8 +13,6 @@ import { ReportFilterHeader } from "../../../components/reports/ReportFilterHead
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-// NOTE: add these two to api/transactions (copy the Ticket Eligibility ones and
-// point them at the new endpoints – handler names are in the controller file).
 import {
   getEmployeeAddressListReportHtml,
   getEmployeeAddressListReportExcelDownload,
@@ -22,15 +20,17 @@ import {
 import { NewReportDialog } from "../../../components/new_report_format";
 
 // ─── Lookup parameter names ───────────────────────────────────────────────────
-// Same lookups as the Ticket Eligibility page.
-// TODO: confirm grade / designation names if you have address-list specific ones.
+// Division -> Department -> Section are chained.
+// Grade / Designation / Formal Designation / Employee depend on Division, Department, Section.
+// Parent codes go as code2 = division, code3 = department, code4 = section.
 const LOOKUP = {
   division: "EDUCATION_QUALIFICATION_DIVISION_LIST",
   department: "EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE",
   section: "EDUCATION_QUALIFICATION_MS_HR_SECTION",
   grade: "EDUCATION_QUALIFICATION_TICKET_ELIG_GRADE",
   designation: "EDUCATION_QUALIFICATION_TICKET_ELIG_DESIGNATION",
-  employee: "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
+  formalDesignation: "EDUCATION_QUALIFICATION_TICKET_ELIG_FORMAL_DESIGNATION",
+  employee: "EDUCATION_QUALIFICATION_ADDR_EMPLOYEE_LIST", // unchanged
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ interface Params {
   section: string;
   grade: string;
   designation: string;
+  formalDesignation: string;
   employeeCode: string;
   status: string;
   joinFrom: string;
@@ -49,10 +50,12 @@ interface Params {
 
 const ALL_SENTINEL = "__ALL__";
 
-// TODO: confirm the EMP_STATUS codes used in your system (C / P are used in the ticket report).
+// TODO: confirm your EMP_STATUS codes.
 const STATUS_OPTIONS: { label: string; value: string }[] = [
   { label: "All", value: "All" },
   { label: "C", value: "C" },
+  { label: "PB", value: "PB" },
+  { label: "PR", value: "PR" },
   { label: "P", value: "P" },
 ];
 
@@ -69,26 +72,37 @@ const toDisplayDate = (isoDate: string): string => {
   return `${d}/${m}/${y}`;
 };
 
-/** Turns lookup rows into MultiSelect options, tolerant of upper/lower-case keys. */
+const NAME_EXCLUDE = [
+  "title", "manager", "mgr", "desg", "dept", "div", "section", "grade",
+  "airport", "company", "father", "spouse", "nation", "religion",
+];
+const CODE_EXCLUDE = ["manager", "mgr", "title"];
+
+/** Lookup rows -> MultiSelect options (upper/lower-case keys both work). */
 const mapOptions = (rows: any, codeKeys: string[], nameKeys: string[]): MultiSelectOption[] =>
   (Array.isArray(rows) ? rows : [])
     .map((r: any) => {
+      const lowerMap: Record<string, any> = {};
+      Object.keys(r).forEach((k) => (lowerMap[k.toLowerCase()] = r[k]));
+
       const pick = (keys: string[]) => {
         for (const k of keys) {
-          const v = r[k] ?? r[k.toUpperCase()];
+          const v = lowerMap[k.toLowerCase()];
           if (v != null && String(v).trim()) return String(v).trim();
         }
         return "";
       };
-      // Fallback: if the expected keys are not found, auto-detect any "*code*" / "*name*" column
-      const autoPick = (needle: string, exclude = "") => {
-        const k = Object.keys(r).find(
-          (key) => key.toLowerCase().includes(needle) && (!exclude || !key.toLowerCase().includes(exclude))
-        );
+
+      const autoPick = (needle: string, exclude: string[]) => {
+        const k = Object.keys(r).find((key) => {
+          const lk = key.toLowerCase();
+          return lk.includes(needle) && !exclude.some((x) => lk.includes(x));
+        });
         return k && r[k] != null ? String(r[k]).trim() : "";
       };
-      const code = pick(codeKeys) || autoPick("code") || autoPick("id");
-      const name = pick(nameKeys) || autoPick("name");
+
+      const code = pick(codeKeys) || autoPick("code", CODE_EXCLUDE) || autoPick("id", CODE_EXCLUDE);
+      const name = pick(nameKeys) || autoPick("name", NAME_EXCLUDE);
       if (!code) return null;
       return { value: code, label: name ? `${code} - ${name}` : code } as MultiSelectOption;
     })
@@ -166,22 +180,21 @@ function useOptions(
       setLoading(true);
       try {
         const rows = await load();
-        if (alive) {
-          const seen = new Set<string>();
-          const opts = mapOptions(rows, codeKeys, nameKeys).filter((o) =>
-            seen.has(o.value) ? false : (seen.add(o.value), true)
+        if (!alive) return;
+        const seen = new Set<string>();
+        const opts = mapOptions(rows, codeKeys, nameKeys).filter((o) =>
+          seen.has(o.value) ? false : (seen.add(o.value), true)
+        );
+        if (!opts.length) {
+          // Debug: inspect the real column names
+          console.debug(
+            "[lookup] 0 options. rows:",
+            Array.isArray(rows) ? rows.length : rows,
+            "columns:",
+            Array.isArray(rows) && rows[0] ? Object.keys(rows[0]) : []
           );
-          // Debug: lookup returned rows but nothing could be mapped / or returned nothing at all
-          if (!opts.length) {
-            console.warn(
-              "[lookup] no options built. rows:",
-              Array.isArray(rows) ? rows.length : rows,
-              "first row:",
-              Array.isArray(rows) ? rows[0] : undefined
-            );
-          }
-          setOptions(opts);
         }
+        setOptions(opts);
       } catch (err) {
         console.error("[lookup] failed to load options:", err);
         if (alive) setOptions([]);
@@ -198,7 +211,7 @@ function useOptions(
   return { options, loading };
 }
 
-// ─── Field wrapper / native select / text input ──────────────────────────────
+// ─── Field wrapper / native select ────────────────────────────────────────────
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -246,6 +259,7 @@ export default function EmployeeAddressListPage() {
   const [sections, setSections] = useState<string[]>([]);
   const [grades, setGrades] = useState<string[]>([]);
   const [designations, setDesignations] = useState<string[]>([]);
+  const [formalDesignations, setFormalDesignations] = useState<string[]>([]);
 
   const [employees, setEmployees] = useState<string[]>([]);
   const [status, setStatus] = useState("All");
@@ -253,54 +267,65 @@ export default function EmployeeAddressListPage() {
   const [joinTo, setJoinTo] = useState("");
 
   // ── Lookups ───────────────────────────────────────────────────────────────
+  const divKey = divisions.join(",");
+  const deptKey = departments.join(",");
+  const sectKey = sections.join(",");
+
   const divisionLookup = useOptions(
     () => getDynamicLookup(buildParams(LOOKUP.division, loginId, companyCode)),
     ["div_code"], ["div_name"], [loginId, companyCode]
   );
 
-  const divKey = divisions.join(",");
-  const deptKey = departments.join(",");
-  const sectKey = sections.join(",");
-
-  // Department  <- Division (dependent when Division selected, all when not)
+  // Department <- Division
   const departmentLookup = useOptions(
     () => loadMerged(LOOKUP.department, loginId, companyCode, divisions),
     ["dept_code"], ["dept_name"], [loginId, companyCode, divKey]
   );
 
-  // Section  <- Division, Department (dependent when selected, all when not)
+  // Section <- Division, Department
   const sectionLookup = useOptions(
     () => loadMerged(LOOKUP.section, loginId, companyCode, divisions, departments),
     ["section_code"], ["section_name"], [loginId, companyCode, divKey, deptKey]
   );
 
-  // Grade  <- INDEPENDENT (always all grades, no parent dependency)
+  // Grade / Designation / Formal Designation / Employee <- Division, Department, Section
   const gradeLookup = useOptions(
-    () => getDynamicLookup(buildParams(LOOKUP.grade, loginId, companyCode)),
+    () => loadMerged(LOOKUP.grade, loginId, companyCode, divisions, departments, sections),
     ["grade_code"], ["grade_name"],
-    [loginId, companyCode]
-  );
-
-  // Designation  <- INDEPENDENT (always all designations, no parent dependency)
-  const designationLookup = useOptions(
-    () => getDynamicLookup(buildParams(LOOKUP.designation, loginId, companyCode)),
-    ["desg_code"], ["desg_name"],
-    [loginId, companyCode]
-  );
-
-  // Employee  <- Division, Department, Section (dependent when selected, all when not)
-  // TODO: confirm the returned column names (employee_code / employee_name) for this lookup.
-  const employeeLookup = useOptions(
-    () => loadMerged(LOOKUP.employee, loginId, companyCode, divisions, departments, sections),
-    ["employee_code", "emp_code"], ["employee_name", "rpt_name", "emp_name"],
     [loginId, companyCode, divKey, deptKey, sectKey]
   );
 
-  // Remove child selections that no longer belong to the chosen parents.
-  // (Grade / Designation are independent, so they are NOT pruned.)
-  usePrune(employeeLookup.options, employeeLookup.loading, employees, setEmployees);
+  const designationLookup = useOptions(
+    () => loadMerged(LOOKUP.designation, loginId, companyCode, divisions, departments, sections),
+    ["desg_code"], ["desg_name"],
+    [loginId, companyCode, divKey, deptKey, sectKey]
+  );
+
+  const formalDesignationLookup = useOptions(
+  () => loadMerged(LOOKUP.formalDesignation, loginId, companyCode, divisions, departments, sections),
+  ["labour_desg_code", "desg_code"], ["labour_desg_name", "desg_name"],
+  [loginId, companyCode, divKey, deptKey, sectKey]
+);
+
+  const employeeLookup = useOptions(
+    () => loadMerged(LOOKUP.employee, loginId, companyCode, divisions, departments, sections),
+    ["employee_code", "emp_code"],
+    ["employee_name", "emp_name", "rpt_name"],
+    [loginId, companyCode, divKey, deptKey, sectKey]
+  );
+
+  // Remove child selections that no longer belong to the chosen parents
   usePrune(departmentLookup.options, departmentLookup.loading, departments, setDepartments);
   usePrune(sectionLookup.options, sectionLookup.loading, sections, setSections);
+  usePrune(gradeLookup.options, gradeLookup.loading, grades, setGrades);
+  usePrune(designationLookup.options, designationLookup.loading, designations, setDesignations);
+  usePrune(
+    formalDesignationLookup.options,
+    formalDesignationLookup.loading,
+    formalDesignations,
+    setFormalDesignations
+  );
+  usePrune(employeeLookup.options, employeeLookup.loading, employees, setEmployees);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false);
@@ -326,6 +351,7 @@ export default function EmployeeAddressListPage() {
     code6: p.designation,
     code7: p.employeeCode,
     code8: p.status,
+    code9: p.formalDesignation,
     date1: p.joinFrom,
     date2: p.joinTo,
   });
@@ -366,6 +392,7 @@ export default function EmployeeAddressListPage() {
       section: toApiCodeString(sections),
       grade: toApiCodeString(grades),
       designation: toApiCodeString(designations),
+      formalDesignation: toApiCodeString(formalDesignations),
       employeeCode: toApiCodeString(employees),
       status,
       joinFrom,
@@ -379,6 +406,7 @@ export default function EmployeeAddressListPage() {
     setSections([]);
     setGrades([]);
     setDesignations([]);
+    setFormalDesignations([]);
     setEmployees([]);
     setStatus("All");
     setJoinFrom("");
@@ -459,7 +487,6 @@ export default function EmployeeAddressListPage() {
   return (
     <section className="freight-ui-standard freight-report-screen">
       <div className="freight-report-card">
-        {/* ── Title bar ─────────────────────────────────────────────────── */}
         <div className="freight-report-titlebar">
           <h1>Employee Address List</h1>
           <span className="freight-report-title-dot" aria-hidden="true" />
@@ -467,7 +494,7 @@ export default function EmployeeAddressListPage() {
 
         <ReportFilterHeader onClear={handleClearAll} />
 
-        {/* ── Row 1: Division / Department / Section ────────────────────── */}
+        {/* Row 1: Division / Department / Section */}
         <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
@@ -495,7 +522,7 @@ export default function EmployeeAddressListPage() {
           />
         </div>
 
-        {/* ── Row 2: Grade / Designation / Employee Code ────────────────── */}
+        {/* Row 2: Grade / Designation / Formal Designation */}
         <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <MultiSelectField
             className="freight-report-multi-select"
@@ -515,16 +542,25 @@ export default function EmployeeAddressListPage() {
           />
           <MultiSelectField
             className="freight-report-multi-select"
+            label="Formal Designation"
+            options={formalDesignationLookup.options}
+            loading={formalDesignationLookup.loading}
+            value={formalDesignations}
+            onChange={setFormalDesignations}
+          />
+        </div>
+
+        {/* Row 3: Employee / Join Date From / To */}
+        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
+          <MultiSelectField
+            className="freight-report-multi-select"
             label="Employee"
             options={employeeLookup.options}
             loading={employeeLookup.loading}
             value={employees}
             onChange={setEmployees}
           />
-        </div>
 
-        {/* ── Row 3: Join Date From / To / Status ───────────────────────── */}
-        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Join Date From">
             <BiscDatePicker
               value={joinFrom}
@@ -542,7 +578,10 @@ export default function EmployeeAddressListPage() {
               }}
             />
           </Field>
+        </div>
 
+        {/* Row 4: Status */}
+        <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Status">
             <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} />
           </Field>
@@ -554,7 +593,6 @@ export default function EmployeeAddressListPage() {
           </p>
         )}
 
-        {/* ── Actions ───────────────────────────────────────────────────── */}
         <div className="freight-report-actions flex flex-wrap items-center justify-end gap-2">
           <Button type="button" size="sm" onClick={handleGenerate} disabled={loading || !dateRangeValid}>
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}{" "}
