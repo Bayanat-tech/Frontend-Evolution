@@ -1878,7 +1878,7 @@ function PaymentDocumentEditor({
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
@@ -1888,7 +1888,7 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-left">Description</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
-                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
                       <th className="px-2 py-2 text-left">Tax %</th>
@@ -2050,11 +2050,35 @@ function PaymentDocumentEditor({
                             </div>
                           </td>
 
-                          <td className="w-14 max-w-[60px] px-1 py-1">
-                            <Select className="h-7 text-xs font-bold text-[#00378c]" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                              <option value={1}>Dr</option>
-                              <option value={-1}>Cr</option>
-                            </Select>
+                          <td className="w-24 px-1 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
                           </td>
 
                           {showAllColumns && (
@@ -2266,9 +2290,11 @@ function PaymentDocumentEditor({
                     <span className="text-xs font-semibold text-slate-600">Total Amount</span>
                     <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
-                    <span className="text-xs font-semibold text-slate-600">Tax Amount</span>
-                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(totalTax)}</strong>
+                  <div className={`flex min-h-9 items-center gap-2.5 rounded-md border px-3 py-1.5 shadow-2xs ${
+                    totalTax > 0 ? "border-amber-300 bg-amber-50/90 text-amber-900" : "border-slate-200 bg-white"
+                  }`}>
+                    <span className={`text-xs font-semibold ${totalTax > 0 ? "text-amber-800" : "text-slate-600"}`}>Tax Amount</span>
+                    <strong className={`font-mono text-sm font-bold tabular-nums ${totalTax > 0 ? "text-amber-700" : "text-slate-900"}`}>{formatAmount(totalTax)}</strong>
                   </div>
                   <div className="flex min-h-10 items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-1.5 shadow-2xs">
                     <span className="text-xs font-bold text-[#00378c]">Net Total</span>

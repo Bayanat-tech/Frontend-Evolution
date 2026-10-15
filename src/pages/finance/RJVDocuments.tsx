@@ -844,24 +844,39 @@ function JVDocument({
   };
 
   const addDetailRow = () => {
-    setForm((current) => ({
-      ...current,
-      detail: [
-        ...current.detail,
-        {
-          ...emptyDetailRow({
-            docType,
-            docNo: current.doc_no || "1",
-            docDate: current.doc_date,
-            divCode: current.div_code,
-            currCode: current.curr_code,
-            currName: current.curr_name,
-            companyCode: user?.company_code,
-          }),
-          serial_no: current.detail.length + 1,
-        },
-      ],
-    }));
+    setForm((current) => {
+      let curDr = 0;
+      let curCr = 0;
+      current.detail.forEach((d) => {
+        const amt = Number(d.amount) || 0;
+        if (Number(d.sign_ind) === 1) curDr += amt;
+        else if (Number(d.sign_ind) === -1) curCr += amt;
+      });
+      const diff = Number((curDr - curCr).toFixed(3));
+      const suggestedSign: 1 | -1 = current.detail.length === 0 ? 1 : diff > 0 ? -1 : 1;
+      const suggestedAmount = Math.abs(diff) > 0 ? Math.abs(diff) : 0;
+
+      return {
+        ...current,
+        detail: [
+          ...current.detail,
+          {
+            ...emptyDetailRow({
+              docType,
+              docNo: current.doc_no || "1",
+              docDate: current.doc_date,
+              divCode: current.div_code,
+              currCode: current.curr_code,
+              currName: current.curr_name,
+              companyCode: user?.company_code,
+            }),
+            serial_no: current.detail.length + 1,
+            sign_ind: suggestedSign,
+            amount: suggestedAmount,
+          },
+        ],
+      };
+    });
   };
 
   useEffect(() => {
@@ -1457,7 +1472,7 @@ function JVDocument({
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
@@ -1468,7 +1483,7 @@ function JVDocument({
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
-                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Dept</th>}
@@ -1578,11 +1593,35 @@ function JVDocument({
                             <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
                           )}
                           <td className="finance-amount-cell w-36 px-2 py-1"><Input className={`finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`} disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
-                          <td className="w-28 px-2 py-1">
-                            <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                              <option value={1}>Dr</option>
-                              <option value={-1}>Cr</option>
-                            </Select>
+                          <td className="w-24 px-2 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
                           </td>
                           {showAllColumns && (
                             <td className="w-28 px-2 py-1">
@@ -1681,9 +1720,9 @@ function JVDocument({
                     <strong className="font-mono text-sm font-bold tabular-nums text-blue-700">{formatAmount(creditTotal)}</strong>
                   </div>
                   {totalTax > 0 && (
-                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
-                      <span className="text-xs font-semibold text-slate-600">Tax</span>
-                      <strong className="font-mono text-sm font-bold tabular-nums text-slate-700">{formatAmount(totalTax)}</strong>
+                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-1 text-amber-900 shadow-2xs">
+                      <span className="text-xs font-semibold text-amber-800">Tax / VAT</span>
+                      <strong className="font-mono text-sm font-bold tabular-nums text-amber-700">{formatAmount(totalTax)}</strong>
                     </div>
                   )}
                   <div className={`flex min-h-9 items-center gap-2 rounded-md border px-3 py-1 shadow-2xs ${
