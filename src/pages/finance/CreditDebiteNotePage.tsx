@@ -2792,6 +2792,12 @@ function mapExistingDocument(
     cheque_bank: text(header.cheque_bank),
     ac_payee: text(header.ac_payee),
     canceled: text(header.canceled),
+    party_address: text(header.party_address),
+    party_phone: text(header.party_phone),
+    party_fax: text(header.party_fax),
+    tx_compntcat_code_1: text(header.tx_compntcat_code_1),
+    tx_compntcat_name_1: text(nested(headerRaw, ["TaxCategory", "tx_compntcat_name"]) ?? header.tx_compntcat_name_1),
+    tx_compnt_1_expmt: text(header.tx_compnt_1_expmt) || "N",
     detail,
     children,
   };

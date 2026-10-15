@@ -379,7 +379,7 @@ export function PurchaseGrnDetailsTable({
                                     </td>
                                     {/* Remarks — DISPLAY ONLY */}
                                     <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
-                                        <textarea disabled readOnly value={row.line_remarks} />
+                                        <textarea disabled readOnly value={row.porder_remarks} />
                                     </td>
                                     <td className="finance-sticky-col-right px-1 py-1 text-center">
                                         <button
