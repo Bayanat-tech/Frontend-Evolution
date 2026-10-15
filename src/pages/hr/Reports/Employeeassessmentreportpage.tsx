@@ -5,22 +5,25 @@ import { Loader2, Search } from "lucide-react";
 
 import { BiscDatePicker } from "../../../components/ui/BiscDatePicker";
 import { Button } from "../../../components/ui/Button";
+import { LookupField } from "../../../components/ui/LookupField";
 import { ReportFilterHeader } from "../../../components/reports/ReportFilterHeader";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 // NOTE: add these two to api/transactions (copy the Visa Expiry ones and point
 // them at the new endpoints – see the controller file for the handler names).
-
+import {
+  getEmployeeAssessmentReportHtml,
+  getEmployeeAssessmentReportExcelDownload,
+} from "../../../api/transactions";
 import { NewReportDialog } from "../../../components/new_report_format";
-import { getEmployeeAssessmentReportExcelDownload, getEmployeeAssessmentReportHtml } from "../../../api/transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface LookupOption {
-  code: string;
-  name: string;
-}
+type DivisionOption = { div_code: string; div_name: string };
+type DeptOption = { dept_code: string; dept_name: string };
+type SectionOption = { section_code: string; section_name: string };
+type EmployeeOption = { employee_id: string; employee_name: string };
 
 type EmployeeFilter = "A" | "ALL";
 
@@ -49,14 +52,19 @@ const toDisplayDate = (isoDate: string): string => {
 
 function Field({
   label,
+  required,
   children,
 }: {
   label: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <label className="grid gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
+      <span>
+        {label}
+        {required && <strong className="ml-0.5 font-bold text-destructive"> *</strong>}
+      </span>
       {children}
     </label>
   );
@@ -88,53 +96,33 @@ function Select({
   );
 }
 
-// ─── Generic lookup fetcher ───────────────────────────────────────────────────
+// ─── Lookup params builder ────────────────────────────────────────────────────
 
-const fetchLookup = async (
+function buildParams(
   parameter: string,
-  loginId: string,
+  loginid: string,
   companyCode: string,
-  codeKey: string,
-  nameKey: string
-): Promise<LookupOption[]> => {
-  try {
-    const res = await getDynamicLookup({
-      parameter,
-      loginid: loginId,
-      code1: companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    });
-
-    return Array.isArray(res)
-      ? res
-          .filter(
-            (x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== ""
-          )
-          .map((x: any) => ({
-            code: String(x[codeKey]),
-            name: x[nameKey] ?? "",
-          }))
-      : [];
-  } catch (err) {
-    console.error(`[${parameter}] Fetch error:`, err);
-    return [];
-  }
-};
-
-const withAll = (opts: LookupOption[]) => [
-  { label: "All", value: "" },
-  ...opts.map((o) => ({ label: `${o.code} - ${o.name}`, value: o.code })),
-];
+  code2 = "",
+  code3 = "",
+  code4 = ""
+) {
+  return {
+    parameter,
+    loginid,
+    code1: companyCode,
+    code2,
+    code3,
+    code4,
+    number1: 0,
+    number2: 0,
+    number3: 0,
+    number4: 0,
+    date1: null,
+    date2: null,
+    date3: null,
+    date4: null,
+  };
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -143,17 +131,14 @@ export default function EmployeeAssessmentReportPage() {
   const companyCode = user?.company_code ?? "";
   const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-  // ── Lookup options (same lookups as Visa Expiry) ──────────────────────────
-  const [divisionOptions, setDivisionOptions] = useState<LookupOption[]>([]);
-  const [departmentOptions, setDepartmentOptions] = useState<LookupOption[]>([]);
-  const [sectionOptions, setSectionOptions] = useState<LookupOption[]>([]);
-  const [employeeOptions, setEmployeeOptions] = useState<LookupOption[]>([]);
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [division, setDivision] = useState<DivisionOption | null>(null);
+  const [department, setDepartment] = useState<DeptOption | null>(null);
+  const [section, setSection] = useState<SectionOption | null>(null);
+  const [employee, setEmployee] = useState<EmployeeOption | null>(null);
 
-  // ── Selected filter values ────────────────────────────────────────────────
-  const [division, setDivision] = useState("");
-  const [department, setDepartment] = useState("");
-  const [section, setSection] = useState("");
-  const [employee, setEmployee] = useState("");
+  // Bumping this remounts every LookupField (via `key`) on Clear All.
+  const [resetKey, setResetKey] = useState(0);
 
   // ── Financial year + employee type ────────────────────────────────────────
   const [periodFrom, setPeriodFrom] = useState(getYearStart());
@@ -173,46 +158,72 @@ export default function EmployeeAssessmentReportPage() {
 
   const dateRangeValid = !periodFrom || !periodTo || periodFrom <= periodTo;
 
-  // ── Fetch lookups on mount ────────────────────────────────────────────────
+  // ── Cascade resets (clear children when a parent changes) ─────────────────
   useEffect(() => {
-    const load = async () => {
-      const [div, dept, sec, emp] = await Promise.all([
-        fetchLookup(
-          "AC_ASSETS_DEPRECIATION_DIVISION_LIST",
+    setDepartment(null);
+    setSection(null);
+    setEmployee(null);
+  }, [division]);
+
+  useEffect(() => {
+    setSection(null);
+    setEmployee(null);
+  }, [department]);
+
+  useEffect(() => {
+    setEmployee(null);
+  }, [section]);
+
+  // ── Lookup loaders ────────────────────────────────────────────────────────
+  const loadDivisions = useCallback(
+    () => getDynamicLookup(buildParams("EDUCATION_QUALIFICATION_DIVISION_LIST", loginId, companyCode)),
+    [loginId, companyCode]
+  );
+
+  // Department: P_CODE2 = DIV_CODE (optional; empty ⇒ all departments)
+  const loadDepartments = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE",
           loginId,
           companyCode,
-          "div_code",
-          "div_name"
-        ),
-        fetchLookup(
-          "HR_CAM_DEPARTMENT_DEPTCODE",
+          division?.div_code ?? ""
+        )
+      ),
+    [loginId, companyCode, division?.div_code]
+  );
+
+  // Section: P_CODE2 = DIV_CODE, P_CODE3 = DEPT_CODE
+  const loadSections = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
           loginId,
           companyCode,
-          "dept_code",
-          "dept_short_name"
-        ),
-        fetchLookup(
-          "AC_ASSETS_SECTION",
+          division?.div_code ?? "",
+          department?.dept_code ?? ""
+        )
+      ),
+    [loginId, companyCode, division?.div_code, department?.dept_code]
+  );
+
+  // Employee: P_CODE2 = DIV_CODE, P_CODE3 = DEPT_CODE, P_CODE4 = SECTION_CODE
+  const loadEmployees = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
           loginId,
           companyCode,
-          "section_code",
-          "section_name"
-        ),
-        fetchLookup(
-          "AC_ASSETS_HR_EMPLOYEE_LIST",
-          loginId,
-          companyCode,
-          "emp_id",
-          "emp_name"
-        ),
-      ]);
-      setDivisionOptions(div);
-      setDepartmentOptions(dept);
-      setSectionOptions(sec);
-      setEmployeeOptions(emp);
-    };
-    load();
-  }, [loginId, companyCode]);
+          division?.div_code ?? "",
+          department?.dept_code ?? "",
+          section?.section_code ?? ""
+        )
+      ),
+    [loginId, companyCode, division?.div_code, department?.dept_code, section?.section_code]
+  );
 
   const buildPayload = (p: Params) => ({
     parameter: "Hr_Report_EMP_ASSESSMENT_REPORT",
@@ -267,10 +278,11 @@ export default function EmployeeAssessmentReportPage() {
 
   // ── Clear All ─────────────────────────────────────────────────────────────
   const handleClearAll = () => {
-    setDivision("");
-    setDepartment("");
-    setSection("");
-    setEmployee("");
+    setDivision(null);
+    setDepartment(null);
+    setSection(null);
+    setEmployee(null);
+    setResetKey((k) => k + 1);
     setPeriodFrom(getYearStart());
     setPeriodTo(getYearEnd());
     setEmployeeFilter("A");
@@ -280,6 +292,10 @@ export default function EmployeeAssessmentReportPage() {
 
   // ── Generate ──────────────────────────────────────────────────────────────
   const handleGenerate = () => {
+    if (!employee?.employee_id) {
+      setError("Please select an employee.");
+      return;
+    }
     if (!periodFrom || !periodTo) {
       setError("Please select both Financial Year From and To dates.");
       return;
@@ -287,10 +303,10 @@ export default function EmployeeAssessmentReportPage() {
     if (!dateRangeValid) return;
 
     fetchReport({
-      division,
-      department,
-      section,
-      employee,
+      division: division?.div_code ?? "",
+      department: department?.dept_code ?? "",
+      section: section?.section_code ?? "",
+      employee: employee?.employee_id ?? "",
       employeeFilter,
       periodFrom,
       periodTo,
@@ -385,41 +401,111 @@ export default function EmployeeAssessmentReportPage() {
         {/* ── Row 1: Division / Department / Section / Employee ─────────── */}
         <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Division">
-            <Select
-              value={division}
-              onChange={setDivision}
-              options={withAll(divisionOptions)}
+            <LookupField
+              key={`division-${resetKey}`}
+              compact
+              label=""
+              value={division?.div_code ?? ""}
+              displayValue={division ? `${division.div_code} - ${division.div_name}` : ""}
+              columns={[
+                { field: "div_code", header: "Code" },
+                { field: "div_name", header: "Division" },
+              ]}
+              valueField="div_code"
+              displayFields={["div_code", "div_name"]}
+              loadOptions={loadDivisions}
+              onChange={(_, row) =>
+                setDivision(
+                  row
+                    ? { div_code: String(row.div_code ?? ""), div_name: String(row.div_name ?? "") }
+                    : null
+                )
+              }
             />
           </Field>
 
           <Field label="Department">
-            <Select
-              value={department}
-              onChange={setDepartment}
-              options={withAll(departmentOptions)}
+            <LookupField
+              key={`department-${resetKey}-${division?.div_code ?? ""}`}
+              compact
+              label=""
+              value={department?.dept_code ?? ""}
+              displayValue={department ? `${department.dept_code} - ${department.dept_name}` : ""}
+              columns={[
+                { field: "dept_code", header: "Code" },
+                { field: "dept_name", header: "Department" },
+              ]}
+              valueField="dept_code"
+              displayFields={["dept_code", "dept_name"]}
+              loadOptions={loadDepartments}
+              onChange={(_, row) =>
+                setDepartment(
+                  row
+                    ? { dept_code: String(row.dept_code ?? ""), dept_name: String(row.dept_name ?? "") }
+                    : null
+                )
+              }
             />
           </Field>
 
           <Field label="Section">
-            <Select
-              value={section}
-              onChange={setSection}
-              options={withAll(sectionOptions)}
+            <LookupField
+              key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
+              compact
+              label=""
+              value={section?.section_code ?? ""}
+              displayValue={section ? `${section.section_code} - ${section.section_name}` : ""}
+              columns={[
+                { field: "section_code", header: "Code" },
+                { field: "section_name", header: "Section" },
+              ]}
+              valueField="section_code"
+              displayFields={["section_code", "section_name"]}
+              loadOptions={loadSections}
+              onChange={(_, row) =>
+                setSection(
+                  row
+                    ? {
+                        section_code: String(row.section_code ?? ""),
+                        section_name: String(row.section_name ?? ""),
+                      }
+                    : null
+                )
+              }
             />
           </Field>
 
-          <Field label="Employee Code">
-            <Select
-              value={employee}
-              onChange={setEmployee}
-              options={withAll(employeeOptions)}
+          <Field label="Employee Code" required>
+            <LookupField
+              key={`employee-${resetKey}-${department?.dept_code ?? ""}-${division?.div_code ?? ""}-${section?.section_code ?? ""}`}
+              compact
+              label=""
+              value={employee?.employee_id ?? ""}
+              displayValue={employee ? `${employee.employee_id} - ${employee.employee_name}` : ""}
+              columns={[
+                { field: "employee_id", header: "ID" },
+                { field: "employee_name", header: "Employee" },
+              ]}
+              valueField="employee_id"
+              displayFields={["employee_id", "employee_name"]}
+              loadOptions={loadEmployees}
+              onChange={(_, row) =>
+                setEmployee(
+                  row
+                    ? {
+                        employee_id: String(row.employee_id ?? ""),
+                        employee_name: String(row.employee_name ?? row.rpt_name ?? ""),
+                      }
+                    : null
+                )
+              }
             />
           </Field>
         </div>
 
         {/* ── Row 2: Financial Year From / To / Employee Type ───────────── */}
         <div className="freight-report-fields grid gap-3 px-3 pb-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Financial Year From">
+          <Field label="Financial Year From" required>
             <BiscDatePicker
               value={periodFrom}
               onChange={(value) => {
@@ -428,7 +514,7 @@ export default function EmployeeAssessmentReportPage() {
             />
           </Field>
 
-          <Field label="Financial Year To">
+          <Field label="Financial Year To" required>
             <BiscDatePicker
               value={periodTo}
               onChange={(value) => {
@@ -461,7 +547,7 @@ export default function EmployeeAssessmentReportPage() {
             type="button"
             size="sm"
             onClick={handleGenerate}
-            disabled={loading || !dateRangeValid}
+            disabled={loading || !dateRangeValid || !employee?.employee_id}
           >
             {loading ? (
               <Loader2 size={15} className="animate-spin" />

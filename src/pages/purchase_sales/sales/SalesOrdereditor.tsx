@@ -593,16 +593,16 @@ export function SalesOrderEditor({
   };
 
   const handleExcel = async () => {
-      if (!form.doc_no) return;
-      try {
-        await getSoOrderReportExcel({
-          doc_no: String(form.doc_no),
-          company_code: user?.company_code,
-        });
-      } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || "Excel export failed");
-      }
-    };
+    if (!form.doc_no) return;
+    try {
+      await getSoOrderReportExcel({
+        doc_no: String(form.doc_no),
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
 
   const actionBarBusy = actionLoading !== null || saving;
 
@@ -704,7 +704,7 @@ export function SalesOrderEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
@@ -712,16 +712,16 @@ export function SalesOrderEditor({
                   {form.doc_no && (
                     <>
                       <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
-                      <Printer size={15} /> Print
-                    </Button>
-                   <Button
-  type="button"
-  variant="secondary"
-  onClick={() => void handleExcel()}
->
-  <Download size={15} />
-  Excel
-</Button>
+                        <Printer size={15} /> Print
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleExcel()}
+                      >
+                        <Download size={15} />
+                        Excel
+                      </Button>
                     </>
                   )}
                   <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>

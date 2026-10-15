@@ -8,7 +8,7 @@ interface Props {
   docNo: string;
   employeeCode: string;
   onRowsChange?: (rows: Row[]) => void;
-  onGrandTotalChange?: (total: number) => void;   // 🆕
+  onGrandTotalChange?: (total: number) => void;   
   isVisible?: boolean;
 }
 
@@ -85,12 +85,12 @@ const TaskGoalAppraisalTab: React.FC<Props> = ({
   }, [rowStates, rows, onRowsChange]);
 
   const grandTotal = useMemo(() => {
-    let t = 0;
-    rows.forEach((row) => { t += rowStates[text(row.KPI_CODE)]?.TOTAL ?? num(row.TOTAL); });
-    return Number(t.toFixed(2));
-  }, [rows, rowStates]);
+  let t = 0;
+  rows.forEach((row) => { t += rowStates[text(row.KPI_CODE)]?.TOTAL ?? num(row.TOTAL); });
+  return Math.round(t);   
+}, [rows, rowStates]);
 
-  // 🆕 notify parent
+
   useEffect(() => {
     if (onGrandTotalChange) onGrandTotalChange(grandTotal);
   }, [grandTotal, onGrandTotalChange]);

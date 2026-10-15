@@ -90,6 +90,7 @@ export interface PurchaseOrderLineRow {
 
 export interface PurchaseOrderForm {
   pr_req_no?: string;
+  job_card_no?:string;
 warranty_period?: number;
   warranty_uom?: "D" | "M" | "Y";
   warranty_desc?: string;

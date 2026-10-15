@@ -57,35 +57,23 @@ function calcFinalRating(
 
   if (t === 0 && c === 0 && g === 0 && s === 0) return 0;
 
-  const hasAnyWeightage =
-    !!cfg &&
-    (Number(cfg.taskPct) > 0 ||
-      Number(cfg.charPct) > 0 ||
-      Number(cfg.goalPct) > 0 ||
-      Number(cfg.skillPct) > 0);
+  const taskPct  = Number(cfg?.taskPct)  || 0;
+  const charPct  = Number(cfg?.charPct)  || 0;
+  const goalPct  = Number(cfg?.goalPct)  || 0;
+  const skillPct = Number(cfg?.skillPct) || 0;
+  const totalWt  = taskPct + charPct + goalPct + skillPct;
 
-  if (hasAnyWeightage) {
-    const taskPct  = Number(cfg!.taskPct)  || 0;
-    const charPct  = Number(cfg!.charPct)  || 0;
-    const goalPct  = Number(cfg!.goalPct)  || 0;
-    const skillPct = Number(cfg!.skillPct) || 0;
+  let raw: number;
 
-    const totalWt = taskPct + charPct + goalPct + skillPct;
-
-    if (totalWt > 0) {
-      const weightedSum =
-        (t * taskPct) +
-        (c * charPct) +
-        (g * goalPct) +
-        (s * skillPct);
-
-      return Math.round((weightedSum / totalWt) * 100) / 100;
-    }
+  if (totalWt > 0) {
+    raw = ((t * taskPct) + (c * charPct) + (g * goalPct) + (s * skillPct)) / totalWt;
+  } else {
+    const active = [t, c, g, s].filter((v) => v > 0);
+    if (active.length === 0) return 0;
+    raw = active.reduce((a, b) => a + b, 0) / active.length;
   }
 
-  const active = [t, c, g, s].filter((v) => v > 0);
-  if (active.length === 0) return 0;
-  return Math.round((active.reduce((a, b) => a + b, 0) / active.length) * 100) / 100;
+  return Math.round(raw);   // ✅ integer
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────
@@ -191,7 +179,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const myLevel = actingLevelRef.current ?? (userFlowLevel === 0 ? flowLevel : userFlowLevel);
   const effectiveLevel = showAllComments ? 0 : myLevel;
 
-  // ✅ FIX: kis doc/employee ka data state me loaded hai — doc badalne par purana comment na bache
+
   const loadedKeyRef = useRef<string>("");
 
   useEffect(() => { actingLevelRef.current = null; }, [docNo, employeeCode]);
@@ -203,7 +191,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
     const docKey = `${docNo}|${employeeCode}`;
     const sameDoc = loadedKeyRef.current === docKey;
 
-    // ✅ FIX: naya doc/employee => purana state poora clear
+   
     if (!sameDoc) {
       setAppraiserComment("");
       setAppraiseeComment("");
@@ -233,11 +221,11 @@ const AppraiserCommentsTab: React.FC<Props> = ({
           .sort((a, b) => new Date(b.COMMENT_DATE || 0).getTime() - new Date(a.COMMENT_DATE || 0).getTime());
         const latestAppraiser = appraiserRows.length > 0 ? text(appraiserRows[0].COMMENT_TEXT) : "";
 
-        // ✅ FIX: user ka typing sirf same doc ke reload par bachao
+        
         setAppraiseeComment(prev => (sameDoc && prev.trim() ? prev : latestAppraisee));
         setAppraiserComment(prev => (sameDoc && prev.trim() ? prev : latestAppraiser));
 
-        // ✅ FIX: parent ko saved values sirf doc badalne par bhejo (same-doc reload par typing overwrite na ho)
+
         if (!sameDoc) {
           onAppraiseeCommentChange?.(latestAppraisee, 0);
           onAppraiserCommentChange?.(latestAppraiser, myLevel);

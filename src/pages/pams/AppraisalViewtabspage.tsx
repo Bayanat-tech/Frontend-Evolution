@@ -50,37 +50,26 @@ function calcFinalRating(
 
   if (t === 0 && c === 0 && g === 0 && s === 0) return 0;
 
-  // ✅ FIX: Weightage available ho (chahe HR-defined ho ya default 70/10/10/10),
-  //         toh hamesha weighted average use karo.
-  const hasAnyWeightage =
-    Number(cfg.taskPct) > 0 ||
-    Number(cfg.charPct) > 0 ||
-    Number(cfg.goalPct) > 0 ||
-    Number(cfg.skillPct) > 0;
+  const taskPct  = Number(cfg?.taskPct)  || 0;
+  const charPct  = Number(cfg?.charPct)  || 0;
+  const goalPct  = Number(cfg?.goalPct)  || 0;
+  const skillPct = Number(cfg?.skillPct) || 0;
+  const totalWt  = taskPct + charPct + goalPct + skillPct;
 
-  if (hasAnyWeightage) {
-    const taskPct  = Number(cfg.taskPct)  || 0;
-    const charPct  = Number(cfg.charPct)  || 0;
-    const goalPct  = Number(cfg.goalPct)  || 0;
-    const skillPct = Number(cfg.skillPct) || 0;
+  let raw: number;
 
-    const totalWt = taskPct + charPct + goalPct + skillPct;
-
-    if (totalWt > 0) {
-      const weightedSum =
-        (t * taskPct) +
-        (c * charPct) +
-        (g * goalPct) +
-        (s * skillPct);
-
-      return Math.round((weightedSum / totalWt) * 100) / 100;
-    }
+  if (totalWt > 0) {
+    const weightedSum =
+      (t * taskPct) + (c * charPct) + (g * goalPct) + (s * skillPct);
+    raw = weightedSum / totalWt;
+  } else {
+    const active = [t, c, g, s].filter((v) => v > 0);
+    if (active.length === 0) return 0;
+    raw = active.reduce((a, b) => a + b, 0) / active.length;
   }
 
-  // Fallback: sirf tab jab koi weightage hi na ho
-  const active = [t, c, g, s].filter((v) => v > 0);
-  if (active.length === 0) return 0;
-  return Math.round((active.reduce((a, b) => a + b, 0) / active.length) * 100) / 100;
+  // ✅ Nearest integer: 2.40 → 2, 2.6 → 3
+  return Math.round(raw);
 }
 
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
@@ -92,7 +81,7 @@ function getRatingMeta(rating: number): { label: string; numColor: string; label
   return { label: "—", numColor: "#6b7280", labelColor: "#6b7280" };
 }
 
-// ─── Styles (unchanged from your file) ────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   container: {
     width: "100%",
@@ -323,7 +312,9 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
   rating,
   weightageConfig,
 }) => {
-  const meta = getRatingMeta(rating);
+  const safeRating = Math.round(Number(rating || 0));
+  const meta = getRatingMeta(safeRating);
+
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: "6px",
@@ -334,7 +325,7 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
         Final Rating:
       </span>
       <span style={{ fontSize: "1.05rem", fontWeight: 800, color: meta.numColor, lineHeight: 1, minWidth: "14px", textAlign: "center" }}>
-        {rating}
+        {safeRating}
       </span>
       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
@@ -443,7 +434,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
           pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
-          // 🆕 Fetch PAMS_WIGHTAGE by company + period
+
           pamsSelect({
             parameter: "Trn_weightage",
             loginid,
@@ -461,7 +452,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           setCreatedBy(text(flowRes[0].CREATED_BY));
         }
 
-        // 🆕 Weightage config from PAMS_WIGHTAGE
+
         if (weightageRes.length > 0) {
           const w = weightageRes[0] as Row;
           const taskPct = num(w.TASK_WEIGHTAGE);
@@ -787,7 +778,7 @@ const AppraisalViewTabsPage: React.FC = () => {
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "goals"}
             onRowsChange={rows => { goalRowsRef.current = rows; }}
-            onGrandTotalChange={total => setGoalTotal(total)}       // 🆕
+            onGrandTotalChange={total => setGoalTotal(total)}
           />
         </div>
         <div style={{ display: selectedTab === "skill" ? "block" : "none" }}>
@@ -795,7 +786,7 @@ const AppraisalViewTabsPage: React.FC = () => {
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "skill"}
             onRowsChange={rows => { skillRowsRef.current = rows; }}
-            onGrandTotalChange={total => setSkillTotal(total)}      // 🆕
+            onGrandTotalChange={total => setSkillTotal(total)}
           />
         </div>
         <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
@@ -804,8 +795,8 @@ const AppraisalViewTabsPage: React.FC = () => {
             isVisible={selectedTab === "comments"}
             taskTotal={taskTotal}
             characterTotal={characterTotal}
-            goalTotal={goalTotal}                                   // 🆕
-            skillTotal={skillTotal}                                 // 🆕
+            goalTotal={goalTotal}
+            skillTotal={skillTotal}
             flowLevel={flowLevel} userFlowLevel={userFlowLevel}
             weightageConfig={weightageConfig}
             showAllComments={true}

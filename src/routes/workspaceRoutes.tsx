@@ -225,6 +225,14 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 import HrDashboard from "../pages/hr/dashboard/HRDashboard";
+import EmployeeTicketEligibilityPage from "../pages/hr/Reports/Employeeticketeligibilitypage";
+import EmployeeSalaryNotProcessedPage from "../pages/hr/Reports/Employeesalarynotprocessedpage";
+import YearlyLeaveBalancePage from "../pages/hr/Reports/Yearlyleavebalancepage";
+import LeaveResumptionPage from "../pages/hr/Reports/LeaveResumptionPage";
+import VacationSeparationReportPage from "../pages/hr/Reports/Vacationseparationreportpage ";
+import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypage";
+import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
+
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -498,9 +506,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: "HR Leave Resumption",
-    match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
+    match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/ems/activity/request/leave_resumption"),
     element: () => <LeaveResumptionWorkspacePage />,
   },
+
+
+
   {
     name: "Employee Master",
     match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
@@ -1574,6 +1585,58 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <EmployeeAssessmentReportPage />
   },
   
+
+   {
+    name: "Employee Ticket Eligibility",
+    match: ({ pathname }) => isEmployeeTicketEligibilityRoute(pathname),
+    element: () => <EmployeeTicketEligibilityPage />
+  },
+
+
+
+{
+     name: "Employees Salary Not Processed",
+     match: ({ pathname }) => isEmployeeSalaryNotProcessedRoute(pathname),
+     element: () => <EmployeeSalaryNotProcessedPage />
+   },
+
+
+
+   {
+     name: "Yearly Leave Balance",
+     match: ({ pathname }) => isYearlyLeaveBalanceRoute(pathname),
+     element: () => <YearlyLeaveBalancePage />
+   },
+
+
+
+   {
+     name: " Leave Resumption",
+     match: ({ pathname }) => isLeaveResumptionRoute(pathname),
+     element: () => <LeaveResumptionPage />
+   },
+
+
+{
+    name: "Vacation Separation Details",
+    match: ({ pathname }) => isVacationSeparationDeatilsRoute(pathname),
+    element: () => <VacationSeparationReportPage />
+  },
+
+{
+    name: "Monthly Salary Summary",
+    match: ({ pathname }) => isMonthlySummarySalaryRoute(pathname),
+    element: () => <MonthlySalarySummaryPage />
+  },
+
+
+
+  {
+    name: "Employee Address List",
+    match: ({ pathname }) => isEmployeeAddressListRoute(pathname),
+    element: () => <EmployeeAddressListPage/>
+  },
+  
   {
     name: "Product BOM",
     match: ({ pathname }) => isProductBomRoute(pathname),
@@ -1615,6 +1678,95 @@ function isEmployeeAssessmentReportRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/employee assessment report") ||
     compact.includes("reportsemployeeemployeeassessmentreport") ||
     compact.includes("reportsemployeeemployeeassessment")
+  );
+}
+
+
+function isVacationSeparationDeatilsRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/payroll/vacation-separation details") ||
+    normalized.includes("/hcm/hcm/reports/payroll/vacation_separation_details") ||
+    compact.includes("reportsemployeevacationseparationdetails")
+  );
+}
+
+
+
+function isMonthlySummarySalaryRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/payroll/monthly salary summary") ||
+    normalized.includes("/hcm/hcm/reports/payroll/monthlysalarysummary") ||
+    compact.includes("reportsmonthlysalarysummary")
+  );
+}
+
+
+
+
+
+function isEmployeeSalaryNotProcessedRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/payroll/employee-salary not processed") ||
+    normalized.includes("/hcm/hcm/reports/payroll/employees-salary not processed") ||
+    compact.includes("employeesalarynotprocessed") ||
+    compact.includes("employeessalarynotprocessed")
+  );
+}
+
+
+
+function isYearlyLeaveBalanceRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/leave/yearly leave balance") ||
+    normalized.includes("/hcm/hcm/reports/leave/yearlyleavebalance") ||
+    compact.includes("yearlyleavebalance") ||
+    compact.includes("yearlyleavebalance")
+  );
+}
+
+
+
+
+function isLeaveResumptionRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/leave/leave resumption report") ||
+    normalized.includes("/hcm/hcm/reports/leave/leaveresumptionreport") ||
+    compact.includes("leaveresumption") ||
+    compact.includes("leaveresumption")
+  );
+}
+
+
+
+function isEmployeeTicketEligibilityRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee ticket eligibility") ||
+    compact.includes("reportsemployeeticketeligibility") ||
+    compact.includes("reportsemployeeticketeligibility")
+  );
+}
+
+
+
+function isEmployeeAddressListRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee address list") ||
+    compact.includes("reportsemployeeaddresslist") ||
+    compact.includes("reportsemployeeaddresslist")
   );
 }
 
@@ -3057,3 +3209,5 @@ function isPendingPurchaseOrderRoute(pathname: string) {
     "/workspace/ims/purchase_sales/reports/pending_purchase_order"
   );
 }
+
+

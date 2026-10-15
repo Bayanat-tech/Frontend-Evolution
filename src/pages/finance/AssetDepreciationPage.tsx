@@ -25,6 +25,9 @@ export function AssetDepreciationPage() {
 
   const [year, month] = monthYear ? monthYear.split("-") : ["", ""];
 
+  // JV button is enabled only when the grid has at least one row
+  const hasRows = rows.length > 0;
+
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
     col("asset_id", "Asset ID", 130),
     col("asset_name", "Asset Name", 220),
@@ -87,6 +90,7 @@ export function AssetDepreciationPage() {
   };
 
   const postJv = async () => {
+    if (!hasRows) return;
     if (!docNo || !division) {
       setNotice({ type: "error", message: "Retrieve or generate a document before posting JV." });
       return;
@@ -94,14 +98,30 @@ export function AssetDepreciationPage() {
     setLoading(true);
     setNotice(null);
     try {
+      // 1. Exception register check:
+      //    select count(*) from tmp_ac_asset_deprcn_excptn where div_code = :division
+      //    NOTE: "AC_ASSET_DEPRCN_EXCEPTION_COUNT" must be registered in the dynamic lookup
+      //    on the backend and return that count as the first column of the first row.
+      // const exceptionRows = await getDynamicLookup({
+      //   parameter: "AC_ASSET_DEPRCN_EXCEPTION_COUNT",
+      //   loginid: loginId,
+      //   code1: division,
+      // });
+      // const firstRow = (exceptionRows?.[0] ?? null) as Record<string, unknown> | null;
+      // const exceptionCount = firstRow ? Number(Object.values(firstRow)[0]) || 0 : 0;
+
+      // if (exceptionCount > 0) {
+      //   setNotice({ type: "error", message: "Please check the Exception register!" });
+      //   return;
+      // }
+
+      // 2. SP_AC_ASSET_DPRC_JVPOST (vs_company_code, vs_doc_type, vl_docno)
       await executeCommonProcedure({
-        parameter: "PROC_DEPRECIATION_JVPOST",
+        parameter: "SP_AC_ASSET_DPRC_JVPOST",
         loginid: loginId,
-        val1s1: companyCode,
-        val1s2: docType,
-        val1s3: docNo,
-        val1s4: division,
-        val1s5: String(rows.length),
+        val1s1: companyCode,       // vs_company_code
+        val1s2: docType,           // vs_doc_type ('ADP')
+        val1s3: String(Number(docNo)), // vl_docno (numeric, e.g. 202610)
       });
       setNotice({ type: "success", message: "Depreciation JV posted successfully" });
     } catch (error) {
@@ -143,9 +163,10 @@ export function AssetDepreciationPage() {
           </Button>
           <Button
             variant="secondary"
-            disabled={loading}
+            disabled={loading || !hasRows}
             onClick={() => void postJv()}
-            className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer"
+            title={hasRows ? "Post depreciation JV" : "No rows to post"}
+            className="h-8 gap-1.5 text-xs font-semibold rounded-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileText size={14} /> JV
           </Button>

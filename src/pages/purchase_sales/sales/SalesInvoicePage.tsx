@@ -19,6 +19,7 @@ import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
 import { downloadSalesInvoiceExcel, SalesInvoiceReport } from "./SalesInvoiceReport";
 import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
 import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 export interface SalesOrderRow {
   doc_type: string;
@@ -264,6 +265,14 @@ useEffect(() => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+    const openEditor = (row: SalesOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
   const columns = useMemo<ColumnDef<SalesOrderRow>[]>(
     () => [
       {
@@ -278,17 +287,14 @@ useEffect(() => {
       { accessorKey: "curr_code", header: "Currency" },
         { accessorKey: "total_so_amount", header: "Sales Order Amount" },
       {
-        accessorKey: "canceled",
-        header: "Status",
-        cell: ({ getValue }) =>
-          String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive">
-              Cancelled
-            </Badge>
-          ) : (
-            <Badge>Active</Badge>
+          accessorKey: "cancelled",
+          header: () => <div className="text-center font-bold">Status</div>,
+          cell: ({ getValue }) => (
+            <div className="flex justify-center">
+              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+            </div>
           ),
-      },
+        },
       {
         id: "reason",
         header: "Reason",
@@ -313,7 +319,7 @@ useEffect(() => {
             <Button
   size="icon"
   variant="ghost"
-  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+        onClick={() => openEditor(row.original)}
   title={isViewOnlyTab ? "View" : "Edit"}
 >
   {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
