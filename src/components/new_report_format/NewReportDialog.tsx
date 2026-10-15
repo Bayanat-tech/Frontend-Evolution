@@ -13,7 +13,6 @@ import {
   Download,
   ZoomIn,
   ZoomOut,
-  Printer,
   Search,
   ChevronUp,
   ChevronDown,
@@ -24,17 +23,13 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { NewReportDialogProps } from "./types";
+import { api } from "../../api/client";
+
 
 type Orientation = "portrait" | "landscape";
 
 /** Above this many pages the preview shows one page at a time with pagination */
 const PAGINATE_THRESHOLD = 5;
-
-/**
- * Above this many pages, "Download PDF" uses the browser print dialog
- * (Save as PDF) instead of html2canvas, which gets slow on big reports.
- */
-const PRINT_PDF_THRESHOLD = 10;
 
 /**
  * How many page thumbnails render a live mini preview at once (a window around
@@ -55,25 +50,6 @@ const buildPageNumbers = (cur: number, total: number): (number | "…")[] => {
     out.push(n);
   });
   return out;
-};
-
-/* ───────────────────────── PDF image helpers ───────────────────────── */
-
-/** Fetch an image and return it as a data URL (html2canvas needs CORS-safe images). */
-const toDataUrl = async (src: string): Promise<string | null> => {
-  try {
-    const res = await fetch(src, { mode: "cors", cache: "force-cache" });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise<string>((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result as string);
-      fr.onerror = reject;
-      fr.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
 };
 
 /* ───────────────────────── Responsive helpers ───────────────────────── */
@@ -217,9 +193,8 @@ const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
  * - 100% zoom = BASE_VIEW_RATIO (90%) of the preview width, centred
  * - Responsive: full-screen on phones, slide-over page navigator, trimmed toolbar, touch pinch-zoom
  * - More than PAGINATE_THRESHOLD pages: one page at a time with a pagination bar
- * - PDF download (fully frontend):
- *     · up to PRINT_PDF_THRESHOLD pages → html2canvas + jsPDF (one click, selectable text layer)
- *     · more than PRINT_PDF_THRESHOLD pages → browser print dialog (Save as PDF), fast and native
+ * - PDF download: the prepared report HTML is POSTed to the backend (Puppeteer / Chromium),
+ *   which returns a real PDF identical to the browser's "Save as PDF"
  */
 export function NewReportDialog({
   open,
@@ -268,8 +243,6 @@ export function NewReportDialog({
   const [totalPages, setTotalPages] = useState(1);
   /** More than PAGINATE_THRESHOLD pages → show one page at a time */
   const paginated = totalPages > PAGINATE_THRESHOLD;
-  /** More than PRINT_PDF_THRESHOLD pages → PDF goes through the browser print dialog */
-  const usePrintForPdf = totalPages > PRINT_PDF_THRESHOLD;
   const [measuring, setMeasuring] = useState(false);
   /** Left page-thumb navbar visible (starts closed on small screens) */
   const [navOpen, setNavOpen] = useState(
@@ -318,6 +291,7 @@ export function NewReportDialog({
    * - Force the report's @media print rules on screen
    * - Constrain to A4 page width for the selected orientation
    * - Same margins as the report's @page rule
+   * This same HTML is what gets sent to the backend for the PDF.
    */
   const preparedHtml = useMemo(() => {
     if (!htmlContent) return null;
@@ -1010,84 +984,6 @@ export function NewReportDialog({
 
   if (!open) return null;
 
-  /**
-   * Print on the same screen — no new tab.
-   * Fresh hidden iframe each time (a reused iframe + document.write is flaky
-   * across browsers), with allow-modals so contentWindow.print() is allowed.
-   * Waits for images + webfonts so the printed pages are complete, not cramped.
-   */
-  const handlePrint = () => {
-    const html = preparedHtml || htmlContent;
-    if (!html) return;
-
-    // Fresh frame per print — removes stale-document / sandbox edge cases
-    document.getElementById("nr-print-iframe")?.remove();
-
-    const iframe = document.createElement("iframe");
-    iframe.id = "nr-print-iframe";
-    // allow-modals is REQUIRED, otherwise print() is blocked silently
-    iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
-    iframe.style.cssText =
-      "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0.01;pointer-events:none;";
-    document.body.appendChild(iframe);
-
-    const win = iframe.contentWindow;
-    if (!win) {
-      iframe.remove();
-      return;
-    }
-
-    let printed = false;
-    const doPrint = () => {
-      if (printed) return;
-      printed = true;
-      const doc = iframe.contentDocument;
-      try {
-        const imgs = doc ? Array.from(doc.images) : [];
-        const ready = Promise.all([
-          imgs.length
-            ? Promise.all(
-                imgs.map((i) =>
-                  i.complete
-                    ? Promise.resolve()
-                    : new Promise<void>((r) => {
-                        i.onload = () => r();
-                        i.onerror = () => r();
-                      })
-                )
-              )
-            : Promise.resolve(),
-          (
-            doc as (Document & { fonts?: { ready: Promise<unknown> } }) | null
-          )?.fonts?.ready ?? Promise.resolve(),
-        ]);
-        ready
-          .then(() => {
-            win.focus();
-            win.print();
-          })
-          .catch((err) => {
-            console.error("Print failed:", err);
-            setDownloadMessage({
-              type: "error",
-              text: "Print failed. Try Open in new window and print from there.",
-            });
-            setTimeout(() => setDownloadMessage(null), 6000);
-          })
-          .finally(() => setTimeout(() => iframe.remove(), 1000));
-      } catch (err) {
-        console.error("Print failed:", err);
-        iframe.remove();
-      }
-    };
-
-    // srcdoc fires load reliably (document.write after load does not, in some browsers)
-    iframe.onload = () => setTimeout(doPrint, 100);
-    iframe.srcdoc = html;
-    // Fallback if onload never fires (older WebKit)
-    setTimeout(doPrint, 1500);
-  };
-
   const goToPage = (n: number) => {
     const clamped = Math.max(1, Math.min(totalPages, n));
     setPage(clamped);
@@ -1176,228 +1072,54 @@ export function NewReportDialog({
   };
 
   /**
-   * Download the report as a PDF, fully on the frontend.
-   *
-   * - More than PRINT_PDF_THRESHOLD pages: open the browser print dialog
-   *   (user picks "Save as PDF"). Native engine, fast, selectable text.
-   * - Otherwise: html2canvas renders each page exactly as the preview shows it
-   *   (all CSS applied), jsPDF assembles the pages, and an invisible text layer
-   *   is added so the text stays selectable / searchable.
-   *
-   * Wide-table fix: the report CSS forces `th, td { white-space: nowrap }`, so a
-   * wide table overflows the A4 content width. Capturing only `contentW` clipped
-   * the overflow columns. Now the FULL rendered width (scrollWidth) is captured
-   * and scaled down to fit the page via the `fit` factor — nothing is hidden.
+   * Download the report as a PDF rendered by the backend (Puppeteer / Chromium).
+   * The same prepared HTML the preview shows is POSTed; the response is the PDF.
    */
-  const handleDownloadPdf = async () => {
-    if (!htmlContent || loading || downloadingPdf) return;
 
-    // Large reports: html2canvas is too slow → use the browser's print engine
-    if (usePrintForPdf) {
-      handlePrint();
-      setDownloadMessage({
-        type: "success",
-        text: 'Large report: choose "Save as PDF" as the destination in the print dialog.',
-      });
-      setTimeout(() => setDownloadMessage(null), 6000);
-      return;
-    }
+const handleDownloadPdf = async () => {
+  const html = preparedHtml || htmlContent;
+  if (!html || loading || downloadingPdf) return;
 
-    const iframe = measureRef.current;
-    const doc = iframe?.contentDocument;
-    const win = iframe?.contentWindow;
-    if (!doc?.body || !win || layout.pages.length === 0) return;
+  setDownloadingPdf(true);
+  setDownloadMessage(null);
 
-    setDownloadingPdf(true);
-    setDownloadMessage(null);
-
-    try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-
-      const S = 2; // render scale (2 = sharp, 1.5 = faster / smaller)
-      const PX_MM = 25.4 / 96;
-      const fullH = Math.max(contentHeight, contentH);
-
-      /* ── 0. Real rendered width — wide tables must NOT be clipped ── */
-      const capW = Math.max(
-        doc.documentElement.scrollWidth,
-        doc.body?.scrollWidth ?? 0,
-        contentW
-      );
-      const fit = capW > contentW ? contentW / capW : 1; // < 1 → shrink to fit the page
-
-      /* ── 1. Inline images so html2canvas can draw them ── */
-      const imgMap = new Map<string, string>();
-      await Promise.all(
-        Array.from(doc.querySelectorAll("img")).map(async (img) => {
-          const src = img.getAttribute("src") || "";
-          if (!src || src.startsWith("data:")) return;
-          try {
-            const d = await toDataUrl(new URL(src, window.location.href).href);
-            if (d) imgMap.set(src, d);
-          } catch {
-            /* ignore bad URLs */
-          }
-        })
-      );
-
-      /* ── 2. Collect every word with its position (for the invisible text layer) ── */
-      type Word = { t: string; x: number; y: number; h: number; fs: number };
-      const words: Word[] = [];
-      const sx = win.pageXOffset || 0;
-      const sy = win.pageYOffset || 0;
-      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-      let n: Node | null;
-      while ((n = walker.nextNode())) {
-        const el = n.parentElement;
-        if (!el || /^(SCRIPT|STYLE|NOSCRIPT)$/.test(el.tagName) || el.closest(".actions")) continue;
-        const cs = win.getComputedStyle(el);
-        if (cs.display === "none" || cs.visibility === "hidden") continue;
-        const fs = parseFloat(cs.fontSize) || 9;
-        const text = n.nodeValue ?? "";
-        const re = /\S+/g;
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(text))) {
-          // standard PDF fonts only cover Latin-1; Arabic etc. stays visible in the image only
-          const t = m[0].replace(/[^\x20-\xFF]/g, "");
-          if (!t) continue;
-          const r = doc.createRange();
-          r.setStart(n, m.index);
-          r.setEnd(n, m.index + m[0].length);
-          const b = r.getBoundingClientRect();
-          if (!b.width || !b.height) continue;
-          words.push({ t, x: b.left + sx, y: b.top + sy, h: b.height, fs });
-        }
+  try {
+    const res = await api.post(
+      "/api/report-pdf",
+      {
+        html,
+        orientation,
+        marginMm: pageMarginMm,
+      },
+      {
+        responseType: "blob", // critical for binary PDF
       }
+    );
 
-      /* ── 3. Capture a vertical window of the report at its real (full) width ── */
-      const capture = (top: number, h: number) =>
-        html2canvas(doc.documentElement, {
-          scale: S,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          x: 0,
-          y: Math.round(top),
-          width: capW,
-          height: Math.max(1, Math.ceil(h)),
-          windowWidth: capW,
-          windowHeight: fullH,
-          scrollX: 0,
-          scrollY: 0,
-          logging: false,
-          onclone: (cd) => {
-            cd.querySelectorAll("img").forEach((img) => {
-              const src = img.getAttribute("src") || "";
-              const d = imgMap.get(src);
-              if (d) img.setAttribute("src", d);
-              else if (!src.startsWith("data:")) (img as HTMLElement).style.visibility = "hidden";
-            });
-          },
-        });
+    const blob = res.data as Blob;
+    const url = URL.createObjectURL(blob);
+    const safeTitle = title.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim() || "Report";
+    const a = Object.assign(document.createElement("a"), {
+      href: url,
+      download: `${safeTitle}.pdf`,
+    });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (reason: unknown) {
+    const message =
+      reason && typeof reason === "object" && "response" in reason
+        ? `PDF download failed: ${(reason as { response?: { status?: number } }).response?.status ?? "unknown"}`
+        : reason instanceof Error
+          ? `PDF download failed: ${reason.message}`
+          : "Unable to generate the PDF. Please try again.";
 
-      const pdf = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
-      const mmW = orientation === "portrait" ? 210 : 297;
-      const mmH = orientation === "portrait" ? 297 : 210;
-
-      /** Invisible text for the words inside doc window [top, top+h), drawn at page offset (offY px) */
-      const addText = (top: number, h: number, offY: number) => {
-        for (const w of words) {
-          const cy = w.y + w.h / 2;
-          if (cy < top || cy >= top + h) continue;
-          pdf.setFontSize(Math.max(1, w.fs * 0.75 * fit));
-          pdf.text(
-            w.t,
-            (pageMarginPx + w.x * fit) * PX_MM,
-            (offY + (w.y - top) * fit) * PX_MM,
-            {
-              baseline: "top",
-              renderingMode: "invisible",
-            } as any
-          );
-        }
-      };
-
-      /* ── 4. Header / footer / repeated thead are captured once and reused ── */
-      const header = layout.headerH > 0 ? await capture(layout.headerTop, layout.headerH) : null;
-      const footer = layout.footerH > 0 ? await capture(layout.footerTop, layout.footerH) : null;
-      const theadCache = new Map<number, HTMLCanvasElement>();
-
-      /** Destination width when drawing a capture onto the sheet (fit-scaled) */
-      const dw = Math.round(capW * S * fit); // === contentW * S when fit < 1
-
-      for (let i = 0; i < layout.pages.length; i++) {
-        const pg = layout.pages[i];
-        const sheet = document.createElement("canvas");
-        sheet.width = pageW * S;
-        sheet.height = pageH * S;
-        const ctx = sheet.getContext("2d")!;
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, sheet.width, sheet.height);
-
-        const x = pageMarginPx * S;
-        let y = pageMarginPx; // px, page coordinates (fit-scaled as we go)
-        const textJobs: [number, number, number][] = []; // [docTop, h, pageY]
-
-        const draw = (img: HTMLCanvasElement, docTop: number, h: number) => {
-          ctx.drawImage(
-            img,
-            x,
-            Math.round(y * S),
-            dw,
-            Math.max(1, Math.round(h * S * fit))
-          );
-          textJobs.push([docTop, h, y]);
-          y += h * fit;
-        };
-
-        if (header) draw(header, layout.headerTop, layout.headerH);
-        if (pg.repeat) {
-          let th = theadCache.get(pg.repeat.top);
-          if (!th) {
-            th = await capture(pg.repeat.top, pg.repeat.h);
-            theadCache.set(pg.repeat.top, th);
-          }
-          draw(th, pg.repeat.top, pg.repeat.h);
-        }
-        const body = await capture(pg.start, pg.end - pg.start);
-        draw(body, pg.start, pg.end - pg.start);
-
-        if (footer) {
-          const fy = pageMarginPx + contentH * fit - layout.footerH * fit;
-          ctx.drawImage(
-            footer,
-            x,
-            Math.round(fy * S),
-            dw,
-            Math.max(1, Math.round(layout.footerH * S * fit))
-          );
-          textJobs.push([layout.footerTop, layout.footerH, fy]);
-        }
-
-        if (i > 0) pdf.addPage("a4", orientation);
-        pdf.addImage(sheet.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, mmW, mmH, undefined, "FAST");
-        textJobs.forEach(([t, h, py]) => addText(t, h, py));
-
-        await new Promise((r) => setTimeout(r, 0)); // keep the UI responsive
-      }
-
-      const safeTitle = title.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim() || "Report";
-      pdf.save(`${safeTitle}.pdf`);
-    } catch (reason) {
-      setDownloadMessage({
-        type: "error",
-        text:
-          reason instanceof Error
-            ? `PDF download failed: ${reason.message}`
-            : "Unable to generate the PDF. Please try again.",
-      });
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
+    setDownloadMessage({ type: "error", text: message });
+  } finally {
+    setDownloadingPdf(false);
+  }
+};
 
   /** True when the user has manually overridden the auto-detected orientation */
   const orientationOverridden = orientation !== autoOrientation;
@@ -1760,9 +1482,6 @@ export function NewReportDialog({
             title="Search in report (Ctrl+F)"
           >
             <Search size={14} />
-          </button>
-          <button type="button" onClick={handlePrint} style={toolIconBtn} title="Print">
-            <Printer size={14} />
           </button>
           {!isMobile && (
             <button
@@ -2269,11 +1988,6 @@ export function NewReportDialog({
             type="button"
             onClick={handleDownloadPdf}
             disabled={!htmlContent || loading || downloadingPdf}
-            title={
-              usePrintForPdf
-                ? 'Large report: opens the print dialog — choose "Save as PDF"'
-                : "Download as PDF"
-            }
             style={{
               ...footerBtn,
               ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
@@ -2282,11 +1996,7 @@ export function NewReportDialog({
             }}
           >
             <Download size={14} strokeWidth={2} />
-            {downloadingPdf
-              ? "Generating PDF…"
-              : usePrintForPdf
-              ? "Print / Save as PDF"
-              : "Download PDF"}
+            {downloadingPdf ? "Generating PDF…" : "Download PDF"}
           </button>
 
           {onOpenInNewWindow && (
