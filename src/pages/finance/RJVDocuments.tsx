@@ -2068,7 +2068,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     header_ac_code: originalForm.ac_code,
     curr_code: row.curr_code || originalForm.curr_code,
     ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
+    lcur_amount: Math.abs(Number(row.lcur_amount ?? (Number(row.amount || 0) * Number(row.ex_rate || originalForm.ex_rate || 1)))),
     div_code: row.div_code || originalForm.div_code,
   }));
 
