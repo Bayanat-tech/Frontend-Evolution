@@ -1146,11 +1146,8 @@ function KpiEditorModal({
 
   const isTask = itemType === "KPI";
   const isGoal = itemType === "GOAL";
-  // ✅ Weightage is required for Task (KPI) and Goal
   const needsWeightage = isTask || isGoal;
-  // ✅ Activities only for Task (KPI)
   const needsActivities = isTask;
-  // ✅ Multi-add mode is only for Skill & Characteristics (on Add)
   const isMulti = !isEdit && !needsWeightage;
 
   const label =

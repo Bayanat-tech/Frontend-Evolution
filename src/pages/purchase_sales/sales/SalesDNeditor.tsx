@@ -626,7 +626,7 @@ export function SalesDNEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab  && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
