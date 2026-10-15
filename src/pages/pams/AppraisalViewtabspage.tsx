@@ -21,6 +21,8 @@ type Row = Record<string, unknown>;
 interface WeightageConfig {
   taskPct: number;
   charPct: number;
+  goalPct: number;
+  skillPct: number;
   isHrDefined: boolean;
 }
 
@@ -33,29 +35,70 @@ function num(val: unknown): number {
   const n = Number(val);
   return isFinite(n) ? n : 0;
 }
-function calcFinalRating(taskTotal: number, charTotal: number, cfg: WeightageConfig): number {
-  if (taskTotal === 0 && charTotal === 0) return 0;
-  if (cfg.isHrDefined) return Math.round((taskTotal * cfg.taskPct) / 100 + (charTotal * cfg.charPct) / 100);
-  return Math.round((taskTotal + charTotal) / 2);
+
+function calcFinalRating(
+  taskTotal: number,
+  charTotal: number,
+  goalTotal: number,
+  skillTotal: number,
+  cfg: WeightageConfig
+): number {
+  const t = Number(taskTotal || 0);
+  const c = Number(charTotal || 0);
+  const g = Number(goalTotal || 0);
+  const s = Number(skillTotal || 0);
+
+  if (t === 0 && c === 0 && g === 0 && s === 0) return 0;
+
+  // ✅ FIX: Weightage available ho (chahe HR-defined ho ya default 70/10/10/10),
+  //         toh hamesha weighted average use karo.
+  const hasAnyWeightage =
+    Number(cfg.taskPct) > 0 ||
+    Number(cfg.charPct) > 0 ||
+    Number(cfg.goalPct) > 0 ||
+    Number(cfg.skillPct) > 0;
+
+  if (hasAnyWeightage) {
+    const taskPct  = Number(cfg.taskPct)  || 0;
+    const charPct  = Number(cfg.charPct)  || 0;
+    const goalPct  = Number(cfg.goalPct)  || 0;
+    const skillPct = Number(cfg.skillPct) || 0;
+
+    const totalWt = taskPct + charPct + goalPct + skillPct;
+
+    if (totalWt > 0) {
+      const weightedSum =
+        (t * taskPct) +
+        (c * charPct) +
+        (g * goalPct) +
+        (s * skillPct);
+
+      return Math.round((weightedSum / totalWt) * 100) / 100;
+    }
+  }
+
+  // Fallback: sirf tab jab koi weightage hi na ho
+  const active = [t, c, g, s].filter((v) => v > 0);
+  if (active.length === 0) return 0;
+  return Math.round((active.reduce((a, b) => a + b, 0) / active.length) * 100) / 100;
 }
+
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
-  if (rating === 5) return { label: "Exceptional", numColor: "#16a34a", labelColor: "#16a34a" };
-  if (rating === 4) return { label: "Above Expectation", numColor: "#2563eb", labelColor: "#2563eb" };
-  if (rating === 3) return { label: "Meets Expectation", numColor: "#7c3aed", labelColor: "#7c3aed" };
-  if (rating === 2) return { label: "Below Expectation", numColor: "#d97706", labelColor: "#d97706" };
-  if (rating === 1) return { label: "Unsatisfactory", numColor: "#dc2626", labelColor: "#dc2626" };
+  if (rating >= 4.5) return { label: "Exceptional", numColor: "#16a34a", labelColor: "#16a34a" };
+  if (rating >= 3.5) return { label: "Above Expectation", numColor: "#2563eb", labelColor: "#2563eb" };
+  if (rating >= 2.5) return { label: "Meets Expectation", numColor: "#7c3aed", labelColor: "#7c3aed" };
+  if (rating >= 1.5) return { label: "Below Expectation", numColor: "#d97706", labelColor: "#d97706" };
+  if (rating >= 1) return { label: "Unsatisfactory", numColor: "#dc2626", labelColor: "#dc2626" };
   return { label: "—", numColor: "#6b7280", labelColor: "#6b7280" };
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (unchanged from your file) ────────────────────────────────────────
 const S = {
   container: {
     width: "100%",
     padding: "12px",
     fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
-
-  // Header card
   headerBar: {
     position: "relative" as const,
     background: "linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%)",
@@ -77,7 +120,6 @@ const S = {
     minHeight: "52px",
     flexWrap: "wrap" as const,
   },
-
   backBtn: {
     display: "inline-flex" as const,
     alignItems: "center" as const,
@@ -92,7 +134,6 @@ const S = {
     flexShrink: 0,
     transition: "background 0.15s",
   },
-
   title: {
     display: "inline-flex" as const,
     alignItems: "center" as const,
@@ -104,7 +145,6 @@ const S = {
     flexShrink: 0,
   },
   titleIcon: { color: "#2563eb" },
-
   divider: {
     width: "1px",
     height: "26px",
@@ -139,7 +179,6 @@ const S = {
     fontWeight: 500,
   },
   ratingChipWrap: { marginLeft: "10px", flexShrink: 0 },
-
   actions: {
     marginLeft: "auto",
     display: "flex" as const,
@@ -162,8 +201,6 @@ const S = {
     whiteSpace: "nowrap" as const,
     transition: "background 0.18s, transform 0.1s",
   },
-
-  // Tabs + Panel
   tabBar: {
     background: "#f8fafc",
     borderBottom: "1px solid #e5e7eb",
@@ -195,8 +232,6 @@ const S = {
     boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
     marginBottom: "10px",
   },
-
-  // Modals
   solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
@@ -305,7 +340,9 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
         {meta.label}
       </span>
       <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
-        {weightageConfig.isHrDefined ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}%` : ""}
+        {weightageConfig.isHrDefined
+          ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}% / G${weightageConfig.goalPct}% / S${weightageConfig.skillPct}%`
+          : ""}
       </span>
     </div>
   );
@@ -342,8 +379,13 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [createdBy, setCreatedBy] = useState<string>(
     prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
   );
+
+  // ─── Totals (all four categories) ───
   const [taskTotal, setTaskTotal] = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
+  const [goalTotal, setGoalTotal] = useState<number>(0);
+  const [skillTotal, setSkillTotal] = useState<number>(0);
+
   const [sentBackPopup, setSentBackPopup] = useState(false);
   const [sentBackLevel, setSentBackLevel] = useState("1");
   const [sentBackReason, setSentBackReason] = useState("");
@@ -356,9 +398,12 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [showReportModal, setShowReportModal] = useState(false);
   const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
 
+  // ─── Default weightage (70/10/10/10) ───
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
-    taskPct: 50,
-    charPct: 50,
+    taskPct: 70,
+    charPct: 10,
+    goalPct: 10,
+    skillPct: 10,
     isHrDefined: false,
   });
 
@@ -381,8 +426,9 @@ const AppraisalViewTabsPage: React.FC = () => {
     showActionButtons && !isFinalized &&
     (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
 
-  const finalRating = calcFinalRating(taskTotal, characterTotal, weightageConfig);
-  const showFinalRating = taskTotal > 0 && characterTotal > 0;
+  const finalRating = calcFinalRating(taskTotal, characterTotal, goalTotal, skillTotal, weightageConfig);
+  const showFinalRating =
+    taskTotal > 0 || characterTotal > 0 || goalTotal > 0 || skillTotal > 0;
 
   // ── Fetch ──
   useEffect(() => {
@@ -390,13 +436,22 @@ const AppraisalViewTabsPage: React.FC = () => {
     const fetchInitialData = async () => {
       if (!prefetchedRow) setLoading(true); else setBackgroundRefreshing(true);
       try {
+        const periodNumber = prefetchedRow ? text(prefetchedRow.PERIOD_NUMBER) : "";
+
         const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
           pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
           pamsSelect({ parameter: "sentback_levels", loginid, code1: docNo }),
           pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
-          pamsSelect({ parameter: "appraisal_weightage_active", loginid, code1: companyCode, code2: "ALL" }),
+          // 🆕 Fetch PAMS_WIGHTAGE by company + period
+          pamsSelect({
+            parameter: "Trn_weightage",
+            loginid,
+            code1: companyCode,
+            code2: periodNumber,
+          }),
         ]);
+
         let currentFlowLevel = 0, nextActionBy = "";
         if (flowRes.length > 0) {
           currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
@@ -405,23 +460,49 @@ const AppraisalViewTabsPage: React.FC = () => {
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
           setCreatedBy(text(flowRes[0].CREATED_BY));
         }
+
+        // 🆕 Weightage config from PAMS_WIGHTAGE
         if (weightageRes.length > 0) {
-          const wRow = weightageRes[0];
-          setWeightageConfig({ taskPct: num(wRow.TASK_PCT), charPct: num(wRow.CHARACTER_PCT), isHrDefined: true });
-        } else setWeightageConfig({ taskPct: 50, charPct: 50, isHrDefined: false });
+          const w = weightageRes[0] as Row;
+          const taskPct = num(w.TASK_WEIGHTAGE);
+          const charPct = num(w.CHARACTER_WEIGHTAGE);
+          const goalPct = num(w.GOAL_WEIGHTAGE);
+          const skillPct = num(w.SKILL_WEIGHTAGE);
+          const sum = taskPct + charPct + goalPct + skillPct;
+
+          if (sum > 0) {
+            setWeightageConfig({
+              taskPct,
+              charPct,
+              goalPct,
+              skillPct,
+              isHrDefined: true,
+            });
+          }
+        }
 
         const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
         if (isMyTurn) setUserFlowLevel(0);
         else {
           const histRows = historyRes as Row[];
-          const myAction = histRows.find(h => text(h.ACTION_BY).trim().toUpperCase() === loginid.trim().toUpperCase());
+          const myAction = histRows.find(
+            (h) => text(h.ACTION_BY).trim().toUpperCase() === loginid.trim().toUpperCase()
+          );
           setUserFlowLevel(myAction ? num(myAction.FLOW_LEVEL) : currentFlowLevel);
         }
+
         setSentBackLevels(levelRes as Row[]);
         if (levelRes.length > 0) setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
+
         if (commentRes.length > 0) {
-          appraiserCommentRef.current = { text: text(commentRes[0].APPRAISER_COMMENTS), level: num(commentRes[0].APPRAISER_COMMENT_LEVEL) };
-          appraiseeCommentRef.current = { text: text(commentRes[0].APPRAISEE_COMMENTS), level: num(commentRes[0].APPRAISEE_COMMENT_LEVEL) };
+          appraiserCommentRef.current = {
+            text: text(commentRes[0].APPRAISER_COMMENTS),
+            level: num(commentRes[0].APPRAISER_COMMENT_LEVEL),
+          };
+          appraiseeCommentRef.current = {
+            text: text(commentRes[0].APPRAISEE_COMMENTS),
+            level: num(commentRes[0].APPRAISEE_COMMENT_LEVEL),
+          };
         }
       } catch { /* silent */ }
       finally { setLoading(false); setBackgroundRefreshing(false); }
@@ -533,7 +614,6 @@ const AppraisalViewTabsPage: React.FC = () => {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={S.container}>
       <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }`}</style>
@@ -546,12 +626,10 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ═══════ SINGLE-ROW HEADER CARD ═══════ */}
+      {/* ═══════ HEADER ═══════ */}
       <div style={S.headerBar}>
         <div style={S.headerAccent} />
-
         <div style={S.headerInner}>
-          {/* Back */}
           <button
             style={S.backBtn}
             onClick={() => navigate(-1)}
@@ -562,7 +640,6 @@ const AppraisalViewTabsPage: React.FC = () => {
             <ArrowLeft size={16} />
           </button>
 
-          {/* Title: Appraisal: DOC */}
           <div style={S.title}>
             <FileText size={16} style={S.titleIcon} />
             <span>Appraisal: {docNo}</span>
@@ -570,23 +647,19 @@ const AppraisalViewTabsPage: React.FC = () => {
 
           <span style={S.divider} />
 
-          {/* Avatar */}
           <div style={S.avatar}>
             {(employeeName?.[0] ?? employeeCode?.[0] ?? "?").toUpperCase()}
           </div>
 
-          {/* Name + ID */}
           <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
           {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
 
-          {/* Final Rating chip */}
           {showFinalRating && (
             <div style={S.ratingChipWrap}>
               <RatingChip rating={finalRating} weightageConfig={weightageConfig} />
             </div>
           )}
 
-          {/* Right-side action buttons */}
           <div style={S.actions}>
             {showSaveSubmitButtons && (
               <>
@@ -714,6 +787,7 @@ const AppraisalViewTabsPage: React.FC = () => {
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "goals"}
             onRowsChange={rows => { goalRowsRef.current = rows; }}
+            onGrandTotalChange={total => setGoalTotal(total)}       // 🆕
           />
         </div>
         <div style={{ display: selectedTab === "skill" ? "block" : "none" }}>
@@ -721,13 +795,17 @@ const AppraisalViewTabsPage: React.FC = () => {
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "skill"}
             onRowsChange={rows => { skillRowsRef.current = rows; }}
+            onGrandTotalChange={total => setSkillTotal(total)}      // 🆕
           />
         </div>
         <div style={{ display: selectedTab === "comments" ? "block" : "none" }}>
           <AppraiserCommentsTab
             docNo={docNo} employeeCode={employeeCode}
             isVisible={selectedTab === "comments"}
-            taskTotal={taskTotal} characterTotal={characterTotal}
+            taskTotal={taskTotal}
+            characterTotal={characterTotal}
+            goalTotal={goalTotal}                                   // 🆕
+            skillTotal={skillTotal}                                 // 🆕
             flowLevel={flowLevel} userFlowLevel={userFlowLevel}
             weightageConfig={weightageConfig}
             showAllComments={true}
@@ -773,7 +851,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── Report: PerformanceReportDesign opens its own NewReportDialog (no extra wrapper modal) ── */}
       {showReportModal && (
         <PerformanceReportDesign
           required_values={{ doc_no: docNo ?? "", employee_code: employeeCode, company_code: "BSG" }}

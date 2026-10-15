@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
@@ -8,6 +8,7 @@ interface Props {
   docNo: string;
   employeeCode: string;
   onRowsChange?: (rows: Row[]) => void;
+  onGrandTotalChange?: (total: number) => void;   // 🆕
   isVisible?: boolean;
 }
 
@@ -27,36 +28,18 @@ function num(val: unknown): number {
 }
 
 const S = {
-  wrapper: {
-    width: "100%", height: "420px", overflowY: "auto" as const,
-    border: "1px solid #ddd", fontFamily: "inherit", fontSize: "11px",
-  },
+  wrapper: { width: "100%", height: "420px", overflowY: "auto" as const, border: "1px solid #ddd", fontFamily: "inherit", fontSize: "11px" },
   table: { width: "100%", borderCollapse: "collapse" as const, tableLayout: "fixed" as const },
-  th: {
-    background: "#f8f8f8", borderBottom: "1px solid #ddd", borderRight: "1px solid #eee",
-    padding: "8px 10px", textAlign: "left" as const, fontWeight: 600,
-    fontSize: "11px", color: "#333", position: "sticky" as const,
-    top: 0, zIndex: 1, whiteSpace: "nowrap" as const,
-  },
-  td: {
-    borderBottom: "1px solid #eee", padding: "8px 10px",
-    verticalAlign: "middle" as const, background: "#fff",
-  },
-  tdPinned: {
-    borderTop: "2px solid #ddd", padding: "8px 10px",
-    background: "#f8f8f8", fontWeight: 600, fontSize: "11px",
-  },
-  ratingSelect: {
-    width: "70px", border: "1px solid #ccc", borderRadius: "4px",
-    padding: "3px 6px", fontSize: "11px", textAlign: "center" as const,
-    outline: "none", backgroundColor: "#fff", cursor: "pointer",
-  },
+  th: { background: "#f8f8f8", borderBottom: "1px solid #ddd", borderRight: "1px solid #eee", padding: "8px 10px", textAlign: "left" as const, fontWeight: 600, fontSize: "11px", color: "#333", position: "sticky" as const, top: 0, zIndex: 1, whiteSpace: "nowrap" as const },
+  td: { borderBottom: "1px solid #eee", padding: "8px 10px", verticalAlign: "middle" as const, background: "#fff" },
+  tdPinned: { borderTop: "2px solid #ddd", padding: "8px 10px", background: "#f8f8f8", fontWeight: 600, fontSize: "11px", position: "sticky" as const, bottom: 0, zIndex: 2 },
+  ratingSelect: { width: "70px", border: "1px solid #ccc", borderRadius: "4px", padding: "3px 6px", fontSize: "11px", textAlign: "center" as const, outline: "none", backgroundColor: "#fff", cursor: "pointer" },
   totalGreen: { color: "#2e7d32", fontWeight: 600 },
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
 const TaskSkillAppraisalTab: React.FC<Props> = ({
-  docNo, employeeCode, onRowsChange,
+  docNo, employeeCode, onRowsChange, onGrandTotalChange,
 }) => {
   const { user }    = useAuth();
   const loginid     = user?.loginid || user?.username || "";
@@ -97,14 +80,23 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
+  // 🆕 AVERAGE (not sum) — like Character tab
   const grandTotal = useMemo(() => {
-    let t = 0;
+    let sum = 0, count = 0;
     rows.forEach((row) => {
       const r = rowStates[text(row.KPI_CODE)]?.RATING;
-      t += r === "" || r == null ? 0 : num(r);
+      if (r !== "" && r != null && !isNaN(Number(r))) {
+        sum += Number(r);
+        count++;
+      }
     });
-    return Number(t.toFixed(2));
+    return count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
   }, [rows, rowStates]);
+
+  // 🆕 notify parent
+  useEffect(() => {
+    if (onGrandTotalChange) onGrandTotalChange(grandTotal);
+  }, [grandTotal, onGrandTotalChange]);
 
   const handleRatingChange = (row: Row, value: string) => {
     const key = text(row.KPI_CODE);
