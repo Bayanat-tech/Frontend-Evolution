@@ -2491,3 +2491,54 @@ input[tabindex="-1"].opacity-0,
   .freight-document-body { padding: 8px; }
 }
 
+/* Consistent bordered headers and detail panels across every Freight screen. */
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) {
+  --freight-document-border: #aab8ca;
+  --freight-document-heading: #f1f6fc;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-form-card, .freight-tabs-shell, .freight-panel, .freight-info-section, .freight-document-paper, .freight-report-card, .freight-job-table-shell, .freight-master-form-card, .freight-dashboard-section, .data-table-shell) {
+  border: 1px solid var(--freight-document-border) !important;
+  border-radius: 9px !important;
+  background: var(--panel, #fff) !important;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 8%) !important;
+  overflow: hidden;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header, .freight-dashboard-section-title, .freight-report-filter-heading),
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) .freight-form-card > .border-b {
+  min-height: 36px;
+  border-bottom: 1px solid var(--freight-document-border) !important;
+  background: linear-gradient(105deg, var(--freight-document-heading), #fff 88%) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header) :is(h2, h3) {
+  color: #17345f !important;
+  font-weight: 700 !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-body, .freight-info-body, .freight-master-form-body) {
+  background: var(--panel, #fff) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-form-header, .freight-transaction-header, .freight-document-header, .tariff-page-header) {
+  border: 1px solid var(--freight-document-border) !important;
+  border-top: 4px solid #00378c !important;
+  border-radius: 9px !important;
+  background: var(--panel, #fff) !important;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 8%) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen) .freight-tabs-list {
+  border-bottom: 1px solid var(--freight-document-border);
+  background: #f5f8fc;
+}
+
+.app.dark :is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) {
+  --freight-document-border: #52647b;
+  --freight-document-heading: #17263b;
+}
+
+.app.dark :is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header, .freight-form-header, .freight-transaction-header, .freight-document-header, .tariff-page-header) {
+  background: var(--freight-document-heading) !important;
+}
