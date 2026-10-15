@@ -99,6 +99,7 @@ export interface SalesOrderLineRow {
 
 export interface PurchaseOrderForm {
   doc_no: string;
+  job_card_no?:string;
     // doc_no: string;
   doc_type?: string;
   doc_date: string;

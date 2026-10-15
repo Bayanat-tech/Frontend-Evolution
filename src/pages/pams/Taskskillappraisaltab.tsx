@@ -8,7 +8,7 @@ interface Props {
   docNo: string;
   employeeCode: string;
   onRowsChange?: (rows: Row[]) => void;
-  onGrandTotalChange?: (total: number) => void;   // 🆕
+  onGrandTotalChange?: (total: number) => void;   
   isVisible?: boolean;
 }
 
@@ -80,20 +80,20 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
-  // 🆕 AVERAGE (not sum) — like Character tab
-  const grandTotal = useMemo(() => {
-    let sum = 0, count = 0;
-    rows.forEach((row) => {
-      const r = rowStates[text(row.KPI_CODE)]?.RATING;
-      if (r !== "" && r != null && !isNaN(Number(r))) {
-        sum += Number(r);
-        count++;
-      }
-    });
-    return count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
-  }, [rows, rowStates]);
 
-  // 🆕 notify parent
+  const grandTotal = useMemo(() => {
+  let sum = 0, count = 0;
+  rows.forEach((row) => {
+    const r = rowStates[text(row.KPI_CODE)]?.RATING;
+    if (r !== "" && r != null && !isNaN(Number(r))) {
+      sum += Number(r);
+      count++;
+    }
+  });
+  return count > 0 ? Math.round(sum / count) : 0;   
+}, [rows, rowStates]);
+
+ 
   useEffect(() => {
     if (onGrandTotalChange) onGrandTotalChange(grandTotal);
   }, [grandTotal, onGrandTotalChange]);

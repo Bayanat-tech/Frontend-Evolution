@@ -231,7 +231,7 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
-          
+
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -298,9 +298,9 @@ export function PurchaseOrderEditor({
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
-    const finalTotal = grandTotal + totalTaxAmount;
+  const finalTotal = grandTotal + totalTaxAmount;
 
   // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
   //   setForm((current) => {
@@ -477,27 +477,27 @@ export function PurchaseOrderEditor({
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
-   const hasValidLinesforprod = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const hasValidLinesforprod = rows.some((row) => text(row.prod_code).trim().length > 0);
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
-      for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const lineNo = i + 1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
 
-    if (!text(row.prod_code).trim()) {
-      return setError(`Line ${lineNo}: Product should not be empty`);
-    }
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
 
-    const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
-    if (!(netQty > 0)) {
-      return setError(`Line ${lineNo}: Net Quantity should not be 0`);
-    }
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
 
-    if (!(numberOrZero(row.unit_price) > 0)) {
-      return setError(`Line ${lineNo}: Rate should not be 0`);
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-  }
 
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -538,38 +538,38 @@ export function PurchaseOrderEditor({
   //   }
   //   setShowSubmitConfirm(true);
   // };
-const handleSubmitClick = () => {
-  if (!form.div_code) return setError("Division is required");
-  if (!form.ac_code) return setError("A/c Code is required");
-  if (!form.curr_code) return setError("Currency is required");
-  if (rows.length === 0) return setError("Add at least one line item before submitting");
+  const handleSubmitClick = () => {
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const lineNo = i + 1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
 
-    if (!text(row.prod_code).trim()) {
-      return setError(`Line ${lineNo}: Product should not be empty`);
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
 
-    const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
-    if (!(netQty > 0)) {
-      return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+    return confirmSubmit();
+  };
+
+
+  const confirmSubmit = () => {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
+      return setError("Line item discount cannot exceed line item amount");
     }
-
-    if (!(numberOrZero(row.unit_price) > 0)) {
-      return setError(`Line ${lineNo}: Rate should not be 0`);
-    }
-  }
-
-  return confirmSubmit();
-};
-
-
- const confirmSubmit = () => {
-  if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
-    return setError("Line item discount cannot exceed line item amount");
-  }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
@@ -660,16 +660,16 @@ const handleSubmitClick = () => {
   };
 
   const handleExcel = async () => {
-      if (!form.doc_no) return;
-      try {
-        await getPoOrderReportExcel({
-          doc_no: String(form.doc_no),
-          company_code: user?.company_code,
-        });
-      } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || "Excel export failed");
-      }
-    };
+    if (!form.doc_no) return;
+    try {
+      await getPoOrderReportExcel({
+        doc_no: String(form.doc_no),
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
 
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
@@ -726,7 +726,7 @@ const handleSubmitClick = () => {
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                
+
 
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
@@ -769,20 +769,20 @@ const handleSubmitClick = () => {
                         document.body
                       )}
                   </div> */}
-                         {isPendingTab && (
-                      <Button
-                        type="button"
-                        onClick={handleSubmitClick}
-                        disabled={actionDisabled || actionBarBusy}
-                      >
-                        {actionLoading === "submit" ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Send className="mr-2 h-4 w-4" />
-                        )}
-                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                      </Button>
-                    )}
+                  {isPendingTab && (
+                    <Button
+                      type="button"
+                      onClick={handleSubmitClick}
+                      disabled={actionDisabled || actionBarBusy}
+                    >
+                      {actionLoading === "submit" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-4 w-4" />
+                      )}
+                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                    </Button>
+                  )}
 
                   {isPendingTab && canSendBackOrReject && (
                     <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -795,7 +795,7 @@ const handleSubmitClick = () => {
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab  && form.doc_no &&  (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
@@ -805,8 +805,8 @@ const handleSubmitClick = () => {
                 {form.doc_no && (
                   <>
                     <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button>
+                      <Printer size={15} /> Print
+                    </Button>
                     {/* <Button
                       aria-label="Excel"
                       title="Excel"
@@ -819,13 +819,13 @@ const handleSubmitClick = () => {
                       <Download size={15} />
                     </Button> */}
                     <Button
-                                          type="button"
-                                          variant="secondary"
-                                          onClick={() => void handleExcel()}
-                                        >
-                                          <Download size={15} />
-                                          Excel
-                                        </Button>
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                      Excel
+                    </Button>
                   </>
                 )}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
