@@ -614,7 +614,7 @@ export function PurchaseGRNEditor({
             <div className="cancelled-document-banner" role="status">
               <div>
                 <span className="cancelled-document-kicker">Cancelled Document</span>
-                <strong>{form.doc_no || "Purchase GRN"}</strong>
+                <strong>{form.doc_no || "Goods Receipt Note"}</strong>
               </div>
               <p>This Purchase GRN is cancelled and opened in read-only mode.</p>
             </div>

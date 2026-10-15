@@ -62,7 +62,9 @@ export function PamsBulkAppraisalPage() {
   ];
 
   const isKpiType = selectedType === "KPI";
-  const colCount = isKpiType ? 5 : 4;
+  // ✅ NEW: Weightage is shown/required for KPI and GOAL
+  const showWeightage = selectedType === "KPI" || selectedType === "GOAL";
+  const colCount = showWeightage ? 5 : 4;
 
   const typeLabel =
     selectedType === "SKILL" ? "Skill"
@@ -70,7 +72,8 @@ export function PamsBulkAppraisalPage() {
         : selectedType === "CHARACTERISTICS" ? "Characteristic"
           : "KPI";
 
-  const canEditRow = selectedType === "KPI" || selectedType === "CHARACTERISTICS";
+  // ✅ NEW: All item types now support Edit
+  const canEditRow = true;
 
   useEffect(() => {
     if (!selectedPeriod) {
@@ -215,7 +218,7 @@ export function PamsBulkAppraisalPage() {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
     if (!selectedEmployee) { toast.warning("Select an employee first"); return; }
 
-    if (isKpiType && totalWeightage !== 100) {
+    if (showWeightage && totalWeightage !== 100) {
       toast.error(
         `Total weightage is ${totalWeightage}%. It must be exactly 100% to process.`
       );
@@ -277,7 +280,7 @@ export function PamsBulkAppraisalPage() {
       return;
     }
 
-    if (isKpiType && totalWeightage !== 100) {
+    if (showWeightage && totalWeightage !== 100) {
       toast.error(
         `Total weightage is ${totalWeightage}%. It must be exactly 100% to process all.`
       );
@@ -741,7 +744,7 @@ export function PamsBulkAppraisalPage() {
                   <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">
                     {isKpiType ? "KPI Group · Activity" : typeLabel}
                   </th>
-                  {isKpiType && (
+                  {showWeightage && (
                     <th className="w-32 px-3 py-2.5 text-right text-[10px] uppercase tracking-wider font-semibold text-slate-500">
                       Weightage %
                     </th>
@@ -841,7 +844,7 @@ export function PamsBulkAppraisalPage() {
                           )}
                         </td>
 
-                        {isKpiType && (
+                        {showWeightage && (
                           <td className="px-3 py-3 text-right">
                             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
                               {formatValue(row.WEIGHTAGE || row.STANDARD_WEIGHTAGE) || "—"}
@@ -877,7 +880,7 @@ export function PamsBulkAppraisalPage() {
                 )}
               </tbody>
 
-              {isKpiType && (
+              {showWeightage && (
                 <tfoot className="sticky bottom-0 bg-slate-50 dark:bg-slate-900">
                   <tr className="border-t border-slate-200 dark:border-slate-800">
                     <td
@@ -1142,9 +1145,13 @@ function KpiEditorModal({
   const isEdit = !!existingRow;
 
   const isTask = itemType === "KPI";
-  const needsWeightage = isTask;
+  const isGoal = itemType === "GOAL";
+  // ✅ Weightage is required for Task (KPI) and Goal
+  const needsWeightage = isTask || isGoal;
+  // ✅ Activities only for Task (KPI)
   const needsActivities = isTask;
-  const isMulti = !isEdit && !isTask;
+  // ✅ Multi-add mode is only for Skill & Characteristics (on Add)
+  const isMulti = !isEdit && !needsWeightage;
 
   const label =
     itemType === "SKILL" ? "Skill"
@@ -1295,13 +1302,10 @@ function KpiEditorModal({
       }
     }
 
-    // ✅ Activity count validation (min 3 / max 6) REMOVED from this page.
-    //    It now lives on the KPI Group page.
     const finalActivities = needsActivities
       ? activities.map((a) => a.trim()).filter(Boolean)
       : [];
 
-    // ✅ Only check for duplicate activities (kept as-is)
     if (needsActivities) {
       const seen = new Set<string>();
       const duplicates: string[] = [];
@@ -1462,7 +1466,6 @@ function KpiEditorModal({
             <Input
               value={kpiDesc}
               onChange={(e) => setKpiDesc(e.target.value)}
-              disabled={isEdit && (itemType === "SKILL" || itemType === "GOAL")}
               placeholder={
                 isTask
                   ? "Enter KPI group name (e.g. General Accountabilities)"
@@ -1503,7 +1506,6 @@ function KpiEditorModal({
                     ? "Add activities below"
                     : `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`}
                 </span>
-                {/* ✅ No disabled limit now — min/max validation moved to KPI Group page */}
                 <Button type="button" size="sm" onClick={addActivityRow}>
                   <Plus size={13} /> Add Activity
                 </Button>

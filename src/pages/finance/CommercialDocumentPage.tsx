@@ -1302,13 +1302,20 @@ const limitProps = (f: keyof FormState) => ({
                           ]}
                           valueField="DOC_NO"
                           displayFields={["DOC_NO"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Account_LPO_REF_DOC",
-                              code1: user?.company_code || "",
-                              number1: form.div_code ? Number(form.div_code) : undefined,
-                            })
-                          }
+                          loadOptions={async () => {
+                            const rows = await getDynamicFinanceLookup({
+                             parameter: "Account_LPO_REF_DOC",
+                             code1: user?.company_code || "",
+                             number1: form.div_code ? Number(form.div_code) : undefined,
+                            });
+                            return [...rows].sort((a, b) =>
+                             String(b["DOC_NO"] ?? b["doc_no"] ?? "").localeCompare(
+                             String(a["DOC_NO"] ?? a["doc_no"] ?? ""),
+                             undefined,
+                             { numeric: true }
+                            )
+                           );
+                          }}
                           onChange={async (value, row) => {
                             if (!value || !row) {
                               setForm((c) => ({ ...c, ref_doc_no: "" }));
