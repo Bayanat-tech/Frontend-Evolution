@@ -1,3 +1,5 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
@@ -1123,6 +1125,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     })),
   };
 
+  assertFreightRecords("TF_ENQUIRY", [payload.header], "Header");
+  assertFreightRecords("TF_ENQUIRY_DET", payload.details, "Activity line");
   const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
     isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
     payload
@@ -1142,51 +1146,10 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
       return;
     }
 
-    // Character limit validations
-    if (header.remarks && header.remarks.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Remarks." });
-      return;
-    }
-    if (header.spl_instructions && header.spl_instructions.length > 250) {
-      setActiveTab("payment");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Special Instructions." });
-      return;
-    }
-    if (header.cargo_detail && header.cargo_detail.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Cargo Detail." });
-      return;
-    }
-    if (header.shipper_name && header.shipper_name.length > 100) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Shipper Name." });
-      return;
-    }
-    if (header.shipper_address && header.shipper_address.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Shipper Address." });
-      return;
-    }
-    if (header.consignee_name && header.consignee_name.length > 100) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Consignee Name." });
-      return;
-    }
-    if (header.consignee_address && header.consignee_address.length > 250) {
-      setActiveTab("cargo");
-      setNotice({ type: "error", text: "You have exceeded the character limit for Consignee Address." });
-      return;
-    }
-
-    // Check line character limits
-    for (const d of details) {
-      if (d.remarks && d.remarks.length > 250) {
-        setActiveTab("activities");
-        setNotice({ type: "error", text: "You have exceeded the character limit for Line Remarks." });
-        return;
-      }
-    }
+    const headerError = freightValidationError("TF_ENQUIRY", header);
+    const lineError = details.map((row, index) => { const error = freightValidationError("TF_ENQUIRY_DET", row); return error ? `Line ${index + 1}: ${error}` : null; }).find(Boolean);
+    const schemaError = headerError || lineError;
+    if (schemaError) { setNotice({ type: "error", text: schemaError }); return; }
 
     // Missing field validation on lines (activities)
     if (!details || details.length === 0) {
@@ -1605,14 +1568,14 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     onChange={(value) => setHeaderField("cargo_detail", value)}
     className="sm:col-span-2"
     inputClassName="truncate"
-    maxLength={250}
+    maxLength={freightTextLimit("TF_ENQUIRY", "cargo_detail")}
   />
 
   {header.transport_mode === "S" && (
     <>
-      <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
+      <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "container_type")} />
       <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-      <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
+      <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "t_f")} />
     </>
   )}
   {header.transport_mode === "R" && (
@@ -1645,16 +1608,16 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties">     
                   <div className="grid gap-1 sm:grid-cols-1">
-                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" maxLength={100} />
-                    <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact maxLength={250} />
-                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" maxLength={100} />
-                    <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact maxLength={250} />
+                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" maxLength={freightTextLimit("TF_ENQUIRY", "shipper_name")} />
+                    <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "shipper_address")} />
+                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" maxLength={freightTextLimit("TF_ENQUIRY", "consignee_name")} />
+                    <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "consignee_address")} />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-12" icon={CreditCard} title="Cargo Notes">
                   <div className="grid grid-cols-1">
-                    <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact maxLength={250} />
+                    <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "remarks")} />
                   </div>
                 </SectionPanel>
 
@@ -1668,17 +1631,17 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
-                    <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
+                    <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "country_origin")} />
                     <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
-                    <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
+                    <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "country_destination")} />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-5" icon={ShipWheel} title="Shipment Reference" meta={header.job_number || "Job pending"}>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-3">
-                    <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
+                    <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "via")} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
-                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
+                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours"  maxLength={freightTextLimit("TF_ENQUIRY", "transit_time")} />
                     {header.transport_mode === "S" && (
                     <>
                     <FormSelect label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} options={["", ...shipmentStatusOptions].map((value) => ({ value, label: value }))} />
@@ -1698,7 +1661,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
                   <div className="grid gap-1 sm:grid-cols-3">
-                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
+                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "frequency")} />
                     <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                    </div>
                 </SectionPanel>
@@ -1758,7 +1721,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-12" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
-                  <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} maxLength={250} />
+                  <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} maxLength={freightTextLimit("TF_ENQUIRY", "spl_instructions")} />
                 </SectionPanel>
               </div>
             </section>
@@ -1899,31 +1862,31 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 {/* Origin */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="text"
                     value={row.origin_port}
                     onChange={(e) => setDetailField(index, "origin_port", e.target.value)}
                     className={fieldClassName}
                     placeholder="Origin"
                     disabled={isReadOnly}
-                  />
+                   maxLength={freightTextLimit("TF_ENQUIRY_DET", "origin_port")}  maxBytes={freightTextLimit("TF_ENQUIRY_DET", "origin_port")} />
                 </td>
 
                 {/* Destination */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="text"
                     value={row.destination_port}
                     onChange={(e) => setDetailField(index, "destination_port", e.target.value)}
                     className={fieldClassName}
                     placeholder="Dest"
                     disabled={isReadOnly}
-                  />
+                   maxLength={freightTextLimit("TF_ENQUIRY_DET", "destination_port")}  maxBytes={freightTextLimit("TF_ENQUIRY_DET", "destination_port")} />
                 </td>
 
                 {/* Qty */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="number"
                     value={row.quantity}
                     onChange={(e) => setDetailField(index, "quantity", e.target.value)}
@@ -1934,7 +1897,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 {/* Bill Rate */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="number"
                     value={row.bill_rate}
                     onChange={(e) => setDetailField(index, "bill_rate", e.target.value)}
@@ -1945,7 +1908,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 {/* Bill */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="number"
                     value={row.bill}
                     onChange={(e) => setDetailField(index, "bill", e.target.value)}
@@ -1956,7 +1919,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 {/* Cost Rate */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="number"
                     value={row.cost_rate}
                     onChange={(e) => setDetailField(index, "cost_rate", e.target.value)}
@@ -1967,7 +1930,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 {/* Cost */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="number"
                     value={row.cost}
                     onChange={(e) => setDetailField(index, "cost", e.target.value)}
@@ -1978,15 +1941,15 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 {/* Remarks */}
                 <td className="px-1.5 py-1">
-                  <input
+                  <Input
                     type="text"
                     value={row.remarks}
-                    maxLength={265}
+                    maxLength={freightTextLimit("TF_ENQUIRY_DET", "remarks")}
                     onChange={(e) => setDetailField(index, "remarks", e.target.value)}
                     className={fieldClassName}
                     placeholder="Line remarks"
                     disabled={isReadOnly}
-                  />
+                   maxBytes={freightTextLimit("TF_ENQUIRY_DET", "remarks")} />
                 </td>
 
                 {/* Actions */}
@@ -2057,7 +2020,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
         </div>
         <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
           Cancel Remarks
-          <Input value={cancelRemarks} onChange={(event) => setCancelRemarks(event.target.value)} placeholder="Enter reason..." />
+          <Input value={cancelRemarks} maxLength={freightTextLimit("TF_ENQUIRY", "cancel_remarks")} maxBytes={freightTextLimit("TF_ENQUIRY", "cancel_remarks")} onChange={(event) => setCancelRemarks(event.target.value)} placeholder="Enter reason..." />
         </label>
       </div>
     </Dialog>
@@ -2517,7 +2480,17 @@ function FormInput({
           </span>
         )}
       </span>
-      <Input
+      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
         className={`h-7.5 text-[11.5px] font-medium border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 ${type === "number" ? "text-right tabular-nums" : ""} ${isOverLimit ? "border-red-500 focus-visible:ring-red-500" : "focus:border-[#00378C]"} ${inputClassName}`}
         value={value}
         type={type}
@@ -2525,11 +2498,11 @@ function FormInput({
         required={required}
         placeholder={placeholder}
         disabled={disabled}
-        maxLength={maxLength ? maxLength + 15 : undefined}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+       maxBytes={maxLength} />)}
     </label>
   );
 }
@@ -2670,13 +2643,13 @@ function FormTextarea({
           </span>
         )}
       </span>
-      <input
+      <Input
         type="text"
         className={`${fieldClassName} truncate ${isOverLimit ? "border-red-500 focus:border-red-500" : ""}`}
         value={value}
-        maxLength={maxLength ? maxLength + 15 : undefined}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
-      />
+       maxBytes={maxLength} />
     </label>
   );
 }
@@ -2695,7 +2668,11 @@ function CellInput({
   return (
     <td className="px-1.5 py-1.5">
       {/* <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} /> */}
-     <Input className={`h-7 text-sm font-medium text-foreground ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+     {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={value}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={value}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input className={`h-7 text-sm font-medium text-foreground ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />)}
     </td>
   );
 }

@@ -38,6 +38,7 @@ import { getDynamicLookup, getLookupText, getMasterLookup } from "../../api/look
 import { Badge } from "../../components/ui/Badge";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
+import { isValidEmail, isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
@@ -691,8 +692,28 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
     }
 
     if (level === 5) {
+      if (!accountForm.ac_name.trim()) {
+        setError("Account Name is required.");
+        return;
+      }
       if (accountForm.ac_name.trim().length > 100) {
         setError("Account Name cannot exceed 100 characters.");
+        return;
+      }
+      if (!isValidEmail(accountForm.e_mail)) {
+        setError("Please enter a valid email address (e.g. name@example.com).");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.phone)) {
+        setError("Phone must contain numbers only.");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.mobile_no)) {
+        setError("Mobile No must contain numbers only.");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.fax)) {
+        setError("Fax must contain numbers only.");
         return;
       }
       for (const section of ACCOUNT_FORM_SECTIONS) {
@@ -1007,16 +1028,33 @@ function AccountLevelFiveForm({
                         value={value[field.name]}
                         onChange={(nextValue) => setField(field.name, nextValue)}
                       />
-                    ) : (
-                      <Input
-                        type={field.type || "text"}
-                        maxLength={field.maxLength}
-                        value={value[field.name]}
-                        className={value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength ? "!border-rose-500 !ring-rose-400" : ""}
-                        onChange={(event) => setField(field.name, event.target.value)}
-                        disabled={field.name === "l4_code"}
-                      />
-                    )}
+                    ) : (() => {
+                      const isEmail = field.type === "email" || field.name === "e_mail";
+                      const isPhone = field.name === "phone" || field.name === "mobile_no" || field.name === "fax";
+                      const isInvalidEmail = isEmail && !isValidEmail(value[field.name]);
+                      const isInvalidPhone = isPhone && !isValidPhoneNumber(value[field.name]);
+                      const isTooLong = Boolean(value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength);
+                      const hasError = isInvalidEmail || isInvalidPhone || isTooLong;
+
+                      return (
+                        <>
+                          <Input
+                            type={isEmail ? "email" : isPhone ? "tel" : (field.type || "text")}
+                            maxLength={field.maxLength}
+                            value={value[field.name]}
+                            className={hasError ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(event) => setField(field.name, isPhone ? sanitizePhoneNumber(event.target.value) : event.target.value)}
+                            disabled={field.name === "l4_code"}
+                          />
+                          {isInvalidEmail && (
+                            <span className="text-[10px] text-destructive mt-0.5">Invalid email address (e.g. name@domain.com)</span>
+                          )}
+                          {isInvalidPhone && (
+                            <span className="text-[10px] text-destructive mt-0.5">{field.label} must contain numbers only</span>
+                          )}
+                        </>
+                      );
+                    })()}
                 </label>
               )
             ))}

@@ -1,3 +1,5 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
+import { Input } from "../../components/ui/Input";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,6 +24,7 @@ import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { DataTable } from "../../components/ui/DataTable";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
@@ -220,6 +223,8 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
 
   const saveTariff = async (event: FormEvent) => {
     event.preventDefault();
+    const schemaError = freightValidationError("TF_AIRLINE_TARIFF", form);
+    if (schemaError) { setNotice({ type: "error", text: schemaError }); return; }
     setSaving(true);
     setNotice(null);
     try {
@@ -551,7 +556,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                   disabled={readOnly}
                   placeholder="e.g. INDIA"
                   onChange={(value) => updateForm(setForm, { source: value.toUpperCase() })}
-                />
+                 maxLength={freightTextLimit("TF_AIRLINE_TARIFF", "source")} />
 
                 <Field
                   label="Destination"
@@ -560,7 +565,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                   disabled={readOnly}
                   placeholder="e.g. OMAN"
                   onChange={(value) => updateForm(setForm, { destination: value.toUpperCase() })}
-                />
+                 maxLength={freightTextLimit("TF_AIRLINE_TARIFF", "destination")} />
 
                 <Field
                   label="Direct / Via"
@@ -568,7 +573,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                   disabled={readOnly}
                   placeholder="e.g. Direct / Via DXB"
                   onChange={(value) => updateForm(setForm, { direct_via: value })}
-                />
+                 maxLength={freightTextLimit("TF_AIRLINE_TARIFF", "direct_via")} />
 
                 <Field
                   label="IATA Code"
@@ -576,7 +581,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                   disabled={readOnly}
                   placeholder="e.g. 123"
                   onChange={(value) => updateForm(setForm, { iata_code: value })}
-                />
+                 maxLength={freightTextLimit("TF_AIRLINE_TARIFF", "iata_code")} />
 
               </div>
             </div>
@@ -613,7 +618,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                   disabled={readOnly}
                   placeholder="Enter restriction remarks or details if applicable..."
                   onChange={(value) => updateForm(setForm, { restriction_det: value })}
-                />
+                 maxLength={freightTextLimit("TF_AIRLINE_TARIFF", "restriction_det")} />
               </div>
             </div>
           </div>
@@ -676,7 +681,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
           pageSize={25}
           getRowId={(row) => String(row.AIR_TARIFF_NO)}
           minWidth={isReport ? 1400 : 850}
-          enableExport
+          enableExport={false}
           exportFilename={isReport ? "airline-tariff-report.csv" : "airline-tariff.csv"}
           searchValue={isReport ? undefined : searchText}
           onSearchChange={isReport ? undefined : setSearchText}
@@ -684,14 +689,14 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
           emptyText="No airline tariff records found"
           actionButton={
             !isReport ? (
-              <Button
+              <div className="flex items-center gap-2"><Button
                 type="button"
                 onClick={openAdd}
                 disabled={saving}
                 className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg cursor-pointer transition-colors"
               >
                 <Plus size={14} strokeWidth={2.5} /> Add
-              </Button>
+              </Button><FinanceListActionsMenu onExport={() => exportCsv(rows)} onRefresh={() => void loadRows()} /></div>
             ) : undefined
           }
           toolbar={
@@ -827,6 +832,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 }
 
 function Field({
+  maxLength,
   label,
   value,
   onChange,
@@ -837,6 +843,7 @@ function Field({
   className,
   numeric,
 }: {
+  maxLength?: number;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -853,7 +860,8 @@ function Field({
         <span>{label}</span>
         {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </label>
-      <input
+      <Input
+        maxLength={maxLength}
         className={`freight-master-input ${numeric ? "numeric" : ""}`}
         value={value}
         type={type}
@@ -861,7 +869,7 @@ function Field({
         disabled={disabled}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-      />
+       maxBytes={maxLength} />
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowRight, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
@@ -202,15 +204,15 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
         <DataTable
           columns={columns}
           data={filteredRows}
-          toolbar={
-            <button
+          actionButton={
+            <div className="flex items-center gap-2"><button
               type="button"
               onClick={() => openSteps(null, "job")}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
             >
               <Plus size={14} />
               Add Job
-            </button>
+            </button><FinanceListActionsMenu onExport={() => exportToCsv(filteredRows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value]))), columns, `freight-${targetMode}-${targetDirection}-jobs.csv`)} onRefresh={() => void loadRows()} /></div>
           }
           loading={loading}
           searchValue={query}
@@ -221,7 +223,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
+          enableExport={false}
           exportFilename={`freight-${targetMode}-${targetDirection}-jobs.csv`}
           onRowClick={(row) => openSteps(row, "job")}
           rowClassName={(row) =>
@@ -243,6 +245,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="freight-workspace-header-shell">
           <div className="freight-workspace-title-cluster">
+            <button type="button" onClick={returnToList} aria-label="Back to job list" title="Back to job list" className="freight-back-button"><ArrowLeft size={18} /></button>
             <div className={`freight-workspace-mode-mark mode-${modeCode[targetMode].toLowerCase()}`} aria-hidden="true">
               <WorkspaceModeIcon size={30} strokeWidth={1.5} />
             </div>
