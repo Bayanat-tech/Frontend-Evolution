@@ -24,13 +24,42 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { NewReportDialogProps } from "./types";
-import htmlToPdfmake from "html-to-pdfmake";
 
 type Orientation = "portrait" | "landscape";
 
+/** Above this many pages the preview shows one page at a time with pagination */
+const PAGINATE_THRESHOLD = 5;
+
+/**
+ * Above this many pages, "Download PDF" uses the browser print dialog
+ * (Save as PDF) instead of html2canvas, which gets slow on big reports.
+ */
+const PRINT_PDF_THRESHOLD = 10;
+
+/**
+ * How many page thumbnails render a live mini preview at once (a window around
+ * the current page). Every live preview is made of iframes that each parse the
+ * whole report, so keeping this small is what keeps 79-page reports responsive.
+ */
+const THUMB_LIVE_COUNT = 5;
+
+/** 1 2 … 7 8 9 … 19 20 */
+const buildPageNumbers = (cur: number, total: number): (number | "…")[] => {
+  const keep = new Set<number>(
+    [1, 2, total - 1, total, cur - 1, cur, cur + 1].filter((n) => n >= 1 && n <= total)
+  );
+  const sorted = Array.from(keep).sort((a, b) => a - b);
+  const out: (number | "…")[] = [];
+  sorted.forEach((n, i) => {
+    if (i > 0 && n - sorted[i - 1] > 1) out.push("…");
+    out.push(n);
+  });
+  return out;
+};
+
 /* ───────────────────────── PDF image helpers ───────────────────────── */
 
-/** Fetch an image and return it as a data URL (pdfmake can't load remote URLs). */
+/** Fetch an image and return it as a data URL (html2canvas needs CORS-safe images). */
 const toDataUrl = async (src: string): Promise<string | null> => {
   try {
     const res = await fetch(src, { mode: "cors", cache: "force-cache" });
@@ -45,33 +74,6 @@ const toDataUrl = async (src: string): Promise<string | null> => {
   } catch {
     return null;
   }
-};
-
-/**
- * Returns HTML where every <img src> is inlined as a data URL.
- * Images that cannot be loaded (CORS, 404, network) are removed so pdfmake
- * does not throw "File ... not found in virtual file system".
- */
-const inlineImages = async (html: string): Promise<string> => {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const imgs = Array.from(doc.querySelectorAll("img"));
-  await Promise.all(
-    imgs.map(async (img) => {
-      const src = img.getAttribute("src") || "";
-      if (!src || src.startsWith("data:")) return;
-      let abs = src;
-      try {
-        abs = new URL(src, window.location.href).href;
-      } catch {
-        img.remove();
-        return;
-      }
-      const dataUrl = await toDataUrl(abs);
-      if (dataUrl) img.setAttribute("src", dataUrl);
-      else img.remove();
-    })
-  );
-  return "<!DOCTYPE html>" + doc.documentElement.outerHTML;
 };
 
 /* ───────────────────────── Responsive helpers ───────────────────────── */
@@ -214,6 +216,10 @@ const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
  * - 100% zoom = BASE_VIEW_RATIO (90%) of the preview width, centred
  * - Responsive: full-screen on phones, slide-over page navigator, trimmed toolbar, touch pinch-zoom
+ * - More than PAGINATE_THRESHOLD pages: one page at a time with a pagination bar
+ * - PDF download (fully frontend):
+ *     · up to PRINT_PDF_THRESHOLD pages → html2canvas + jsPDF (one click, selectable text layer)
+ *     · more than PRINT_PDF_THRESHOLD pages → browser print dialog (Save as PDF), fast and native
  */
 export function NewReportDialog({
   open,
@@ -228,7 +234,6 @@ export function NewReportDialog({
   onOpenInNewWindow,
   headerSlot,
 }: NewReportDialogProps) {
-  console.log("htmlContent", htmlContent);
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
   const isCompact = bp !== "desktop";
@@ -240,6 +245,8 @@ export function NewReportDialog({
   const rootRef = useRef<HTMLDivElement>(null);
   const sizerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  /** Match to scroll to once its page has been mounted (paginated mode) */
+  const pendingMatchRef = useRef<{ k: number; list: { y: number }[] } | null>(null);
   /** Search state */
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -259,6 +266,10 @@ export function NewReportDialog({
   const [page, setPage] = useState(1);
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [totalPages, setTotalPages] = useState(1);
+  /** More than PAGINATE_THRESHOLD pages → show one page at a time */
+  const paginated = totalPages > PAGINATE_THRESHOLD;
+  /** More than PRINT_PDF_THRESHOLD pages → PDF goes through the browser print dialog */
+  const usePrintForPdf = totalPages > PRINT_PDF_THRESHOLD;
   const [measuring, setMeasuring] = useState(false);
   /** Left page-thumb navbar visible (starts closed on small screens) */
   const [navOpen, setNavOpen] = useState(
@@ -266,6 +277,8 @@ export function NewReportDialog({
   );
   /** Width of the scrollable preview area (px) — used to fit the page edge to edge */
   const [viewW, setViewW] = useState(0);
+  /** Height of the scrollable preview area (px) — used to fit one whole page in paginated mode */
+  const [viewH, setViewH] = useState(0);
   /** Unscaled layout height of the pages wrapper (px) — used to size scroll area after scaling */
   const [layoutH, setLayoutH] = useState(0);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -291,6 +304,9 @@ export function NewReportDialog({
   const contentH = pageH - pageMarginPx * 2;
 
   /** Scale that makes the A4 sheet as wide as the preview area (× BASE_VIEW_RATIO) */
+  /** Same 100% as the normal view in both modes (page not stretched edge to edge) */
+  const PAGINATED_EXTRA_H = 24; // gap above the label + label
+  const PAGINATED_PAD_V = 16; // 8px top + 8px bottom
   const baseScale = viewW > 0 ? (viewW / pageW) * BASE_VIEW_RATIO : 1;
   /** Final scale applied to the pages (100% zoom = old 90% view) */
   const scale = baseScale * (zoom / 100);
@@ -509,6 +525,7 @@ export function NewReportDialog({
       setSearchOpen(false);
       setQuery("");
       setDebouncedQuery("");
+      setDownloadMessage(null);
     }
   }, [open]);
 
@@ -518,10 +535,13 @@ export function NewReportDialog({
     const el = scrollRef.current;
     if (!el) return;
     setViewW(el.clientWidth);
+    setViewH(el.clientHeight);
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
+      const h = entries[0]?.contentRect.height;
       if (w) setViewW(w);
+      if (h) setViewH(h);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -536,7 +556,7 @@ export function NewReportDialog({
     const ro = new ResizeObserver(() => setLayoutH(el.offsetHeight));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [open, loading, error, preparedHtml, totalPages]);
+  }, [open, loading, error, preparedHtml, totalPages, paginated]);
 
   // When htmlContent changes (e.g. drill-down navigation), reset page +
   // auto-detect orientation from the new HTML, then remeasure
@@ -752,7 +772,14 @@ export function NewReportDialog({
     off += pageMarginPx;
 
     const sheetEl = pageSheetRefs.current[pageIdx];
-    if (!sheetEl) return;
+    if (!sheetEl) {
+      // Paginated mode: switch page first, the effect below finishes the scroll
+      if (paginated && pageIdx + 1 !== page) {
+        pendingMatchRef.current = { k, list };
+        setPage(pageIdx + 1);
+      }
+      return;
+    }
     const rootRect = root.getBoundingClientRect();
     const elRect = sheetEl.getBoundingClientRect();
     const target =
@@ -906,6 +933,25 @@ export function NewReportDialog({
     el.scrollTop = st + a.cY * scale - a.cy;
   }, [scale]);
 
+  // Paginated mode: on page change scroll to top, or finish a pending search-match scroll
+  useEffect(() => {
+    if (!paginated) return;
+    // Each page opens at 100% (fit to view), even if the previous one was zoomed in
+    zoomAnchor.current = null;
+    setZoom(100);
+    const id = requestAnimationFrame(() => {
+      const pending = pendingMatchRef.current;
+      if (pending) {
+        pendingMatchRef.current = null;
+        scrollToMatch(pending.k, pending.list);
+      } else {
+        scrollRef.current?.scrollTo({ top: 0 });
+      }
+    });
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, paginated]);
+
   /** Runs when any displayed report frame (re)loads: highlights + pinch / Ctrl+F inside the frame */
   const onFrameLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
     const frame = e.currentTarget;
@@ -966,55 +1012,87 @@ export function NewReportDialog({
 
   /**
    * Print on the same screen — no new tab.
-   * Hidden iframe with allow-modals so the browser print dialog can open.
+   * Fresh hidden iframe each time (a reused iframe + document.write is flaky
+   * across browsers), with allow-modals so contentWindow.print() is allowed.
+   * Waits for images + webfonts so the printed pages are complete, not cramped.
    */
   const handlePrint = () => {
     const html = preparedHtml || htmlContent;
     if (!html) return;
 
-    const PRINT_IFRAME_ID = "nr-print-iframe";
-    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+    // Fresh frame per print — removes stale-document / sandbox edge cases
+    document.getElementById("nr-print-iframe")?.remove();
 
-    if (!iframe) {
-      iframe = document.createElement("iframe");
-      iframe.id = PRINT_IFRAME_ID;
-      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
-      iframe.style.cssText =
-        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
-      document.body.appendChild(iframe);
+    const iframe = document.createElement("iframe");
+    iframe.id = "nr-print-iframe";
+    // allow-modals is REQUIRED, otherwise print() is blocked silently
+    iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+    iframe.style.cssText =
+      "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0.01;pointer-events:none;";
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow;
+    if (!win) {
+      iframe.remove();
+      return;
     }
 
+    let printed = false;
     const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      const doc = iframe.contentDocument;
       try {
-        iframe?.contentWindow?.focus();
-        iframe?.contentWindow?.print();
-      } catch {
-        /* ignore */
+        const imgs = doc ? Array.from(doc.images) : [];
+        const ready = Promise.all([
+          imgs.length
+            ? Promise.all(
+                imgs.map((i) =>
+                  i.complete
+                    ? Promise.resolve()
+                    : new Promise<void>((r) => {
+                        i.onload = () => r();
+                        i.onerror = () => r();
+                      })
+                )
+              )
+            : Promise.resolve(),
+          (
+            doc as (Document & { fonts?: { ready: Promise<unknown> } }) | null
+          )?.fonts?.ready ?? Promise.resolve(),
+        ]);
+        ready
+          .then(() => {
+            win.focus();
+            win.print();
+          })
+          .catch((err) => {
+            console.error("Print failed:", err);
+            setDownloadMessage({
+              type: "error",
+              text: "Print failed. Try Open in new window and print from there.",
+            });
+            setTimeout(() => setDownloadMessage(null), 6000);
+          })
+          .finally(() => setTimeout(() => iframe.remove(), 1000));
+      } catch (err) {
+        console.error("Print failed:", err);
+        iframe.remove();
       }
     };
 
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    if (iframe.contentDocument?.readyState === "complete") {
-      setTimeout(doPrint, 300);
-    } else {
-      iframe.onload = () => setTimeout(doPrint, 300);
-      setTimeout(doPrint, 700);
-    }
+    // srcdoc fires load reliably (document.write after load does not, in some browsers)
+    iframe.onload = () => setTimeout(doPrint, 100);
+    iframe.srcdoc = html;
+    // Fallback if onload never fires (older WebKit)
+    setTimeout(doPrint, 1500);
   };
 
   const goToPage = (n: number) => {
     const clamped = Math.max(1, Math.min(totalPages, n));
     setPage(clamped);
-    const el = pageSheetRefs.current[clamped - 1];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    if (paginated) return; // effect above scrolls to top
+    pageSheetRefs.current[clamped - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const goPrev = () => goToPage(page - 1);
@@ -1025,6 +1103,7 @@ export function NewReportDialog({
    * Uses on-screen rects (not offsetTop) because the pages are CSS-scaled.
    */
   const onScrollPreview = () => {
+    if (paginated) return; // only one page is mounted; page is controlled by pagination
     const root = scrollRef.current;
     if (!root || totalPages < 1) return;
     const rootTop = root.getBoundingClientRect().top;
@@ -1096,105 +1175,217 @@ export function NewReportDialog({
     );
   };
 
+  /**
+   * Download the report as a PDF, fully on the frontend.
+   *
+   * - More than PRINT_PDF_THRESHOLD pages: open the browser print dialog
+   *   (user picks "Save as PDF"). Native engine, fast, selectable text.
+   * - Otherwise: html2canvas renders each page exactly as the preview shows it
+   *   (all CSS applied), jsPDF assembles the pages, and an invisible text layer
+   *   is added so the text stays selectable / searchable.
+   *
+   * Wide-table fix: the report CSS forces `th, td { white-space: nowrap }`, so a
+   * wide table overflows the A4 content width. Capturing only `contentW` clipped
+   * the overflow columns. Now the FULL rendered width (scrollWidth) is captured
+   * and scaled down to fit the page via the `fit` factor — nothing is hidden.
+   */
   const handleDownloadPdf = async () => {
     if (!htmlContent || loading || downloadingPdf) return;
+
+    // Large reports: html2canvas is too slow → use the browser's print engine
+    if (usePrintForPdf) {
+      handlePrint();
+      setDownloadMessage({
+        type: "success",
+        text: 'Large report: choose "Save as PDF" as the destination in the print dialog.',
+      });
+      setTimeout(() => setDownloadMessage(null), 6000);
+      return;
+    }
+
+    const iframe = measureRef.current;
+    const doc = iframe?.contentDocument;
+    const win = iframe?.contentWindow;
+    if (!doc?.body || !win || layout.pages.length === 0) return;
 
     setDownloadingPdf(true);
     setDownloadMessage(null);
 
     try {
-      const [pdfMakeModule, pdfFontsModule] = await Promise.all([
-        import("pdfmake/build/pdfmake"),
-        import("pdfmake/build/vfs_fonts"),
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
       ]);
 
-      const pdfMake = ((pdfMakeModule as any).default ?? pdfMakeModule) as any;
-      const fontModule = pdfFontsModule as any;
+      const S = 2; // render scale (2 = sharp, 1.5 = faster / smaller)
+      const PX_MM = 25.4 / 96;
+      const fullH = Math.max(contentHeight, contentH);
 
-      // pdfmake's VFS export differs between 0.2.x and 0.3.x and between
-      // CommonJS/ESM bundlers. Find the actual font-file dictionary instead
-      // of assuming it always lives at pdfMake.vfs.
-      const isFontVfs = (value: unknown): value is Record<string, string> => {
-        if (!value || typeof value !== "object") return false;
-        const entries = Object.entries(value as Record<string, unknown>);
-        return entries.some(([key, val]) => /\.ttf$/i.test(key) && typeof val === "string");
-      };
+      /* ── 0. Real rendered width — wide tables must NOT be clipped ── */
+      const capW = Math.max(
+        doc.documentElement.scrollWidth,
+        doc.body?.scrollWidth ?? 0,
+        contentW
+      );
+      const fit = capW > contentW ? contentW / capW : 1; // < 1 → shrink to fit the page
 
-      const fontCandidates = [
-        fontModule?.pdfMake?.vfs,
-        fontModule?.default?.pdfMake?.vfs,
-        fontModule?.vfs,
-        fontModule?.default?.vfs,
-        fontModule?.default,
-        fontModule,
-      ];
-      const vfs = fontCandidates.find(isFontVfs);
+      /* ── 1. Inline images so html2canvas can draw them ── */
+      const imgMap = new Map<string, string>();
+      await Promise.all(
+        Array.from(doc.querySelectorAll("img")).map(async (img) => {
+          const src = img.getAttribute("src") || "";
+          if (!src || src.startsWith("data:")) return;
+          try {
+            const d = await toDataUrl(new URL(src, window.location.href).href);
+            if (d) imgMap.set(src, d);
+          } catch {
+            /* ignore bad URLs */
+          }
+        })
+      );
 
-      if (!vfs) {
-        throw new Error(
-          "The bundled PDF font files were not found. Ensure pdfmake and its vfs_fonts module use the same version."
-        );
+      /* ── 2. Collect every word with its position (for the invisible text layer) ── */
+      type Word = { t: string; x: number; y: number; h: number; fs: number };
+      const words: Word[] = [];
+      const sx = win.pageXOffset || 0;
+      const sy = win.pageYOffset || 0;
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+      let n: Node | null;
+      while ((n = walker.nextNode())) {
+        const el = n.parentElement;
+        if (!el || /^(SCRIPT|STYLE|NOSCRIPT)$/.test(el.tagName) || el.closest(".actions")) continue;
+        const cs = win.getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden") continue;
+        const fs = parseFloat(cs.fontSize) || 9;
+        const text = n.nodeValue ?? "";
+        const re = /\S+/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(text))) {
+          // standard PDF fonts only cover Latin-1; Arabic etc. stays visible in the image only
+          const t = m[0].replace(/[^\x20-\xFF]/g, "");
+          if (!t) continue;
+          const r = doc.createRange();
+          r.setStart(n, m.index);
+          r.setEnd(n, m.index + m[0].length);
+          const b = r.getBoundingClientRect();
+          if (!b.width || !b.height) continue;
+          words.push({ t, x: b.left + sx, y: b.top + sy, h: b.height, fs });
+        }
       }
 
-      // pdfmake 0.2.x uses .vfs; 0.3.x also supports addVirtualFileSystem.
-      if (typeof pdfMake.addVirtualFileSystem === "function") {
-        pdfMake.addVirtualFileSystem(vfs);
-      }
-      pdfMake.vfs = { ...(pdfMake.vfs ?? {}), ...vfs };
+      /* ── 3. Capture a vertical window of the report at its real (full) width ── */
+      const capture = (top: number, h: number) =>
+        html2canvas(doc.documentElement, {
+          scale: S,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          x: 0,
+          y: Math.round(top),
+          width: capW,
+          height: Math.max(1, Math.ceil(h)),
+          windowWidth: capW,
+          windowHeight: fullH,
+          scrollX: 0,
+          scrollY: 0,
+          logging: false,
+          onclone: (cd) => {
+            cd.querySelectorAll("img").forEach((img) => {
+              const src = img.getAttribute("src") || "";
+              const d = imgMap.get(src);
+              if (d) img.setAttribute("src", d);
+              else if (!src.startsWith("data:")) (img as HTMLElement).style.visibility = "hidden";
+            });
+          },
+        });
 
-      const robotoFonts = {
-        Roboto: {
-          normal: "Roboto-Regular.ttf",
-          bold: "Roboto-Medium.ttf",
-          italics: "Roboto-Italic.ttf",
-          bolditalics: "Roboto-MediumItalic.ttf",
-        },
+      const pdf = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
+      const mmW = orientation === "portrait" ? 210 : 297;
+      const mmH = orientation === "portrait" ? 297 : 210;
+
+      /** Invisible text for the words inside doc window [top, top+h), drawn at page offset (offY px) */
+      const addText = (top: number, h: number, offY: number) => {
+        for (const w of words) {
+          const cy = w.y + w.h / 2;
+          if (cy < top || cy >= top + h) continue;
+          pdf.setFontSize(Math.max(1, w.fs * 0.75 * fit));
+          pdf.text(
+            w.t,
+            (pageMarginPx + w.x * fit) * PX_MM,
+            (offY + (w.y - top) * fit) * PX_MM,
+            {
+              baseline: "top",
+              renderingMode: "invisible",
+            } as any
+          );
+        }
       };
-      if (typeof pdfMake.addFonts === "function") {
-        pdfMake.addFonts(robotoFonts);
+
+      /* ── 4. Header / footer / repeated thead are captured once and reused ── */
+      const header = layout.headerH > 0 ? await capture(layout.headerTop, layout.headerH) : null;
+      const footer = layout.footerH > 0 ? await capture(layout.footerTop, layout.footerH) : null;
+      const theadCache = new Map<number, HTMLCanvasElement>();
+
+      /** Destination width when drawing a capture onto the sheet (fit-scaled) */
+      const dw = Math.round(capW * S * fit); // === contentW * S when fit < 1
+
+      for (let i = 0; i < layout.pages.length; i++) {
+        const pg = layout.pages[i];
+        const sheet = document.createElement("canvas");
+        sheet.width = pageW * S;
+        sheet.height = pageH * S;
+        const ctx = sheet.getContext("2d")!;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, sheet.width, sheet.height);
+
+        const x = pageMarginPx * S;
+        let y = pageMarginPx; // px, page coordinates (fit-scaled as we go)
+        const textJobs: [number, number, number][] = []; // [docTop, h, pageY]
+
+        const draw = (img: HTMLCanvasElement, docTop: number, h: number) => {
+          ctx.drawImage(
+            img,
+            x,
+            Math.round(y * S),
+            dw,
+            Math.max(1, Math.round(h * S * fit))
+          );
+          textJobs.push([docTop, h, y]);
+          y += h * fit;
+        };
+
+        if (header) draw(header, layout.headerTop, layout.headerH);
+        if (pg.repeat) {
+          let th = theadCache.get(pg.repeat.top);
+          if (!th) {
+            th = await capture(pg.repeat.top, pg.repeat.h);
+            theadCache.set(pg.repeat.top, th);
+          }
+          draw(th, pg.repeat.top, pg.repeat.h);
+        }
+        const body = await capture(pg.start, pg.end - pg.start);
+        draw(body, pg.start, pg.end - pg.start);
+
+        if (footer) {
+          const fy = pageMarginPx + contentH * fit - layout.footerH * fit;
+          ctx.drawImage(
+            footer,
+            x,
+            Math.round(fy * S),
+            dw,
+            Math.max(1, Math.round(layout.footerH * S * fit))
+          );
+          textJobs.push([layout.footerTop, layout.footerH, fy]);
+        }
+
+        if (i > 0) pdf.addPage("a4", orientation);
+        pdf.addImage(sheet.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, mmW, mmH, undefined, "FAST");
+        textJobs.forEach(([t, h, py]) => addText(t, h, py));
+
+        await new Promise((r) => setTimeout(r, 0)); // keep the UI responsive
       }
-      pdfMake.fonts = { ...(pdfMake.fonts ?? {}), ...robotoFonts };
 
-      // pdfmake can't fetch remote images in the browser: it only accepts data
-      // URLs or files registered in its virtual file system. Inline every <img>
-      // (e.g. the company logo on Oracle Object Storage) as a data URL first.
-      // Images that fail to load (CORS / 404) are dropped so the PDF still builds.
-      const safeHtml = await inlineImages(htmlContent);
-
-      // Keep htmlContent unchanged; apply a compact, readable fallback style
-      // so large tables are more likely to fit the report page width/height.
-      const pdfContent = htmlToPdfmake(safeHtml, {
-        window: window as any,
-      });
-      const margin = pageMarginMm * 2.83465;
-      const definition = {
-        pageSize: "A4",
-        pageOrientation: orientation,
-        pageMargins: [margin, margin, margin, margin],
-        content: pdfContent,
-        defaultStyle: {
-          font: "Roboto",
-          fontSize: 8,
-          lineHeight: 1.05,
-          color: "#222222",
-        },
-        styles: {
-          header: { font: "Roboto", fontSize: 12, bold: true },
-          subheader: { font: "Roboto", fontSize: 10, bold: true },
-          tableHeader: { font: "Roboto", fontSize: 8, bold: true, color: "#222222" },
-        },
-        // Reduce default table padding to conserve space without changing the HTML.
-        layout: {
-          hLineWidth: () => 0.5,
-          vLineWidth: () => 0.5,
-          paddingLeft: () => 3,
-          paddingRight: () => 3,
-          paddingTop: () => 2,
-          paddingBottom: () => 2,
-        },
-      };
       const safeTitle = title.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim() || "Report";
-      pdfMake.createPdf(definition).download(`${safeTitle}.pdf`);
+      pdf.save(`${safeTitle}.pdf`);
     } catch (reason) {
       setDownloadMessage({
         type: "error",
@@ -1212,6 +1403,11 @@ export function NewReportDialog({
   const orientationOverridden = orientation !== autoOrientation;
 
   const navW = orientation === "portrait" ? 100 : 132;
+
+  /** Pages actually mounted in the preview: all of them, or just the current one when paginated */
+  const pageIndexes = paginated
+    ? [Math.min(page, totalPages) - 1]
+    : Array.from({ length: totalPages }, (_, i) => i);
 
   return (
     <div
@@ -1632,6 +1828,13 @@ export function NewReportDialog({
           >
             {navOpen &&
               thumbPages.map((n, idx) => {
+                // Only a window of THUMB_LIVE_COUNT pages around the current one is rendered;
+                // the window moves as the user goes to the next / previous page
+                const liveStart = Math.max(
+                  1,
+                  Math.min(page - 2, totalPages - (THUMB_LIVE_COUNT - 1))
+                );
+                const isLive = n >= liveStart && n < liveStart + THUMB_LIVE_COUNT;
                 const prev = thumbPages[idx - 1];
                 const showGap = prev != null && n - prev > 1;
                 // Thumbnail sheet size (fits nav column)
@@ -1671,7 +1874,7 @@ export function NewReportDialog({
                       }}
                     >
                       {/* Mini page: repeated header + this page's body slice + footer, scaled down */}
-                      {preparedHtml && !loading ? (
+                      {preparedHtml && !loading && !measuring && isLive ? (
                         <div
                           style={{
                             width: pageW,
@@ -1727,10 +1930,15 @@ export function NewReportDialog({
             style={{
               flex: 1,
               minWidth: 0,
-              overflowY: "auto",
+              // Paginated: the whole page fits the view, so no scrolling (only when zoomed in to pan)
+              overflowY:
+                paginated && (pageH + PAGINATED_EXTRA_H) * scale + PAGINATED_PAD_V <= viewH + 1
+                  ? "hidden"
+                  : "auto",
               overflowX: pageW * scale > viewW + 1 ? "auto" : "hidden",
+              scrollbarGutter: paginated ? "stable" : undefined,
               background: "#374151",
-              padding: "0 0 40px",
+              padding: paginated ? `${PAGINATED_PAD_V / 2}px 0` : "0 0 40px",
               touchAction: "pan-x pan-y",
             }}
           >
@@ -1783,30 +1991,39 @@ export function NewReportDialog({
                   }}
                 >
                   {/*
-                    One continuous report, split visually into A4 sheets.
-                    Each sheet clips a slice of the same content via translateY.
-                    Measure iframe runs report scripts (drill postMessage) with
-                    sandbox allow-scripts allow-same-origin so DRILL_DOWN works.
+                    The measure iframe is resized to the FULL report height (e.g. 76 pages),
+                    so it is clipped inside a 0x0 box. Otherwise it stretches the scrollable
+                    area of the preview and leaves a huge blank scroll below the page.
                   */}
-                  <iframe
-                    ref={measureRef}
-                    title={`${title}-measure`}
-                    srcDoc={preparedHtml}
-                    onLoad={onIframeLoad}
+                  <div
+                    aria-hidden="true"
                     style={{
                       position: "absolute",
-                      left: -9999,
+                      left: 0,
                       top: 0,
-                      width: contentW,
-                      height: 50,
-                      opacity: 0,
+                      width: 0,
+                      height: 0,
+                      overflow: "hidden",
+                      visibility: "hidden",
                       pointerEvents: "none",
-                      border: "none",
                     }}
-                    sandbox="allow-same-origin allow-scripts"
-                  />
+                  >
+                    <iframe
+                      ref={measureRef}
+                      title={`${title}-measure`}
+                      srcDoc={preparedHtml}
+                      onLoad={onIframeLoad}
+                      style={{
+                        display: "block",
+                        width: contentW,
+                        height: 50,
+                        border: "none",
+                      }}
+                      sandbox="allow-same-origin allow-scripts"
+                    />
+                  </div>
 
-                  {Array.from({ length: totalPages }, (_, i) => {
+                  {pageIndexes.map((i) => {
                     const pageNum = i + 1;
 
                     return (
@@ -1819,7 +2036,7 @@ export function NewReportDialog({
                           display: "flex",
                           flexDirection: "column",
                           alignItems: "center",
-                          marginBottom: 20,
+                          marginBottom: paginated ? 0 : 20,
                         }}
                       >
                         <div
@@ -1949,6 +2166,66 @@ export function NewReportDialog({
           )}
         </div>
 
+        {/* Pagination bar — only when the report has more than PAGINATE_THRESHOLD pages */}
+        {paginated && !loading && !error && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              padding: "6px 10px",
+              background: "#1f2937",
+              borderTop: "1px solid #374151",
+              flexShrink: 0,
+              overflowX: "auto",
+            }}
+          >
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={page <= 1}
+              style={{ ...pageBtn, opacity: page <= 1 ? 0.35 : 1 }}
+            >
+              <ChevronLeft size={14} /> {!isMobile && "Prev"}
+            </button>
+
+            {buildPageNumbers(page, totalPages).map((n, idx) =>
+              n === "…" ? (
+                <span key={`gap-${idx}`} style={{ color: "#9ca3af", padding: "0 4px" }}>
+                  …
+                </span>
+              ) : (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => goToPage(n)}
+                  aria-current={n === page ? "page" : undefined}
+                  style={{
+                    ...pageBtn,
+                    minWidth: 30,
+                    justifyContent: "center",
+                    background: n === page ? "#3b82f6" : "transparent",
+                    color: n === page ? "#fff" : "#e2e8f0",
+                    fontWeight: n === page ? 700 : 500,
+                  }}
+                >
+                  {n}
+                </button>
+              )
+            )}
+
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={page >= totalPages}
+              style={{ ...pageBtn, opacity: page >= totalPages ? 0.35 : 1 }}
+            >
+              {!isMobile && "Next"} <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Footer */}
         <div
           style={{
@@ -1992,6 +2269,11 @@ export function NewReportDialog({
             type="button"
             onClick={handleDownloadPdf}
             disabled={!htmlContent || loading || downloadingPdf}
+            title={
+              usePrintForPdf
+                ? 'Large report: opens the print dialog — choose "Save as PDF"'
+                : "Download as PDF"
+            }
             style={{
               ...footerBtn,
               ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
@@ -2000,7 +2282,11 @@ export function NewReportDialog({
             }}
           >
             <Download size={14} strokeWidth={2} />
-            {downloadingPdf ? "Generating PDF…" : "Download PDF"}
+            {downloadingPdf
+              ? "Generating PDF…"
+              : usePrintForPdf
+              ? "Print / Save as PDF"
+              : "Download PDF"}
           </button>
 
           {onOpenInNewWindow && (
@@ -2052,6 +2338,21 @@ const toolIconBtn: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: 0,
+  flexShrink: 0,
+};
+
+const pageBtn: React.CSSProperties = {
+  height: 28,
+  padding: "0 8px",
+  border: "none",
+  borderRadius: 4,
+  background: "transparent",
+  color: "#e2e8f0",
+  fontSize: 12,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
   flexShrink: 0,
 };
 
