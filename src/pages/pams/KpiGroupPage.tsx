@@ -11,7 +11,6 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
-// ✅ FIX: pamsDelete import kiya
 import { pamsDelete, pamsSave, pamsSelect } from "../../api/pams";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -285,9 +284,6 @@ export function KpiGroupPage() {
     ? KPI_CHARACTERISTIC_TYPE_CODE
     : KPI_ACTIVITY_TYPE_CODE;
 
-  // ═════════════════════════════════════════════════════════
-  // LOAD ROWS  — ✅ FIX: server-side DIV/DEPT filter pass
-  // ═════════════════════════════════════════════════════════
   const loadRows = async () => {
     if (!selectedDivision || !selectedDepartment) {
       setRows([]);
@@ -300,8 +296,8 @@ export function KpiGroupPage() {
         parameter: "kpi",
         loginid,
         code1: companyCode,
-        code2: selectedDivision,   // ✅ server-side DIV filter
-        code3: selectedDepartment, // ✅ server-side DEPT filter
+        code2: selectedDivision,   
+        code3: selectedDepartment, 
       });
       setRows(data.map(normalizeRow));
     } catch (error) {
@@ -311,7 +307,7 @@ export function KpiGroupPage() {
     }
   };
 
-  // ✅ FIX: Div/Dept change hone par reload karo (purana loginid/companyCode effect hata diya)
+
   useEffect(() => {
     if (selectedDivision && selectedDepartment) {
       void loadRows();
@@ -410,7 +406,7 @@ export function KpiGroupPage() {
     })();
   }, [selectedDivision, loginid, companyCode]);
 
-  // ✅ FIX: TRIM + case-insensitive compare (safety net — server-side filter already laga hai)
+
   const filteredRows = useMemo(() => {
     if (!selectedDivision || !selectedDepartment) return [];
     const selDiv = selectedDivision.trim().toUpperCase();
@@ -423,7 +419,6 @@ export function KpiGroupPage() {
     });
   }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
 
-  // ✅ Dedupe rows inside each designation group (by KPI_CODE, fallback KPI_DESC)
   const designationGroups = useMemo<DesignationGroup[]>(() => {
     const map = new Map<string, DesignationGroup>();
     filteredRows.forEach((r) => {
@@ -493,7 +488,7 @@ export function KpiGroupPage() {
       return next;
     });
 
-  // ✅ FIX: loadActivities ab div/dept/desg bhi leta hai
+ 
   const loadActivities = async (
     kpiCode: string,
     divCode: string,
@@ -510,9 +505,9 @@ export function KpiGroupPage() {
         loginid,
         code1: companyCode,
         code2: kpiCode,
-        code3: divCode || "NULL",     // ✅
-        code4: deptCode || "NULL",    // ✅
-        code5: desgCode || "NULL",    // ✅
+        code3: divCode || "NULL",     
+        code4: deptCode || "NULL",    
+        code5: desgCode || "NULL",    
       });
       setActivities(
         data.map((r: Row) => ({
@@ -624,7 +619,7 @@ export function KpiGroupPage() {
 
     setFormOpen(true);
     if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
-      // ✅ FIX: div/dept/desg bhi pass karo
+  
       await loadActivities(text(row.KPI_CODE), divCode, deptCode, desgCode);
     }
   };
@@ -664,7 +659,7 @@ export function KpiGroupPage() {
 
     setFormOpen(true);
     if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
-      // ✅ FIX: div/dept/desg bhi pass karo
+   
       await loadActivities(text(row.KPI_CODE), divCode, deptCode, desgCode);
     }
   };
@@ -724,8 +719,8 @@ export function KpiGroupPage() {
           parameter: "kpi",
           loginid,
           code1: companyCode,
-          code2: form.DIVISION_CODE,   // ✅ filter
-          code3: form.DEPARTMENT_CODE, // ✅ filter
+          code2: form.DIVISION_CODE,   
+          code3: form.DEPARTMENT_CODE, 
         });
         const matches = refreshed
           .map(normalizeRow)
@@ -742,16 +737,16 @@ export function KpiGroupPage() {
       }
 
       if (kpiCode && form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
-        // ✅ FIX: Delete old activities via pamsDelete (DEL endpoint) — div/dept/desg bhi pass
+        
         if (editMode) {
           await pamsDelete({
             parameter: "kpi_item_delete_all",
             loginid,
             code1: companyCode,
             code2: kpiCode,
-            code3: form.DIVISION_CODE || "NULL",   // ✅
-            code4: form.DEPARTMENT_CODE || "NULL", // ✅
-            code5: form.DESG_CODE || "NULL",       // ✅
+            code3: form.DIVISION_CODE || "NULL",   
+            code4: form.DEPARTMENT_CODE || "NULL", 
+            code5: form.DESG_CODE || "NULL",       
           });
         }
 
@@ -765,9 +760,9 @@ export function KpiGroupPage() {
             val1s1: companyCode,
             val1s2: kpiCode,
             val1s3: act.desc,
-            val1s4: form.DIVISION_CODE || "",   // ✅ DIV
-            val1s5: form.DEPARTMENT_CODE || "", // ✅ DEPT
-            val1s6: form.DESG_CODE || "",       // ✅ DESG
+            val1s4: form.DIVISION_CODE || "",   
+            val1s5: form.DEPARTMENT_CODE || "", 
+            val1s6: form.DESG_CODE || "",      
             val1n1: srno,
           });
           srno++;
