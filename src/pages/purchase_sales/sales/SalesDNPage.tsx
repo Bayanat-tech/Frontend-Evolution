@@ -16,10 +16,11 @@ import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchase
 import { SalesDNEditor } from "./SalesDNeditor";
 import { SDN_CONFIG } from "./SalesOrdertypes";
 
-import {  downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
+import { downloadSalesDNExcel, getSalesDNReportHtml } from "./SalesDNReport";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -88,80 +89,80 @@ export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [tabCounts, setTabCounts] = useState<Record<string, number>>({
-  PENDING: 0,
-  INPROGRESS: 0,
-  CLOSED: 0,
-  CANCELED: 0,
-  REJECTED: 0,
-  SENDBACK: 0,
-});
+    PENDING: 0,
+    INPROGRESS: 0,
+    CLOSED: 0,
+    CANCELED: 0,
+    REJECTED: 0,
+    SENDBACK: 0,
+  });
   // ── Report dialog state ────────────────────────────────────────────────────
- 
 
- const openReport = async (row: SalesOrderRow) => {
-  const params = {
-    company_code: user?.company_code,
-    doc_type: row.doc_type || "SDN",
-    doc_no: row.doc_no,
+
+  const openReport = async (row: SalesOrderRow) => {
+    const params = {
+      company_code: user?.company_code,
+      doc_type: row.doc_type || "SDN",
+      doc_no: row.doc_no,
+    };
+    const preview = openPurchaseReport(`Delivery Note - ${row.doc_no}`);
+    try {
+      const html = await getSalesDNReportHtml(params);
+      preview.ready({
+        html,
+        filename: `delivery_note_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await downloadSalesDNExcel(params);
+        },
+      });
+    } catch (e) {
+      preview.fail(e instanceof Error ? e : new Error("Unable to load Delivery Note report"));
+    }
   };
-  const preview = openPurchaseReport(`Delivery Note - ${row.doc_no}`);
-  try {
-    const html = await getSalesDNReportHtml(params);
-    preview.ready({
-      html,
-      filename: `delivery_note_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await downloadSalesDNExcel(params);
-      },
-    });
-  } catch (e) {
-    preview.fail(e instanceof Error ? e : new Error("Unable to load Delivery Note report"));
-  }
-};
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
     setDivisions(divisionData);
   };
   const purchaseOrderTabs = [
-  { value: "PENDING", label: "Pending" },
-  { value: "INPROGRESS", label: "In Progress" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "CANCELED", label: "Canceled" },
-  { value: "REJECTED", label: "Rejected" },
-];
-const getTabCount = (tabValue: string) => {
-  return tabCounts[tabValue] ?? 0;
-};
+    { value: "PENDING", label: "Pending" },
+    { value: "INPROGRESS", label: "In Progress" },
+    { value: "CLOSED", label: "Closed" },
+    { value: "CANCELED", label: "Canceled" },
+    { value: "REJECTED", label: "Rejected" },
+  ];
+  const getTabCount = (tabValue: string) => {
+    return tabCounts[tabValue] ?? 0;
+  };
 
-const loadRows = async (clearNotice = true) => {
-  setLoading(true);
+  const loadRows = async (clearNotice = true) => {
+    setLoading(true);
 
-  if (clearNotice) setNotice(null);
+    if (clearNotice) setNotice(null);
 
-  try {
-    const response = await fetchPurchaseOrders();
+    try {
+      const response = await fetchPurchaseOrders();
 
-    setRows(response);
-    setTotalRows(response.length);
+      setRows(response);
+      setTotalRows(response.length);
 
-    setTabCounts((prev) => ({
-      ...prev,
-      [tab]: response.length,
-    }));
-  } catch (error) {
-    setNotice({
-      type: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to load purchase orders",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+      setTabCounts((prev) => ({
+        ...prev,
+        [tab]: response.length,
+      }));
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load purchase orders",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
@@ -176,10 +177,10 @@ const loadRows = async (clearNotice = true) => {
     return response as unknown as SalesOrderRow[];
   };
   const loadTabCounts = async () => {
-  const visibleTabs: RequestTab[] =
-    approvalLevel === 0
-      ? ["PENDING", "CLOSED", "CANCELED"]
-      : [
+    const visibleTabs: RequestTab[] =
+      approvalLevel === 0
+        ? ["PENDING", "CLOSED", "CANCELED"]
+        : [
           "PENDING",
           "INPROGRESS",
           "CLOSED",
@@ -187,44 +188,44 @@ const loadRows = async (clearNotice = true) => {
           "REJECTED",
         ];
 
-  const results = await Promise.all(
-    visibleTabs.map(async (tabValue) => {
-      const response = await getDynamicLookup({
-        parameter: "PS_SDN_ENTRY_TAB_LIST",
-        code1: user?.company_code,
-        code2: user?.loginid || user?.username || "ADMIN",
-        code3: tabValue,
+    const results = await Promise.all(
+      visibleTabs.map(async (tabValue) => {
+        const response = await getDynamicLookup({
+          parameter: "PS_SDN_ENTRY_TAB_LIST",
+          code1: user?.company_code,
+          code2: user?.loginid || user?.username || "ADMIN",
+          code3: tabValue,
+        });
+
+        return {
+          tab: tabValue,
+          count: response.length,
+        };
+      })
+    );
+
+    setTabCounts((prev) => {
+      const next = { ...prev };
+
+      results.forEach(({ tab, count }) => {
+        next[tab] = count;
       });
 
-      return {
-        tab: tabValue,
-        count: response.length,
-      };
-    })
-  );
-
-  setTabCounts((prev) => {
-    const next = { ...prev };
-
-    results.forEach(({ tab, count }) => {
-      next[tab] = count;
+      return next;
     });
+  };
 
-    return next;
-  });
-};
+  useEffect(() => {
+    if (!user?.company_code || approvalLevel === undefined) return;
 
-useEffect(() => {
-  if (!user?.company_code || approvalLevel === undefined) return;
-
-  void loadTabCounts();
-}, [
-  user?.company_code,
-  user?.loginid,
-  user?.username,
-  approvalLevel,
-  canViewCanceledTab,
-]);
+    void loadTabCounts();
+  }, [
+    user?.company_code,
+    user?.loginid,
+    user?.username,
+    approvalLevel,
+    canViewCanceledTab,
+  ]);
   useEffect(() => {
     if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
       setTab("PENDING");
@@ -253,8 +254,8 @@ useEffect(() => {
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
         const level = first
           ? Number(
-              first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0],
-            )
+            first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0],
+          )
           : 0;
         setApprovalLevel(Number.isFinite(level) ? level : 0);
       } catch {
@@ -270,6 +271,14 @@ useEffect(() => {
   useEffect(() => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
+
+  const openEditor = (row: SalesOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
 
   const columns = useMemo<ColumnDef<SalesOrderRow>[]>(
     () => [
@@ -287,16 +296,13 @@ useEffect(() => {
       { accessorKey: "ac_code", header: "A/c Code" },
       { accessorKey: "ac_name", header: "A/c Name" },
       {
-        accessorKey: "canceled",
-        header: "Status",
-        cell: ({ getValue }) =>
-          String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive">
-              Cancelled
-            </Badge>
-          ) : (
-            <Badge>Active</Badge>
-          ),
+        accessorKey: "cancelled",
+        header: () => <div className="text-center font-bold">Status</div>,
+        cell: ({ getValue }) => (
+          <div className="flex justify-center">
+            <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+          </div>
+        ),
       },
       {
         id: "reason",
@@ -311,14 +317,14 @@ useEffect(() => {
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
-         <Button
-  size="icon"
-  variant="ghost"
-  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
-  title={isViewOnlyTab ? "View" : "Edit"}
->
-  {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
-</Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => openEditor(row.original)}
+              title={isViewOnlyTab ? "View" : "Edit"}
+            >
+              {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+            </Button>
             <Button
               size="icon"
               variant="ghost"
@@ -352,7 +358,7 @@ useEffect(() => {
         ),
       },
     ],
-    [user?.company_code ,isViewOnlyTab],
+    [user?.company_code, isViewOnlyTab],
   );
 
   const openCreateForDivision = (division: Division) => {
@@ -384,62 +390,60 @@ useEffect(() => {
           )}
         </div>
       </div> */}
-            <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Sales Delivery Note</h6>
-        </div>
+      <div className="finance-list-title">
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Sales Delivery Note</h6>
+      </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-    <div className="flex flex-wrap items-center gap-1.5 pb-1">
-  {purchaseOrderTabs
-    .filter((item) => {
-      if (approvalLevel === 0) {
-        return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
-      }
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {purchaseOrderTabs
+          .filter((item) => {
+            if (approvalLevel === 0) {
+              return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
+            }
 
-      if (item.value === "CANCELED" && !canViewCanceledTab) {
-        return false;
-      }
+            if (item.value === "CANCELED" && !canViewCanceledTab) {
+              return false;
+            }
 
-      return true;
-    })
-    .map((item) => {
-      const active = tab === item.value;
+            return true;
+          })
+          .map((item) => {
+            const active = tab === item.value;
 
-      return (
-        <button
-          key={item.value}
-          type="button"
-          onClick={() => {
-            setTab(item.value as RequestTab);
-            setPageIndex(0);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-            active
-              ? "bg-[#00378C] text-white shadow-sm font-semibold"
-              : "border border-border bg-card text-foreground hover:bg-secondary"
-          }`}
-        >
-          <span>{item.label}</span>
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setTab(item.value as RequestTab);
+                  setPageIndex(0);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  }`}
+              >
+                <span>{item.label}</span>
 
-          <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-              active
-                ? "bg-white/20 text-white"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {getTabCount(item.value)}
-          </span>
-        </button>
-      );
-    })}
-</div>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
+                      ? "bg-white/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                    }`}
+                >
+                  {getTabCount(item.value)}
+                </span>
+              </button>
+            );
+          })}
+      </div>
 
       <div className="min-h-[650px]">
         <DataTable
           columns={columns}
           data={rows}
-            toolbar={
+          toolbar={
             tab === "PENDING" && (
               <button
                 title="Add Delivery Note"
@@ -502,7 +506,7 @@ useEffect(() => {
       )}
 
       {/* Report dialog — Print opens this; Excel downloads from API */}
-    <PurchaseReportPreview />
+      <PurchaseReportPreview />
       <DivisionPickerDialog
         open={divisionPicker}
         divisions={divisions}

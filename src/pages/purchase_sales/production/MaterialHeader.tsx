@@ -75,7 +75,7 @@ export function MaterialHeaderForm({
   calculateDiscount: (type: "amount" | "percent", value: number) => void;
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
-    const docTypeUpper = String(docType ?? "").trim().toUpperCase();
+  const docTypeUpper = String(docType ?? "").trim().toUpperCase();
 
   return (
     <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
@@ -122,17 +122,17 @@ export function MaterialHeaderForm({
               />
             </div>
             <div className="grid grid-cols-3 gap-x-2 gap-y-1 col-span-1">
-            <CField label="Doc Date" required>
-              <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
-            </CField>
-            <CField label="Ref No">
-              <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(e) => updateField("ref_no", e.target.value)} />
-            </CField>
-            <CField label="Ref Date">
-              <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
-            </CField>
+              <CField label="Doc Date" required>
+                <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
+              </CField>
+              <CField label="Ref No">
+                <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(e) => updateField("ref_no", e.target.value)} />
+              </CField>
+              <CField label="Ref Date">
+                <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
+              </CField>
             </div>
-             <CField label="Remarks" className="col-span-2">
+            <CField label="Remarks" className="col-span-2">
               <textarea
                 className="h-[48px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
                 disabled={headerAndLineDisabled}
@@ -140,17 +140,17 @@ export function MaterialHeaderForm({
                 onChange={(e) => updateField("remarks", e.target.value)}
               />
             </CField>
-        
-        
+
+
           </HeaderBlock>
         </div>
 
         {/* MIDDLE COLUMN — Account Details */}
         <div className="flex flex-col gap-1.5">
           <HeaderBlock label="Account Details" icon={<Building2 size={11} />} gridCols="grid-cols-3" grow>
-          
 
-                    <div className="col-span-1 grid grid-cols-[minmax(0,1fr)_80px] gap-x-2">
+
+            <div className="col-span-1 grid grid-cols-[minmax(0,1fr)_80px] gap-x-2">
               <LookupField
                 label="Currency *"
                 value={form.curr_code}
@@ -192,7 +192,7 @@ export function MaterialHeaderForm({
                 onChange={(value, row) => setForm((current) => ({ ...current, dept_code: value, dept_name: text(getLookupValue(row || {}, "dept_name")) }))}
               />
             </div>
-                 <LookupField
+            {/* <LookupField
               label="JobCard No"
               value={form.job_no || ""}
               displayValue={form.job_name ? `${form.job_no} - ${form.job_name}` : form.job_no || ""}
@@ -208,21 +208,31 @@ export function MaterialHeaderForm({
                   job_name: text(getLookupValue(row || {}, "job_name")),
                 }))
               }
-            />
-              <CField label="Delivery Term" className="col-span-1">
+                
+            /> */}
+            <CField label="JobCard No">
+              <Input
+                className="h-7 text-xs text-left"
+                type="text"
+                disabled={headerAndLineDisabled}
+                value={form.job_card_no}
+                onChange={(e) => updateField("job_card_no", e.target.value )}
+              />
+            </CField>
+            <CField label="Delivery Term" className="col-span-1">
               <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} />
             </CField>
-           { docTypeUpper === "MIS" && (
+            {docTypeUpper === "MIS" && (
               <CField label="Order Details" className="col-span-2">
                 <Input
                   className="h-7 w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
                   disabled={headerAndLineDisabled}
                   value={form.order_details || ""}
                   onChange={(e) => updateField("order_details" as keyof PurchaseOrderForm, e.target.value)}
-              />
-            </CField>)}
+                />
+              </CField>)}
 
-          
+
           </HeaderBlock>
         </div>
 
