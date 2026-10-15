@@ -6,24 +6,13 @@
 // Filter cascade mirrors HREmployeeLeaveEntitlement / HrRetirementReport:
 //   Division → Department → Section → Employee
 // Plus two independent filters:
-//   • Grade        → MS_HR_GRADE_LIST (falls back to EDUCATION_QUALIFICATION_GRADE_LIST)
-//   • Designation  → MS_HR_DESIGNATION_LIST (falls back to EDUCATION_QUALIFICATION_DESIGNATION_LIST)
+//   • Grade        → MST_HR_MS_HR_Grade_Page
+//   • Designation  → MST_HR_MS_HR_DESIGNATION_LIST
 //
-// Lookup parameter names (same as HrRetirementReport):
-//   • Division    → EDUCATION_QUALIFICATION_DIVISION_LIST
-//                   (code1 = company)                              → div_code, div_name
-//   • Department  → MS_EMP_HR_LEAVE_ENTITLEMENT_DEPARTMENT
-//                   (code1 = company, code2 = div_code)            → dept_code, dept_name
-//   • Section     → EDUCATION_QUALIFICATION_MS_HR_SECTION
-//                   (code1 = company, code2 = div_code, code3 = dept_code)
-//                                                                  → section_code, section_name
-//   • Employee    → MS_EMP_HR_LEAVE_ENTITLEMENT_EMPLOYEE_LIST
-//                   (code1 = company, code2 = div_code, code3 = dept_code, code4 = section_code)
-//                                                                  → EMPLOYEE_ID, EMPLOYEE_CODE, RPT_NAME
-//   • Grade       → MS_HR_GRADE_LIST / EDUCATION_QUALIFICATION_GRADE_LIST
-//                                                                  → GRADE_CODE, GRADE_NAME
-//   • Designation → MS_HR_DESIGNATION_LIST / EDUCATION_QUALIFICATION_DESIGNATION_LIST
-//                                                                  → DESG_CODE, DESG_NAME
+// Checkboxes (same style as HrDocumentReport):
+//   • Active Employees       → emp_status = 'A'
+//   • Cancelled Transactions → cancelled = 'Y'
+//   • Listing                → listing = 'Y'
 
 import React, {
   useCallback,
@@ -66,6 +55,17 @@ type Props = {
 const PRINT_IFRAME_ID = "hr-labour-card-expiry-report-print-iframe";
 const REPORT_TITLE = "HR Labour Card Expiry Listing";
 const LABOUR_CARD_REPORT_URL = "/api/wms/reports/hr/labour-card-expiry/html";
+
+/* ── Dynamic-lookup parameter names ─────────────────────────────
+   These MUST match the WHEN branches in
+   WMSTST.PROC_BUILD_DYNAMIC_SQL_MST_HR.
+   ─────────────────────────────────────────────────────────────── */
+const PARAM_DIVISION_LIST      = "EDUCATION_QUALIFICATION_DIVISION_LIST";
+const PARAM_DEPARTMENT_LIST    = "MS_EMP_HR_LEAVE_ENTITLEMENT_DEPARTMENT";
+const PARAM_SECTION_LIST       = "EDUCATION_QUALIFICATION_MS_HR_SECTION";
+const PARAM_GRADE_LIST         = "MST_HR_MS_HR_Grade_Page";          // ✅ was MS_HR_GRADE_LIST
+const PARAM_DESIGNATION_LIST   = "MST_HR_MS_HR_DESIGNATION_LIST";    // ✅ was MS_HR_DESIGNATION_LIST
+const PARAM_EMPLOYEE_LIST      = "MS_EMP_HR_LEAVE_ENTITLEMENT_EMPLOYEE_LIST";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -168,6 +168,42 @@ function SummaryStripItem({
   );
 }
 
+/* ── CheckBox — exactly the same as HrDocumentReport ─────────────────── */
+
+function CheckBox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        cursor: "pointer",
+        userSelect: "none",
+        fontSize: 12,
+        color: "#1e293b",
+        fontWeight: 500,
+        padding: "6px 0",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ width: 14, height: 14, cursor: "pointer" }}
+      />
+      {label}
+    </label>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────────
    Main Page
    ───────────────────────────────────────────────────────────── */
@@ -201,21 +237,28 @@ export const HrLabourCardExpiryReport = forwardRef<
   const [employeeId, setEmployeeId] = useState("");
   const [employeeDisplay, setEmployeeDisplay] = useState("");
 
-  // Labour Card expiry range (defaults match screenshot: 01/10/2026 → 19/10/2026).
+  // Labour Card expiry range
   const [fromDate, setFromDate] = useState<string>(firstOfMonth());
   const [toDate, setToDate] = useState<string>(endOfNextYear());
 
-  // Active / All employees toggle — mirrors SQL: ('All' = :as_emp_status OR EMPSTATUS_CODE <> 'S')
-  // "Active Employees"  → emp_status = 'A'  (server treats non-'All' as filter; see report proc)
-  // "All Employees"     → emp_status = 'All'
-  const [empStatus, setEmpStatus] = useState<"A" | "All">("A");
+  /* ── Checkbox state — mirrors HrDocumentReport ──────────────────────── */
+
+  // Active Employees (checked = 'A', unchecked = 'All')
+  const [activeOnly, setActiveOnly] = useState(true);
+  // Cancelled Transactions
+  const [cancelledTxn, setCancelledTxn] = useState(false);
+  // Listing
+  const [listing, setListing] = useState(false);
+
+  // Derived emp_status — same convention as the SQL proc
+  const empStatus: "A" | "All" = activeOnly ? "A" : "All";
 
   // ── Lookup loaders — IDENTICAL STRUCTURE to HrRetirementReport ────────────
   const loadDivisions = useCallback(
     async (q?: string) => {
       if (!companyCode) return [];
       const data = await getDynamicLookup(
-        buildPayload("EDUCATION_QUALIFICATION_DIVISION_LIST", loginid, {
+        buildPayload(PARAM_DIVISION_LIST, loginid, {
           code1: companyCode,
         }),
       );
@@ -228,7 +271,7 @@ export const HrLabourCardExpiryReport = forwardRef<
     async (q?: string) => {
       if (!companyCode) return [];
       const data = await getDynamicLookup(
-        buildPayload("MS_EMP_HR_LEAVE_ENTITLEMENT_DEPARTMENT", loginid, {
+        buildPayload(PARAM_DEPARTMENT_LIST, loginid, {
           code1: companyCode,
           code2: divCode || undefined,
         }),
@@ -242,7 +285,7 @@ export const HrLabourCardExpiryReport = forwardRef<
     async (q?: string) => {
       if (!companyCode) return [];
       const data = await getDynamicLookup(
-        buildPayload("EDUCATION_QUALIFICATION_MS_HR_SECTION", loginid, {
+        buildPayload(PARAM_SECTION_LIST, loginid, {
           code1: companyCode,
           code2: divCode || undefined,
           code3: deptCode || undefined,
@@ -253,16 +296,18 @@ export const HrLabourCardExpiryReport = forwardRef<
     [companyCode, loginid, divCode, deptCode],
   );
 
+  /**
+   * Grade loader — now calls the parameter that actually exists in
+   * PROC_BUILD_DYNAMIC_SQL_MST_HR (returns SELECT * FROM MS_HR_GRADE).
+   * Fallback retained for older environments.
+   */
   const loadGrades = useCallback(
     async (q?: string) => {
       if (!companyCode) return [];
-      // Try the HR-specific grade list first; if the endpoint returns nothing,
-      // fall back to the education qualification grade list used by other
-      // employee reports.
       let data: LookupRow[] = [];
       try {
         data = await getDynamicLookup(
-          buildPayload("MS_HR_GRADE_LIST", loginid, {
+          buildPayload(PARAM_GRADE_LIST, loginid, {   // ✅ MST_HR_MS_HR_Grade_Page
             code1: companyCode,
           }),
         );
@@ -285,13 +330,18 @@ export const HrLabourCardExpiryReport = forwardRef<
     [companyCode, loginid],
   );
 
+  /**
+   * Designation loader — now calls the parameter that actually exists in
+   * PROC_BUILD_DYNAMIC_SQL_MST_HR (returns from MS_HR_DESIGNATION).
+   * Fallback retained for older environments.
+   */
   const loadDesignations = useCallback(
     async (q?: string) => {
       if (!companyCode) return [];
       let data: LookupRow[] = [];
       try {
         data = await getDynamicLookup(
-          buildPayload("MS_HR_DESIGNATION_LIST", loginid, {
+          buildPayload(PARAM_DESIGNATION_LIST, loginid, {  // ✅ MST_HR_MS_HR_DESIGNATION_LIST
             code1: companyCode,
           }),
         );
@@ -318,7 +368,7 @@ export const HrLabourCardExpiryReport = forwardRef<
     async (q?: string) => {
       if (!companyCode) return [];
       const data = await getDynamicLookup(
-        buildPayload("MS_EMP_HR_LEAVE_ENTITLEMENT_EMPLOYEE_LIST", loginid, {
+        buildPayload(PARAM_EMPLOYEE_LIST, loginid, {
           code1: companyCode,
           code2: divCode || undefined,
           code3: deptCode || undefined,
@@ -443,6 +493,8 @@ export const HrLabourCardExpiryReport = forwardRef<
     from_date: fromDate || "",
     to_date: toDate || "",
     emp_status: empStatus,
+    listing: listing ? "Y" : "N",
+    cancelled: cancelledTxn ? "Y" : "N",
     print: "false",
   });
 
@@ -481,6 +533,8 @@ export const HrLabourCardExpiryReport = forwardRef<
     fromDate,
     toDate,
     empStatus,
+    listing,
+    cancelledTxn,
   ]);
 
   const closeReportPreview = () => {
@@ -584,7 +638,9 @@ export const HrLabourCardExpiryReport = forwardRef<
     setEmployeeDisplay("");
     setFromDate(firstOfMonth());
     setToDate(endOfNextYear());
-    setEmpStatus("A");
+    setActiveOnly(true);
+    setCancelledTxn(false);
+    setListing(false);
     setError("");
   };
 
@@ -802,7 +858,7 @@ export const HrLabourCardExpiryReport = forwardRef<
             </FloatLabel>
           </div>
 
-          {/* Row 3: Labour Card Expiry dates + Active/All toggle */}
+          {/* Row 3: Labour Card Expiry dates */}
           <div
             className="field-row"
             style={{
@@ -828,56 +884,34 @@ export const HrLabourCardExpiryReport = forwardRef<
                 onChange={(e) => setToDate(e.target.value)}
               />
             </FloatLabel>
+          </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 18,
-                alignItems: "center",
-                paddingBottom: 4,
-                gridColumn: "span 2",
-                justifyContent: "flex-end",
-              }}
-            >
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 12.5,
-                  color: "#1f2937",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="emp_status"
-                  value="A"
-                  checked={empStatus === "A"}
-                  onChange={() => setEmpStatus("A")}
-                />
-                Active Employees
-              </label>
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 12.5,
-                  color: "#1f2937",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="emp_status"
-                  value="All"
-                  checked={empStatus === "All"}
-                  onChange={() => setEmpStatus("All")}
-                />
-                All Employees
-              </label>
-            </div>
+          {/* Row 4: Checkboxes — same style as HrDocumentReport */}
+          <div
+            className="field-row"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 28,
+              marginTop: 10,
+              marginBottom: 6,
+            }}
+          >
+            <CheckBox
+              label="Active Employees"
+              checked={activeOnly}
+              onChange={setActiveOnly}
+            />
+            <CheckBox
+              label="Cancelled Transactions"
+              checked={cancelledTxn}
+              onChange={setCancelledTxn}
+            />
+            <CheckBox
+              label="Listing"
+              checked={listing}
+              onChange={setListing}
+            />
           </div>
         </div>
 

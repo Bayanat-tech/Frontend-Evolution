@@ -5,18 +5,15 @@
 //
 // Filters:
 //   • From Date / To Date  (both required)
-//   • Report Mode (radio, 9 options — mirrors the legacy screen)
+//   • Report Mode (radio, 6 options)
 //
-// Report modes (exact order from the UI screenshot):
+// Report modes:
 //   1. Division wise Head count summary
 //   2. Department wise Head count summary
 //   3. Nationality wise Head count summary
 //   4. Local/Expat Head count summary
-//   5. Organization Head Count Month-wise Joiners
-//   6. Organization Head Count Month-wise Leavers
-//   7. Organization Head Count Month-wise Joiners with opening Balance
-//   8. Budgeted Plan Variance
-//   9. ManPower Department wise
+//   5. Budgeted Plan Variance
+//   6. ManPower Department wise
 //
 // The `report_mode` query-string value is one of the keys defined in
 // REPORT_MODES below. The backend maps each key to the corresponding
@@ -61,12 +58,6 @@ const REPORT_MODES = [
   { key: "DEPARTMENT_WISE", label: "Department wise Head count summary" },
   { key: "NATIONALITY_WISE", label: "Nationality wise Head count summary" },
   { key: "LOCAL_EXPAT", label: "Local/Expat Head count summary" },
-  { key: "MONTHLY_JOINERS", label: "Organization Head Count Month-wise Joiners" },
-  { key: "MONTHLY_LEAVERS", label: "Organization Head Count Month-wise Leavers" },
-  {
-    key: "MONTHLY_JOINERS_OPENING",
-    label: "Organization Head Count Month-wise Joiners with opening Balance",
-  },
   { key: "BUDGETED_VARIANCE", label: "Budgeted Plan Variance" },
   { key: "MANPOWER_DEPT", label: "ManPower Department wise" },
 ] as const;
@@ -483,7 +474,7 @@ export const HrEmployeeHeadCountList = forwardRef<
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gridTemplateRows: "repeat(3, auto)",
+                gridTemplateRows: "repeat(2, auto)",
                 gridAutoFlow: "column",
                 gap: "2px 16px",
                 alignItems: "start",
