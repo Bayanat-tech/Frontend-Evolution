@@ -1,3 +1,4 @@
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
@@ -168,9 +169,7 @@ export function FreightJobFollowupTab({
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>}
-        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList}>
-          <ArrowLeft size={14} /> List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={onEmbeddedList} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={!job || loading}>
           <RefreshCw size={14} /> Refresh
         </Button>
@@ -431,7 +430,10 @@ function Cell({ row, column, onChange, onInstructionChange, instructionLookup, r
       placeholder="Select instruction"
     />
   );
-  if (isDateField) return <Input className="h-7 text-xs" type="date" value={dateValue(value)} disabled={readOnly} onChange={(event) => onChange(event.target.value)} />;
+  if (isDateField) return <FreightDatePicker className="freight-calendar-field"
+        value={dateValue(value)}
+        disabled={readOnly}
+        onChange={(nextValue) => onChange(nextValue)} />;
   // if (column === "op_desc") return <Input className="h-7 bg-muted/35 text-xs font-semibold" value={value} readOnly />;
   if (column === "op_desc") return <Input className="h-7 bg-muted/35 text-xs font-semibold" value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />;
   if (["mandatory", "collected"].includes(column)) return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || "N"} disabled={readOnly} onChange={(event) => onChange(event.target.value)}><option value="Y">Y</option><option value="N">N</option></select>;

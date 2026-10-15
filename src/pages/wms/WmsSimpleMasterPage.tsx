@@ -443,6 +443,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       {/* ---------- EDITOR ---------- */}
       {editorOpen && (
         <WmsMasterForm
+          characterLimitCards={config.master.startsWith("freight-")}
           key={editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add"}
           formId={FORM_ID}
           title={config.title}

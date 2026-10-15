@@ -3,6 +3,8 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Save } from "lucide-react";
 import { getDynamicLookup } from "../api/lookups";
 import { LookupField } from "./ui/LookupField";
+import { Input } from "./ui/Input";
+import { Textarea } from "./ui/Textarea";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { LookupRow } from "../api/lookups";
 import type { UserProfile } from "../types/auth";
@@ -14,6 +16,7 @@ interface DropdownOption {
 }
 
 type Props = {
+  characterLimitCards?: boolean;
   fields: WmsMasterField[];
   /** Optional. When provided (and non-empty) the form is split into steps with Back / Next buttons. */
   tabs?: WmsMasterFormTab[];
@@ -45,6 +48,7 @@ function isEmpty(value: unknown) {
 }
 
 export function WmsMasterForm({
+  characterLimitCards = false,
   fields,
   tabs,
   title = "Master",
@@ -57,6 +61,8 @@ export function WmsMasterForm({
   onChange,
   onSave,
 }: Props) {
+  const TextControl = characterLimitCards ? Input : "input";
+  const MultilineControl = characterLimitCards ? Textarea : "textarea";
   const hasTabs = Boolean(tabs && tabs.length > 0);
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
   const [fieldErrors, setFieldErrors] = useState<FieldError>({});
@@ -75,6 +81,9 @@ export function WmsMasterForm({
   const validateField = (field: WmsMasterField, value: unknown): string => {
     if (field.maxLength && typeof value === "string" && value.length > field.maxLength) {
       return `Maximum ${field.maxLength} characters allowed`;
+    }
+    if (characterLimitCards && field.maxLength && typeof value === "string" && new TextEncoder().encode(value).length > field.maxLength) {
+      return `Maximum ${field.maxLength} UTF-8 bytes allowed`;
     }
     return "";
   };
@@ -307,7 +316,8 @@ export function WmsMasterForm({
     let control: ReactNode;
     if (field.type === "textarea") {
       control = (
-        <textarea
+        <MultilineControl
+          {...(characterLimitCards ? { maxBytes: field.maxLength } : {})}
           disabled={disabled}
           maxLength={field.maxLength}
           value={String(value ?? "")}
@@ -318,8 +328,10 @@ export function WmsMasterForm({
     } else {
       const tooLong = field.maxLength && String(value ?? "").length > field.maxLength;
       control = (
-        <input
+        <TextControl
+          {...(characterLimitCards ? { maxBytes: field.maxLength } : {})}
           disabled={disabled}
+          maxLength={characterLimitCards ? field.maxLength : undefined}
           type={
             field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : "text"
           }

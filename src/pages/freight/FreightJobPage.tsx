@@ -1,3 +1,6 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
+import { Textarea as TextAreaControl } from "../../components/ui/Textarea";
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -334,23 +337,8 @@ export function FreightJobPage({
       notify({ type: "error", text: "Kindly fill in the missing fields." });
       return;
     }
-    // Character limit validations
-    if (job.remarks && job.remarks.length > 250) {
-      notify({ type: "error", text: "You have exceeded the character limit for Operational Remarks & Instructions." });
-      return;
-    }
-    if (job.description1 && job.description1.length > 250) {
-      notify({ type: "error", text: "You have exceeded the character limit for Cargo Description." });
-      return;
-    }
-    if (job.description2 && job.description2.length > 250) {
-      notify({ type: "error", text: "You have exceeded the character limit for Cargo Specifications." });
-      return;
-    }
-    if (job.driver_remarks && job.driver_remarks.length > 250) {
-      notify({ type: "error", text: "You have exceeded the character limit for Driver Remarks / Contact." });
-      return;
-    }
+    const schemaError = freightValidationError("TI_JOB", job);
+    if (schemaError) { notify({ type: "error", text: schemaError }); return; }
     setSaving(true);
     setNotice(null);
     try {
@@ -397,9 +385,7 @@ export function FreightJobPage({
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
-          <ArrowLeft size={14} /> List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" onClick={() => setView("list")} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button
           type="button"
           size="sm"
@@ -591,7 +577,8 @@ export function FreightJobPage({
 
       <fieldset disabled={isEditLocked} className="contents">
         <div className="freight-job-editor-shell w-full flex flex-col gap-2.5">
-          <JobProgressRail job={job} />
+          {/* Workflow status is hidden until its presentation is revised.
+          <JobProgressRail job={job} /> */}
           <div className="freight-job-main-content grid gap-2 lg:grid-cols-12">
             {/* Section 1: Job Identity & Core Booking */}
             <SectionPanel
@@ -741,9 +728,9 @@ export function FreightJobPage({
                 meta={job.ref_jobno || job.combined_jobno || "Import job reference"}
               >
                 <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
-                  <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
+                  <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "ref_jobno")} />
                   <SelectField label="Job Indicator" value={job.job_flag} options={[["M", "Master"], ["H", "House"], ["C", "Console"]]} onChange={(value) => setJobField(setJob, "job_flag", value)} />
-                  <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
+                  <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "combined_jobno")} />
                   <ReadOnlyField label="Re-export" value="Yes" />
                 </div>
               </SectionPanel>
@@ -774,7 +761,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
+               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)}  maxLength={freightTextLimit("TI_JOB", "place_receipt")} />
                 <Lookup
                   label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"}
                   value={job.destination_port}
@@ -792,7 +779,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-                <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)} />
+                <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)}  maxLength={freightTextLimit("TI_JOB", "place_delivery")} />
               </div>
             </SectionPanel>
 
@@ -813,13 +800,13 @@ export function FreightJobPage({
                   onChange={(value) => setJobField(setJob, "vessel_name", value)}
                 />
                 {mode.code === "S" && (
-                  <Field label="Feeder Vessel" value={job.feeder_vessel_name} onChange={(value) => setJobField(setJob, "feeder_vessel_name", value)} />
+                  <Field label="Feeder Vessel" value={job.feeder_vessel_name} onChange={(value) => setJobField(setJob, "feeder_vessel_name", value)}  maxLength={freightTextLimit("TI_JOB", "feeder_vessel_name")} />
                 )}
                 <Field
                   label={mode.code === "R" ? "Trip / Route No" : mode.code === "A" ? "Flight No" : "Voyage No"}
                   value={job.voyage_no}
                   onChange={(value) => setJobField(setJob, "voyage_no", value)}
-                />
+                 maxLength={freightTextLimit("TI_JOB", "voyage_no")} />
                 {mode.code === "S" && !isExportLike && (
                   <SelectField
                     label="Health Status"
@@ -830,15 +817,15 @@ export function FreightJobPage({
                 )}
                 {mode.code === "R" ? (
                   <>
-                    <Field label="Driver Name / Ref" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)} />
-                    <Field label="Doc Ref" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
-                    <Field label="House Ref" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
-                    <Textarea className="sm:col-span-2" label="Driver Remarks / Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)} />
+                    <Field label="Driver Name / Ref" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)}  maxLength={freightTextLimit("TI_JOB", "driver_ref")} />
+                    <Field label="Doc Ref" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)}  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
+                    <Field label="House Ref" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)}  maxLength={freightTextLimit("TI_JOB", "hawb")} />
+                    <Textarea className="sm:col-span-2" label="Driver Remarks / Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)}  maxLength={freightTextLimit("TI_JOB", "driver_remarks")} />
                   </>
                 ) : (
                   <>
-                    <Field label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} required />
-                    <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} required />
+                    <Field label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} required  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
+                    <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} required  maxLength={freightTextLimit("TI_JOB", "hawb")} />
                   </>
                 )}
               </div>
@@ -857,13 +844,13 @@ export function FreightJobPage({
                   value={job.description1}
                   onChange={(value) => setJobField(setJob, "description1", value)}
                   rows={3}
-                />
+                 maxLength={freightTextLimit("TI_JOB", "description1")} />
                 <Textarea
                   label="Operational Remarks & Instructions"
                   value={job.remarks}
                   onChange={(value) => setJobField(setJob, "remarks", value)}
                   rows={3}
-                />
+                 maxLength={freightTextLimit("TI_JOB", "remarks")} />
               </div>
             </SectionPanel>
 
@@ -882,7 +869,7 @@ export function FreightJobPage({
                     <DateField label="Date of Pickup" value={job.picked_date} onChange={(value) => setJobField(setJob, "picked_date", value)} />
                     <DateField label="Date of Departure" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
                     <DateField label="Schedule Date" value={job.schedule_date} onChange={(value) => setJobField(setJob, "schedule_date", value)} />
-                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
+                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)}  maxLength={freightTextLimit("TI_JOB", "transit_time")} />
                   </>
                 ) : (
                   <>
@@ -890,7 +877,7 @@ export function FreightJobPage({
                     <DateField label="Exp. Date of Arrival" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
                     <DateField label="Act. Date of Arrival" value={job.ata} onChange={(value) => setJobField(setJob, "ata", value)} />
                     <DateField label="Clearance Date" value={job.clearance_date} onChange={(value) => setJobField(setJob, "clearance_date", value)} />
-                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
+                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)}  maxLength={freightTextLimit("TI_JOB", "transit_time")} />
                     {mode.code === "S" && (
                       <DateField label="LOU" value={job.letter_undertaking} onChange={(value) => setJobField(setJob, "letter_undertaking", value)} />
                     )}
@@ -999,26 +986,26 @@ export function FreightJobPage({
                 />
                 {isExportLike ? (
                   <>
-                    <Field label="Customer Dec No" value={job.dec_no} onChange={(value) => setJobField(setJob, "dec_no", value)} />
+                    <Field label="Customer Dec No" value={job.dec_no} onChange={(value) => setJobField(setJob, "dec_no", value)}  maxLength={freightTextLimit("TI_JOB", "dec_no")} />
                     <DateField label="Customer Dec Date" value={job.dec_date} onChange={(value) => setJobField(setJob, "dec_date", value)} />
-                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)} />
+                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)}  maxLength={freightTextLimit("TI_JOB", "ref_customs")} />
                     <DateField label="FHCR Date" value={job.ref_customs_date} onChange={(value) => setJobField(setJob, "ref_customs_date", value)} />
                   </>
                 ) : (
                   <>
-                    <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)} />
+                    <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)}  maxLength={freightTextLimit("TI_JOB", "be_no")} />
                     <DateField label="BE Date" value={job.be_date} onChange={(value) => setJobField(setJob, "be_date", value)} />
                     <SelectField label="BE Deposits" value={job.be_deposits} options={[["Y", "Yes"], ["N", "No"]]} onChange={(value) => setJobField(setJob, "be_deposits", value)} />
                     <Field label="BE Deposit Amt" type="number" value={job.be_dep_amount} onChange={(value) => setJobField(setJob, "be_dep_amount", value)} />
-                    <Field label="Custom Rec No" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)} />
-                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)} />
+                    <Field label="Custom Rec No" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)}  maxLength={freightTextLimit("TI_JOB", "custom_recno")} />
+                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)}  maxLength={freightTextLimit("TI_JOB", "ref_customs")} />
                     <DateField label="FHCR Date" value={job.ref_customs_date} onChange={(value) => setJobField(setJob, "ref_customs_date", value)} />
                   </>
                 )}
                 {!isReexport && (
                   <>
-                    <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
-                    <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
+                    <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "ref_jobno")} />
+                    <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "combined_jobno")} />
                   </>
                 )}
               </div>
@@ -1130,6 +1117,7 @@ function SectionPanel({
 }
 
 function Field({
+  maxLength,
   label,
   value,
   onChange,
@@ -1138,6 +1126,7 @@ function Field({
   required,
   placeholder,
 }: {
+  maxLength?: number;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -1152,7 +1141,16 @@ function Field({
       <span>
         {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input
+      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={safeValue}
+        required={required}
+        placeholder={placeholder}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={safeValue}
+        required={required}
+        placeholder={placeholder}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
+        maxLength={maxLength}
         className={`h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C] ${type === "number" ? "text-right tabular-nums" : ""}`}
         type={type}
         value={safeValue}
@@ -1161,7 +1159,7 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+       maxBytes={maxLength} />)}
     </label>
   );
 }
@@ -1225,15 +1223,10 @@ function DateField({
       <span>
         {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input
-        className="h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C]"
-        type="date"
+      <FreightDatePicker className="freight-calendar-field"
         value={inputValue}
         required={required}
-        onChange={(event) => onChange(event.target.value)}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+        onChange={(nextValue) => onChange(nextValue)} />
     </label>
   );
 }
@@ -1256,15 +1249,10 @@ function DateTimeField({
       <span>
         {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input
-        className="h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C]"
-        type="datetime-local"
+      <FreightDateTimePicker className="freight-calendar-field"
         value={dateTimeInputValue(value)}
         required={required}
-        onChange={(event) => onChange(localInputToUtcIso(event.target.value))}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+        onChange={(nextValue) => onChange(localInputToUtcIso(nextValue))} />
     </label>
   );
 }
@@ -1294,13 +1282,13 @@ function Textarea({
           </span>
         )}
       </div>
-      <textarea
+      <TextAreaControl
         rows={rows}
         maxLength={maxLength}
         className="min-h-[44px] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-none focus:border-[#00378C]"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-      />
+       maxBytes={maxLength} />
     </label>
   );
 }
