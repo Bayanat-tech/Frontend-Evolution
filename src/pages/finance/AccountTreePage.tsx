@@ -38,6 +38,7 @@ import { getDynamicLookup, getLookupText, getMasterLookup } from "../../api/look
 import { Badge } from "../../components/ui/Badge";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
+import { isValidEmail, isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
@@ -168,18 +169,9 @@ const ACCOUNT_FORM_SECTIONS: Array<{
     fields: [
       { name: "ac_name", label: "Account Name", maxLength: 100 },
       { name: "l4_code", label: "Level 4 Code", maxLength: 8 },
-      { name: "dept_code", label: "Department Code" },
-      { name: "curr_code", label: "Currency Code" },
-      { name: "pl_bl_code", label: "BS / PL Code" },
-      // { name: "ac_status", label: "Status" },
-    ],
-  },
-  {
-    title: "Address and Contact",
-    fields: [
-      { name: "address_1", label: "Address 1", type: "textarea", maxLength: 255 },
-      { name: "address_2", label: "Address 2", type: "textarea", maxLength: 100 },
-      { name: "address_3", label: "Address 3", type: "textarea", maxLength: 100 },
+       { name: "address_1", label: "Address 1", maxLength: 255 },
+      { name: "address_2", label: "Address 2", maxLength: 100 },
+      { name: "address_3", label: "Address 3", maxLength: 100 },
       { name: "city_name", label: "City", maxLength: 100 },
       { name: "territory_code", label: "Territory Code" },
       { name: "country_code", label: "Country Code" },
@@ -188,8 +180,27 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "fax", label: "Fax", maxLength: 50 },
       { name: "e_mail", label: "Email", type: "email", maxLength: 50 },
       { name: "contact_person", label: "Contact Person", maxLength: 50 },
+      { name: "dept_code", label: "Department Code" },
+      { name: "curr_code", label: "Currency Code" },
+      // { name: "ac_status", label: "Status" },
     ],
   },
+  // {
+  //   title: "Address and Contact",
+  //   fields: [
+  //     { name: "address_1", label: "Address 1", maxLength: 255 },
+  //     { name: "address_2", label: "Address 2", maxLength: 100 },
+  //     { name: "address_3", label: "Address 3", maxLength: 100 },
+  //     { name: "city_name", label: "City", maxLength: 100 },
+  //     { name: "territory_code", label: "Territory Code" },
+  //     { name: "country_code", label: "Country Code" },
+  //     { name: "phone", label: "Phone", maxLength: 50 },
+  //     { name: "mobile_no", label: "Mobile No", maxLength: 50 },
+  //     { name: "fax", label: "Fax", maxLength: 50 },
+  //     { name: "e_mail", label: "Email", type: "email", maxLength: 50 },
+  //     { name: "contact_person", label: "Contact Person", maxLength: 50 },
+  //   ],
+  // },
   {
     title: "Credit and Bank",
     fields: [
@@ -216,6 +227,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
   {
     title: "BI and Expense",
     fields: [
+      { name: "pl_bl_code", label: "BS / PL Code" },
       { name: "bi_main_group", label: "BI Main Group", maxLength: 50 },
       { name: "bi_sub_group", label: "BI Sub Group", maxLength: 50 },
       { name: "bi_exp_type", label: "BI Exp Type", maxLength: 100 },
@@ -680,8 +692,28 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
     }
 
     if (level === 5) {
+      if (!accountForm.ac_name.trim()) {
+        setError("Account Name is required.");
+        return;
+      }
       if (accountForm.ac_name.trim().length > 100) {
         setError("Account Name cannot exceed 100 characters.");
+        return;
+      }
+      if (!isValidEmail(accountForm.e_mail)) {
+        setError("Please enter a valid email address (e.g. name@example.com).");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.phone)) {
+        setError("Phone must contain numbers only.");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.mobile_no)) {
+        setError("Mobile No must contain numbers only.");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.fax)) {
+        setError("Fax must contain numbers only.");
         return;
       }
       for (const section of ACCOUNT_FORM_SECTIONS) {
@@ -996,16 +1028,33 @@ function AccountLevelFiveForm({
                         value={value[field.name]}
                         onChange={(nextValue) => setField(field.name, nextValue)}
                       />
-                    ) : (
-                      <Input
-                        type={field.type || "text"}
-                        maxLength={field.maxLength}
-                        value={value[field.name]}
-                        className={value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength ? "!border-rose-500 !ring-rose-400" : ""}
-                        onChange={(event) => setField(field.name, event.target.value)}
-                        disabled={field.name === "l4_code"}
-                      />
-                    )}
+                    ) : (() => {
+                      const isEmail = field.type === "email" || field.name === "e_mail";
+                      const isPhone = field.name === "phone" || field.name === "mobile_no" || field.name === "fax";
+                      const isInvalidEmail = isEmail && !isValidEmail(value[field.name]);
+                      const isInvalidPhone = isPhone && !isValidPhoneNumber(value[field.name]);
+                      const isTooLong = Boolean(value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength);
+                      const hasError = isInvalidEmail || isInvalidPhone || isTooLong;
+
+                      return (
+                        <>
+                          <Input
+                            type={isEmail ? "email" : isPhone ? "tel" : (field.type || "text")}
+                            maxLength={field.maxLength}
+                            value={value[field.name]}
+                            className={hasError ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(event) => setField(field.name, isPhone ? sanitizePhoneNumber(event.target.value) : event.target.value)}
+                            disabled={field.name === "l4_code"}
+                          />
+                          {isInvalidEmail && (
+                            <span className="text-[10px] text-destructive mt-0.5">Invalid email address (e.g. name@domain.com)</span>
+                          )}
+                          {isInvalidPhone && (
+                            <span className="text-[10px] text-destructive mt-0.5">{field.label} must contain numbers only</span>
+                          )}
+                        </>
+                      );
+                    })()}
                 </label>
               )
             ))}

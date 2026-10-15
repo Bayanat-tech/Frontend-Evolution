@@ -3,9 +3,12 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Save } from "lucide-react";
 import { getDynamicLookup } from "../api/lookups";
 import { LookupField } from "./ui/LookupField";
+import { Input } from "./ui/Input";
+import { Textarea } from "./ui/Textarea";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { LookupRow } from "../api/lookups";
 import type { UserProfile } from "../types/auth";
+import { isValidEmail, isValidPhoneNumber, sanitizePhoneNumber } from "../utils/inputValidation";
 
 interface DropdownOption {
   label: string;
@@ -14,6 +17,7 @@ interface DropdownOption {
 }
 
 type Props = {
+  characterLimitCards?: boolean;
   fields: WmsMasterField[];
   /** Optional. When provided (and non-empty) the form is split into steps with Back / Next buttons. */
   tabs?: WmsMasterFormTab[];
@@ -45,6 +49,7 @@ function isEmpty(value: unknown) {
 }
 
 export function WmsMasterForm({
+  characterLimitCards = false,
   fields,
   tabs,
   title = "Master",
@@ -57,6 +62,8 @@ export function WmsMasterForm({
   onChange,
   onSave,
 }: Props) {
+  const TextControl = characterLimitCards ? Input : "input";
+  const MultilineControl = characterLimitCards ? Textarea : "textarea";
   const hasTabs = Boolean(tabs && tabs.length > 0);
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
   const [fieldErrors, setFieldErrors] = useState<FieldError>({});
@@ -73,8 +80,20 @@ export function WmsMasterForm({
     (hasTabs ? fields.filter((f) => fieldTab(f) === tabKey) : fields).filter(isVisible);
 
   const validateField = (field: WmsMasterField, value: unknown): string => {
+    const strVal = String(value ?? "").trim();
     if (field.maxLength && typeof value === "string" && value.length > field.maxLength) {
       return `Maximum ${field.maxLength} characters allowed`;
+    }
+    if (characterLimitCards && field.maxLength && typeof value === "string" && new TextEncoder().encode(value).length > field.maxLength) {
+      return `Maximum ${field.maxLength} UTF-8 bytes allowed`;
+    }
+    const isEmail = field.type === "email" || /(^|_)(email|e_mail)(_|$)/i.test(field.name);
+    if (isEmail && strVal && !isValidEmail(strVal)) {
+      return "Invalid email address (e.g. name@domain.com)";
+    }
+    const isPhone = /(^|_)(phone|mobile|tel|telephone|fax)(_|$|[0-9])/i.test(field.name);
+    if (isPhone && strVal && !isValidPhoneNumber(strVal)) {
+      return `${field.label} must contain numbers only`;
     }
     return "";
   };
@@ -307,7 +326,8 @@ export function WmsMasterForm({
     let control: ReactNode;
     if (field.type === "textarea") {
       control = (
-        <textarea
+        <MultilineControl
+          {...(characterLimitCards ? { maxBytes: field.maxLength } : {})}
           disabled={disabled}
           maxLength={field.maxLength}
           value={String(value ?? "")}
@@ -316,17 +336,35 @@ export function WmsMasterForm({
         />
       );
     } else {
+      const isPhone = /(^|_)(phone|mobile|tel|telephone|fax)(_|$|[0-9])/i.test(field.name);
+      const isEmail = field.type === "email" || /(^|_)(email|e_mail)(_|$)/i.test(field.name);
       const tooLong = field.maxLength && String(value ?? "").length > field.maxLength;
       control = (
-        <input
+        <TextControl
+          {...(characterLimitCards ? { maxBytes: field.maxLength } : {})}
           disabled={disabled}
+          maxLength={characterLimitCards ? field.maxLength : undefined}
           type={
-            field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : "text"
+            field.type === "number"
+              ? "number"
+              : isEmail
+              ? "email"
+              : isPhone
+              ? "tel"
+              : field.type === "date"
+              ? "date"
+              : "text"
           }
           value={String(value ?? "")}
-          onChange={(e) =>
-            handleFieldChange(field.name, field.type === "number" ? Number(e.target.value || 0) : e.target.value)
-          }
+          onChange={(e) => {
+            const rawVal = e.target.value;
+            const finalVal = isPhone
+              ? sanitizePhoneNumber(rawVal)
+              : field.type === "number"
+              ? Number(rawVal || 0)
+              : rawVal;
+            handleFieldChange(field.name, finalVal);
+          }}
           className={`${inputClass} ${tooLong ? inputBad : border}`}
         />
       );

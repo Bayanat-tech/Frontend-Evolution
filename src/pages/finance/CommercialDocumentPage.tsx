@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, Receipt, List, Truck, Coins } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, PlusCircle, Printer, RefreshCw, Save, Search, Trash2, X, AlertCircle, Columns3, FileText, Building2, User, UserCheck, Receipt, List, Truck, Coins } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
 import { api } from "../../api/client";
 import {
@@ -23,7 +23,9 @@ import {
   getPurchaseHeader,
   downloadDocumentReportExcel,
   upsertBulkAccountEntryApi,
-  openDocumentReportv1
+  openDocumentReportv1,
+  cancelLpoDocument,
+  getFinanceOutstanding
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -36,6 +38,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
@@ -151,8 +154,6 @@ const HEADER_LIMITS: Partial<Record<keyof FormState, { max: number; label: strin
   ref_no:        { max: 30,  label: "Ref No" },
   remarks:       { max: 250, label: "Remarks" },
   party_address: { max: 250, label: "Address" },
-  party_phone:   { max: 30,  label: "Party Phone" },
-  party_fax:      { max: 30,  label: "Party Fax" },
   payment_terms: { max: 250, label: "Payment Terms" },
   dlvr_contact:  { max: 70,  label: "Contact" },
   dlvr_mobile:   { max: 20,  label: "Mobile" },
@@ -274,7 +275,9 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     try {
-      await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type || docType);
+      const cancelType = cancelTarget.doc_type || docType;
+       if (docType === "PO") await cancelLpoDocument(cancelTarget.doc_no, cancelType);
+        else await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
       await loadRows();
@@ -418,7 +421,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
             />
           </div>
         }
-        initialSorting={[{ id: "doc_date", desc: true }]}
+        initialSorting={[{ id: "doc_no", desc: true }]}
         initialColumnFilters={[{ id: "canceled", value: "N" }]}
         pageIndex={pageIndex}
         pageSize={pageSize}
@@ -577,6 +580,7 @@ function CommercialEditor({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
 
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
@@ -648,7 +652,8 @@ function CommercialEditor({
     setSaving(true);
     setError("");
     try {
-      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      if (form.doc_type === "PO") await cancelLpoDocument(form.doc_no, form.doc_type);
+       else await cancelTransactionDocument(form.doc_no, form.doc_type);
       setCancelConfirmOpen(false);
       await onSaved("Document cancelled successfully");
     } catch (cancelError) {
@@ -708,8 +713,8 @@ function CommercialEditor({
             div_code: current.div_code || defaultDiv,
             div_name: current.div_name || (editor.mode === "create" && editor.div?.div_name ? editor.div.div_name : text(defaults.Division?.div_name ?? "")),
             party_address: getVal("address") || current.party_address,
-            party_phone: getVal("phone") || current.party_phone,
-            party_fax: getVal("fax") || current.party_fax,
+            party_phone: (getVal("phone") || current.party_phone || "").slice(0, 30),
+            party_fax: (getVal("fax") || current.party_fax || "").slice(0, 30),
             dlvr_contact: getVal("contact_person") || current.dlvr_contact,
             dlvr_mobile: getVal("mobile_no") || current.dlvr_mobile,
             dlvr_email: getVal("e_mail") || current.dlvr_email,
@@ -755,6 +760,26 @@ function CommercialEditor({
             return row;
           });
           setForm(mapForm(docType, header, enrichedDetail));
+
+          // Check settled payments against this invoice
+          if (editor.mode === "edit" && editor.row.doc_no) {
+            try {
+              const resp = await getFinanceOutstanding(
+                editor.row.div_code,
+                [editor.row.doc_no, (editor.row as any).ref_no].filter(Boolean),
+                undefined,
+                docType
+              );
+              const bal = resp?.balances?.[0];
+              if (bal && Number(bal.paid_amount || 0) > 0.0001) {
+                setSettledPaidAmount(Number(bal.paid_amount));
+              } else {
+                setSettledPaidAmount(0);
+              }
+            } catch {
+              setSettledPaidAmount(0);
+            }
+          }
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
@@ -809,6 +834,7 @@ const limitProps = (f: keyof FormState) => ({
   
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [remarksFocus, setRemarksFocus] = useState(false);
 
   const filteredLines = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
@@ -931,6 +957,9 @@ const limitProps = (f: keyof FormState) => ({
   if (form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim())) {
     hErr.dlvr_email = "Invalid email format";
   }
+  if (form.dlvr_mobile && form.dlvr_mobile.trim() && !isValidPhoneNumber(form.dlvr_mobile)) {
+    hErr.dlvr_mobile = "Mobile must contain numbers only";
+  }
 
   // Character limit validations
   // if (form.ref_no && form.ref_no.length > 30) {
@@ -988,6 +1017,12 @@ const limitProps = (f: keyof FormState) => ({
     return;
   }
 
+  const netTotal = total + taxTotal;
+  if (settledPaidAmount > 0 && netTotal < settledPaidAmount - 0.001) {
+    setError(`Invoice net total (${formatAmount(netTotal)}) cannot be less than already settled payments (${formatAmount(settledPaidAmount)}). Please adjust the payment vouchers or issue a debit/credit note first.`);
+    return;
+  }
+
   setSaving(true);
   setError("");
   try {
@@ -1018,6 +1053,19 @@ const limitProps = (f: keyof FormState) => ({
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen w-full min-w-0 ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
+        {settledPaidAmount > 0 && (
+          <div className="mb-1 flex items-center justify-between gap-2 rounded border border-amber-200/90 bg-amber-50/90 px-2.5 py-0.5 text-[11px] text-amber-900 shadow-2xs leading-tight">
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <AlertCircle size={13} className="text-amber-600 shrink-0" />
+              <span className="truncate">
+                <strong>Active Payments ({formatAmount(settledPaidAmount)}):</strong> Settled against this invoice. Party, currency & rate locked. Cannot cancel until payments unallocated.
+              </span>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-100/80 border border-amber-300/80 rounded px-1.5 py-0.2">
+              Locked
+            </span>
+          </div>
+        )}
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={docType === "PI" ? "Purchase Invoice" : META[docType]?.title || "Commercial"}
@@ -1050,10 +1098,16 @@ const limitProps = (f: keyof FormState) => ({
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
             {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCancelConfirmOpen(true)}
+                disabled={saving || Boolean(settledPaidAmount > 0)}
+                title={settledPaidAmount > 0 ? `Cannot cancel invoice: active payments of ${formatAmount(settledPaidAmount)} exist` : "Cancel Document"}
+              >
+                <Ban size={15} /> Cancel
+              </Button>
+            )}
             <Button
               disabled={saving}
               aria-label="Close"
@@ -1150,7 +1204,7 @@ const limitProps = (f: keyof FormState) => ({
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -1177,8 +1231,8 @@ const limitProps = (f: keyof FormState) => ({
                               curr_code:     get("curr_code"),
                               ex_rate:       newExRate,
                               party_address: get("address"),
-                              party_phone:   get("phone"),
-                              party_fax:     get("fax"),
+                              party_phone:   (get("phone") || "").slice(0, 30),
+                              party_fax:     (get("fax") || "").slice(0, 30),
                               dlvr_contact:  get("contact_person"),
                               dlvr_mobile:   get("mobile_no"),
                               dlvr_email:    get("e_mail"),
@@ -1209,8 +1263,8 @@ const limitProps = (f: keyof FormState) => ({
                       <Input {...limitProps("dlvr_contact")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
                     </CField>
 
-                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile")}>
-                      <Input {...limitProps("dlvr_mobile")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
+                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile") || fieldErrors.dlvr_mobile}>
+                      <Input {...limitProps("dlvr_mobile")} type="tel" className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", sanitizePhoneNumber(e.target.value))} />
                     </CField>
 
                     <CField label="E-mail" className="col-span-1" error={(form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim()) ? "Invalid email format" : limitErr("dlvr_email")) || fieldErrors.dlvr_email}>
@@ -1228,66 +1282,6 @@ const limitProps = (f: keyof FormState) => ({
                     <CField label="Payment Terms" className="col-span-1" error={limitErr("payment_terms")}>
                       <Input {...limitProps("payment_terms")} className="h-7 text-xs" disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
                     </CField>
-
-                    {isSales && (
-                      <div className="col-span-1">
-                        <LookupField
-                          label="Salesman"
-                          disabled={isCancelled}
-                          value={form.salesman_code ?? ""}
-                          displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
-                          columns={[
-                            { field: "salesman_code", header: "Code" },
-                            { field: "salesman_name", header: "Name" },
-                          ]}
-                          valueField="salesman_code"
-                          displayFields={["salesman_code", "salesman_name"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Salesman_Search",
-                              code1: user?.company_code || "",
-                            })
-                          }
-                          onChange={(value, row) =>
-                            setForm((c) => ({
-                              ...c,
-                              salesman_code: value,
-                              salesman_name: text(getLookupValue(row || {}, "salesman_name")),
-                            }))
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {isSales && (
-                      <div className="col-span-1">
-                        <LookupField
-                          label="Sector"
-                          disabled={isCancelled}
-                          value={form.sector_code ?? ""}
-                          displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
-                          columns={[
-                            { field: "sector_code", header: "Code" },
-                            { field: "sector_name", header: "Name" },
-                          ]}
-                          valueField="sector_code"
-                          displayFields={["sector_code", "sector_name"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Sector_Search",
-                              code1: user?.company_code || "",
-                            })
-                          }
-                          onChange={(value, row) =>
-                            setForm((c) => ({
-                              ...c,
-                              sector_code: value,
-                              sector_name: text(getLookupValue(row || {}, "sector_name")),
-                            }))
-                          }
-                        />
-                      </div>
-                    )}
                   </HeaderBlock>
                 </div>
 
@@ -1312,13 +1306,20 @@ const limitProps = (f: keyof FormState) => ({
                           ]}
                           valueField="DOC_NO"
                           displayFields={["DOC_NO"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Account_LPO_REF_DOC",
-                              code1: user?.company_code || "",
-                              number1: form.div_code ? Number(form.div_code) : undefined,
-                            })
-                          }
+                          loadOptions={async () => {
+                            const rows = await getDynamicFinanceLookup({
+                             parameter: "Account_LPO_REF_DOC",
+                             code1: user?.company_code || "",
+                             number1: form.div_code ? Number(form.div_code) : undefined,
+                            });
+                            return [...rows].sort((a, b) =>
+                             String(b["DOC_NO"] ?? b["doc_no"] ?? "").localeCompare(
+                             String(a["DOC_NO"] ?? a["doc_no"] ?? ""),
+                             undefined,
+                             { numeric: true }
+                            )
+                           );
+                          }}
                           onChange={async (value, row) => {
                             if (!value || !row) {
                               setForm((c) => ({ ...c, ref_doc_no: "" }));
@@ -1433,19 +1434,25 @@ const limitProps = (f: keyof FormState) => ({
                     )}
 
                     {/* Remarks: Wide textarea across entire bottom of Document Details */}
-                    <CField
-                      label="Remarks"
-                      className="col-span-2"
-                      error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
-                    >
-                      <textarea
-                        className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                        disabled={isCancelled}
-                        value={form.remarks || ""}
-                        maxLength={250}
-                        placeholder="Remarks / Notes"
-                        onChange={(e) => update("remarks", e.target.value)}
-                      />
+                   
+                    <CField label="Remarks" className="col-span-2">
+                      <div className="relative">
+                        <textarea
+                          className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                          disabled={isCancelled}
+                          value={form.remarks || ""}
+                          maxLength={250}
+                          placeholder="Remarks / Notes"
+                          onFocus={() => setRemarksFocus(true)}
+                          onBlur={() => setRemarksFocus(false)}
+                          onChange={(e) => update("remarks", e.target.value)}
+                        />
+                        {remarksFocus && !isCancelled && (
+                          <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+                            {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
+                          </div>
+                        )}
+                      </div>
                     </CField>
                   </HeaderBlock>
                 </div>
@@ -1459,7 +1466,7 @@ const limitProps = (f: keyof FormState) => ({
                         label="Currency *"
                         required
                         enforceRequired
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         value={form.curr_code ?? ""}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1491,7 +1498,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     <CField label="Ex Rate" required error={fieldErrors.ex_rate}>
                       <ExchangeRateInput
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         required
                         value={form.ex_rate}
                         onChange={(rate) => update("ex_rate", rate)}
@@ -1513,7 +1520,7 @@ const limitProps = (f: keyof FormState) => ({
                   )}
 
                   {/* Card 3: Tax Details */}
-                  <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow>
+                  <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow={!isSales}>
                     <CField label="Tax Type">
                       <Select
                         className="h-7 text-xs"
@@ -1599,6 +1606,67 @@ const limitProps = (f: keyof FormState) => ({
                       />
                     </div>
                   </HeaderBlock>
+
+                  {/* Card 4: Sales Details (Sales & Service only) */}
+                  {isSales && (
+                    <HeaderBlock label="Sales Details" icon={<UserCheck size={11} />} gridCols="grid-cols-2" grow>
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Salesman"
+                          disabled={isCancelled}
+                          value={form.salesman_code ?? ""}
+                          displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
+                          columns={[
+                            { field: "salesman_code", header: "Code" },
+                            { field: "salesman_name", header: "Name" },
+                          ]}
+                          valueField="salesman_code"
+                          displayFields={["salesman_code", "salesman_name"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Salesman_Search",
+                              code1: user?.company_code || "",
+                            })
+                          }
+                          onChange={(value, row) =>
+                            setForm((c) => ({
+                              ...c,
+                              salesman_code: value,
+                              salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="col-span-1">
+                        <LookupField
+                          label="Sector"
+                          disabled={isCancelled}
+                          value={form.sector_code ?? ""}
+                          displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
+                          columns={[
+                            { field: "sector_code", header: "Code" },
+                            { field: "sector_name", header: "Name" },
+                          ]}
+                          valueField="sector_code"
+                          displayFields={["sector_code", "sector_name"]}
+                          loadOptions={() =>
+                            getDynamicFinanceLookup({
+                              parameter: "Sector_Search",
+                              code1: user?.company_code || "",
+                            })
+                          }
+                          onChange={(value, row) =>
+                            setForm((c) => ({
+                              ...c,
+                              sector_code: value,
+                              sector_name: text(getLookupValue(row || {}, "sector_name")),
+                            }))
+                          }
+                        />
+                      </div>
+                    </HeaderBlock>
+                  )}
                 </div>
               </div>
             </div>
@@ -1674,10 +1742,10 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Product Code</th>}
-                      <th className="w-[320px] min-w-[280px] px-2 py-2 text-left">Description</th>
+                      <th className="w-[380px] min-w-[300px] px-2 py-2 text-left">Description</th>
                       {isPO && <th className="w-32 min-w-[110px] px-2 py-2 text-left">Cost Code</th>}
-                      <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty</th>
-                      {isPO && <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty Rcv</th>}
+                      <th className="w-18 min-w-[55px] px-2 py-2 text-right">Qty</th>
+                      {/* {isPO && <th className="w-24 min-w-[95px] px-2 py-2 text-right">Qty Rcv</th>} */}
                       <th className="w-24 min-w-[95px] px-2 py-2 text-right">Rate</th>
                       <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Amount</th>
                       {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
@@ -1685,13 +1753,13 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="w-[60px] min-w-[60px] px-2 py-2 text-center">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="w-[100px] min-w-[100px] px-2 py-2 text-left">Tax Type</th>}
-                      <th className="w-16 min-w-[65px] px-2 py-2 text-right">Tax %</th>
+                      <th className="w-16 min-w-[55px] px-2 py-2 text-right">Tax %</th>
                       <th className="finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="w-28 min-w-[110px] px-2 py-2 text-left">Job</th>
                       {isPO && <th className="w-28 min-w-[110px] px-2 py-2 text-left">Dept.</th>}
-                      {isPO && <th className="w-56 min-w-[200px] px-2 py-2 text-left">Remarks</th>}
+                      {isPO && <th className="w-56 min-w-[300px] px-2 py-2 text-left">Remarks</th>}
                       <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
@@ -1751,7 +1819,7 @@ const limitProps = (f: keyof FormState) => ({
     
   </td>
 )}
-                        <td className="w-[320px] min-w-[280px] px-1 py-1">
+                        <td className="w-[380px] min-w-[300px] px-1 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
@@ -1765,8 +1833,8 @@ const limitProps = (f: keyof FormState) => ({
                         {isPO && (<td className="w-32 min-w-[110px] px-1 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
                         </td>
                         )}
-                        <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>}
+                        <td className="w-18 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        {/* {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.001" placeholder="0.000" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
                         <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
@@ -1806,7 +1874,7 @@ const limitProps = (f: keyof FormState) => ({
 </Select>
                         </td>
                       )}
-                        <td className="w-16 min-w-[65px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
+                        <td className="w-16 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
@@ -2055,8 +2123,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     delivery_to: text(header.delivery_to),
     dlvr_term: text(header.dlvr_term?? header.delivery_term),
     party_address: text(header.party_address ?? header.address),
-    party_phone:   text(header.party_phone ?? header.phone),
-    party_fax:     text(header.party_fax ?? header.fax),
+    party_phone:   text(header.party_phone ?? header.phone).slice(0, 30),
+    party_fax:     text(header.party_fax ?? header.fax).slice(0, 30),
     dlvr_contact:       text(header.dlvr_contact ?? header.contact_person),
     dlvr_mobile:        text(header.dlvr_mobile ?? header.mobile_no),
     dlvr_email:         text(header.dlvr_email ?? header.e_mail),
@@ -2122,9 +2190,14 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
   };
 }
 
+// function buildCommercialPayload(form: FormState, companyCode: string) {
+//   return {
+//     ...form,
+//     company_code: companyCode,
 function buildCommercialPayload(form: FormState, companyCode: string) {
+  const { tx_compntcat_name_1, ...formForSave } = form;
   return {
-    ...form,
+    ...formForSave,
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
     // ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
@@ -2230,6 +2303,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
   return {
     header,
     details,
+    invoiceDetails: buildCommercialInvoiceDetails(form, companyCode, docNo),
     expenseDetails: [],
     jobDetails: buildCommercialJobDetails(form, companyCode, docNo),
     loginid,
@@ -2238,7 +2312,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
 
 function buildCommercialInvoiceDetails(form: FormState, companyCode: string, docNo: string) {
   if (form.doc_type === "PO") return [];
-  const invNo = form.inv_no || form.ref_no;
+  const invNo = form.doc_no || form.inv_no || form.ref_no;
   if (!invNo) return [];
   return form.detail
     .filter((line) => Number(line.amount || 0) !== 0)
@@ -2249,7 +2323,7 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       serial_no: line.serial_no || index + 1,
       dtl_sr_no: 1,
       doc_date: form.doc_date,
-      ac_code: line.ac_code,
+      ac_code: form.ac_code || line.ac_code,
       inv_no: invNo,
       inv_date: form.inv_date || form.ref_date || form.doc_date,
       amount: Math.abs(Number(line.amount || 0)),
@@ -2259,6 +2333,8 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       curr_code: form.curr_code,
       ex_rate: Number(form.ex_rate || 1),
       div_code: form.div_code,
+      indicator_origin: "Y",
+      amount_origin: Math.abs(Number(line.amount || 0)),
     }));
 }
 

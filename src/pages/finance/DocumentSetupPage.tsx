@@ -376,7 +376,7 @@ export function DocumentSetupPage() {
                 ]}
                 valueField="curr_code"
                 displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Serach", loginid: loginId, code1: companyCode })}
+                loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Search", loginid: loginId, code1: companyCode })}
                 onChange={(code, row) => {
                   setDocForm((prev) => prev ? { ...prev, curr_code: code, curr_name: row ? getLookupText(row, ["curr_name", "currency_name"]) : "" } : null);
                 }}
@@ -478,6 +478,19 @@ export function DocumentSetupPage() {
   );
 }
 
+async function loadApprovedAccounts(loginid?: string, company_code?: string): Promise<LookupRow[]> {
+  const rows = await getDynamicLookup({
+    parameter: "Account_AC_CODE_Serach",
+    loginid: loginid || "",
+    code1: company_code || "",
+  });
+  return rows.filter((r) => {
+    const active = String(getLookupValue(r, "ac_active") || "").trim().toUpperCase();
+    const status = String(getLookupValue(r, "ac_status") || "A").trim().toUpperCase();
+    return active === "Y" && status !== "C";
+  });
+}
+
 function DocAccountTable({
   title,
   description,
@@ -549,7 +562,7 @@ function DocAccountTable({
             ]}
             valueField="ac_code"
             displayFields={["ac_code", "ac_name"]}
-            loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "" })}
+            loadOptions={() => loadApprovedAccounts(user?.loginid, user?.company_code)}
             onChange={(value, lookupRow) => onChange({ ...original, ac_code: value, ac_name: lookupRow ? getLookupText(lookupRow, ["ac_name", "AC_NAME", "account_name"]) : "" })}
           />
         ) : (
@@ -621,7 +634,7 @@ function AccountLookup({ label, value, name, onChange }: { label: string; value:
       ]}
       valueField="ac_code"
       displayFields={["ac_code", "ac_name"]}
-      loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+      loadOptions={() => loadApprovedAccounts(user?.loginid, user?.company_code)}
       onChange={(nextValue, row) => onChange(nextValue, row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "")}
     />
   );
@@ -692,7 +705,7 @@ function AddAccountDialog({
           ]}
           valueField="ac_code"
           displayFields={["ac_code", "ac_name"]}
-          loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+          loadOptions={() => loadApprovedAccounts(user?.loginid, user?.company_code)}
           onChange={(value, row) => setAccount({ ac_code: value, ac_name: row ? String(getLookupValue(row, "ac_name") || getLookupValue(row, "account_name") || "") : "" })}
         />
         {touched && !account.ac_code && (

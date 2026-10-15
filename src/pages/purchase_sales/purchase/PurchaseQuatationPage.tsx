@@ -13,7 +13,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
-import { PQA_CONFIG } from "./Purchaseordertypes";
+import { PQO_CONFIG } from "./Purchaseordertypes";
 import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 import { Dialog } from "../../../components/mms_ui";
 import { formatDate } from "../../../utils/date";
@@ -330,25 +330,25 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
             if (approvalLevel === 0) {
               return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
             }
-      <TabStrip
-        value={tab}
-        onChange={(value) => setTab(value as RequestTab)}
-        tabs={
-          approvalLevel === 0
-            ? [
-              { label: "Pending", value: "PENDING", icon: "pending" },
-              { label: "Closed", value: "CLOSED", icon: "closed" },
-              { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-            ]
-            : [
-              { label: "Pending", value: "PENDING", icon: "pending" },
-              { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-              { label: "Closed", value: "CLOSED", icon: "closed" },
-              ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-              { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-            ]
-        }
-      />
+            <TabStrip
+              value={tab}
+              onChange={(value) => setTab(value as RequestTab)}
+              tabs={
+                approvalLevel === 0
+                  ? [
+                    { label: "Pending", value: "PENDING", icon: "pending" },
+                    { label: "Closed", value: "CLOSED", icon: "closed" },
+                    { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+                  ]
+                  : [
+                    { label: "Pending", value: "PENDING", icon: "pending" },
+                    { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+                    { label: "Closed", value: "CLOSED", icon: "closed" },
+                    ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+                    { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+                  ]
+              }
+            />
 
             if (item.value === "CANCELED" && !canViewCanceledTab) {
               return false;
@@ -368,16 +368,16 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
                   setPageIndex(0);
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
-                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
                   }`}
               >
                 <span>{item.label}</span>
 
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
-                      ? "bg-white/20 text-white"
-                      : "bg-muted text-muted-foreground"
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
                     }`}
                 >
                   {getTabCount(item.value)}
@@ -439,7 +439,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         <div className="fixed inset-0 z-50 bg-background">
           <PurchaseQuotationEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={PQA_CONFIG}
+            config={PQO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -452,7 +452,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       )}
 
-    <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
+      {/* <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
   <div className="grid max-h-[420px] gap-2 overflow-auto">
     {divisions.map((division) => (
       <button
@@ -469,14 +469,21 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   <div className="mt-4 flex justify-end">
     <Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>
   </div>
-</Dialog>
+</Dialog> */}
+      <DivisionPickerDialog
+        open={divisionPicker}
+        divisions={divisions}
+        description="Choose the division before opening the Purchase Grn form."
+        onSelect={(division) => openCreateForDivision(division)}
+        onClose={() => setDivisionPicker(false)}
+      />
       {printTarget && (
         <PurchaseQuotationPrintDialog
           open={!!printTarget}
           onClose={() => setPrintTarget(null)}
           form={printTarget as any}
           companyCode={user?.company_code || ""}
-          docType="PQA"
+          docType="PQO"
         />
       )}
     </section>

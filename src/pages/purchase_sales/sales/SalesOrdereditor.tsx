@@ -46,6 +46,7 @@ import { FinanceDocumentIdentity } from "../../../components/finance/FinanceDocu
 import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { downloadSalesInvoiceExcel } from "./SalesInvoiceReport";
 
 
 export type { PurchaseOrderEditorState };
@@ -101,7 +102,8 @@ export function SalesOrderEditor({
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
-const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [printOpen, setPrintOpen] = useState(false);
 
 
 
@@ -115,7 +117,7 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
-   useEffect(() => {
+  useEffect(() => {
     const taxPerc =
       form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
@@ -161,6 +163,22 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           fetchSalesOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchSalesOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
+        let acRow: Record<string, unknown> | undefined;
+        const savedAcCode = text(headerRaw.ac_code);
+        if (savedAcCode) {
+          try {
+            const acList = await getDynamicLookup({
+              parameter: "Account_AC_CODE_Serach_For_suppier_customer",
+              code1: user?.company_code,
+              loginid: user?.loginid || user?.username || "ADMIN",
+            });
+            acRow = (acList || [])
+              .map((r) => lowerRecord(r as Record<string, unknown>))
+              .find((r) => text(r.ac_code).trim().toUpperCase() === savedAcCode.trim().toUpperCase());
+          } catch {
+            acRow = undefined;
+          }
+        }
         if (!mounted) return;
 
         setForm((current) => ({
@@ -174,14 +192,21 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
+          address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
+          e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
+          prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
+          credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
           party_phone: text(headerRaw.tel || current.party_phone),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -200,7 +225,11 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
-          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          // tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          tx_compnt_perc_1: numberOrZero(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1),
+          tx_cat_code: text(headerRaw.tx_cat_code || detailRows[0]?.tx_cat_code || current.tx_cat_code),
+          tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || detailRows[0]?.tx_compntcat_code_1 || current.tx_compntcat_code_1),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || detailRows[0]?.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
@@ -251,10 +280,10 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
 
-      const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-          const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
-    const finalTotal = grandTotal + totalTaxAmount;
+  const finalTotal = grandTotal + totalTaxAmount;
   const updateField = (
     field: keyof PurchaseOrderForm,
     value: string | number
@@ -357,34 +386,34 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
-  if (!form.doc_no) {
-    setError("Save the Sales Order before printing");
-    return;
-  }
+    if (!form.doc_no) {
+      setError("Save the Sales Order before printing");
+      return;
+    }
 
-  const params = {
-    company_code: user?.company_code,
-    doc_type: SO_DOC_TYPE.SO,
-    doc_no: form.doc_no,
+    const params = {
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.SO,
+      doc_no: form.doc_no,
+    };
+    const preview = openPurchaseReport(`Sales Order ${form.doc_no}`.trim());
+
+    try {
+      const html = await getSOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `sales_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getSoOrderReportExcel(params);
+        },
+      });
+    } catch (printError) {
+      preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
+    }
   };
-  const preview = openPurchaseReport(`Sales Order ${form.doc_no}`.trim());
 
-  try {
-    const html = await getSOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `sales_order_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getSoOrderReportExcel(params);
-      },
-    });
-  } catch (printError) {
-    preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
-  }
-};
 
-  
 
   const handleExportExcel = async () => {
     if (!form.doc_no) {
@@ -411,6 +440,23 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
@@ -428,32 +474,32 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-const rect = submitBtnRef.current?.getBoundingClientRect();
-if (rect) {
-  setSubmitConfirmPos({
-    top: rect.bottom + 8,
-    right: window.innerWidth - rect.right,
-  });
-}
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
@@ -546,6 +592,18 @@ if (rect) {
     }, "Sales Order sent back");
   };
 
+  const handleExcel = async () => {
+      if (!form.doc_no) return;
+      try {
+        await getSoOrderReportExcel({
+          doc_no: String(form.doc_no),
+          company_code: user?.company_code,
+        });
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Excel export failed");
+      }
+    };
+
   const actionBarBusy = actionLoading !== null || saving;
 
   return (
@@ -592,8 +650,8 @@ if (rect) {
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-        
-                     <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                       {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
@@ -601,20 +659,20 @@ if (rect) {
                     </Button>
                   )}
                   <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                      {isPendingTab && (
-                    <Button
-                      type="button"
-                      onClick={handleSubmitClick}
-                      disabled={actionDisabled || actionBarBusy}
-                    >
-                      {actionLoading === "submit" ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                    </Button>
-   )}
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
                     {showSubmitConfirm &&
                       createPortal(
                         <div
@@ -651,26 +709,24 @@ if (rect) {
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
-                          {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExportExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  {form.doc_no && (
+                    <>
+                      <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                      <Printer size={15} /> Print
                     </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+                   <Button
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+>
+  <Download size={15} />
+  Excel
+</Button>
+                    </>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
 
                 </div>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
@@ -690,7 +746,7 @@ if (rect) {
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Order...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

@@ -2,7 +2,7 @@ import { useEffect, useState, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 
 /** Multiline counterpart of Input's character-limit preview. */
-export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ maxBytes, onFocus, onBlur, onChange, onMouseEnter, onMouseLeave, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { maxBytes?: number }) {
   const [preview, setPreview] = useState<{ text: string; left: number; top: number; above: boolean } | null>(null);
   useEffect(() => {
     const hide = () => setPreview(null);
@@ -11,6 +11,7 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
     return () => { window.removeEventListener("scroll", hide, true); window.removeEventListener("resize", hide); };
   }, []);
   const show = (el: HTMLTextAreaElement) => {
+    if (document.activeElement !== el) return setPreview(null);
     if (props.maxLength == null && (!el.value || el.value.length < 12)) return setPreview(null);
     const rect = el.getBoundingClientRect();
     const above = rect.bottom + 150 > window.innerHeight;
@@ -20,9 +21,12 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
     <textarea {...props}
       onFocus={(event) => { show(event.currentTarget); onFocus?.(event); }}
       onBlur={(event) => { setPreview(null); onBlur?.(event); }}
-      onMouseEnter={(event) => { show(event.currentTarget); onMouseEnter?.(event); }}
-      onMouseLeave={(event) => { if (document.activeElement !== event.currentTarget) setPreview(null); onMouseLeave?.(event); }}
-      onChange={(event) => { show(event.currentTarget); onChange?.(event); }}
+      onMouseEnter={(event) => { onMouseEnter?.(event); }}
+      onMouseLeave={(event) => { onMouseLeave?.(event); }}
+      onChange={(event) => {
+        if (maxBytes != null) event.currentTarget.setCustomValidity(new TextEncoder().encode(event.currentTarget.value).length > maxBytes ? `Maximum ${maxBytes} UTF-8 bytes allowed` : "");
+        show(event.currentTarget); onChange?.(event);
+      }}
     />
     {preview && createPortal(<div role="tooltip" style={{ position: "fixed", zIndex: 99999, left: preview.left, top: preview.top, transform: preview.above ? "translateY(-100%)" : undefined, width: "min(480px, calc(100vw - 16px))", pointerEvents: "none" }} className="rounded-xl bg-[#00378C] p-4 text-sm text-white shadow-xl">
       <div className="max-h-24 overflow-hidden whitespace-pre-wrap break-words">{preview.text || <span className="opacity-60 italic text-xs">Start typing...</span>}</div>
@@ -30,6 +34,7 @@ export function Textarea({ onFocus, onBlur, onChange, onMouseEnter, onMouseLeave
         <span>{preview.text.length} / {props.maxLength} characters</span>
         <span>{preview.text.length > props.maxLength ? "Exceeded by " + (preview.text.length - props.maxLength) : "(" + (props.maxLength - preview.text.length) + " left)"}</span>
       </div>}
+      {maxBytes != null && new TextEncoder().encode(preview.text).length !== preview.text.length && <div className="mt-1 font-mono text-xs">{new TextEncoder().encode(preview.text).length} / {maxBytes} UTF-8 bytes</div>}
     </div>, document.body)}
   </>;
 }

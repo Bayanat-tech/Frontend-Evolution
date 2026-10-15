@@ -328,7 +328,6 @@ useEffect(() => {
     { accessorKey: "div_code", header: "Div" },
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
-    { accessorKey: "curr_code", header: "Currency" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -400,7 +399,7 @@ useEffect(() => {
         </div>
       </div> */}
             <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase GRN</h6>
+          <h6 className="m-0 text-xl font-semibold tracking-tight">Goods Receipt Note</h6>
         </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />

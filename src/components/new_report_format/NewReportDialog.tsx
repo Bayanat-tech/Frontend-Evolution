@@ -10,6 +10,7 @@ import {
   X,
   ExternalLink,
   FileSpreadsheet,
+  Download,
   ZoomIn,
   ZoomOut,
   Printer,
@@ -23,8 +24,55 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { NewReportDialogProps } from "./types";
+import htmlToPdfmake from "html-to-pdfmake";
 
 type Orientation = "portrait" | "landscape";
+
+/* ───────────────────────── PDF image helpers ───────────────────────── */
+
+/** Fetch an image and return it as a data URL (pdfmake can't load remote URLs). */
+const toDataUrl = async (src: string): Promise<string | null> => {
+  try {
+    const res = await fetch(src, { mode: "cors", cache: "force-cache" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as string);
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Returns HTML where every <img src> is inlined as a data URL.
+ * Images that cannot be loaded (CORS, 404, network) are removed so pdfmake
+ * does not throw "File ... not found in virtual file system".
+ */
+const inlineImages = async (html: string): Promise<string> => {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const imgs = Array.from(doc.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.getAttribute("src") || "";
+      if (!src || src.startsWith("data:")) return;
+      let abs = src;
+      try {
+        abs = new URL(src, window.location.href).href;
+      } catch {
+        img.remove();
+        return;
+      }
+      const dataUrl = await toDataUrl(abs);
+      if (dataUrl) img.setAttribute("src", dataUrl);
+      else img.remove();
+    })
+  );
+  return "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+};
 
 /* ───────────────────────── Responsive helpers ───────────────────────── */
 
@@ -180,6 +228,7 @@ export function NewReportDialog({
   onOpenInNewWindow,
   headerSlot,
 }: NewReportDialogProps) {
+  console.log("htmlContent", htmlContent);
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
   const isCompact = bp !== "desktop";
@@ -219,6 +268,8 @@ export function NewReportDialog({
   const [viewW, setViewW] = useState(0);
   /** Unscaled layout height of the pages wrapper (px) — used to size scroll area after scaling */
   const [layoutH, setLayoutH] = useState(0);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   /** Orientation the report HTML actually declares (auto-detected) */
   const autoOrientation = useMemo<Orientation>(
@@ -1045,6 +1096,118 @@ export function NewReportDialog({
     );
   };
 
+  const handleDownloadPdf = async () => {
+    if (!htmlContent || loading || downloadingPdf) return;
+
+    setDownloadingPdf(true);
+    setDownloadMessage(null);
+
+    try {
+      const [pdfMakeModule, pdfFontsModule] = await Promise.all([
+        import("pdfmake/build/pdfmake"),
+        import("pdfmake/build/vfs_fonts"),
+      ]);
+
+      const pdfMake = ((pdfMakeModule as any).default ?? pdfMakeModule) as any;
+      const fontModule = pdfFontsModule as any;
+
+      // pdfmake's VFS export differs between 0.2.x and 0.3.x and between
+      // CommonJS/ESM bundlers. Find the actual font-file dictionary instead
+      // of assuming it always lives at pdfMake.vfs.
+      const isFontVfs = (value: unknown): value is Record<string, string> => {
+        if (!value || typeof value !== "object") return false;
+        const entries = Object.entries(value as Record<string, unknown>);
+        return entries.some(([key, val]) => /\.ttf$/i.test(key) && typeof val === "string");
+      };
+
+      const fontCandidates = [
+        fontModule?.pdfMake?.vfs,
+        fontModule?.default?.pdfMake?.vfs,
+        fontModule?.vfs,
+        fontModule?.default?.vfs,
+        fontModule?.default,
+        fontModule,
+      ];
+      const vfs = fontCandidates.find(isFontVfs);
+
+      if (!vfs) {
+        throw new Error(
+          "The bundled PDF font files were not found. Ensure pdfmake and its vfs_fonts module use the same version."
+        );
+      }
+
+      // pdfmake 0.2.x uses .vfs; 0.3.x also supports addVirtualFileSystem.
+      if (typeof pdfMake.addVirtualFileSystem === "function") {
+        pdfMake.addVirtualFileSystem(vfs);
+      }
+      pdfMake.vfs = { ...(pdfMake.vfs ?? {}), ...vfs };
+
+      const robotoFonts = {
+        Roboto: {
+          normal: "Roboto-Regular.ttf",
+          bold: "Roboto-Medium.ttf",
+          italics: "Roboto-Italic.ttf",
+          bolditalics: "Roboto-MediumItalic.ttf",
+        },
+      };
+      if (typeof pdfMake.addFonts === "function") {
+        pdfMake.addFonts(robotoFonts);
+      }
+      pdfMake.fonts = { ...(pdfMake.fonts ?? {}), ...robotoFonts };
+
+      // pdfmake can't fetch remote images in the browser: it only accepts data
+      // URLs or files registered in its virtual file system. Inline every <img>
+      // (e.g. the company logo on Oracle Object Storage) as a data URL first.
+      // Images that fail to load (CORS / 404) are dropped so the PDF still builds.
+      const safeHtml = await inlineImages(htmlContent);
+
+      // Keep htmlContent unchanged; apply a compact, readable fallback style
+      // so large tables are more likely to fit the report page width/height.
+      const pdfContent = htmlToPdfmake(safeHtml, {
+        window: window as any,
+      });
+      const margin = pageMarginMm * 2.83465;
+      const definition = {
+        pageSize: "A4",
+        pageOrientation: orientation,
+        pageMargins: [margin, margin, margin, margin],
+        content: pdfContent,
+        defaultStyle: {
+          font: "Roboto",
+          fontSize: 8,
+          lineHeight: 1.05,
+          color: "#222222",
+        },
+        styles: {
+          header: { font: "Roboto", fontSize: 12, bold: true },
+          subheader: { font: "Roboto", fontSize: 10, bold: true },
+          tableHeader: { font: "Roboto", fontSize: 8, bold: true, color: "#222222" },
+        },
+        // Reduce default table padding to conserve space without changing the HTML.
+        layout: {
+          hLineWidth: () => 0.5,
+          vLineWidth: () => 0.5,
+          paddingLeft: () => 3,
+          paddingRight: () => 3,
+          paddingTop: () => 2,
+          paddingBottom: () => 2,
+        },
+      };
+      const safeTitle = title.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim() || "Report";
+      pdfMake.createPdf(definition).download(`${safeTitle}.pdf`);
+    } catch (reason) {
+      setDownloadMessage({
+        type: "error",
+        text:
+          reason instanceof Error
+            ? `PDF download failed: ${reason.message}`
+            : "Unable to generate the PDF. Please try again.",
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   /** True when the user has manually overridden the auto-detected orientation */
   const orientationOverridden = orientation !== autoOrientation;
 
@@ -1072,6 +1235,29 @@ export function NewReportDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {downloadMessage && (
+        <div
+          role={downloadMessage.type === "error" ? "alert" : "status"}
+          style={{
+            position: "fixed",
+            top: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2000,
+            padding: "12px 20px",
+            borderRadius: 8,
+            background: downloadMessage.type === "success" ? "#166534" : "#b91c1c",
+            color: "#ffffff",
+            fontSize: 14,
+            fontWeight: 600,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+            maxWidth: "90vw",
+            textAlign: "center",
+          }}
+        >
+          {downloadMessage.text}
+        </div>
+      )}
       <div
         style={{
           width: "100%",
@@ -1801,6 +1987,21 @@ export function NewReportDialog({
               {exportingExcel ? "Exporting…" : "Excel"}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={!htmlContent || loading || downloadingPdf}
+            style={{
+              ...footerBtn,
+              ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
+              opacity: !htmlContent || loading || downloadingPdf ? 0.55 : 1,
+              cursor: !htmlContent || loading || downloadingPdf ? "not-allowed" : "pointer",
+            }}
+          >
+            <Download size={14} strokeWidth={2} />
+            {downloadingPdf ? "Generating PDF…" : "Download PDF"}
+          </button>
 
           {onOpenInNewWindow && (
             <button

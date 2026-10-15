@@ -225,6 +225,27 @@ export async function processStockAdjustment(payload: ProcessStockAdjustmentPayl
 export async function confirmStockAdjustment(payload: ConfirmStockAdjustmentPayload) {
   return postWmsStockAdjustment("confirm-adj-detail", payload as unknown as Record<string, unknown>);
 }
+// In wms.ts
+
+export async function fetchHrDashboardData(params: {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  number1?: number;
+  number2?: number;
+}) {
+  // Point to the new API endpoint
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/hr/dashboard/summary", 
+    params
+  );
+  
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load HR Dashboard data");
+  }
+  
+  return response.data.data || [];
+}
 
 /** GET all stock adjustment reports for the print dialog */
 export async function getAllStockAdjReports() {

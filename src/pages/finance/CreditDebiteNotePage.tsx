@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { AlertCircle, Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
+import { AlertCircle, Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, User, X } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -29,6 +29,7 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
@@ -42,6 +43,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
@@ -154,12 +156,23 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -312,7 +325,6 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               density="grid"
               enablePagination
               manualPagination
-              manualFiltering
               enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
@@ -339,7 +351,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalRows={totalRows}
-              initialSorting={[{ id: "doc_date", desc: true }]}
+              initialSorting={[{ id: "doc_no", desc: true }]}
               columnFilters={columnFilters}
               onColumnFiltersChange={(filters) => {
                 setColumnFilters(filters);
@@ -494,6 +506,8 @@ function PaymentDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [remarksHover, setRemarksHover] = useState(false);
+  const [remarksFocus, setRemarksFocus] = useState(false);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -535,24 +549,41 @@ function PaymentDocumentEditor({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -561,11 +592,11 @@ function PaymentDocumentEditor({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -1034,14 +1065,19 @@ const limitProps = (f: keyof TransactionHeader) => ({
   const selectedDetail = form.detail.find((row) => row.id === selectedDetailId) || form.detail[0];
   const selectedChildren = selectedDetail ? (form.children[selectedDetail.id] as TransactionChildRow[] | undefined) || [] : [];
 
-  const loadChildrenForDetail = async (detail: TransactionDetail) => {
+  const loadChildrenForDetail = async (detail: TransactionDetail, overridePartyAcCode?: string) => {
     if (!detail.child_table) return;
     setChildLoading(true);
     setError("");
     try {
       const divCode = detail.div_code || form.div_code;
+      const partyAcCode = overridePartyAcCode || (
+        (docType === "CN" || docType === "DN")
+          ? (form.ac_code || detail.ac_code)
+          : (detail.ac_code || form.ac_code)
+      );
       const rows = await getFinanceMasterRows(detail.child_table, {
-        code: detail.ac_code,
+        code: partyAcCode,
         extra_param1: divCode,
         extra_param2: docType,
         extra_param3: form.doc_no || "0",
@@ -1061,21 +1097,54 @@ const limitProps = (f: keyof TransactionHeader) => ({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, partyAcCode, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+          });
+        }
+
+        // Deduplicate invoices so the same voucher / invoice reference is only shown once
+        const seenInvoices = new Set<string>();
+        mapped = mapped.filter((m) => {
+          const docKey = text(m.doc_no).trim().toUpperCase();
+          const refKey = text(m.ref_no).trim().toUpperCase();
+          const invKey = text(m.inv_no).trim().toUpperCase();
+          const primaryId = docKey || refKey || invKey;
+          if (!primaryId) return true;
+          if ((docKey && seenInvoices.has(`D_${docKey}`)) ||
+              (refKey && seenInvoices.has(`R_${refKey}`)) ||
+              (invKey && seenInvoices.has(`I_${invKey}`))) {
+            return false;
+          }
+          if (docKey) seenInvoices.add(`D_${docKey}`);
+          if (refKey) seenInvoices.add(`R_${refKey}`);
+          if (invKey) seenInvoices.add(`I_${invKey}`);
+          return true;
+        });
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -1083,11 +1152,26 @@ const limitProps = (f: keyof TransactionHeader) => ({
           let remaining = parentAmt;
           mapped = mapped.map((row) => {
             if (remaining <= 0) return { ...row, amount: 0 };
-            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
-            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
+        }
+
+        // If header inv_no is empty and we loaded invoices, auto-fill header inv_no from the first invoice
+        if (!form.inv_no && mapped.length > 0) {
+          const firstInv = mapped[0];
+          const firstInvNo = text(firstInv.inv_no || firstInv.ref_no);
+          const firstInvDate = firstInv.inv_date;
+          if (firstInvNo) {
+            setForm((current) => ({
+              ...current,
+              inv_no: current.inv_no || firstInvNo,
+              inv_date: current.inv_date || firstInvDate || current.inv_date,
+            }));
+          }
         }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
@@ -1199,11 +1283,17 @@ const limitProps = (f: keyof TransactionHeader) => ({
     // }
 
     for (const [f, l] of Object.entries(HEADER_LIMITS)) {
-  const v = String((form as Record<string, unknown>)[f] ?? "");
-  if (l && v.length > l.max) {
-    return setError(`You have exceeded the character limit for ${l.label}.`);
-  }
-}
+      const v = String((form as Record<string, unknown>)[f] ?? "");
+      if (l && v.length > l.max) {
+        return setError(`You have exceeded the character limit for ${l.label}.`);
+      }
+    }
+    if (form.party_phone && form.party_phone.trim() && !isValidPhoneNumber(form.party_phone)) {
+      return setError("Phone must contain numbers only.");
+    }
+    if (form.party_fax && form.party_fax.trim() && !isValidPhoneNumber(form.party_fax)) {
+      return setError("Fax must contain numbers only.");
+    }
 
     if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
 
@@ -1219,6 +1309,10 @@ if (tooLong.length) {
   setInvalidLineIds(new Set(tooLong.map((d) => d.id)));
   return setError(`You have exceeded the character limit for Remarks on Line #${tooLong[0].serial_no || 1}.`);
 }
+
+    setInvalidLineIds(new Set());
+    setInvalidChildRowIds(new Set());
+    setInvalidChildFields({});
 
     // Missing field validation on lines (new row without details / missing account or zero amount)
     const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
@@ -1245,8 +1339,17 @@ if (tooLong.length) {
             if (!c.job_no?.trim()) missingFields.push("Job No");
             if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
           } else if (d.child_table === "invoice") {
-            if (!c.inv_no?.trim()) missingFields.push("Invoice No");
-            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Allocated Amount");
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              }
+            }
           }
 
           if (missingFields.length > 0) {
@@ -1286,11 +1389,12 @@ if (tooLong.length) {
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      const resolvedAc = acCode || ((docType === "CN" || docType === "DN") ? form.ac_code : undefined);
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode: resolvedAc, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, resolvedAc, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -1306,13 +1410,44 @@ if (tooLong.length) {
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    const partyAcCode = (docType === "CN" || docType === "DN")
+      ? (form.ac_code || parentDetail?.ac_code)
+      : (parentDetail?.ac_code || form.ac_code);
+    void fetchOutstanding(invNo, partyAcCode).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
+          : `Invoice "${invNo}" not found for account ${partyAcCode || ""}.`;
+        setError(errMsg);
+        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            ? {
+                ...row,
+                inv_no: balance.inv_no || row.inv_no,
+                ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+                inv_amt: balance.original_amount,
+                c_bal_amt_org: balance.outstanding_amount,
+              }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -1508,6 +1643,11 @@ if (tooLong.length) {
                                   ...current,
                                   cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
                                 }));
+                                form.detail.forEach((d) => {
+                                  if (d.child_table === "invoice") {
+                                    void loadChildrenForDetail(d, value);
+                                  }
+                                });
                               }
                             }}
                           />
@@ -1524,25 +1664,27 @@ if (tooLong.length) {
                           />
                         </CField>
 
-                        <CField label="Phone" className="col-span-1" error={limitErr("party_phone")}>
+                        <CField label="Phone" className="col-span-1" error={limitErr("party_phone") || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}>
                           <Input
                             {...limitProps("party_phone")}
+                            type="tel"
                             placeholder="Phone"
                             disabled={disabled}
                             value={form.party_phone || ""}
-                            className={`h-7 text-xs ${form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                            onChange={(event) => updateField("party_phone", event.target.value)}
+                            className={`h-7 text-xs ${((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_phone", sanitizePhoneNumber(event.target.value))}
                           />
                         </CField>
 
-                        <CField label="Fax" className="col-span-1" error={limitErr("party_fax")}>
+                        <CField label="Fax" className="col-span-1" error={limitErr("party_fax") || (form.party_fax && !isValidPhoneNumber(form.party_fax) ? "Must contain numbers only" : undefined)}>
                           <Input
                             {...limitProps("party_fax")}
+                            type="tel"
                             placeholder="Fax"
                             disabled={disabled}
                             value={form.party_fax || ""}
-                            className={`h-7 text-xs ${form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                            onChange={(event) => updateField("party_fax", event.target.value)}
+                            className={`h-7 text-xs ${((form.party_fax && form.party_fax.length > 30) || (form.party_fax && !isValidPhoneNumber(form.party_fax))) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_fax", sanitizePhoneNumber(event.target.value))}
                           />
                         </CField>
                       </HeaderBlock>
@@ -1593,21 +1735,39 @@ if (tooLong.length) {
                           </div>
                         )}
 
-                        {/* Remarks: Wide textarea across entire bottom of Document Details */}
-                        <CField
-                          label="Remarks"
-                          className="col-span-2"
-                          error={limitErr("remarks")}
-                        >
-                          <textarea
-                            className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                            disabled={disabled}
-                            value={form.remarks || ""}
-                            maxLength={250}
-                            placeholder="Remarks / Notes"
-                            onChange={(event) => updateField("remarks", event.target.value)}
-                          />
-                        </CField>
+                        {/* Remarks: Wide textarea across entire bottom of Document Details */}                       
+<CField
+  label="Remarks"
+  className="col-span-2"
+  error={limitErr("remarks")}
+>
+  <div className="w-full">
+    <textarea
+      className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${
+        limitErr("remarks")
+          ? "!border-rose-500 !ring-rose-400"
+          : ""
+      }`}
+      disabled={disabled}
+      value={form.remarks || ""}
+      maxLength={250}
+      placeholder="Remarks / Notes"
+      onFocus={() => setRemarksFocus(true)}
+      onBlur={() => setRemarksFocus(false)}
+      onChange={(event) =>
+        updateField("remarks", event.target.value)
+      }
+    />
+
+    {remarksFocus && !disabled && (
+      <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+        {(form.remarks || "").length} / 250 characters (
+        {250 - (form.remarks || "").length} left)
+      </div>
+    )}
+  </div>
+</CField>
+
                       </HeaderBlock>
                     </div>
 
@@ -1843,7 +2003,7 @@ if (tooLong.length) {
                       <th className="finance-amount-cell px-2 py-2 text-right text-white w-24 min-w-[100px]">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white w-28 min-w-[110px]">Job No</th>}
                       {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white w-32 min-w-[110px]">Base Amount</th>}
-                      <th className="px-2 py-2 text-center text-white w-14">Action</th>
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2062,7 +2222,17 @@ if (tooLong.length) {
                           {showAllColumns && (
                             <td className="finance-amount-cell w-32 min-w-[110px] px-2 py-1"><Input className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                           )}
-                          <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                          <td className="finance-sticky-col-right px-1 py-1 text-center w-[76px] min-w-[76px] max-w-[76px]">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              title="Delete row"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                              onClick={() => removeDetailRow(detail.id)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         </tr>
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
@@ -2641,6 +2811,12 @@ function mapExistingDocument(
     cheque_bank: text(header.cheque_bank),
     ac_payee: text(header.ac_payee),
     canceled: text(header.canceled),
+    party_address: text(header.party_address),
+    party_phone: text(header.party_phone),
+    party_fax: text(header.party_fax),
+    tx_compntcat_code_1: text(header.tx_compntcat_code_1),
+    tx_compntcat_name_1: text(nested(headerRaw, ["TaxCategory", "tx_compntcat_name"]) ?? header.tx_compntcat_name_1),
+    tx_compnt_1_expmt: text(header.tx_compnt_1_expmt) || "N",
     detail,
     children,
   };
@@ -2720,19 +2896,25 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
   delete (header as Record<string, unknown>).detail;
   delete (header as Record<string, unknown>).children;
 
-  const details = originalForm.detail.map((row, index) => ({
-    ...row,
-    company_code: row.company_code || companyCode,
-    doc_type: docType,
-    doc_no: docNo,
-    serial_no: row.serial_no || index + 1,
-    doc_date: originalForm.doc_date,
-    header_ac_code: originalForm.ac_code,
-    curr_code: row.curr_code || originalForm.curr_code,
-    ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
-    div_code: row.div_code || originalForm.div_code,
-  }));
+  const details = originalForm.detail.map((row, index) => {
+    const rowCurr = row.curr_code || originalForm.curr_code;
+    const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(originalForm.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(originalForm.curr_code).trim().toUpperCase());
+    const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || originalForm.ex_rate || 1);
+    const effectiveLcurAmt = Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1);
+    return {
+      ...row,
+      company_code: row.company_code || companyCode,
+      doc_type: docType,
+      doc_no: docNo,
+      serial_no: row.serial_no || index + 1,
+      doc_date: originalForm.doc_date,
+      header_ac_code: originalForm.ac_code,
+      curr_code: rowCurr,
+      ex_rate: effectiveExRate,
+      lcur_amount: effectiveLcurAmt,
+      div_code: row.div_code || originalForm.div_code,
+    };
+  });
 
   const children = groupChildren(originalForm);
   return {
@@ -2780,12 +2962,27 @@ function groupChildren(form: TransactionHeader) {
       cleaned.dtl_sr_no = childIndex + 1;
       cleaned.doc_date = form.doc_date;
       cleaned.div_code = form.div_code;
-      cleaned.ac_code = detail.ac_code;
+      cleaned.ac_code = (table === "invoice" && (form.doc_type === "CN" || form.doc_type === "DN"))
+        ? (form.ac_code || detail.ac_code)
+        : (detail.ac_code || form.ac_code);
       cleaned.sign_ind = detail.sign_ind;
-      cleaned.curr_code = cleaned.curr_code || form.curr_code;
-      cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
-      cleaned.amount = Number(cleaned.amount || 0);
-      cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+        cleaned.curr_code = form.curr_code;
+        const isBaseCurr = String(form.curr_code).trim().toUpperCase() === "INR" || Number(form.ex_rate || 1) === 1;
+        cleaned.ex_rate = isBaseCurr ? 1 : Number(form.ex_rate || 1);
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      } else {
+        const rowCurr = cleaned.curr_code || form.curr_code;
+        const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
+        const effectiveExRate = isBaseCurr ? 1 : Number(cleaned.ex_rate || form.ex_rate || 1);
+        cleaned.curr_code = rowCurr;
+        cleaned.ex_rate = effectiveExRate;
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * effectiveExRate * Number(detail.sign_ind || 1);
+      }
       grouped[table].push(cleaned);
     });
   });

@@ -212,6 +212,8 @@ import { QuotationComparisonPage } from "../pages/purchase_sales/purchase/Quotat
 import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesalesdashboard";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import PostDateCheque from "../pages/finance/PostDateCheque";
+import { AirTicketRequestReportPage, AttendanceRegisterReportPage, EmployeeAccrualBalanceReportPage, EmployeeAirfareReportPage, EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeeListingReportPage, EmployeePayUnitReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage, PassportExpiryReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
+import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
 import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
 import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseReturnPage";
@@ -219,13 +221,14 @@ import { MaterialIssuesPage } from "../pages/purchase_sales/production/Materiall
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
+import HrDashboard from "../pages/hr/dashboard/HRDashboard";
 import EmployeeTicketEligibilityPage from "../pages/hr/Reports/Employeeticketeligibilitypage";
-import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
-import VacationSeparationReportPage from "../pages/hr/Reports/Vacationseparationreportpage ";
-import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypage";
 import EmployeeSalaryNotProcessedPage from "../pages/hr/Reports/Employeesalarynotprocessedpage";
 import YearlyLeaveBalancePage from "../pages/hr/Reports/Yearlyleavebalancepage";
 import LeaveResumptionPage from "../pages/hr/Reports/LeaveResumptionPage";
+import VacationSeparationReportPage from "../pages/hr/Reports/Vacationseparationreportpage ";
+import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypage";
+import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
 
 
 type WorkspaceRouteContext = {
@@ -248,6 +251,80 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 
 export const workspaceRoutes: WorkspaceRoute[] = [
 
+  // ── PAMS Dashboard on /workspace/ems/ems ──
+  {
+    name: "PAMS Dashboard",
+    match: ({ pathname }) => isPamsDashboardRoute(pathname),
+    element: () => <PamsDashboard />,
+  },
+
+  
+    {
+    name: "HR Dashboard",
+    // Matches exactly /workspace/hcm/hcm (ignoring trailing slashes)
+    match: ({ pathname }) => pathname.toLowerCase().replace(/\/+$/, "") === "/workspace/hcm/hcm",
+    element: () => <HrDashboard />,
+  },
+  {
+    name : 'Attendance Register Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/attendance_register"),
+    element : () => <AttendanceRegisterReportPage />
+  },
+  {
+    name : 'Passport Expiry Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/passport_expiry_listing"),
+    element : () => <PassportExpiryReportPage />
+  },
+  {
+    name : 'Employee Listing',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/employee_listing"),
+    element : () => <EmployeeListingReportPage />
+  },
+  {
+    name : 'Employee airfare report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/payroll/employee_airfare"),
+    element : () => <EmployeeAirfareReportPage />
+  },
+    {
+    name : 'Passport Expiry Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/leave/air_ticket_request_list"),
+    element : () => <AirTicketRequestReportPage />
+  },
+  {
+    name : 'Employee Accural Balance Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/employee_accural_balance"),
+    element : () => <EmployeeAccrualBalanceReportPage />
+  },
+  {
+    name : 'Employee Pay Unit List Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/employee_pay_unit"),
+    element : () => <EmployeePayUnitReportPage />
+  },
+  {
+    name : 'Hr Employee Joining Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/joining_report"),
+    element : () => <EmployeeJoinerReportPage />
+  },
+    {
+    name : 'Hr Leave Entitlement Master',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leave_entitlement"),
+    element : () => <HREmployeeLeaveEntitlement />
+  },
+  {
+    name : 'Hr Employee Register Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/register_report"),
+    element : () => <EmployeeRegisterReportPage />
+  },
+  {
+    name : 'Hr Employee Leaver Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/leaver_report"),
+    element : () => <EmployeeLeaversReportPage />
+  },
+  {
+    name : 'Hr Employee Tenure Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/tenure_report"),
+    element : () => <EmployeeTenureReportPage />
+  },
    {
     name: 'HR Leave Slap Page',
     match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
@@ -290,7 +367,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: 'MSE Prod Group',
-    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/ims/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
 
@@ -302,14 +379,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
     name: 'Purchase Sales Product Brand',
-    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/ims/purchase_sales/masters/product_brand"),
     element: () => <ProductBrandPage />,
   },
   {
-    name: 'Purchase Sales Product',
-    match: ({ pathname }) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
-    element: () => <ProductPurchaseSales />
-  },
+  name: 'Purchase Sales Product',
+  match: ({ pathname }) => isProductRoute(pathname),
+  element: () => <ProductPurchaseSales />
+},
 
   {
   name: "Purchase Sales Product Type",
@@ -975,16 +1052,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <Purchase_Request_page initialTab={0} />
   },
 
-  // ============================================================
-  // ── PAMS ROUTES ─────────────────────────────────────────────
-  // ⚠️ IMPORTANT ORDERING RULE:
-  //    More specific routes MUST come before generic ones.
-  //    "Appraisal List" matcher uses substring `activityrequestappraisal`
-  //    which would also match `appraisal_listing` URLs. Therefore all
-  //    summary / listing report routes MUST appear before it.
-  // ============================================================
 
-  // ✅ PAMS Reporting pages — MUST come BEFORE "PAMS Appraisal List"
+
+  // PAMS Reporting pages — MUST come BEFORE "PAMS Appraisal List"
   {
     name: "PAMS Appraisal Summary Report",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
@@ -1006,8 +1076,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PamsBulkAppraisalPage />,
   },
 
-  // ✅ NEW: PAMS Appraisal List — now runs AFTER the summary reports,
-  //    and additionally excludes `*_listing` / `*listing*` paths defensively.
   {
     name: "PAMS Appraisal List",
     match: (context) => {
@@ -1436,11 +1504,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
 
-  {
-    name: "Purchase Sales Product Type",
-    match: ({ pathname }) => isProductTypeRoute(pathname),
-    element: () => <ProductTypePage />,
-  },
+  // {
+  //   name: "Purchase Sales Product Type",
+  //   match: ({ pathname }) => isProductTypeRoute(pathname),
+  //   element: () => <ProductTypePage />,
+  // },
 
   {
     name: "Purchase Sales Product Category",
@@ -1575,6 +1643,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PrRegisterOldPage />,
   }
 ];
+
+function isPamsDashboardRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().trim().replace(/\/+$/, "");
+  return normalized === "/workspace/ems/ems";
+}
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
@@ -1726,21 +1799,21 @@ function isHrLeaveTypeRoute(pathname: string) {
 function isExpenseMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/masters/expense_master"
+    "/workspace/ims/purchase_sales/masters/expense_master"
   );
 }
 
 function isPurchaseSaleSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
+    "/workspace/ims/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
   );
 }
 
 function isProductBrandRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+    "/ims/purchase_sales/masters/product_brand"
   );
 }
 
@@ -3047,7 +3120,7 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
 
 function isProductRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
-  return /\/workspace\/purchase_sales\/purchase_sales\/masters\/product$/.test(normalized);
+  return /\/workspace\/ims\/purchase_sales\/masters\/product$/.test(normalized);
 }
 
 
@@ -3055,9 +3128,9 @@ function isProductTypeRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-     normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
+     normalized.includes("/ims/purchase_sales/masters/product_type") ||
+    normalized.includes("/ims/purchase_sales/masters/product%20type") ||
+    normalized.includes("/ims/purchase_sales/masters/product-type")
   );
 }
 
@@ -3065,9 +3138,9 @@ function isProductCategoryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-        normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
+        normalized.includes("/ims/purchase_sales/masters/product_category") ||
+    normalized.includes("/ims/purchase_sales/masters/product%20category") ||
+    normalized.includes("/ims/purchase_sales/masters/product-category")
   );
 }
 
@@ -3075,9 +3148,9 @@ function isZoneMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-    normalized.includes("/purchase_sales/purchase_sales/masters/zone%20master") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/zone_master") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/zone-master")
+    normalized.includes("/ims/purchase_sales/masters/zone%20master") ||
+    normalized.includes("/ims/purchase_sales/masters/zone_master") ||
+    normalized.includes("/ims/purchase_sales/masters/zone-master")
   );
 }
 
@@ -3092,15 +3165,15 @@ function isProductBomRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   return (
-    normalized.includes("/purchase_sales/purchase_sales/masters/product_bom") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product%20bom") ||
-    normalized.includes("/purchase_sales/purchase_sales/masters/product-bom")
+    normalized.includes("/ims/purchase_sales/masters/product_bom") ||
+    normalized.includes("/ims/purchase_sales/masters/product%20bom") ||
+    normalized.includes("/ims/purchase_sales/masters/product-bom")
   );
 }
 
 function isPnSRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
-  return normalized === "/workspace/purchase_sales/purchase_sales";
+  return normalized === "/workspace/ims/ims";
 }
 function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
