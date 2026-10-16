@@ -267,6 +267,23 @@ export function PurchaseGRNEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+      for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
@@ -282,25 +299,32 @@ export function PurchaseGRNEditor({
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => computeQuantity(row) <= 0);
-    if (invalidRow) {
-      return setError("Received Quantity must be greater than 0 for all line items");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
 
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
+
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
@@ -312,44 +336,44 @@ export function PurchaseGRNEditor({
     }, "Purchase GRN cancelled");
 
   // ── Print opens the in-app NewReportDialog preview ───────────────────────
-  
+
 
 
 
   const handlePrintGrn = async () => {
-  if (!form.doc_no) {
-    setError("Save the GRN before printing");
-    return;
-  }
-  const params = {
-    parameter: "GRN_Print",
-    loginid: user?.loginid || user?.username || "ADMIN",
-    company_code: user?.company_code,
-    doc_type: PO_DOC_TYPE.GRN,
-    doc_no: form.doc_no,
-  } as any;
-  setPrinting(true);
-  setError("");
-  const preview = openPurchaseReport(`Purchase GRN ${form.doc_no}`.trim());
-  try {
-    const url = await getGrnPrintReportPreviewUrl(params);
-    const html = await fetchHtmlFromPreviewUrl(url);
-    preview.ready({
-      html,
-      filename: `purchase_grn_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await exportGrnPrintReportExcel(params);
-      },
-    });
-  } catch (printError) {
-    preview.fail(printError instanceof Error ? printError : new Error("Error while generating report"));
-  } finally {
-    setPrinting(false);
-  }
-};
+    if (!form.doc_no) {
+      setError("Save the GRN before printing");
+      return;
+    }
+    const params = {
+      parameter: "GRN_Print",
+      loginid: user?.loginid || user?.username || "ADMIN",
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.GRN,
+      doc_no: form.doc_no,
+    } as any;
+    setPrinting(true);
+    setError("");
+    const preview = openPurchaseReport(`Purchase GRN ${form.doc_no}`.trim());
+    try {
+      const url = await getGrnPrintReportPreviewUrl(params);
+      const html = await fetchHtmlFromPreviewUrl(url);
+      preview.ready({
+        html,
+        filename: `purchase_grn_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await exportGrnPrintReportExcel(params);
+        },
+      });
+    } catch (printError) {
+      preview.fail(printError instanceof Error ? printError : new Error("Error while generating report"));
+    } finally {
+      setPrinting(false);
+    }
+  };
 
- 
+
 
   const handleExportGrnExcel = async () => {
     if (!form.doc_no) {
@@ -373,6 +397,30 @@ export function PurchaseGRNEditor({
     }
   };
 
+
+
+
+  const handleExcel = async () => {
+  if (!form.doc_no) {
+    setError("Save the GRN before exporting to Excel");
+    return;
+  }
+  setExportingExcel(true);
+  setError("");
+  try {
+    await exportGrnPrintReportExcel({
+      parameter: "GRN_Print",
+      loginid: user?.loginid || user?.username || "ADMIN",
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.GRN,
+      doc_no: String(form.doc_no),
+    } as any);
+  } catch (e: any) {
+    setError(e?.response?.data?.message || e?.message || "Excel export failed");
+  } finally {
+    setExportingExcel(false);
+  }
+};
   const openRejectDialog = () => {
     setRejectError("");
     setRejectReason("");
@@ -464,7 +512,7 @@ export function PurchaseGRNEditor({
           <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
             <div className="flex min-h-10 items-center justify-between gap-3">
               <FinanceDocumentIdentity
-                title="Purchase GRN"
+                title="Goods Receipt Note"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
                 total={formatAmount(finalTotal)}
@@ -476,27 +524,7 @@ export function PurchaseGRNEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
-                    {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={handleExportGrnExcel}
-                      disabled={exportingExcel}
-                      title="Download Excel"
-                    >
-                      {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
@@ -551,13 +579,32 @@ export function PurchaseGRNEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab  && form.doc_no &&(
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
 
                 </div>
+                {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
+                      {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
+                    </Button>
+                    <Button
+  type="button"
+  variant="secondary"
+  onClick={() => void handleExcel()}
+  disabled={exportingExcel}
+>
+  {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+  Excel
+</Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>
@@ -567,7 +614,7 @@ export function PurchaseGRNEditor({
             <div className="cancelled-document-banner" role="status">
               <div>
                 <span className="cancelled-document-kicker">Cancelled Document</span>
-                <strong>{form.doc_no || "Purchase GRN"}</strong>
+                <strong>{form.doc_no || "Goods Receipt Note"}</strong>
               </div>
               <p>This Purchase GRN is cancelled and opened in read-only mode.</p>
             </div>
@@ -575,7 +622,7 @@ export function PurchaseGRNEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Goods Receipt Note...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -701,7 +748,7 @@ export function PurchaseGRNEditor({
       </div>
 
       {/* ── Report preview dialog (NewReportDialog + NewReportDialogProps) ── */}
-       <PurchaseReportPreview />
+      <PurchaseReportPreview />
 
       <SendBackDialog
         open={sendBackDialogOpen}

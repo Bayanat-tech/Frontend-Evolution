@@ -226,7 +226,6 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
           </span>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-bold leading-tight text-slate-900">{title} Register</h1>
-            <p className="m-0 text-xs text-slate-500">Asset Utility</p>
           </div>
         </div>
       </div>
@@ -452,7 +451,7 @@ function AssetSaleEditor({
               <div className="freight-master-field">
                 <label className="freight-master-label">
                   <span>Asset</span>
-                  <span className="text-red-500 font-bold ml-0.5">*</span>
+                  <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>
                 </label>
                 <LookupField
                   compact
@@ -635,7 +634,7 @@ function Field({
     <div className={`freight-master-field ${className || ""}`}>
       <label className="freight-master-label">
         <span>{label}</span>
-        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </label>
       <input
         className={`freight-master-input ${numeric ? "numeric text-right tabular-nums" : ""}`}

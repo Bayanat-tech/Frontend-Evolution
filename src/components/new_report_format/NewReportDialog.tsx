@@ -10,6 +10,7 @@ import {
   X,
   ExternalLink,
   FileSpreadsheet,
+  Download,
   ZoomIn,
   ZoomOut,
   Printer,
@@ -25,6 +26,30 @@ import {
 import type { NewReportDialogProps } from "./types";
 
 type Orientation = "portrait" | "landscape";
+
+/** Above this many pages the preview shows one page at a time with pagination */
+const PAGINATE_THRESHOLD = 5;
+
+/**
+ * How many page thumbnails render a live mini preview at once (a window around
+ * the current page). Every live preview is made of iframes that each parse the
+ * whole report, so keeping this small is what keeps 79-page reports responsive.
+ */
+const THUMB_LIVE_COUNT = 5;
+
+/** 1 2 … 7 8 9 … 19 20 */
+const buildPageNumbers = (cur: number, total: number): (number | "…")[] => {
+  const keep = new Set<number>(
+    [1, 2, total - 1, total, cur - 1, cur, cur + 1].filter((n) => n >= 1 && n <= total)
+  );
+  const sorted = Array.from(keep).sort((a, b) => a - b);
+  const out: (number | "…")[] = [];
+  sorted.forEach((n, i) => {
+    if (i > 0 && n - sorted[i - 1] > 1) out.push("…");
+    out.push(n);
+  });
+  return out;
+};
 
 /* ───────────────────────── Responsive helpers ───────────────────────── */
 
@@ -166,6 +191,8 @@ const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
  * - Optional headerSlot for drill-down breadcrumbs / alerts (does not affect print/measure)
  * - 100% zoom = BASE_VIEW_RATIO (90%) of the preview width, centred
  * - Responsive: full-screen on phones, slide-over page navigator, trimmed toolbar, touch pinch-zoom
+ * - More than PAGINATE_THRESHOLD pages: one page at a time with a pagination bar
+ * - Print & Download PDF both open the browser print dialog (user can print or Save as PDF)
  */
 export function NewReportDialog({
   open,
@@ -191,6 +218,8 @@ export function NewReportDialog({
   const rootRef = useRef<HTMLDivElement>(null);
   const sizerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  /** Match to scroll to once its page has been mounted (paginated mode) */
+  const pendingMatchRef = useRef<{ k: number; list: { y: number }[] } | null>(null);
   /** Search state */
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -210,13 +239,29 @@ export function NewReportDialog({
   const [page, setPage] = useState(1);
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [totalPages, setTotalPages] = useState(1);
+  /** More than PAGINATE_THRESHOLD pages → show one page at a time */
+  const paginated = totalPages > PAGINATE_THRESHOLD;
   const [measuring, setMeasuring] = useState(false);
+  /**
+   * Version of preparedHtml — bumped whenever the srcDoc changes so a stale
+   * "loaded" set can't be confused with a new document.
+   */
+  const htmlVersionRef = useRef(0);
+  /** Which live page bodies have finished loading for the current load key */
+  const loadedRef = useRef<{ key: string; pages: Set<number> }>({
+    key: "",
+    pages: new Set(),
+  });
+  /** Force a re-render when a page body iframe reports loaded */
+  const [, setLoadTick] = useState(0);
   /** Left page-thumb navbar visible (starts closed on small screens) */
   const [navOpen, setNavOpen] = useState(
     () => typeof window === "undefined" || window.innerWidth >= 768
   );
   /** Width of the scrollable preview area (px) — used to fit the page edge to edge */
   const [viewW, setViewW] = useState(0);
+  /** Height of the scrollable preview area (px) — used to fit one whole page in paginated mode */
+  const [viewH, setViewH] = useState(0);
   /** Unscaled layout height of the pages wrapper (px) — used to size scroll area after scaling */
   const [layoutH, setLayoutH] = useState(0);
 
@@ -240,6 +285,9 @@ export function NewReportDialog({
   const contentH = pageH - pageMarginPx * 2;
 
   /** Scale that makes the A4 sheet as wide as the preview area (× BASE_VIEW_RATIO) */
+  /** Same 100% as the normal view in both modes (page not stretched edge to edge) */
+  const PAGINATED_EXTRA_H = 24; // gap above the label + label
+  const PAGINATED_PAD_V = 16; // 8px top + 8px bottom
   const baseScale = viewW > 0 ? (viewW / pageW) * BASE_VIEW_RATIO : 1;
   /** Final scale applied to the pages (100% zoom = old 90% view) */
   const scale = baseScale * (zoom / 100);
@@ -336,6 +384,10 @@ export function NewReportDialog({
     }
     return `<!DOCTYPE html><html><head>${inject}</head><body>${htmlContent}</body></html>`;
   }, [htmlContent, contentW, orientation, pageMarginMm]);
+
+  // Bump whenever srcDoc changes so "loaded" can't be confused with a stale document
+  const htmlVersion = useMemo(() => ++htmlVersionRef.current, [preparedHtml]);
+  const loadKey = `${htmlVersion}:${orientation}:${paginated ? page : "all"}`;
 
   const [contentHeight, setContentHeight] = useState(0);
   const [layout, setLayout] = useState<PageLayout>(EMPTY_LAYOUT);
@@ -454,6 +506,7 @@ export function NewReportDialog({
       setTotalPages(1);
       setOrientation("portrait");
       setMeasuring(false);
+      loadedRef.current = { key: "", pages: new Set() };
       setNavOpen(typeof window === "undefined" || window.innerWidth >= 768);
       setSearchOpen(false);
       setQuery("");
@@ -461,16 +514,26 @@ export function NewReportDialog({
     }
   }, [open]);
 
+  // Watchdog: if the measure iframe never settles (hung image/font), clear measuring
+  useEffect(() => {
+    if (!measuring) return;
+    const t = setTimeout(() => setMeasuring(false), 10000);
+    return () => clearTimeout(t);
+  }, [measuring]);
+
   // Track the width of the scrollable preview area so the page can fit it edge to edge
   useEffect(() => {
     if (!open) return;
     const el = scrollRef.current;
     if (!el) return;
     setViewW(el.clientWidth);
+    setViewH(el.clientHeight);
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
+      const h = entries[0]?.contentRect.height;
       if (w) setViewW(w);
+      if (h) setViewH(h);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -485,7 +548,7 @@ export function NewReportDialog({
     const ro = new ResizeObserver(() => setLayoutH(el.offsetHeight));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [open, loading, error, preparedHtml, totalPages]);
+  }, [open, loading, error, preparedHtml, totalPages, paginated]);
 
   // When htmlContent changes (e.g. drill-down navigation), reset page +
   // auto-detect orientation from the new HTML, then remeasure
@@ -701,7 +764,14 @@ export function NewReportDialog({
     off += pageMarginPx;
 
     const sheetEl = pageSheetRefs.current[pageIdx];
-    if (!sheetEl) return;
+    if (!sheetEl) {
+      // Paginated mode: switch page first, the effect below finishes the scroll
+      if (paginated && pageIdx + 1 !== page) {
+        pendingMatchRef.current = { k, list };
+        setPage(pageIdx + 1);
+      }
+      return;
+    }
     const rootRect = root.getBoundingClientRect();
     const elRect = sheetEl.getBoundingClientRect();
     const target =
@@ -855,9 +925,38 @@ export function NewReportDialog({
     el.scrollTop = st + a.cY * scale - a.cy;
   }, [scale]);
 
+  // Paginated mode: on page change scroll to top, or finish a pending search-match scroll.
+  useEffect(() => {
+    if (!paginated) return;
+    // Each page opens at 100% (fit to view), even if the previous one was zoomed in
+    zoomAnchor.current = null;
+    setZoom(100);
+    const id = requestAnimationFrame(() => {
+      const pending = pendingMatchRef.current;
+      if (pending) {
+        pendingMatchRef.current = null;
+        scrollToMatch(pending.k, pending.list);
+      } else {
+        scrollRef.current?.scrollTo({ top: 0 });
+      }
+    });
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, paginated]);
+
   /** Runs when any displayed report frame (re)loads: highlights + pinch / Ctrl+F inside the frame */
   const onFrameLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
     const frame = e.currentTarget;
+    // Track which live page bodies have finished loading for the current load key
+    if (frame.dataset.nrLive === "1" && frame.dataset.nrPart === "body") {
+      const key = frame.dataset.nrKey ?? "";
+      const pg = Number(frame.dataset.nrPage);
+      if (loadedRef.current.key !== key) {
+        loadedRef.current = { key, pages: new Set() };
+      }
+      loadedRef.current.pages.add(pg);
+      setLoadTick((t) => t + 1);
+    }
     try {
       const d = frame.contentDocument;
       if (!d) return;
@@ -911,59 +1010,112 @@ export function NewReportDialog({
     return Array.from(set).sort((a, b) => a - b);
   }, [totalPages, page]);
 
+  /** Pages actually mounted in the preview: all of them, or just the current one when paginated */
+  const pageIndexes = useMemo(
+    () =>
+      paginated
+        ? [Math.min(page, totalPages) - 1]
+        : Array.from({ length: totalPages }, (_, i) => i),
+    [paginated, page, totalPages]
+  );
+
+  /**
+   * Derived: true until every currently-mounted live page body has fired onLoad
+   * for this exact loadKey. No effect-vs-load race; non-paginated waits for all pages.
+   */
+  const pageLoading =
+    !!preparedHtml &&
+    !loading &&
+    !error &&
+    !(
+      loadedRef.current.key === loadKey &&
+      pageIndexes.every((i) => loadedRef.current.pages.has(i))
+    );
+
+  /** Single source of truth for the wait cursor; errors can never leave it stuck */
+  const busy = loading || (!error && (measuring || pageLoading));
+
   if (!open) return null;
 
   /**
-   * Print on the same screen — no new tab.
-   * Hidden iframe with allow-modals so the browser print dialog can open.
+   * Print / Save as PDF on the same screen — no new tab.
+   * Fresh hidden iframe each time (a reused iframe + document.write is flaky
+   * across browsers), with allow-modals so contentWindow.print() is allowed.
+   * Waits for images + webfonts so the printed pages are complete, not cramped.
+   * Both the Print button and the Download PDF button use this.
    */
   const handlePrint = () => {
     const html = preparedHtml || htmlContent;
     if (!html) return;
 
-    const PRINT_IFRAME_ID = "nr-print-iframe";
-    let iframe = document.getElementById(PRINT_IFRAME_ID) as HTMLIFrameElement | null;
+    // Fresh frame per print — removes stale-document / sandbox edge cases
+    document.getElementById("nr-print-iframe")?.remove();
 
-    if (!iframe) {
-      iframe = document.createElement("iframe");
-      iframe.id = PRINT_IFRAME_ID;
-      iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
-      iframe.style.cssText =
-        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
-      document.body.appendChild(iframe);
+    const iframe = document.createElement("iframe");
+    iframe.id = "nr-print-iframe";
+    // allow-modals is REQUIRED, otherwise print() is blocked silently
+    iframe.setAttribute("sandbox", "allow-same-origin allow-scripts allow-modals");
+    iframe.style.cssText =
+      "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0.01;pointer-events:none;";
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow;
+    if (!win) {
+      iframe.remove();
+      return;
     }
 
+    let printed = false;
     const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      const doc = iframe.contentDocument;
       try {
-        iframe?.contentWindow?.focus();
-        iframe?.contentWindow?.print();
-      } catch {
-        /* ignore */
+        const imgs = doc ? Array.from(doc.images) : [];
+        const ready = Promise.all([
+          imgs.length
+            ? Promise.all(
+                imgs.map((i) =>
+                  i.complete
+                    ? Promise.resolve()
+                    : new Promise<void>((r) => {
+                        i.onload = () => r();
+                        i.onerror = () => r();
+                      })
+                )
+              )
+            : Promise.resolve(),
+          (
+            doc as (Document & { fonts?: { ready: Promise<unknown> } }) | null
+          )?.fonts?.ready ?? Promise.resolve(),
+        ]);
+        ready
+          .then(() => {
+            win.focus();
+            win.print();
+          })
+          .catch((err) => {
+            console.error("Print failed:", err);
+          })
+          .finally(() => setTimeout(() => iframe.remove(), 1000));
+      } catch (err) {
+        console.error("Print failed:", err);
+        iframe.remove();
       }
     };
 
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    if (iframe.contentDocument?.readyState === "complete") {
-      setTimeout(doPrint, 300);
-    } else {
-      iframe.onload = () => setTimeout(doPrint, 300);
-      setTimeout(doPrint, 700);
-    }
+    // srcdoc fires load reliably (document.write after load does not, in some browsers)
+    iframe.onload = () => setTimeout(doPrint, 100);
+    iframe.srcdoc = html;
+    // Fallback if onload never fires (older WebKit)
+    setTimeout(doPrint, 1500);
   };
 
   const goToPage = (n: number) => {
     const clamped = Math.max(1, Math.min(totalPages, n));
     setPage(clamped);
-    const el = pageSheetRefs.current[clamped - 1];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    if (paginated) return; // effect above scrolls to top
+    pageSheetRefs.current[clamped - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const goPrev = () => goToPage(page - 1);
@@ -974,6 +1126,7 @@ export function NewReportDialog({
    * Uses on-screen rects (not offsetTop) because the pages are CSS-scaled.
    */
   const onScrollPreview = () => {
+    if (paginated) return; // only one page is mounted; page is controlled by pagination
     const root = scrollRef.current;
     if (!root || totalPages < 1) return;
     const rootTop = root.getBoundingClientRect().top;
@@ -1011,6 +1164,10 @@ export function NewReportDialog({
           srcDoc={preparedHtml ?? undefined}
           tabIndex={-1}
           sandbox={live ? "allow-same-origin allow-scripts" : "allow-same-origin"}
+          data-nr-part={part}
+          data-nr-live={live ? "1" : undefined}
+          data-nr-key={live ? loadKey : undefined}
+          data-nr-page={live ? String(pageIdx) : undefined}
           style={{
             width: contentW,
             height: fullH,
@@ -1018,7 +1175,8 @@ export function NewReportDialog({
             display: "block",
             background: "#fff",
             transform: `translateY(${-top}px)`,
-            pointerEvents: live ? "auto" : "none",
+            // While busy, disable pointer events so the parent's wait cursor shows over the sheet
+            pointerEvents: live && !busy ? "auto" : "none",
           }}
         />
       </div>
@@ -1055,6 +1213,7 @@ export function NewReportDialog({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
+      className={busy ? "nr-busy" : undefined}
       style={{
         position: "fixed",
         inset: 0,
@@ -1446,6 +1605,13 @@ export function NewReportDialog({
           >
             {navOpen &&
               thumbPages.map((n, idx) => {
+                // Only a window of THUMB_LIVE_COUNT pages around the current one is rendered;
+                // the window moves as the user goes to the next / previous page
+                const liveStart = Math.max(
+                  1,
+                  Math.min(page - 2, totalPages - (THUMB_LIVE_COUNT - 1))
+                );
+                const isLive = n >= liveStart && n < liveStart + THUMB_LIVE_COUNT;
                 const prev = thumbPages[idx - 1];
                 const showGap = prev != null && n - prev > 1;
                 // Thumbnail sheet size (fits nav column)
@@ -1485,7 +1651,7 @@ export function NewReportDialog({
                       }}
                     >
                       {/* Mini page: repeated header + this page's body slice + footer, scaled down */}
-                      {preparedHtml && !loading ? (
+                      {preparedHtml && !loading && !measuring && isLive ? (
                         <div
                           style={{
                             width: pageW,
@@ -1541,10 +1707,15 @@ export function NewReportDialog({
             style={{
               flex: 1,
               minWidth: 0,
-              overflowY: "auto",
+              // Paginated: the whole page fits the view, so no scrolling (only when zoomed in to pan)
+              overflowY:
+                paginated && (pageH + PAGINATED_EXTRA_H) * scale + PAGINATED_PAD_V <= viewH + 1
+                  ? "hidden"
+                  : "auto",
               overflowX: pageW * scale > viewW + 1 ? "auto" : "hidden",
+              scrollbarGutter: paginated ? "stable" : undefined,
               background: "#374151",
-              padding: "0 0 40px",
+              padding: paginated ? `${PAGINATED_PAD_V / 2}px 0` : "0 0 40px",
               touchAction: "pan-x pan-y",
             }}
           >
@@ -1597,30 +1768,39 @@ export function NewReportDialog({
                   }}
                 >
                   {/*
-                    One continuous report, split visually into A4 sheets.
-                    Each sheet clips a slice of the same content via translateY.
-                    Measure iframe runs report scripts (drill postMessage) with
-                    sandbox allow-scripts allow-same-origin so DRILL_DOWN works.
+                    The measure iframe is resized to the FULL report height (e.g. 76 pages),
+                    so it is clipped inside a 0x0 box. Otherwise it stretches the scrollable
+                    area of the preview and leaves a huge blank scroll below the page.
                   */}
-                  <iframe
-                    ref={measureRef}
-                    title={`${title}-measure`}
-                    srcDoc={preparedHtml}
-                    onLoad={onIframeLoad}
+                  <div
+                    aria-hidden="true"
                     style={{
                       position: "absolute",
-                      left: -9999,
+                      left: 0,
                       top: 0,
-                      width: contentW,
-                      height: 50,
-                      opacity: 0,
+                      width: 0,
+                      height: 0,
+                      overflow: "hidden",
+                      visibility: "hidden",
                       pointerEvents: "none",
-                      border: "none",
                     }}
-                    sandbox="allow-same-origin allow-scripts"
-                  />
+                  >
+                    <iframe
+                      ref={measureRef}
+                      title={`${title}-measure`}
+                      srcDoc={preparedHtml}
+                      onLoad={onIframeLoad}
+                      style={{
+                        display: "block",
+                        width: contentW,
+                        height: 50,
+                        border: "none",
+                      }}
+                      sandbox="allow-same-origin allow-scripts"
+                    />
+                  </div>
 
-                  {Array.from({ length: totalPages }, (_, i) => {
+                  {pageIndexes.map((i) => {
                     const pageNum = i + 1;
 
                     return (
@@ -1633,7 +1813,7 @@ export function NewReportDialog({
                           display: "flex",
                           flexDirection: "column",
                           alignItems: "center",
-                          marginBottom: 20,
+                          marginBottom: paginated ? 0 : 20,
                         }}
                       >
                         <div
@@ -1763,6 +1943,66 @@ export function NewReportDialog({
           )}
         </div>
 
+        {/* Pagination bar — only when the report has more than PAGINATE_THRESHOLD pages */}
+        {paginated && !loading && !error && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              padding: "6px 10px",
+              background: "#1f2937",
+              borderTop: "1px solid #374151",
+              flexShrink: 0,
+              overflowX: "auto",
+            }}
+          >
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={page <= 1}
+              style={{ ...pageBtn, opacity: page <= 1 ? 0.35 : 1 }}
+            >
+              <ChevronLeft size={14} /> {!isMobile && "Prev"}
+            </button>
+
+            {buildPageNumbers(page, totalPages).map((n, idx) =>
+              n === "…" ? (
+                <span key={`gap-${idx}`} style={{ color: "#9ca3af", padding: "0 4px" }}>
+                  …
+                </span>
+              ) : (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => goToPage(n)}
+                  aria-current={n === page ? "page" : undefined}
+                  style={{
+                    ...pageBtn,
+                    minWidth: 30,
+                    justifyContent: "center",
+                    background: n === page ? "#3b82f6" : "transparent",
+                    color: n === page ? "#fff" : "#e2e8f0",
+                    fontWeight: n === page ? 700 : 500,
+                  }}
+                >
+                  {n}
+                </button>
+              )
+            )}
+
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={page >= totalPages}
+              style={{ ...pageBtn, opacity: page >= totalPages ? 0.35 : 1 }}
+            >
+              {!isMobile && "Next"} <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Footer */}
         <div
           style={{
@@ -1802,6 +2042,22 @@ export function NewReportDialog({
             </button>
           )}
 
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={!htmlContent || loading}
+            title="Download PDF — opens the print dialog; choose Save as PDF"
+            style={{
+              ...footerBtn,
+              ...(isMobile ? { flex: 1, justifyContent: "center" } : null),
+              opacity: !htmlContent || loading ? 0.55 : 1,
+              cursor: !htmlContent || loading ? "not-allowed" : "pointer",
+            }}
+          >
+            <Download size={14} strokeWidth={2} />
+            Download PDF
+          </button>
+
           {onOpenInNewWindow && (
             <button
               type="button"
@@ -1834,6 +2090,8 @@ export function NewReportDialog({
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        /* Wait cursor over the whole dialog (including page sheets) while busy */
+        .nr-busy, .nr-busy * { cursor: wait !important; }
       `}</style>
     </div>
   );
@@ -1851,6 +2109,21 @@ const toolIconBtn: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: 0,
+  flexShrink: 0,
+};
+
+const pageBtn: React.CSSProperties = {
+  height: 28,
+  padding: "0 8px",
+  border: "none",
+  borderRadius: 4,
+  background: "transparent",
+  color: "#e2e8f0",
+  fontSize: 12,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
   flexShrink: 0,
 };
 

@@ -50,7 +50,7 @@ function CField({ label, required, className, children }: { label: string; requi
         <label className={`field ${className || ""}`}>
             <span className="text-[10px]   font-semibold">
                 {label}
-                {required && <span className="ml-1 text-destructive">*</span>}
+                {required && <span className="ml-1 text-red-500">*</span>}
             </span>
             {children}
         </label>
@@ -100,7 +100,8 @@ export function SalesDNHeaderForm({
           <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
                 <div className="col-span-3">
                     <LookupField
-                        label="A/c code *"
+                    required
+                        label="A/c code"
                         value={form.ac_code}
                         displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
@@ -120,10 +121,10 @@ export function SalesDNHeaderForm({
                 </div>
 
                 <div className="col-span-3">
-                    <label>SO No</label>
+                   
                     <LookupField
-                        label="SO No"
-                        compact
+                        label="SO No*"
+                        
                         placeholder="SO No"
                         value={String(form.so_doc_no ?? "")}
                         displayValue={String(form.so_doc_no ?? "")}
@@ -239,17 +240,16 @@ export function SalesDNHeaderForm({
                     />
                 </div>
 
-                <CField label="SO Date *">
+                <CField label="SO Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
                 </CField>
 
-                <CField label="SO Amount *">
+                <CField label="SO Amount" required>
 
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.total_so_amount} onChange={(event) => updateField("total_so_amount", event.target.value)} />
                 </CField>
 
-                {editMode && <CField label="DN No"><Input disabled value={form.doc_no || ""} /></CField>}
-                <CField label="DN Date *">
+                <CField label="DN Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
 
@@ -284,15 +284,15 @@ export function SalesDNHeaderForm({
             <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
             
               <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
                 </CField>
 
                 <CField label="Remarks" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
                 <CField label="Delivery Term" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled}   maxLength={250} value={form.so_dlvr_term} onChange={(event) => updateField("so_dlvr_term", event.target.value)} />
                 </CField>
                 </HeaderBlock>
         </div>

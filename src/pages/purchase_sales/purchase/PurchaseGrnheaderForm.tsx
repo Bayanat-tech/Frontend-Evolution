@@ -49,7 +49,7 @@ function CField({ label, required, className, children }: { label: string; requi
         <label className={`field ${className || ""}`}>
             <span className="text-[10px]   font-semibold">
                 {label}
-                {required && <span className="ml-1 text-destructive">*</span>}
+               {required && <span className="ml-1 text-red-500">*</span>}
             </span>
             {children}
         </label>
@@ -90,7 +90,8 @@ export function PurchaseGrnHeaderForm({
         <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
                 <div className="col-span-3">
                     <LookupField
-                        label="A/c code *"
+                    required
+                        label="A/c code"
                         value={form.ac_code || ""}
                         displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
@@ -110,10 +111,10 @@ export function PurchaseGrnHeaderForm({
                 </div>
                 {(String(docType ?? "").trim().toUpperCase() === "GRN" &&
                     <div className="col-span-2">
-                        <label>PO No</label>
                         <LookupField
-                            label="PO No"
-                            compact
+                        required
+                            label="PO No*"
+                          
                             placeholder="PO No"
                             value={String(form.po_doc_no ?? "")}
                             displayValue={String(form.po_doc_no ?? "")}
@@ -211,17 +212,17 @@ export function PurchaseGrnHeaderForm({
                         />
                     </div>
                 )}
-                <CField label="PO Date *">
+                <CField label="PO Date " required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.po_doc_date} onChange={(event) => updateField("po_doc_date", event.target.value)} />
                 </CField>
 
-                <CField label="PO Amount *">
+                <CField label="PO Amount " required>
                       
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.total_po_amount} onChange={(event) => updateField("total_po_amount", event.target.value)} />
                 </CField>
 
-                {editMode && <CField label="GRN No"><Input disabled value={form.doc_no || ""} /></CField>}
-                <CField label="Goods Receipt Note Date *">
+                {/* {editMode && <CField label="GRN No"><Input disabled value={form.doc_no || ""} /></CField>} */}
+                <CField label="Goods Receipt Note Date" required>
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
 
@@ -252,15 +253,15 @@ export function PurchaseGrnHeaderForm({
             <HeaderBlock label="Payment Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
 
   <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms}   maxLength={250} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
                 </CField>
 
                <CField label="Remarks" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled} value={form.remarks}   maxLength={250} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
                 <CField label="Delivery Term" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
+                    <Input disabled={headerAndLineDisabled} value={form.po_dlvr_term}   maxLength={250} onChange={(event) => updateField("po_dlvr_term", event.target.value)} />
                 </CField>
             
             </HeaderBlock>

@@ -11,11 +11,12 @@ import {
   Paperclip,
   Trash2,
   RefreshCw,
+  Eraser,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { DataTable } from "../../components/ui/DataTable";
-import { pamsSelect, pamsSave } from "../../api/pams";
+import { pamsSelect, pamsSave, pamsDelete } from "../../api/pams";
 import type { ColumnDef } from "@tanstack/react-table";
 
 export type DesignationInfo = {
@@ -32,7 +33,7 @@ interface ImportKpiEdiProps {
   divisionName?: string;
   departmentCode?: string;
   departmentName?: string;
-  designationLookup?: Record<string, DesignationInfo>;
+  designationLookup?: Record<string, DesignationInfo[]>;
 }
 
 interface EdiRow {
@@ -87,33 +88,93 @@ function getVal(row: AnyRow, ...keys: string[]): string {
 }
 
 // ═════════════════════════════════════════════════════════
-// Validate 3–6 activities per (DESG_CODE + KPI_GROUP)
+// EDI Row-level validation
+//    ✅ FIXED: Min 3 KPI Groups per DESG (Max limit REMOVED)
+//    ✅ Duplicate KPI Group detection
 // ═════════════════════════════════════════════════════════
-function validateActivityGroups(data: AnyRow[]): { label: string; count: number }[] {
-  const groups: Record<string, { label: string; count: number }> = {};
-  let lastDesg = "";
-  let lastKpiGroup = "";
-
-  for (const raw of data) {
-    const r = normalizeRow(raw);
-
-    const desgCode = getVal(r, "DESGCODE", "DESG_CODE");
-    const kpiActivity = getVal(r, "KPIACTIVITY", "KPI_ACTIVITY");
-    const currentGroup = getVal(r, "KPIGROUP", "KPI_GROUP");
-
-    if (desgCode !== "") lastDesg = desgCode;
-    if (currentGroup !== "") lastKpiGroup = currentGroup;
-
-    if (!kpiActivity) continue;
-
-    const key = `${lastDesg}|${lastKpiGroup}`;
-    if (!groups[key]) {
-      groups[key] = { label: lastKpiGroup || "(no group name)", count: 0 };
+function applyEdiValidation(rows: EdiRow[]): EdiRow[] {
+  const desgGroups = new Map<
+    string,
+    {
+      kpiGroups: Map<string, { rowIndices: number[]; weightages: Set<string> }>;
+      allRowIndices: number[];
     }
-    groups[key].count++;
-  }
+  >();
 
-  return Object.values(groups).filter((g) => g.count < 3 || g.count > 6);
+  rows.forEach((r, idx) => {
+    const desg = text(r.desg_code).toUpperCase();
+    const grp = text(r.kpi_group).toUpperCase();
+    const wt = text(r.weightage);
+
+    if (!desg) return;
+
+    if (!desgGroups.has(desg)) {
+      desgGroups.set(desg, { kpiGroups: new Map(), allRowIndices: [] });
+    }
+    const dg = desgGroups.get(desg)!;
+    dg.allRowIndices.push(idx);
+
+    if (!grp) return;
+
+    if (!dg.kpiGroups.has(grp)) {
+      dg.kpiGroups.set(grp, { rowIndices: [], weightages: new Set() });
+    }
+    const kg = dg.kpiGroups.get(grp)!;
+    kg.rowIndices.push(idx);
+    kg.weightages.add(wt);
+  });
+
+  return rows.map((r) => {
+    const desg = text(r.desg_code).toUpperCase();
+    const grp = text(r.kpi_group).toUpperCase();
+
+    const backendError = text(r.error_message);
+    let computedError = "";
+
+    const dg = desgGroups.get(desg);
+
+    if (!backendError && dg) {
+      const distinctGroups = dg.kpiGroups.size;
+
+      // ─────────────────────────────────────────────
+      // Check 1: Duplicate KPI Group (same name, multiple weightages)
+      // ─────────────────────────────────────────────
+      let duplicateGroupName: string | null = null;
+      dg.kpiGroups.forEach((info, gname) => {
+        if (info.weightages.size > 1 && !duplicateGroupName) {
+          duplicateGroupName = gname;
+        }
+      });
+
+      if (duplicateGroupName) {
+        if (grp === duplicateGroupName) {
+          const wts = Array.from(dg.kpiGroups.get(duplicateGroupName)!.weightages)
+            .filter(Boolean)
+            .join(", ");
+          computedError = `Duplicate KPI Group "${r.kpi_group}" in DESG ${r.desg_code} — appears with multiple weightages: ${wts}`;
+        }
+      }
+      // ─────────────────────────────────────────────
+      // Check 2: Min 3 KPI Groups per DESG
+      //          ✅ Max 6 rule REMOVED
+      // ─────────────────────────────────────────────
+      else if (distinctGroups < 3) {
+        computedError = `DESG ${r.desg_code} has only ${distinctGroups} KPI Group(s). Min 3 required.`;
+      }
+
+      // ─────────────────────────────────────────────
+      // Check 3: Blank KPI group name
+      // ─────────────────────────────────────────────
+      if (!computedError && !grp) {
+        computedError = "KPI Group name is blank.";
+      }
+    }
+
+    return {
+      ...r,
+      error_message: backendError || computedError,
+    };
+  });
 }
 
 const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
@@ -134,38 +195,127 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
   const [ediUploaded, setEdiUploaded] = useState(false);
   const [fileSelected, setFileSelected] = useState(false);
   const [fileName, setFileName] = useState<string>("");
-  const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
-  const [activityValidationOk, setActivityValidationOk] = useState(false);
+  const [notice, setNotice] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validRows = ediRows.filter((row) => !row.error_message || row.error_message.trim() === "");
-  const invalidRows = ediRows.filter((row) => row.error_message && row.error_message.trim() !== "");
+  // ✅ STEP 1: Dedupe rows on frontend
+  const dedupedEdiRows = useMemo<EdiRow[]>(() => {
+    const seen = new Set<string>();
+    return ediRows.filter((r) => {
+      const key = [
+        text(r.desg_code).toUpperCase(),
+        text(r.kpi_group).toUpperCase(),
+        text(r.kpi_activity).toUpperCase(),
+        text(r.weightage),
+      ].join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [ediRows]);
+
+  const enhancedEdiRows = useMemo<EdiRow[]>(
+    () => applyEdiValidation(dedupedEdiRows),
+    [dedupedEdiRows]
+  );
+
+  const validRows = enhancedEdiRows.filter(
+    (row) => !row.error_message || row.error_message.trim() === ""
+  );
+  const invalidRows = enhancedEdiRows.filter(
+    (row) => row.error_message && row.error_message.trim() !== ""
+  );
   const hasErrors = invalidRows.length > 0;
 
-  const totalCount = ediRows.length;
+  const totalCount = enhancedEdiRows.length;
   const countLabel = useMemo(
     () => `${totalCount} record${totalCount === 1 ? "" : "s"}`,
     [totalCount]
   );
 
-  const resolveScope = (desgCode: string) => {
-    const key = String(desgCode || "").trim();
-    const info = designationLookup[key];
-    if (info) {
-      return {
-        divCode: info.divCode,
-        divName: info.divName,
-        deptCode: info.deptCode,
-        deptName: info.deptName,
-      };
+  // ═════════════════════════════════════════════════════════
+  // HARD CLEAR — 3 attempts + verification
+  // ═════════════════════════════════════════════════════════
+  const clearStaging = async (): Promise<boolean> => {
+    const MAX_ATTEMPTS = 3;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        await pamsDelete({
+          parameter: "clear_kpi_edi",
+          loginid: user?.loginid ?? "",
+          code1: user?.company_code ?? "",
+        });
+      } catch (e) {
+        console.warn(`clear attempt ${attempt} threw:`, e);
+      }
+
+      try {
+        const check: any = await pamsSelect({
+          parameter: "get_kpi_edi",
+          loginid: user?.loginid ?? "",
+          code1: user?.company_code ?? "",
+        });
+
+        if (!Array.isArray(check)) return true;
+
+        const myLoginid = text(user?.loginid).toUpperCase();
+        const myRows = check.filter((r: any) => {
+          const r2: any = {};
+          Object.keys(r).forEach((k) => {
+            r2[k.toUpperCase()] = r[k];
+          });
+          return text(r2.LOADED_BY).toUpperCase() === myLoginid;
+        });
+
+        if (myRows.length === 0) {
+          console.log(`clear succeeded on attempt ${attempt}`);
+          return true;
+        }
+
+        console.warn(
+          `clear attempt ${attempt} failed — ${myRows.length} rows still exist`
+        );
+      } catch (e) {
+        console.warn(`verify attempt ${attempt} threw:`, e);
+        return true;
+      }
+
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((res) => setTimeout(res, 300));
+      }
     }
-    return {
-      divCode: divisionCode,
-      divName: divisionName,
-      deptCode: departmentCode,
-      deptName: departmentName,
-    };
+
+    return false;
+  };
+
+  const handleForceClear = async () => {
+    try {
+      setIsLoading(true);
+      setUploadError(null);
+
+      const cleared = await clearStaging();
+
+      if (cleared) {
+        setNotice({
+          type: "success",
+          message: "Staging cleared successfully.",
+        });
+        setEdiRows([]);
+        setEdiUploaded(false);
+      } else {
+        setUploadError(
+          "Unable to clear staging data. This is a database permission issue — " +
+            "please contact your administrator to grant DELETE privilege on GT_KPI_EDI."
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ═════════════════════════════════════════════════════════
@@ -181,32 +331,37 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
       });
 
       if (Array.isArray(response)) {
-        const rows: EdiRow[] = response.map((row: any) => {
-          const r: any = {};
-          Object.keys(row).forEach((k) => {
-            r[k.toUpperCase()] = row[k];
-          });
+        const myLoginid = text(user?.loginid).toUpperCase();
 
-          return {
-            error_message: text(r.ERROR_MESSAGE),
-            kpi_code: text(r.KPI_CODE),
-            kpi_group: text(r.KPI_GROUP),
-            kpi_activity: text(r.KPI_ACTIVITY),
-            weightage: text(r.WEIGHTAGE),
-            div_code: text(r.DIV_CODE),
-            div_name: text(r.DIV_NAME),
-            dept_code: text(r.DEPT_CODE),
-            dept_name: text(r.DEPT_NAME),
-            desg_code: text(r.DESG_CODE),
-            desg_name: text(r.DESG_NAME),
-            dept_head_name: text(r.DEPT_HEAD_NAME),
-            dept_head_code: text(r.DEPT_HEAD_CODE),
-            remarks: text(r.REMARKS),
-            loaded_by: text(r.LOADED_BY),
-            loaded_date: text(r.LOADED_DATE),
-            company_code: text(r.COMPANY_CODE),
-          };
-        });
+        const rows: EdiRow[] = response
+          .map((row: any) => {
+            const r: any = {};
+            Object.keys(row).forEach((k) => {
+              r[k.toUpperCase()] = row[k];
+            });
+
+            return {
+              error_message: text(r.ERROR_MESSAGE),
+              kpi_code: text(r.KPI_CODE),
+              kpi_group: text(r.KPI_GROUP),
+              kpi_activity: text(r.KPI_ACTIVITY),
+              weightage: text(r.WEIGHTAGE),
+              div_code: text(r.DIV_CODE),
+              div_name: text(r.DIV_NAME),
+              dept_code: text(r.DEPT_CODE),
+              dept_name: text(r.DEPT_NAME),
+              desg_code: text(r.DESG_CODE),
+              desg_name: text(r.DESG_NAME),
+              dept_head_name: text(r.DEPT_HEAD_NAME),
+              dept_head_code: text(r.DEPT_HEAD_CODE),
+              remarks: text(r.REMARKS),
+              loaded_by: text(r.LOADED_BY),
+              loaded_date: text(r.LOADED_DATE),
+              company_code: text(r.COMPANY_CODE),
+            };
+          })
+          .filter((row) => text(row.loaded_by).toUpperCase() === myLoginid);
+
         setEdiRows(rows);
       } else {
         setEdiRows([]);
@@ -228,7 +383,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     setUploadError(null);
     setFileName(file.name);
     setFileSelected(false);
-    setActivityValidationOk(false);
     setExcelData([]);
 
     const reader = new FileReader();
@@ -260,32 +414,8 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
           return;
         }
 
-        const badGroups = validateActivityGroups(normalized);
-
-        if (badGroups.length > 0) {
-          const details = badGroups
-            .slice(0, 5)
-            .map((g) => `• "${g.label}" → ${g.count} activit${g.count === 1 ? "y" : "ies"}`)
-            .join("\n");
-
-          setUploadError(
-            `Each KPI must have between min 3 and max 6 activities.\n${details}` +
-            (badGroups.length > 5 ? `\n...and ${badGroups.length - 5} more group(s)` : "")
-          );
-          setNotice({
-            type: "error",
-            message: `Validation failed: ${badGroups.length} KPI group(s) have invalid activity counts (min 3, max 6).`,
-          });
-          setExcelData([]);
-          setFileSelected(false);
-          setFileName("");
-          if (fileInputRef.current) fileInputRef.current.value = "";
-          return;
-        }
-
         setExcelData(normalized);
         setFileSelected(true);
-        setActivityValidationOk(true);
         setNotice({
           type: "info",
           message: `${normalized.length} rows loaded from "${file.name}". Click "Upload to EDI" to continue.`,
@@ -307,6 +437,36 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     try {
       setIsLoading(true);
       setUploadError(null);
+
+      const existingCheck: any = await pamsSelect({
+        parameter: "get_kpi_edi",
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code ?? "",
+      });
+
+      if (Array.isArray(existingCheck)) {
+        const myLoginid = text(user?.loginid).toUpperCase();
+        const existingMyRows = existingCheck.filter((r: any) => {
+          const r2: any = {};
+          Object.keys(r).forEach((k) => {
+            r2[k.toUpperCase()] = r[k];
+          });
+          return text(r2.LOADED_BY).toUpperCase() === myLoginid;
+        });
+
+        if (existingMyRows.length > 0) {
+          const cleared = await clearStaging();
+          if (!cleared) {
+            setUploadError(
+              `Cannot proceed. There are ${existingMyRows.length} old rows in staging that cannot be cleared.\n\n` +
+                `Please click "Clear All Staging" button to retry, or contact your admin to grant DELETE privilege on GT_KPI_EDI table.\n\n` +
+                `Continuing would duplicate the data.`
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
 
       const filled: AnyRow[] = [];
       let lastDesg: AnyRow = {};
@@ -344,9 +504,29 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         filled.push(merged);
       }
 
+      const desgUseCount: Record<string, number> = {};
+
       const mappedRows = filled.map((r) => {
         const desgCode = getVal(r, "DESGCODE", "DESG_CODE").replace(/\.0+$/, "");
-        const scope = resolveScope(desgCode);
+        const arr = designationLookup[desgCode] || [];
+        const idx = desgUseCount[desgCode] || 0;
+        const info = arr[idx] || arr[0];
+
+        desgUseCount[desgCode] = idx + 1;
+
+        const scope = info
+          ? {
+              divCode: info.divCode,
+              divName: info.divName,
+              deptCode: info.deptCode,
+              deptName: info.deptName,
+            }
+          : {
+              divCode: divisionCode,
+              divName: divisionName,
+              deptCode: departmentCode,
+              deptName: departmentName,
+            };
 
         return [
           scope.divCode || "-",
@@ -405,29 +585,6 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
       return;
     }
 
-    const groups: Record<string, number> = {};
-    validRows.forEach((r) => {
-      const key = `${r.div_code}|${r.dept_code}|${r.desg_code}|${r.kpi_group}`;
-      groups[key] = (groups[key] || 0) + 1;
-    });
-
-    const badGroups = Object.entries(groups).filter(([, cnt]) => cnt < 3 || cnt > 6);
-    if (badGroups.length > 0) {
-      const details = badGroups
-        .map(([key, cnt]) => {
-          const g = key.split("|").pop();
-          return `• "${g}" → ${cnt} activit${cnt > 1 ? "ies" : "y"}`;
-        })
-        .slice(0, 5)
-        .join("\n");
-
-      setUploadError(
-        `Each KPI must have 3-6 activities.\n${details}` +
-        (badGroups.length > 5 ? `\n...and ${badGroups.length - 5} more` : "")
-      );
-      return;
-    }
-
     try {
       setIsLoading(true);
       setNotice(null);
@@ -450,7 +607,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
           message: `Import successful! ${validRows.length} records saved.`,
         });
         setTimeout(() => {
-          handleReset();
+          void handleReset();
           onSuccess();
           onClose();
         }, 2000);
@@ -464,7 +621,8 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    await clearStaging();
     setExcelData([]);
     setEdiRows([]);
     setUploadError(null);
@@ -472,39 +630,29 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     setFileSelected(false);
     setFileName("");
     setNotice(null);
-    setActivityValidationOk(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-
+  // ═════════════════════════════════════════════════════════
+  // DOWNLOAD TEMPLATE
+  // ═════════════════════════════════════════════════════════
   const handleDownloadTemplate = async () => {
     try {
       setIsLoading(true);
       setUploadError(null);
 
-      // ── Fetch unique designations under logged-in HOD ──────
-      const rows = await pamsSelect({
-        parameter: "hod_team_designations",
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code ?? "",
-      });
-
       const templateData: Array<Record<string, string>> = [];
+      const desgCodes = Object.keys(designationLookup || {}).sort();
+      const nameMap: Record<string, string> = {};
 
-      if (Array.isArray(rows) && rows.length > 0) {
-        for (const raw of rows) {
-          const r: AnyRow = {};
-          Object.keys(raw).forEach((k) => {
-            r[k.toUpperCase()] = (raw as AnyRow)[k];
-          });
+      for (const desgCode of desgCodes) {
+        const arr = designationLookup[desgCode];
+        if (!Array.isArray(arr) || arr.length === 0) continue;
 
-          const desgCode = text(r.DESG_CODE);
-          const desgName = text(r.DESG_NAME);
-          if (!desgCode && !desgName) continue;
-
+        for (const info of arr) {
           templateData.push({
             DESG_CODE: desgCode,
-            DESG_NAME: desgName,
+            DESG_NAME: "",
             KPI_GROUP: "",
             WEIGHTAGE: "",
             KPI_ACTIVITY: "",
@@ -512,7 +660,57 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         }
       }
 
-      // ── Fallback: header-only row if nothing fetched ───────
+      if (templateData.length > 0) {
+        try {
+          const pairs = new Set<string>();
+          for (const desgCode of desgCodes) {
+            const arr = designationLookup[desgCode];
+            if (!Array.isArray(arr)) continue;
+            for (const info of arr) {
+              if (info.divCode && info.deptCode) {
+                pairs.add(`${info.divCode}|${info.deptCode}`);
+              }
+            }
+          }
+
+          for (const pair of pairs) {
+            const [d, p] = pair.split("|");
+            try {
+              const desgRows = await pamsSelect({
+                parameter: "employee_designation",
+                loginid: user?.loginid ?? "",
+                code1: user?.company_code ?? "",
+                code2: d,
+                code3: p,
+                code4: "All",
+              });
+
+              if (Array.isArray(desgRows)) {
+                for (const raw of desgRows) {
+                  const r: AnyRow = {};
+                  Object.keys(raw).forEach((k) => {
+                    r[k.toUpperCase()] = (raw as AnyRow)[k];
+                  });
+                  const c = text(r.DESG_CODE);
+                  const n = text(r.DESG_NAME);
+                  if (c && !nameMap[c]) nameMap[c] = n;
+                }
+              }
+            } catch {
+              // silent
+            }
+          }
+
+          for (const row of templateData) {
+            if (nameMap[row.DESG_CODE]) {
+              row.DESG_NAME = nameMap[row.DESG_CODE];
+            }
+          }
+        } catch {
+          // silent
+        }
+      }
+
       if (templateData.length === 0) {
         templateData.push({
           DESG_CODE: "",
@@ -523,10 +721,8 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         });
       }
 
-      // ── Build worksheet ────────────────────────────────────
       const ws = XLSX.utils.json_to_sheet(templateData);
 
-      // ── Pura header row YELLOW ─────────────────────────────
       const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
       const yellowStyle = {
         fill: { patternType: "solid", fgColor: { rgb: "FFFF00" } },
@@ -539,23 +735,21 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
         (ws[cellRef] as any).s = yellowStyle;
       }
 
-      // ── Column widths ──────────────────────────────────────
       ws["!cols"] = [
-        { wch: 12 }, // DESG_CODE
-        { wch: 40 }, // DESG_NAME
-        { wch: 32 }, // KPI_GROUP
-        { wch: 12 }, // WEIGHTAGE
-        { wch: 55 }, // KPI_ACTIVITY
+        { wch: 12 },
+        { wch: 40 },
+        { wch: 32 },
+        { wch: 12 },
+        { wch: 55 },
       ];
 
-      // ── Write file ─────────────────────────────────────────
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "KpiEdiTemplate");
       XLSX.writeFile(wb, "KPI_EDI_Template.xlsx");
 
       setNotice({
         type: "success",
-        message: `Template downloaded with ${templateData.length} designation(s).`,
+        message: `Template downloaded with ${templateData.length} row(s).`,
       });
     } catch (err: any) {
       setUploadError("Failed to generate template: " + (err?.message || err));
@@ -571,14 +765,16 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
     {
       accessorKey: "error_message",
       header: "Status",
-      size: 180,
+      size: 280,
       cell: ({ row }) => {
         const error = row.original.error_message;
         if (error && error.trim() !== "") {
           return (
-            <div className="flex items-center gap-2 text-red-600">
-              <XCircle size={16} />
-              <span className="text-sm font-medium">{error}</span>
+            <div className="flex items-start gap-2 text-red-600">
+              <XCircle size={16} className="mt-0.5 shrink-0" />
+              <span className="text-xs font-medium leading-snug whitespace-normal">
+                {error}
+              </span>
             </div>
           );
         }
@@ -680,7 +876,16 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
               </Button>
               <Button
                 variant="outline"
-                onClick={handleReset}
+                onClick={() => void handleForceClear()}
+                disabled={isLoading}
+                className="gap-2 text-red-600 hover:text-red-700"
+                title="Force clear all staging data"
+              >
+                <Eraser size={15} /> Clear All Staging
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handleReset()}
                 disabled={isLoading}
                 className="gap-2"
               >
@@ -701,11 +906,13 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
             </div>
             <h3 className="m-0 text-base font-semibold">Upload KPI Excel File</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              Columns required: <strong>DESG_CODE, DESG_NAME, KPI_GROUP, WEIGHTAGE, KPI_ACTIVITY</strong>.
+              Columns required:{" "}
+              <strong>DESG_CODE, DESG_NAME, KPI_GROUP, WEIGHTAGE, KPI_ACTIVITY</strong>.
               Download the template for reference.
             </p>
             <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-              <strong>Note:</strong> Each KPI group must have <strong>3 to 6 activities</strong>.
+              <strong>Note:</strong> Each designation must have <strong>at least 3 KPI Groups</strong>.
+              Duplicate KPI Groups within a designation are not allowed.
             </p>
             <div className="mt-4 flex justify-center gap-2">
               <Button variant="outline" onClick={handleDownloadTemplate} className="gap-2">
@@ -732,13 +939,13 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
               Review the file content before uploading to staging. Click{" "}
               <strong>Upload to EDI</strong> to proceed.
             </p>
-            {activityValidationOk && (
-              <p className="mx-auto mt-1 max-w-md text-xs font-medium text-green-700">
-                ✓ All KPI groups have 3–6 activities
-              </p>
-            )}
             <div className="mt-4 flex justify-center gap-2">
-              <Button variant="outline" onClick={handleReset} className="gap-2" disabled={isLoading}>
+              <Button
+                variant="outline"
+                onClick={() => void handleReset()}
+                className="gap-2"
+                disabled={isLoading}
+              >
                 <Trash2 size={15} /> Discard
               </Button>
               <Button onClick={handleUploadToEDI} disabled={isLoading} className="gap-2">
@@ -756,22 +963,28 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
             <div className="flex gap-6">
               <div>
                 <span className="text-xs text-muted-foreground">Total</span>
-                <p className="m-0 text-2xl font-bold text-foreground">{ediRows.length}</p>
+                <p className="m-0 text-2xl font-bold text-foreground">
+                  {enhancedEdiRows.length}
+                </p>
               </div>
               <div>
                 <span className="text-xs text-muted-foreground">Valid</span>
-                <p className="m-0 text-2xl font-bold text-green-600">{validRows.length}</p>
+                <p className="m-0 text-2xl font-bold text-green-600">
+                  {validRows.length}
+                </p>
               </div>
               <div>
                 <span className="text-xs text-muted-foreground">Invalid</span>
-                <p className="m-0 text-2xl font-bold text-red-600">{invalidRows.length}</p>
+                <p className="m-0 text-2xl font-bold text-red-600">
+                  {invalidRows.length}
+                </p>
               </div>
             </div>
           </div>
 
           <DataTable
             columns={columns}
-            data={ediRows}
+            data={enhancedEdiRows}
             title="Staged Records"
             subtitle="Review and validate before saving"
             searchPlaceholder="Search records..."
@@ -806,6 +1019,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
             <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-yellow-700" />
             <div className="text-sm text-yellow-800">
               {invalidRows.length} record(s) have validation errors. Please fix and re-upload.
+              All errors are shown in the <strong>Status</strong> column above.
             </div>
           </div>
         </div>
@@ -836,7 +1050,7 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({
                 </>
               )}
             </Button>
-            <Button variant="ghost" onClick={handleReset} disabled={isLoading}>
+            <Button variant="ghost" onClick={() => void handleReset()} disabled={isLoading}>
               Cancel
             </Button>
           </div>

@@ -346,7 +346,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
 
     // SDN reference
     si_ref_doc_no: form.sdn_doc_no,
-    discount_scoope: form.discount_scoope || "ITEM"
+    discount_scoope: form.discount_scoope || "ITEM",
+    job_card_no : form.job_card_no
 
   };
 }
@@ -498,7 +499,7 @@ export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number)
 
     quantity: computeQuantity(row),
 
-    tax_pct: row.tax_pct,
+    tax_pct: numberOrZero(row.tx_compnt_perc_1),
     tax_amount: lineTaxAmount(row),
 
     lcur_amount: lineLcurrAmount(row, ex_rate),
@@ -545,7 +546,9 @@ export async function runWorkflow(
 ) {
   return upsertBulkSaleseEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
+      header: {...buildHeaderPayload(form, companyCode, loginid, docType, rows),
+        cancelled: status === "CANCELED" ? "Y" : form.canceled || "N",
+      },
       details: buildDetailsPayload(rows, form.ex_rate),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",

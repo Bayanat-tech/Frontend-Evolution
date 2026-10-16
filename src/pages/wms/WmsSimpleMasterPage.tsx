@@ -13,6 +13,7 @@ import { WmsMasterForm } from "../../components/WmsMasterForm";
 import ImportLocationEdi from "./edi/ImportLocationEdi";
 import ImportProductEdi from "./edi/ImportProductEdi";
 import ImportSiteEdi from "./edi/ImportSiteEdi";
+import { isValidEmail, isValidPhoneNumber } from "../../utils/inputValidation";
 
 export type WmsMasterField = {
   name: string;
@@ -330,6 +331,23 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       setNotice({ type: "error", message: `${missing.label} is required` });
       return;
     }
+
+    for (const field of editableFields) {
+      const val = String(form[field.name] ?? "").trim();
+      if (!val) continue;
+
+      const isEmail = field.type === "email" || /(^|_)(email|e_mail)(_|$)/i.test(field.name);
+      if (isEmail && !isValidEmail(val)) {
+        setNotice({ type: "error", message: `Please enter a valid email address for ${field.label}` });
+        return;
+      }
+
+      const isPhone = /(^|_)(phone|mobile|tel|telephone|fax)(_|$|[0-9])/i.test(field.name);
+      if (isPhone && !isValidPhoneNumber(val)) {
+        setNotice({ type: "error", message: `${field.label} must contain numbers only` });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const transformedForm = editableFields.reduce((acc, field) => {
@@ -443,6 +461,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       {/* ---------- EDITOR ---------- */}
       {editorOpen && (
         <WmsMasterForm
+          characterLimitCards={config.master.startsWith("freight-")}
           key={editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add"}
           formId={FORM_ID}
           title={config.title}

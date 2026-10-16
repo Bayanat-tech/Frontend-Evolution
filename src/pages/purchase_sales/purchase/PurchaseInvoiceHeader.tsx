@@ -82,6 +82,22 @@ export function PurchaseInvoiceHeaderForm({
     const discountScope = form.discount_scoope || "ITEM";
     const docTypeUpper = String(docType ?? "").trim().toUpperCase();
 
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const emailInvalid = !!form.e_mail && !EMAIL_RE.test(String(form.e_mail).trim());
+
+    // phone / fax: digits, + ( ) - and space only, max 20 chars
+    const cleanPhone = (v: string) => v.replace(/[^0-9+()\-\s]/g, "").slice(0, 20);
+
+    // whole number only, max 4 digits
+    const cleanInt = (v: string, max = 4) => v.replace(/\D/g, "").slice(0, max);
+
+    // positive number, max 3 decimals
+    const cleanAmount = (v: string) => {
+        const cleaned = v.replace(/[^0-9.]/g, "");
+        const [int, ...rest] = cleaned.split(".");
+        return rest.length ? `${int}.${rest.join("").slice(0, 3)}` : int;
+    };
+
     return (
         <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
             {/* THREE COLUMNS (same as PO header):
@@ -143,32 +159,71 @@ export function PurchaseInvoiceHeaderForm({
                         </div>
 
                         <CField label="Address" className="col-span-5">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.address1} onChange={(e) => updateField("address1", e.target.value)} />
+                            <Input className="h-7 text-xs"  readOnly={true} disabled={headerAndLineDisabled} value={form.address1} onChange={(e) => updateField("address1", e.target.value)} />
                         </CField>
                         <CField label="" className="col-span-5">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.address2} onChange={(e) => updateField("address2", e.target.value)} />
+                            <Input className="h-7 text-xs" readOnly={true} disabled={headerAndLineDisabled} value={form.address2} onChange={(e) => updateField("address2", e.target.value)} />
                         </CField>
                         <CField label="" className="col-span-5">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.address3} onChange={(e) => updateField("address3", e.target.value)} />
+                            <Input className="h-7 text-xs" readOnly={true} disabled={headerAndLineDisabled} value={form.address3} onChange={(e) => updateField("address3", e.target.value)} />
                         </CField>
 
                         <CField label="Tel no" className="col-span-3">
-                            <Input className="h-7 text-xs" type="number" disabled={headerAndLineDisabled} value={form.po_party_phone} onChange={(e) => updateField("po_party_phone", e.target.value)} />
+                            <Input
+                                className="h-7 text-xs"
+                                type="tel"
+                                 readOnly={true}
+                                maxLength={20}
+                                disabled={headerAndLineDisabled}
+                                value={form.po_party_phone || ""}
+                                onChange={(e) => updateField("po_party_phone", cleanPhone(e.target.value))}
+                            />
                         </CField>
                         <CField label="Fax" className="col-span-2">
-                            <Input className="h-7 text-xs" type="number" disabled={headerAndLineDisabled} value={form.po_party_fax} onChange={(e) => updateField("po_party_fax", e.target.value)} />
+                            <Input
+                                className="h-7 text-xs"
+                                type="tel"
+                                 readOnly={true}
+                                maxLength={20}
+                                disabled={headerAndLineDisabled}
+                                value={form.po_party_fax || ""}
+                                onChange={(e) => updateField("po_party_fax", cleanPhone(e.target.value))}
+                            />
                         </CField>
 
                         <div className="col-span-5 grid grid-cols-3 gap-x-2">
                             <CField label="Email">
-                                <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.e_mail} onChange={(e) => updateField("e_mail", e.target.value)} />
+                                <Input
+                                    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`}
+                                    type="email"
+                                     readOnly={true}
+                                    maxLength={100}
+                                    disabled={headerAndLineDisabled}
+                                    value={form.e_mail || ""}
+                                    onChange={(e) => updateField("e_mail", e.target.value.trim())}
+                                />
+                                {emailInvalid && <span className="text-[10px] text-destructive">Invalid email</span>}
                             </CField>
-                           
+
                             <CField label="Credit Period">
-                                <Input className="h-7 text-xs text-right" type="number" step="1" disabled={headerAndLineDisabled} value={form.po_credit_period} onChange={(e) => updateField("po_credit_period", Number(e.target.value || 0))} />
+                                <Input
+                                    className="h-7 text-xs text-right"
+                                    inputMode="numeric"
+                                     readOnly={true}
+                                    disabled={headerAndLineDisabled}
+                                    value={form.credit_period ?? ""}
+                                    onChange={(e) => updateField("credit_period", cleanInt(e.target.value))}
+                                />
                             </CField>
-                             <CField label="Credit Amount">
-                                <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.credit_amount} onChange={(e) => updateField("credit_amount", e.target.value)} />
+                            <CField label="Credit Amount">
+                                <Input
+                                    className="h-7 text-xs text-right"
+                                    inputMode="decimal"
+                                     readOnly={true}
+                                    disabled={headerAndLineDisabled}
+                                    value={form.credit_amount ?? ""}
+                                    onChange={(e) => updateField("credit_amount", cleanAmount(e.target.value))}
+                                />
                             </CField>
                         </div>
                     </HeaderBlock>
@@ -275,9 +330,12 @@ export function PurchaseInvoiceHeaderForm({
                                             inv_no: text(getLookupValue(row || {}, "inv_no")),
                                             inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                             pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
+                                            po_tx_compnt_1_expmt: text(getLookupValue(row || {}, "po_tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
+                                            tx_compnt_perc_1: getLookupValue(row || {}, "tx_compnt_perc_1") == null
+                                                ? current.tx_compnt_perc_1
+                                                : numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
                                             tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
                                             tx_compntcat_name_1: text(getLookupValue(row || {}, "tx_compntcat_name_1")),
-                                            tx_compnt_perc_1: numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
                                             discount_scoope:
                                                 text(getLookupValue(row || {}, "discount_scoope")) === "PO"
                                                     ? "PO"
@@ -391,11 +449,11 @@ export function PurchaseInvoiceHeaderForm({
                             </Select>
                         </CField>
                         <CField label="Payment Terms" className="col-span-6">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(e) => updateField("po_payment_terms", e.target.value)} />
+                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.po_payment_terms} onChange={(e) => updateField("po_payment_terms", e.target.value)} />
                         </CField>
 
                         <CField label="GRN Remarks" className="col-span-6">
-                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} />
+                            <Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} />
                         </CField>
                         <CField label="Remarks" className="col-span-6">
                             <textarea
@@ -427,6 +485,16 @@ export function PurchaseInvoiceHeaderForm({
                                 ex_rate: Number(getLookupValue(row || {}, "ex_rate") || (row as any)?.ex_rate || current.ex_rate || 1),
                             }))}
                         />
+                          <CField label="Ex Rate">
+                            <Input
+                                className="h-7 text-xs text-right"
+                                type="number"
+                                disabled={headerAndLineDisabled}
+                                step="0.000001"
+                                value={form.ex_rate}
+                                onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))}
+                            />
+                        </CField>
                         <LookupField
                             label="Department"
                             value={form.dept_code || ""}
@@ -438,23 +506,14 @@ export function PurchaseInvoiceHeaderForm({
                             disabled={headerAndLineDisabled}
                             onChange={(value, row) => setForm((current) => ({ ...current, dept_code: value, dept_name: text(getLookupValue(row || {}, "dept_name")) }))}
                         />
-                        <CField label="Ex Rate">
-                            <Input
-                                className="h-7 text-xs text-right"
-                                type="number"
-                                disabled={headerAndLineDisabled}
-                                step="0.000001"
-                                value={form.ex_rate}
-                                onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))}
-                            />
-                        </CField>
+                      
                     </HeaderBlock>
 
                     <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
-                        <CField label="Delivery Contact Person"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
-                        <CField label="Delivery Telephone"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
-                        <CField label="Delivery Email Address"><Input className="h-7 text-xs" type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
-                        <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_term} onChange={(e) => updateField("po_dlvr_term", e.target.value)} /></CField>
+                        <CField label="Delivery Contact Person"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_contact} onChange={(e) => updateField("po_dlvr_contact", e.target.value)} /></CField>
+                        <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.po_dlvr_mobile} maxLength={20} onChange={(e) => updateField("po_dlvr_mobile", cleanPhone(e.target.value))} /></CField>
+                        <CField label="Delivery Email Address"><Input    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`}  type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.po_dlvr_email} onChange={(e) => updateField("po_dlvr_email", (e.target.value))} /></CField>
+                        <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.po_dlvr_term}   maxLength={250} onChange={(e) => updateField("po_dlvr_term", e.target.value)} /></CField>
                     </HeaderBlock>
 
                     {/* Discount + Tax side by side */}
@@ -536,10 +595,14 @@ export function PurchaseInvoiceHeaderForm({
                         </HeaderBlock>
 
                         <HeaderBlock label="Tax" icon={<Receipt size={11} />} gridCols="grid-cols-2">
-                            <CField label="Tax Type">
-                                <Select className="h-7 text-xs" value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
+                            <CField label="Tax Type"  >
+                                <Select className="h-7 text-xs"   disabled={headerAndLineDisabled}  value={form.tx_compnt_1_expmt || "N"} onChange={(e) => {
                                     const taxType = e.target.value;
-                                    setForm((current) => ({ ...current, tx_compnt_1_expmt: taxType, tx_compnt_1_pct: taxType === "S" ? 5 : 0 }));
+                                    setForm((current) => ({
+                                        ...current,
+                                        tx_compnt_1_expmt: taxType,
+                                        tx_compnt_perc_1: taxType === "S" ? 5 : 0,
+                                    }));
                                 }}>
                                     <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
                                 </Select>

@@ -1,6 +1,7 @@
+import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, User, X } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { AlertCircle, Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, User, X } from "lucide-react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
 import {
@@ -28,10 +29,11 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
   downloadDocumentReportExcel,
   openDocumentReportv1,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -41,6 +43,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
@@ -71,6 +74,27 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
   RJV: { title: "Reverse Journal Voucher", subtitle: "Reverse journal entry", addLabel: "Add Reverse Voucher" },
+};
+
+const HEADER_LIMITS: Partial<Record<keyof TransactionHeader, { max: number; label: string }>> = {
+  inv_no:        { max: 30,  label: "Invoice No" },
+  ref_no:        { max: 30,  label: "Ref No" },
+  party_address: { max: 250, label: "Address" },
+  party_phone:   { max: 30,  label: "Phone" },
+  party_fax:     { max: 30,  label: "Fax" },
+  remarks:       { max: 250, label: "Remarks" },
+};
+
+const TAX_CATEGORY_NAME_MAP: Record<string, string> = {
+  "10100": "LOCAL PURCHASE - SRV",
+  "11000": "NO VAT",
+  "11100": "LOCAL SALES - SRV",
+};
+
+const getTaxCatDisplayName = (code?: string, name?: string) => {
+  if (name && name.trim()) return name.trim();
+  if (code && TAX_CATEGORY_NAME_MAP[code]) return TAX_CATEGORY_NAME_MAP[code];
+  return code || "";
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -132,12 +156,23 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -290,7 +325,6 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               density="grid"
               enablePagination
               manualPagination
-              manualFiltering
               enableExport={false}
               actionButton={
                 <div className="flex items-center gap-2">
@@ -317,7 +351,7 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
               pageIndex={pageIndex}
               pageSize={pageSize}
               totalRows={totalRows}
-              initialSorting={[{ id: "doc_date", desc: true }]}
+              initialSorting={[{ id: "doc_no", desc: true }]}
               columnFilters={columnFilters}
               onColumnFiltersChange={(filters) => {
                 setColumnFilters(filters);
@@ -394,6 +428,61 @@ export function CreditDebiteNotePage({ docType, menuTitle }: { docType: Transact
   );
 }
 
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  gridCols = "grid-cols-2",
+  grow = false,
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  gridCols?: string;
+  grow?: boolean;
+}) {
+  return (
+    <div className={`finance-payment-header-block ${grow ? "flex-1" : ""}`}>
+      <div className="finance-section-title flex items-center">
+        <span className="finance-section-icon">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className={`grid gap-x-2 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CField({
+  label,
+  required,
+  className,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  className?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`field flex flex-col gap-0.5 ${className || ""}`}>
+      <span className="text-[10px] font-semibold">
+        {label}
+        {required && <span className="ml-1 text-destructive font-bold">*</span>}
+      </span>
+      {children}
+      {error && (
+        <span data-error="true" className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+          <AlertCircle size={10} /> {error}
+        </span>
+      )}
+    </label>
+  );
+}
+
 function PaymentDocumentEditor({
   docType,
   editor,
@@ -417,6 +506,8 @@ function PaymentDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [remarksHover, setRemarksHover] = useState(false);
+  const [remarksFocus, setRemarksFocus] = useState(false);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -458,24 +549,41 @@ function PaymentDocumentEditor({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount, paid_amt: balance.paid_amount } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -484,21 +592,92 @@ function PaymentDocumentEditor({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
+          const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
+          const effectiveDiv = defaultDiv || (editor?.mode === "create" ? text(editor.divCode) : "") || text(form.div_code);
+          let resolvedAcName = text(defaults.ac_name ?? defaults.Account?.ac_name ?? "");
+          let resolvedCurrCode = text(defaults.curr_code ?? defaults.Currency?.curr_code ?? "");
+          let resolvedCurrName = text(defaults.curr_name ?? defaults.Currency?.curr_name ?? "");
+          let resolvedExRate = Number(defaults.ex_rate ?? 1);
+
+          if (defaultAcCode && (!resolvedAcName || !resolvedCurrCode)) {
+            if (effectiveDiv) {
+              try {
+                const headerAccounts = await getDocAccounts(docType, "H", effectiveDiv);
+                const matched = (headerAccounts || []).find((a: Record<string, unknown>) => {
+                  const code = text(a.ac_code ?? a.AC_CODE ?? "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(matched.ac_name ?? matched.AC_NAME ?? "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(matched.curr_code ?? matched.CURR_CODE ?? "");
+                  if (!resolvedCurrName) resolvedCurrName = text(matched.curr_name ?? matched.CURR_NAME ?? "");
+                  const matchedRate = Number(matched.ex_rate ?? matched.EX_RATE ?? 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
+            }
+
+            if (!resolvedCurrCode || !resolvedAcName) {
+              try {
+                const acRows = await getDynamicFinanceLookup({
+                  parameter: "Account_AC_CODE_Serach",
+                  code1: user?.company_code || "",
+                });
+                const matched = (acRows || []).find((a: Record<string, unknown>) => {
+                  const code = text(getLookupValue(a, "ac_code") || a.ac_code || "");
+                  return code.toUpperCase() === defaultAcCode.toUpperCase();
+                });
+                if (matched) {
+                  if (!resolvedAcName) resolvedAcName = text(getLookupValue(matched, "ac_name") || matched.ac_name || "");
+                  if (!resolvedCurrCode) resolvedCurrCode = text(getLookupValue(matched, "curr_code") || matched.curr_code || "");
+                  if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(matched, "curr_name") || matched.curr_name || "");
+                  const matchedRate = Number(getLookupValue(matched, "ex_rate") || matched.ex_rate || 0);
+                  if (matchedRate > 0) resolvedExRate = matchedRate;
+                }
+              } catch {
+                // fallback
+              }
+            }
+          }
+
+          if (resolvedCurrCode) {
+            try {
+              const currencyRows = await getDynamicFinanceLookup({
+                parameter: "Account_Currency_CODE_Serach",
+                code1: user?.company_code || "",
+              });
+              const match = currencyRows.find(
+                (currencyRow) =>
+                  String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                  resolvedCurrCode.toUpperCase(),
+              );
+              if (match) {
+                const rate = Number(getLookupValue(match, "ex_rate") || (match as any)?.ex_rate || 0);
+                if (rate > 0) resolvedExRate = rate;
+                if (!resolvedCurrName) resolvedCurrName = text(getLookupValue(match, "curr_name") || "");
+              }
+            } catch {}
+          }
+
           setForm((current) => ({
             ...current,
-            ac_code: text(defaults.ac_code ?? defaults.Account?.ac_code ?? current.ac_code),
-            ac_name: text(defaults.Account?.ac_name ?? current.ac_name),
-            curr_code: text(defaults.curr_code ?? defaults.Currency?.curr_code ?? current.curr_code),
-            curr_name: text(defaults.Currency?.curr_name ?? current.curr_name),
-            ex_rate: Number(defaults.ex_rate ?? current.ex_rate ?? 1),
+            ac_code: defaultAcCode || current.ac_code,
+            ac_name: resolvedAcName || current.ac_name,
+            curr_code: resolvedCurrCode || current.curr_code,
+            curr_name: resolvedCurrName || current.curr_name,
+            ex_rate: resolvedExRate > 0 ? resolvedExRate : (current.ex_rate || 1),
+            div_code: effectiveDiv || current.div_code,
             bank_ac_code: text(defaults.bank_ac_code ?? defaults.MS_AC_BANKCODE?.ac_code ?? current.bank_ac_code),
             bank_ac_name: text(defaults.bank_ac_name ?? defaults.MS_AC_BANKCODE?.Account?.ac_name ?? defaults.MS_AC_BANKCODE?.ac_name ?? current.bank_ac_name),
           }));
@@ -515,22 +694,122 @@ function PaymentDocumentEditor({
     };
   }, [docType, editMode, editor]);
 
+  const [invalidLineIds, setInvalidLineIds] = useState<Set<string>>(new Set());
+  const [invalidChildRowIds, setInvalidChildRowIds] = useState<Set<string>>(new Set());
+  const [invalidChildFields, setInvalidChildFields] = useState<Record<string, string[]>>({});
+  const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
+  const [taxTypeMap, setTaxTypeMap] = useState<Record<string, string>>({});
+
+  const loadTaxOptions = useCallback(async () => {
+    let rows: LookupRow[] = [];
+    try {
+      rows = await getFinanceTaxList();
+    } catch {
+      // fallback
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicFinanceLookup({
+          parameter: "Account_Tax_Search",
+          code1: user?.company_code || "",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        // fallback
+      }
+    }
+    if (!rows || rows.length === 0) {
+      try {
+        rows = await getDynamicLookup({
+          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+          code1: user?.company_code,
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+      } catch {
+        rows = [];
+      }
+    }
+    const rMap: Record<string, number> = {};
+    const tMap: Record<string, string> = {};
+    (rows || []).forEach((r) => {
+      const code = String(getLookupValue(r, "tx_compntcat_code") || "").trim();
+      const rawRate = Number(
+        getLookupValue(r, "tx_percnt") ??
+        getLookupValue(r, "tx_compnt_perc_1") ??
+        getLookupValue(r, "perc") ??
+        getLookupValue(r, "tax_percnt") ??
+        getLookupValue(r, "tax_rate") ??
+        getLookupValue(r, "rate") ??
+        0
+      );
+      const rawType = String(getLookupValue(r, "tx_type") || "").trim().toUpperCase();
+      if (code) {
+        rMap[code] = rawRate;
+        tMap[code] = rawType || (rawRate > 0 ? "S" : "N");
+      }
+    });
+    setTaxRateMap((prev) => ({ ...prev, ...rMap }));
+    setTaxTypeMap((prev) => ({ ...prev, ...tMap }));
+    return rows;
+  }, [user?.company_code, user?.loginid, user?.username]);
+
   useEffect(() => {
-    setForm((current) => ({
-      ...current,
-      detail: current.detail.map((d) => {
-        if (d.tx_compnt_1_expmt !== "S") return d;
-        const taxAmt = (Number(d.amount) || 0) * ((Number(d.tx_compnt_perc_1) || 5) / 100);
-        return { ...d, tx_compnt_amt_1: taxAmt };
-      }),
-    }));
-  }, [form.detail.map((d) => d.amount).join(",")]);
+    if (user?.company_code) {
+      void loadTaxOptions();
+    }
+  }, [user?.company_code, loadTaxOptions]);
+
+  const getTaxPercForCode = useCallback((taxCode?: string, fallbackPerc?: number | null) => {
+    const trimmed = String(taxCode || "").trim();
+    if (trimmed && taxRateMap[trimmed] !== undefined) {
+      return taxRateMap[trimmed];
+    }
+    if (fallbackPerc != null && !isNaN(Number(fallbackPerc))) {
+      return Number(fallbackPerc);
+    }
+    return 0;
+  }, [taxRateMap]);
+
+  useEffect(() => {
+    setForm((current) => {
+      let changed = false;
+      const nextDetail = current.detail.map((d) => {
+        const lineTaxCode = d.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+        const dynamicRate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1);
+        const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+        if (!isTaxable) {
+          if (d.tx_compnt_amt_1 !== 0 && d.tx_compnt_amt_1 != null) {
+            changed = true;
+            return { ...d, tx_compnt_amt_1: 0 };
+          }
+          return d;
+        }
+        const taxAmt = Number(((Number(d.amount) || 0) * (dynamicRate / 100)).toFixed(3));
+        if (d.tx_compnt_amt_1 === taxAmt && d.tx_compnt_perc_1 === dynamicRate && d.tx_compnt_1_expmt === "S") {
+          return d;
+        }
+        changed = true;
+        return { ...d, tx_compnt_1_expmt: "S", tx_compnt_perc_1: dynamicRate, tx_compnt_amt_1: taxAmt };
+      });
+      return changed ? { ...current, detail: nextDetail } : current;
+    });
+  }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), form.tx_compntcat_code_1, form.tx_compnt_1_expmt, getTaxPercForCode]);
 
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
+
+  const limitErr = (f: keyof TransactionHeader) => {
+  const l = HEADER_LIMITS[f];
+  const v = String(form[f] ?? "");
+  return l && v.length > l.max ? `Exceeded limit (${v.length}/${l.max})` : undefined;
+};
+const limitProps = (f: keyof TransactionHeader) => ({
+  maxLength: HEADER_LIMITS[f]?.max,
+  className: limitErr(f) ? "!border-rose-500 !ring-rose-400" : "",
+});
 
   const [lineSearch, setLineSearch] = useState("");
   const filteredDetail = useMemo(() => {
@@ -582,20 +861,71 @@ function PaymentDocumentEditor({
   };
 
   const updateDetail = (id: string, patch: Partial<TransactionDetail>) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => ({
       ...current,
-      detail: current.detail.map((row) => row.id === id ? { ...row, ...patch } : row),
+      detail: current.detail.map((row) => {
+        if (row.id !== id) return row;
+        const merged = { ...row, ...patch };
+        if ("amount" in patch || "tx_compnt_perc_1" in patch || "tx_compnt_1_expmt" in patch || "tx_compntcat_code_1" in patch) {
+          const amt = Number(merged.amount) || 0;
+          const lineTaxCode = merged.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+          const dynamicRate = getTaxPercForCode(lineTaxCode, merged.tx_compnt_perc_1);
+          let taxType = merged.tx_compnt_1_expmt || (dynamicRate > 0 ? "S" : "N");
+
+          if (dynamicRate > 0 && taxType === "N") {
+            taxType = "S";
+            merged.tx_compnt_1_expmt = "S";
+          }
+
+          if (taxType === "S") {
+            merged.tx_compnt_perc_1 = dynamicRate;
+            merged.tx_compnt_amt_1 = Number(((amt * dynamicRate) / 100).toFixed(3));
+          } else {
+            merged.tx_compnt_perc_1 = 0;
+            merged.tx_compnt_amt_1 = 0;
+          }
+          if ("tx_compnt_amt_1" in patch) {
+            merged.tx_compnt_amt_1 = Number(patch.tx_compnt_amt_1) || 0;
+          }
+        }
+        return merged;
+      }),
     }));
   };
 
   const updateDetailAmount = (id: string, newAmount: number) => {
+    setInvalidLineIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setForm((current) => {
       const detail = current.detail.find((d) => d.id === id);
-      if (!detail || detail.child_table !== "invoice") {
+      if (!detail) return current;
+
+      const lineTaxCode = detail.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+      const dynamicRate = getTaxPercForCode(lineTaxCode, detail.tx_compnt_perc_1);
+      const isTaxable = (detail.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+      const taxPerc = isTaxable ? dynamicRate : 0;
+      const taxAmt = isTaxable ? Number(((newAmount * taxPerc) / 100).toFixed(3)) : 0;
+      const taxPatch = {
+        tx_compnt_1_expmt: isTaxable ? "S" : "N",
+        tx_compnt_perc_1: isTaxable ? taxPerc : 0,
+        tx_compnt_amt_1: taxAmt,
+      };
+
+      if (detail.child_table !== "invoice") {
         return {
           ...current,
           detail: current.detail.map((row) =>
-            row.id === id ? { ...row, amount: newAmount } : row
+            row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
           ),
         };
       }
@@ -613,14 +943,14 @@ function PaymentDocumentEditor({
 
       return {
         ...current,
-        // ✅ Keep user's typed amount, don't snap it
         detail: current.detail.map((row) =>
-          row.id === id ? { ...row, amount: newAmount } : row
+          row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
         ),
         children: { ...current.children, [id]: updatedChildren },
       };
     });
   };
+
 
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
@@ -735,14 +1065,19 @@ function PaymentDocumentEditor({
   const selectedDetail = form.detail.find((row) => row.id === selectedDetailId) || form.detail[0];
   const selectedChildren = selectedDetail ? (form.children[selectedDetail.id] as TransactionChildRow[] | undefined) || [] : [];
 
-  const loadChildrenForDetail = async (detail: TransactionDetail) => {
+  const loadChildrenForDetail = async (detail: TransactionDetail, overridePartyAcCode?: string) => {
     if (!detail.child_table) return;
     setChildLoading(true);
     setError("");
     try {
       const divCode = detail.div_code || form.div_code;
+      const partyAcCode = overridePartyAcCode || (
+        (docType === "CN" || docType === "DN")
+          ? (form.ac_code || detail.ac_code)
+          : (detail.ac_code || form.ac_code)
+      );
       const rows = await getFinanceMasterRows(detail.child_table, {
-        code: detail.ac_code,
+        code: partyAcCode,
         extra_param1: divCode,
         extra_param2: docType,
         extra_param3: form.doc_no || "0",
@@ -762,21 +1097,54 @@ function PaymentDocumentEditor({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, partyAcCode, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
+
+        // Filter out fully paid invoices (outstanding <= 0 and not allocated) when creating a new transaction
+        if (!editMode) {
+          mapped = mapped.filter((m) => {
+            const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+            return bal > 0.001 || Number(m.amount || 0) > 0.001;
+          });
+        }
+
+        // Deduplicate invoices so the same voucher / invoice reference is only shown once
+        const seenInvoices = new Set<string>();
+        mapped = mapped.filter((m) => {
+          const docKey = text(m.doc_no).trim().toUpperCase();
+          const refKey = text(m.ref_no).trim().toUpperCase();
+          const invKey = text(m.inv_no).trim().toUpperCase();
+          const primaryId = docKey || refKey || invKey;
+          if (!primaryId) return true;
+          if ((docKey && seenInvoices.has(`D_${docKey}`)) ||
+              (refKey && seenInvoices.has(`R_${refKey}`)) ||
+              (invKey && seenInvoices.has(`I_${invKey}`))) {
+            return false;
+          }
+          if (docKey) seenInvoices.add(`D_${docKey}`);
+          if (refKey) seenInvoices.add(`R_${refKey}`);
+          if (invKey) seenInvoices.add(`I_${invKey}`);
+          return true;
+        });
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -784,11 +1152,26 @@ function PaymentDocumentEditor({
           let remaining = parentAmt;
           mapped = mapped.map((row) => {
             if (remaining <= 0) return { ...row, amount: 0 };
-            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
-            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
+        }
+
+        // If header inv_no is empty and we loaded invoices, auto-fill header inv_no from the first invoice
+        if (!form.inv_no && mapped.length > 0) {
+          const firstInv = mapped[0];
+          const firstInvNo = text(firstInv.inv_no || firstInv.ref_no);
+          const firstInvDate = firstInv.inv_date;
+          if (firstInvNo) {
+            setForm((current) => ({
+              ...current,
+              inv_no: current.inv_no || firstInvNo,
+              inv_date: current.inv_date || firstInvDate || current.inv_date,
+            }));
+          }
         }
       }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
@@ -820,6 +1203,12 @@ function PaymentDocumentEditor({
   const updateChildRow = (childId: string, patch: Partial<TransactionChildRow>, targetDetailId?: string) => {
     const parentDetailId = targetDetailId || selectedDetail?.id;
     if (!parentDetailId) return;
+    setInvalidChildRowIds((prev) => {
+      if (!prev.has(childId)) return prev;
+      const next = new Set(prev);
+      next.delete(childId);
+      return next;
+    });
     setForm((current) => {
       const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
         row.id === childId ? { ...row, ...patch } : row,
@@ -828,9 +1217,14 @@ function PaymentDocumentEditor({
       return {
         ...current,
         children: { ...current.children, [parentDetailId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === parentDetailId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== parentDetailId) return d;
+          const lineTaxCode = d.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+          const dynamicRate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1);
+          const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [parentDetailId]: true }));
@@ -847,9 +1241,14 @@ function PaymentDocumentEditor({
       return {
         ...current,
         children: { ...current.children, [parentDetailId]: rows },
-        detail: current.detail.map((d) =>
-          d.id === parentDetailId ? { ...d, amount: childTotal } : d,
-        ),
+        detail: current.detail.map((d) => {
+          if (d.id !== parentDetailId) return d;
+          const lineTaxCode = d.tx_compntcat_code_1 || current.tx_compntcat_code_1;
+          const dynamicRate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1);
+          const isTaxable = (d.tx_compnt_1_expmt || current.tx_compnt_1_expmt) === "S";
+          const taxAmt = isTaxable ? Number(((childTotal * dynamicRate) / 100).toFixed(3)) : 0;
+          return { ...d, amount: childTotal, tx_compnt_perc_1: isTaxable ? dynamicRate : 0, tx_compnt_amt_1: taxAmt };
+        }),
       };
     });
     setExpandedRowIds((prev) => ({ ...prev, [parentDetailId]: true }));
@@ -864,34 +1263,111 @@ function PaymentDocumentEditor({
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
     // Character limit validations
-    if (form.ref_no && form.ref_no.length > 30) {
-      return setError("You have exceeded the character limit for Ref No.");
+    // if (form.inv_no && form.inv_no.length > 30) {
+    //   return setError("You have exceeded the character limit for Invoice No.");
+    // }
+    // if (form.ref_no && form.ref_no.length > 30) {
+    //   return setError("You have exceeded the character limit for Ref No.");
+    // }
+    // if (form.party_address && form.party_address.length > 250) {
+    //   return setError("You have exceeded the character limit for Address (max 250 characters).");
+    // }
+    // if (form.party_phone && form.party_phone.length > 30) {
+    //   return setError("You have exceeded the character limit for Phone (max 30 characters).");
+    // }
+    // if (form.party_fax && form.party_fax.length > 30) {
+    //   return setError("You have exceeded the character limit for Fax (max 30 characters).");
+    // }
+    // if (form.remarks && form.remarks.length > 250) {
+    //   return setError("You have exceeded the character limit for Remarks.");
+    // }
+
+    for (const [f, l] of Object.entries(HEADER_LIMITS)) {
+      const v = String((form as Record<string, unknown>)[f] ?? "");
+      if (l && v.length > l.max) {
+        return setError(`You have exceeded the character limit for ${l.label}.`);
+      }
     }
-    if (form.remarks && form.remarks.length > 250) {
-      return setError("You have exceeded the character limit for Remarks.");
+    if (form.party_phone && form.party_phone.trim() && !isValidPhoneNumber(form.party_phone)) {
+      return setError("Phone must contain numbers only.");
+    }
+    if (form.party_fax && form.party_fax.trim() && !isValidPhoneNumber(form.party_fax)) {
+      return setError("Fax must contain numbers only.");
     }
 
     if (!form.detail || form.detail.length === 0) return setError("Kindly fill in the missing fields: Add at least one detail line.");
 
     // Check line character limits
-    for (const d of form.detail) {
-      if (d.remarks && d.remarks.length > 250) {
-        return setError("You have exceeded the character limit for Remarks.");
-      }
-    }
+    // for (const d of form.detail) {
+    //   if (d.remarks && d.remarks.length > 250) {
+    //     return setError(`You have exceeded the character limit for Remarks on Line #${d.serial_no || 1}.`);
+    //   }
+    // }
+
+    const tooLong = form.detail.filter((d) => d.remarks && d.remarks.length > 250);
+if (tooLong.length) {
+  setInvalidLineIds(new Set(tooLong.map((d) => d.id)));
+  return setError(`You have exceeded the character limit for Remarks on Line #${tooLong[0].serial_no || 1}.`);
+}
+
+    setInvalidLineIds(new Set());
+    setInvalidChildRowIds(new Set());
+    setInvalidChildFields({});
 
     // Missing field validation on lines (new row without details / missing account or zero amount)
-    const invalidLine = form.detail.find((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
-    if (invalidLine) {
-      return setError("Kindly fill in the missing fields.");
+    const invalidLines = form.detail.filter((d) => !d.ac_code?.trim() || !d.amount || Number(d.amount) <= 0);
+    if (invalidLines.length > 0) {
+      setInvalidLineIds(new Set(invalidLines.map((d) => d.id)));
+      const firstInvalid = invalidLines[0];
+      const missingParts: string[] = [];
+      if (!firstInvalid.ac_code?.trim()) missingParts.push("Account");
+      if (!firstInvalid.amount || Number(firstInvalid.amount) <= 0) missingParts.push("Amount");
+      return setError(`Kindly fill in the missing fields: ${missingParts.join(" and ")} on Line #${firstInvalid.serial_no || 1}.`);
     }
 
+    // Validation on child allocations (Expense, Invoice, Job)
     for (const d of form.detail) {
       const children = (form.children[d.id] || []) as TransactionChildRow[];
       if (children.length > 0) {
+        for (const [idx, c] of children.entries()) {
+          const rowNum = c.dtl_sr_no || idx + 1;
+          const missingFields: string[] = [];
+          if (d.child_table === "expense") {
+            if (!c.exp_type_code?.trim()) missingFields.push("Expense Type");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "job") {
+            if (!c.job_no?.trim()) missingFields.push("Job No");
+            if (!c.amount || Number(c.amount) <= 0) missingFields.push("Amount");
+          } else if (d.child_table === "invoice") {
+            const amt = Number(c.amount || 0);
+            if (amt < 0) {
+              missingFields.push("Valid Allocated Amount");
+            } else if (amt > 0) {
+              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+              const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              }
+            }
+          }
+
+          if (missingFields.length > 0) {
+            setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+            setSelectedDetailId(d.id);
+            setInvalidChildRowIds(new Set([c.id]));
+            setInvalidChildFields({ [c.id]: missingFields });
+            return setError(
+              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+            );
+          }
+        }
+
         const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
         const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
         if (Math.abs(childSum - lineAmt) > 0.001) {
+          setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
+          setSelectedDetailId(d.id);
           return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
         }
       }
@@ -913,11 +1389,12 @@ function PaymentDocumentEditor({
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      const resolvedAc = acCode || ((docType === "CN" || docType === "DN") ? form.ac_code : undefined);
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode: resolvedAc, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, resolvedAc, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -933,13 +1410,44 @@ function PaymentDocumentEditor({
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    const partyAcCode = (docType === "CN" || docType === "DN")
+      ? (form.ac_code || parentDetail?.ac_code)
+      : (parentDetail?.ac_code || form.ac_code);
+    void fetchOutstanding(invNo, partyAcCode).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no open balance.`)
+          : `Invoice "${invNo}" not found for account ${partyAcCode || ""}.`;
+        setError(errMsg);
+        // If invoice is not found or does not belong to this account, clear invalid invoice amount
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
         const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
           row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            ? {
+                ...row,
+                inv_no: balance.inv_no || row.inv_no,
+                ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+                inv_amt: balance.original_amount,
+                c_bal_amt_org: balance.outstanding_amount,
+              }
             : row,
         );
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
@@ -951,7 +1459,10 @@ function PaymentDocumentEditor({
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   return (
-    <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
+    <form data-header-expanded={showHeaderDetails} 
+    // className={`payment-workbench commercial-editor grid h-screen 
+    className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen
+    ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
@@ -972,8 +1483,8 @@ function PaymentDocumentEditor({
                 <Button type="button" variant="secondary" onClick={() => void handleOpenReport(form.doc_type, form.doc_no || "")}>
                   <Printer size={15} /> Print
                 </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
+                <Button type="button" variant="secondary" title="Export to Excel" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} /> Excel
                 </Button>
                 {form.canceled !== "Y" && (
                   <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
@@ -1054,7 +1565,7 @@ function PaymentDocumentEditor({
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="font-semibold text-[#00378C]">Tax:</span>
-                    <span className="font-medium">{form.tx_compnt_1_expmt === "S" ? "Std (5%)" : form.tx_compnt_1_expmt === "Z" ? "Zero" : form.tx_compnt_1_expmt === "E" ? "Exempt" : "No Tax"}</span>
+                    <span className="font-medium">{form.tx_compnt_1_expmt === "S" ? "Std Tax" : form.tx_compnt_1_expmt === "Z" ? "Zero" : form.tx_compnt_1_expmt === "E" ? "Exempt" : "No Tax"}</span>
                   </span>
                 </div>
                 <Button
@@ -1069,196 +1580,356 @@ function PaymentDocumentEditor({
               </div>
             ) : (
               <div className="commercial-header-shell flex flex-col gap-1.5 mb-3">
-                <div className="commercial-header-panel">
-                  {/* Block 1: Document Details */}
-                  <section className="commercial-header-block commercial-header-block-doc">
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon"><FileText size={11} /></span>
-                      <span>Document Details</span>
-                    </div>
-                    <div className="commercial-header-block-fields">
-                      <Field label="Doc Date">
-                        <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
-                      </Field>
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field label="Inv No*">
-                          <Input required disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} />
-                        </Field>
-                      )}
-                      {(docType === "CN" || docType === "DN") && (
-                        <Field label="Inv Date">
-                          <BiscDatePicker disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
-                        </Field>
-                      )}
-                      {docType !== "CR" && (
-                        <LookupField
-                          label="Bank Account"
-                          value={form.bank_ac_code || ""}
-                          displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                          columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
-                          valueField="bank_ac_code"
-                          displayFields={["bank_ac_code", "bank_ac_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
-                          })}
-                          disabled={disabled || !form.div_code}
-                          onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
-                        />
-                      )}
-                    </div>
-                  </section>
-
-                  {/* Block 2: Customer / Supplier Details */}
-                  <section className={`commercial-header-block commercial-header-block-party ${docType === "CN" ? "commercial-header-block-party-sales" : ""}`}>
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon">
-                        {docType === "CN" ? <User size={11} /> : <Building2 size={11} />}
-                      </span>
-                      <span>{docType === "CN" ? "Customer Details" : "Supplier Details"}</span>
-                    </div>
-                    <div className="commercial-header-block-fields">
-                      <div className="col-span-1">
-                        <LookupField
-                          label={docType === "CN" ? "Customer *" : "Supplier *"}
-                          value={form.ac_code}
-                          displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                          columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
-                          valueField="ac_code"
-                          displayFields={["ac_code", "ac_name", 'curr_code']}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_AC_CODE_Serach_HDR",
-                            code1: user?.company_code,
-                            code2: "H",
-                            code3: form.doc_type,
-                            code4: form.div_code
-                          })}
-                          disabled={disabled || !form.div_code}
-                          onChange={async (value, row) => {
-                            setForm((current) => ({
-                              ...current,
-                              ac_code: value,
-                              ac_name: text(getLookupValue(row || {}, "ac_name")),
-                              curr_code: text(getLookupValue(row || {}, "curr_code")),
-                            }));
-                            if ((docType === "CN" || docType === "DN") && value) {
-                              const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
+                <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.95fr)] gap-1.5 p-1.5 items-stretch">
+                    {/* ══ COLUMN 1: Customer Details (CN) / Supplier Details (DN) ══ */}
+                    <div className="flex flex-col gap-1.5">
+                      <HeaderBlock
+                        label={docType === "CN" ? "Customer Details" : "Supplier Details"}
+                        icon={docType === "CN" ? <User size={11} /> : <Building2 size={11} />}
+                        gridCols="grid-cols-2"
+                        grow
+                      >
+                        <div className="col-span-2">
+                          <LookupField
+                            label={docType === "CN" ? "Customer *" : "Supplier *"}
+                            value={form.ac_code}
+                            displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                            valueField="ac_code"
+                            displayFields={["ac_code", "ac_name", "curr_code"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_AC_CODE_Serach_HDR",
+                              code1: user?.company_code,
+                              code2: "H",
+                              code3: form.doc_type,
+                              code4: form.div_code
+                            })}
+                            disabled={disabled || !form.div_code}
+                            onChange={async (value, row) => {
+                              const r = row || {} as Record<string, unknown>;
+                              const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
+                              const newCurrCode = get("curr_code");
+                              let newExRate = form.ex_rate;
+                              if (newCurrCode) {
+                                try {
+                                  const currRows = await getDynamicFinanceLookup({
+                                    parameter: "Account_Currency_CODE_Serach",
+                                    code1: user?.company_code || "",
+                                  });
+                                  const match = currRows.find(
+                                    (rec: Record<string, unknown>) =>
+                                      String(rec["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
+                                  );
+                                  if (match) {
+                                    const rate = Number(getLookupValue(match, "ex_rate") || (match as any)?.ex_rate || 0);
+                                    if (rate > 0) newExRate = rate;
+                                  }
+                                } catch {}
+                              }
                               setForm((current) => ({
                                 ...current,
-                                cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
+                                ac_code: value,
+                                ac_name: text(getLookupValue(row || {}, "ac_name")),
+                                curr_code: newCurrCode || current.curr_code,
+                                ex_rate: newExRate,
+                                party_address: get("address") || current.party_address,
+                                party_phone: get("phone") || current.party_phone,
+                                party_fax: get("fax") || current.party_fax,
                               }));
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <LookupField
-                          label="Currency*"
-                          value={form.curr_code}
-                          displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                          columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                          valueField="curr_code"
-                          displayFields={["curr_code", "curr_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_Currency_CODE_Serach",
-                            code1: user?.company_code,
-                            loginid: user?.loginid || user?.username || "ADMIN"
-                          })}
-                          disabled={disabled}
-                          onChange={(value, row) => setForm((current) => ({
-                            ...current,
-                            curr_code: value,
-                            curr_name: text(getLookupValue(row || {}, "curr_name")),
-                            ex_rate: Number(row?.ex_rate ?? 1),
-                          }))}
-                        />
-                      </div>
-                      <Field label="Exchange Rate*">
-                        <Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
-                      </Field>
-                      <label className="field col-span-2 max-md:col-span-1">
-                        <span>Address</span>
-                        <Input disabled={disabled} value={form.party_address || ""} onChange={(event) => updateField("party_address", event.target.value)} />
-                      </label>
-                      <Field label="Phone">
-                        <Input disabled={disabled} value={form.party_phone || ""} onChange={(event) => updateField("party_phone", event.target.value)} />
-                      </Field>
-                      <Field label="Fax">
-                        <Input disabled={disabled} value={form.party_fax || ""} onChange={(event) => updateField("party_fax", event.target.value)} />
-                      </Field>
-                    </div>
-                  </section>
+                              if ((docType === "CN" || docType === "DN") && value) {
+                                const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
+                                setForm((current) => ({
+                                  ...current,
+                                  cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
+                                }));
+                                form.detail.forEach((d) => {
+                                  if (d.child_table === "invoice") {
+                                    void loadChildrenForDetail(d, value);
+                                  }
+                                });
+                              }
+                            }}
+                          />
+                        </div>
 
-                  {/* Block 3: Tax & Remarks */}
-                  <section className="commercial-header-block commercial-header-block-tax commercial-header-block-tax-wide">
-                    <div className="commercial-header-block-title">
-                      <span className="finance-section-icon"><Receipt size={11} /></span>
-                      <span>Tax & Remarks</span>
+                        <CField label="Address" className="col-span-2" error={limitErr("party_address")}>
+                          <Input
+                            {...limitProps("party_address")}
+                            placeholder="Address"
+                            disabled={disabled}
+                            value={form.party_address || ""}
+                            className={`h-7 text-xs ${form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_address", event.target.value)}
+                          />
+                        </CField>
+
+                        <CField label="Phone" className="col-span-1" error={limitErr("party_phone") || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}>
+                          <Input
+                            {...limitProps("party_phone")}
+                            type="tel"
+                            placeholder="Phone"
+                            disabled={disabled}
+                            value={form.party_phone || ""}
+                            className={`h-7 text-xs ${((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_phone", sanitizePhoneNumber(event.target.value))}
+                          />
+                        </CField>
+
+                        <CField label="Fax" className="col-span-1" error={limitErr("party_fax") || (form.party_fax && !isValidPhoneNumber(form.party_fax) ? "Must contain numbers only" : undefined)}>
+                          <Input
+                            {...limitProps("party_fax")}
+                            type="tel"
+                            placeholder="Fax"
+                            disabled={disabled}
+                            value={form.party_fax || ""}
+                            className={`h-7 text-xs ${((form.party_fax && form.party_fax.length > 30) || (form.party_fax && !isValidPhoneNumber(form.party_fax))) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                            onChange={(event) => updateField("party_fax", sanitizePhoneNumber(event.target.value))}
+                          />
+                        </CField>
+                      </HeaderBlock>
                     </div>
-                    <div className="commercial-header-block-fields">
-                      <label className="field col-span-1 max-md:col-span-1">
-                        <span>Tax Code</span>
-                        <LookupField
-                          label="Tax Code"
-                          compact
-                          placeholder="Tax code"
-                          value={form.tx_compntcat_code_1 || ""}
-                          displayValue={form.tx_compntcat_code_1 || ""}
-                          columns={[
-                            { field: "tx_compntcat_code", header: "Code" },
-                            { field: "tx_compntcat_name", header: "Name" },
-                          ]}
-                          valueField="tx_compntcat_code"
-                          displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                            code1: user?.company_code,
-                            loginid: user?.loginid || user?.username || "ADMIN",
-                          })}
-                          disabled={disabled}
-                          onChange={(value) =>
-                            setForm((current) => ({
+
+                    {/* ══ COLUMN 2: Document Details ══ */}
+                    <div className="flex flex-col gap-1.5">
+                      <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
+                        <CField label="Doc Date" required className="col-span-1">
+                          <BiscDatePicker compact disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
+                        </CField>
+
+                        {(docType === "CN" || docType === "DN") && (
+                          <CField label="Inv No" required className="col-span-1" error={limitErr("inv_no")}>
+                            <Input
+                              {...limitProps("inv_no")}
+                              required
+                              disabled={disabled}
+                              value={form.inv_no || ""}
+                              placeholder="Invoice No"
+                              className={`h-7 text-xs ${form.inv_no && form.inv_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              onChange={(event) => updateField("inv_no", event.target.value)}
+                            />
+                          </CField>
+                        )}
+
+                        {(docType === "CN" || docType === "DN") && (
+                          <CField label="Inv Date" className="col-span-1">
+                            <BiscDatePicker compact disabled={disabled} value={dateInput(form.inv_date)} onChange={(val) => updateField("inv_date", val)} />
+                          </CField>
+                        )}
+
+                        {docType !== "CR" && (
+                          <div className="col-span-1">
+                            <LookupField
+                              label="Bank Account"
+                              value={form.bank_ac_code || ""}
+                              displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
+                              columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
+                              valueField="bank_ac_code"
+                              displayFields={["bank_ac_code", "bank_ac_name"]}
+                              loadOptions={() => getDynamicLookup({
+                                parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
+                              })}
+                              disabled={disabled || !form.div_code}
+                              onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
+                            />
+                          </div>
+                        )}
+
+                        {/* Remarks: Wide textarea across entire bottom of Document Details */}                       
+<CField
+  label="Remarks"
+  className="col-span-2"
+  error={limitErr("remarks")}
+>
+  <div className="w-full">
+    <textarea
+      className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${
+        limitErr("remarks")
+          ? "!border-rose-500 !ring-rose-400"
+          : ""
+      }`}
+      disabled={disabled}
+      value={form.remarks || ""}
+      maxLength={250}
+      placeholder="Remarks / Notes"
+      onFocus={() => setRemarksFocus(true)}
+      onBlur={() => setRemarksFocus(false)}
+      onChange={(event) =>
+        updateField("remarks", event.target.value)
+      }
+    />
+
+    {remarksFocus && !disabled && (
+      <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+        {(form.remarks || "").length} / 250 characters (
+        {250 - (form.remarks || "").length} left)
+      </div>
+    )}
+  </div>
+</CField>
+
+                      </HeaderBlock>
+                    </div>
+
+                    {/* ══ COLUMN 3: Currency & Exchange Rate + Tax Details ══ */}
+                    <div className="flex flex-col gap-1.5">
+                      {/* Card 1: Currency & Exchange Rate */}
+                      <HeaderBlock label="Currency & Exchange Rate" icon={<Coins size={11} />} gridCols="grid-cols-[1.3fr_1fr]">
+                        <div>
+                          <LookupField
+                            label="Currency *"
+                            required
+                            enforceRequired
+                            value={form.curr_code}
+                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                            valueField="curr_code"
+                            displayFields={["curr_code", "curr_name"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_Currency_CODE_Serach",
+                              code1: user?.company_code,
+                              loginid: user?.loginid || user?.username || "ADMIN"
+                            })}
+                            disabled={disabled}
+                            onChange={(value, row) => setForm((current) => ({
                               ...current,
-                              tx_compntcat_code_1: value,
-                              detail: current.detail.map((d) => ({ ...d, tx_compntcat_code_1: value })),
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="field col-span-1 max-md:col-span-1">
-                        <span>Tax Type</span>
-                        <Select
-                          disabled={disabled}
-                          value={form.tx_compnt_1_expmt || "N"}
-                          onChange={(event) => {
-                            const taxType = event.target.value;
-                            setForm((current) => ({
-                              ...current,
-                              tx_compnt_1_expmt: taxType,
-                              detail: current.detail.map((d) => {
-                                const taxPerc = taxType === "S" ? (d.tx_compnt_perc_1 ?? 5) : 0;
-                                const taxAmt = taxType === "S" ? (Number(d.amount) || 0) * (taxPerc / 100) : 0;
+                              curr_code: value,
+                              curr_name: text(getLookupValue(row || {}, "curr_name")),
+                              ex_rate: Number(row?.ex_rate ?? 1),
+                            }))}
+                          />
+                        </div>
+
+                        <CField label="Ex Rate" required>
+                          <Input
+                            disabled={disabled}
+                            required
+                            type="number"
+                            step="0.0001"
+                            className="h-7 text-xs"
+                            value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""}
+                            onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))}
+                          />
+                        </CField>
+                      </HeaderBlock>
+
+                      {/* Card 2: Tax Details */}
+                      <HeaderBlock label="Tax Details" icon={<Receipt size={11} />} gridCols="grid-cols-[105px_1fr]" grow>
+                        <CField label="Tax Type">
+                          <Select
+                            className="h-7 text-xs"
+                            disabled={disabled}
+                            value={form.tx_compnt_1_expmt || "N"}
+                            onChange={(event) => {
+                              const taxType = event.target.value;
+                              setForm((current) => {
+                                const currentTaxCode = current.tx_compntcat_code_1;
+                                const defaultRate = getTaxPercForCode(currentTaxCode, 0);
                                 return {
-                                  ...d,
+                                  ...current,
                                   tx_compnt_1_expmt: taxType,
-                                  tx_compnt_perc_1: taxPerc,
-                                  tx_compnt_amt_1: taxAmt,
+                                  detail: current.detail.map((d) => {
+                                    const lineTaxCode = d.tx_compntcat_code_1 || currentTaxCode;
+                                    const rate = getTaxPercForCode(lineTaxCode, d.tx_compnt_perc_1 || defaultRate);
+                                    const taxPerc = taxType === "S" ? rate : 0;
+                                    const taxAmt = taxType === "S" ? Number(((Number(d.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                    return {
+                                      ...d,
+                                      tx_compnt_1_expmt: taxType,
+                                      tx_compnt_perc_1: taxPerc,
+                                      tx_compnt_amt_1: taxAmt,
+                                    };
+                                  }),
                                 };
-                              }),
-                            }));
-                          }}
-                        >
-                          <option value="N">No Tax</option>
-                          <option value="S">Std Tax</option>
-                          <option value="Z">Zero</option>
-                          <option value="E">Exempt</option>
-                        </Select>
-                      </label>
-                      <label className="field col-span-2 max-md:col-span-1">
-                        <span>Remarks</span>
-                        <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
-                      </label>
+                              });
+                            }}
+                          >
+                            <option value="N">No Tax</option>
+                            <option value="S">Std Tax</option>
+                            <option value="Z">Zero</option>
+                            <option value="E">Exempt</option>
+                          </Select>
+                        </CField>
+
+                        <div className="col-span-1">
+                          <LookupField
+                            label="Tax Category"
+                            popoverWidth={420}
+                            placeholder="Tax code"
+                            value={form.tx_compntcat_code_1 || ""}
+                            displayValue={getTaxCatDisplayName(form.tx_compntcat_code_1, form.tx_compntcat_name_1)}
+                            columns={[
+                              { field: "tx_compntcat_code", header: "Category Code" },
+                              { field: "tx_compntcat_name", header: "Category Name" },
+                            ]}
+                            valueField="tx_compntcat_code"
+                            displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+                            loadOptions={loadTaxOptions}
+                            disabled={disabled}
+                            onChange={(value, row) => {
+                              const r = (row || {}) as Record<string, unknown>;
+                              const catName = text(getLookupValue(r, "tx_compntcat_name"));
+                              const rowRate = Number(
+                                getLookupValue(r, "tx_percnt") ??
+                                getLookupValue(r, "tx_compnt_perc_1") ??
+                                getLookupValue(r, "perc") ??
+                                getLookupValue(r, "tax_percnt") ??
+                                getLookupValue(r, "tax_rate") ??
+                                getLookupValue(r, "rate") ??
+                                0
+                              );
+                              const rowName = String(getLookupValue(r, "tx_compntcat_name") || "").toUpperCase();
+                              const valStr = String(value || "").trim();
+                              const isZero = rowName.includes("ZERO") || valStr.startsWith("20") || valStr.startsWith("21");
+                              const isExempt = rowName.includes("EXEMPT") || valStr.startsWith("30") || valStr.startsWith("31");
+                              const isStd = rowName.includes("STD") || rowName.includes("STANDARD") || valStr.startsWith("10") || valStr.startsWith("11");
+
+                              let determinedTaxType: "S" | "Z" | "E" | "N" = "N";
+                              let perc = 0;
+
+                              if (isZero) {
+                                determinedTaxType = "Z";
+                                perc = 0;
+                              } else if (isExempt) {
+                                determinedTaxType = "E";
+                                perc = 0;
+                              } else if (rowRate > 0) {
+                                determinedTaxType = (taxTypeMap[value] as any) || "S";
+                                perc = rowRate;
+                              } else if (valStr && valStr !== "N/A") {
+                                const mappedRate = getTaxPercForCode(value);
+                                const mappedType = taxTypeMap[value] || (mappedRate > 0 ? "S" : "N");
+                                determinedTaxType = (mappedType as any) || (mappedRate > 0 ? "S" : "N");
+                                perc = mappedRate;
+                              }
+
+                              if (valStr && perc > 0) {
+                                setTaxRateMap((prev) => ({ ...prev, [valStr]: perc }));
+                              }
+
+                              setForm((current) => ({
+                                ...current,
+                                tx_compntcat_code_1: value,
+                                tx_compntcat_name_1: catName,
+                                tx_compnt_1_expmt: determinedTaxType,
+                                detail: current.detail.map((d) => {
+                                  const lineAmt = Number(d.amount || 0);
+                                  const taxAmt = determinedTaxType === "S" ? Number(((lineAmt * perc) / 100).toFixed(3)) : 0;
+                                  return {
+                                    ...d,
+                                    tx_compntcat_code_1: value,
+                                    tx_compnt_1_expmt: determinedTaxType,
+                                    tx_compnt_perc_1: perc,
+                                    tx_compnt_amt_1: taxAmt,
+                                  };
+                                }),
+                              }));
+                            }}
+                          />
+                        </div>
+                      </HeaderBlock>
                     </div>
-                  </section>
+                  </div>
                 </div>
               </div>
             )}
@@ -1321,18 +1992,18 @@ function PaymentDocumentEditor({
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left text-white">No</th>
                       <th className="finance-sticky-col finance-col-account px-2 py-2 text-left text-white">Account</th>
                       <th className="px-2 py-2 text-center text-white w-[110px]">Allocations</th>
-                      <th className="px-2 py-2 text-left text-white">Description</th>
+                      <th className="px-2 py-2 text-left text-white w-[320px] min-w-[280px]">Description</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Ex Rate</th>}
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white w-28 min-w-[110px]">Amount</th>
                       <th className="px-2 py-2 text-left text-white">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left text-white">Tax Type</th>}
                       <th className="px-2 py-2 text-left text-white">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right text-white">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left text-white">Job No</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white">Base Amount</th>}
-                      <th className="px-2 py-2 text-center text-white w-14">Action</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-white w-24 min-w-[100px]">Tax Amt</th>
+                      {showAllColumns && <th className="px-2 py-2 text-left text-white w-28 min-w-[110px]">Job No</th>}
+                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right text-white w-32 min-w-[110px]">Base Amount</th>}
+                      <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1345,7 +2016,7 @@ function PaymentDocumentEditor({
                         <tr className={`${selectedDetail?.id === detail.id ? "bg-blue-50/70 border-l-4 border-l-[#00378C]" : "odd:bg-muted/10"} border-t border-slate-200 transition-colors hover:bg-blue-50/40`} key={detail.id}>
                           <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
                           <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
-                            <div className="w-full max-w-[460px] truncate">
+                            <div className={`w-full max-w-[460px] truncate ${invalidLineIds.has(detail.id) && !detail.ac_code?.trim() ? "ring-2 ring-rose-400 rounded-md" : ""}`}>
                               <LookupField
                                 label="Detail Account"
                                 compact
@@ -1401,12 +2072,12 @@ function PaymentDocumentEditor({
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </td>
-                          <td className="w-[200px] max-w-[240px] px-1 py-1">
-                            <textarea
+                          <td className="w-[320px] min-w-[280px] max-w-[480px] px-1 py-1">
+                            <Textarea maxLength={250}
                               disabled={disabled}
-                              className="commercial-line-description"
-                              title={detail.remarks || ""}
-                              rows={1}
+                              className={`commercial-line-description w-[320px] min-w-[280px] ${detail.remarks && detail.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              title={detail.remarks && detail.remarks.length > 250 ? `Character limit exceeded (${detail.remarks.length}/250)` : (detail.remarks || "")}
+                              rows={2}
                               value={detail.remarks || ""}
                               onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })}
                               placeholder="Line remarks"
@@ -1438,13 +2109,14 @@ function PaymentDocumentEditor({
                               <Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} />
                             </td>
                           )}
-                          <td className="finance-amount-cell px-2 py-1">
+                          <td className="finance-amount-cell w-28 min-w-[110px] px-2 py-1">
                             <div className="flex flex-col gap-1">
                               <Input
                                 disabled={disabled}
                                 type="number"
                                 style={{ textAlign: "right" }}
                                 step="0.001"
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
                                   const newAmount = Number(event.target.value || 0);
@@ -1494,13 +2166,23 @@ function PaymentDocumentEditor({
                                 ]}
                                 valueField="tx_compntcat_code"
                                 displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                                loadOptions={() => getDynamicLookup({
-                                  parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                                  code1: user?.company_code,
-                                  loginid: user?.loginid || user?.username || "ADMIN",
-                                })}
+                                loadOptions={loadTaxOptions}
                                 disabled={disabled}
-                                onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
+                                onChange={(value, row) => {
+                                  const rateFromRow = row ? Number(getLookupValue(row, "tx_percnt") ?? getLookupValue(row, "tx_compnt_perc_1") ?? getLookupValue(row, "perc") ?? 0) : undefined;
+                                  const dynamicRate = rateFromRow !== undefined ? rateFromRow : (taxRateMap[value] ?? 0);
+                                  if (value && rateFromRow !== undefined) {
+                                    setTaxRateMap((prev) => ({ ...prev, [value]: rateFromRow }));
+                                  }
+                                  const isTaxable = (detail.tx_compnt_1_expmt || form.tx_compnt_1_expmt) === "S";
+                                  const taxPerc = isTaxable ? dynamicRate : 0;
+                                  const taxAmt = isTaxable ? Number(((Number(detail.amount || 0) * taxPerc) / 100).toFixed(3)) : 0;
+                                  updateDetail(detail.id, {
+                                    tx_compntcat_code_1: value,
+                                    tx_compnt_perc_1: isTaxable ? taxPerc : (detail.tx_compnt_perc_1 || 0),
+                                    tx_compnt_amt_1: taxAmt,
+                                  });
+                                }}
                               />
                             </td>
                           )}
@@ -1511,11 +2193,16 @@ function PaymentDocumentEditor({
                                 value={detail.tx_compnt_1_expmt || "N"}
                                 onChange={(event) => {
                                   const taxType = event.target.value;
-                                  const taxPerc = taxType === "S" ? 5 : 0;
-                                  const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                                  const lineTaxCode = detail.tx_compntcat_code_1 || form.tx_compntcat_code_1;
+                                  const rate = taxType === "S"
+                                    ? (detail.tx_compnt_perc_1 && detail.tx_compnt_perc_1 > 0
+                                        ? detail.tx_compnt_perc_1
+                                        : getTaxPercForCode(lineTaxCode))
+                                    : 0;
+                                  const taxAmt = taxType === "S" ? Number(((Number(detail.amount || 0) * rate) / 100).toFixed(3)) : 0;
                                   updateDetail(detail.id, {
                                     tx_compnt_1_expmt: taxType,
-                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_perc_1: rate,
                                     tx_compnt_amt_1: taxAmt,
                                   });
                                 }}
@@ -1528,14 +2215,24 @@ function PaymentDocumentEditor({
                             </td>
                           )}
                           <td className="w-24 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                          <td className="finance-amount-cell w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell w-24 min-w-[100px] px-2 py-1"><Input className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" disabled={disabled} type="number" style={{ textAlign: "right" }} value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                           {showAllColumns && (
-                            <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
+                            <td className="w-28 min-w-[110px] px-2 py-1"><Input className="w-28 min-w-[110px]" disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                           )}
                           {showAllColumns && (
-                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
+                            <td className="finance-amount-cell w-32 min-w-[110px] px-2 py-1"><Input className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                           )}
-                          <td className="px-2 py-1 text-center"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                          <td className="finance-sticky-col-right px-1 py-1 text-center w-[76px] min-w-[76px] max-w-[76px]">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              title="Delete row"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                              onClick={() => removeDetailRow(detail.id)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         </tr>
                         {expandedRowIds[detail.id] && (
                           <tr key={`${detail.id}_alloc`} className="finance-allocation-row">
@@ -1554,6 +2251,8 @@ function PaymentDocumentEditor({
                                 onRefreshInvoices={() => void loadChildrenForDetail(detail)}
                                 onInvNoBlur={handleInvNoBlur}
                                 onClose={() => toggleRowExpanded(detail.id)}
+                                invalidChildRowIds={invalidChildRowIds}
+                                invalidChildFields={invalidChildFields}
                               />
                               </div>
                             </td>
@@ -1859,12 +2558,19 @@ function ChildAllocationTable({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({ label, required, children, className, error }: { label: string; required?: boolean; children: ReactNode; className?: string; error?: string }) {
+  const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
+  const cleanLabel = label ? label.replace(/\s*\*\s*$/, "") : "";
+  const isRequired = Boolean(required || hasAsterisk);
+
   return (
-    <label className="field">
-      <span>
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
+    <label className={`field ${className || ""}`}>
+      <span className="flex items-center justify-between">
+        <span>
+          {cleanLabel}
+          {isRequired && <span className="ml-1 text-destructive font-bold" style={{ color: "#E24B4A" }}>*</span>}
+        </span>
+        {error && <span className="text-[11px] font-medium text-rose-500">{error}</span>}
       </span>
       {children}
     </label>
@@ -1923,12 +2629,12 @@ function emptyDetailRow({
     ex_rate: 1,
     amount: 0,
     sign_ind: docType === "CN" || docType === "CP" ? 1 : -1,
-    tx_compntcat_code_1: "11100",
+    tx_compntcat_code_1: "",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
     tx_compnt_lcuramt_1: null,
-    tx_compnt_perc_1: null,
-    tx_compnt_amt_1: null,
+    tx_compnt_perc_1: 0,
+    tx_compnt_amt_1: 0,
     job_no: "",
     dept_code: "",
     child_table: "",
@@ -2105,6 +2811,12 @@ function mapExistingDocument(
     cheque_bank: text(header.cheque_bank),
     ac_payee: text(header.ac_payee),
     canceled: text(header.canceled),
+    party_address: text(header.party_address),
+    party_phone: text(header.party_phone),
+    party_fax: text(header.party_fax),
+    tx_compntcat_code_1: text(header.tx_compntcat_code_1),
+    tx_compntcat_name_1: text(nested(headerRaw, ["TaxCategory", "tx_compntcat_name"]) ?? header.tx_compntcat_name_1),
+    tx_compnt_1_expmt: text(header.tx_compnt_1_expmt) || "N",
     detail,
     children,
   };
@@ -2184,19 +2896,25 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
   delete (header as Record<string, unknown>).detail;
   delete (header as Record<string, unknown>).children;
 
-  const details = originalForm.detail.map((row, index) => ({
-    ...row,
-    company_code: row.company_code || companyCode,
-    doc_type: docType,
-    doc_no: docNo,
-    serial_no: row.serial_no || index + 1,
-    doc_date: originalForm.doc_date,
-    header_ac_code: originalForm.ac_code,
-    curr_code: row.curr_code || originalForm.curr_code,
-    ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
-    div_code: row.div_code || originalForm.div_code,
-  }));
+  const details = originalForm.detail.map((row, index) => {
+    const rowCurr = row.curr_code || originalForm.curr_code;
+    const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(originalForm.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(originalForm.curr_code).trim().toUpperCase());
+    const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || originalForm.ex_rate || 1);
+    const effectiveLcurAmt = Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1);
+    return {
+      ...row,
+      company_code: row.company_code || companyCode,
+      doc_type: docType,
+      doc_no: docNo,
+      serial_no: row.serial_no || index + 1,
+      doc_date: originalForm.doc_date,
+      header_ac_code: originalForm.ac_code,
+      curr_code: rowCurr,
+      ex_rate: effectiveExRate,
+      lcur_amount: effectiveLcurAmt,
+      div_code: row.div_code || originalForm.div_code,
+    };
+  });
 
   const children = groupChildren(originalForm);
   return {
@@ -2244,12 +2962,27 @@ function groupChildren(form: TransactionHeader) {
       cleaned.dtl_sr_no = childIndex + 1;
       cleaned.doc_date = form.doc_date;
       cleaned.div_code = form.div_code;
-      cleaned.ac_code = detail.ac_code;
+      cleaned.ac_code = (table === "invoice" && (form.doc_type === "CN" || form.doc_type === "DN"))
+        ? (form.ac_code || detail.ac_code)
+        : (detail.ac_code || form.ac_code);
       cleaned.sign_ind = detail.sign_ind;
-      cleaned.curr_code = cleaned.curr_code || form.curr_code;
-      cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
-      cleaned.amount = Number(cleaned.amount || 0);
-      cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+        cleaned.curr_code = form.curr_code;
+        const isBaseCurr = String(form.curr_code).trim().toUpperCase() === "INR" || Number(form.ex_rate || 1) === 1;
+        cleaned.ex_rate = isBaseCurr ? 1 : Number(form.ex_rate || 1);
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      } else {
+        const rowCurr = cleaned.curr_code || form.curr_code;
+        const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
+        const effectiveExRate = isBaseCurr ? 1 : Number(cleaned.ex_rate || form.ex_rate || 1);
+        cleaned.curr_code = rowCurr;
+        cleaned.ex_rate = effectiveExRate;
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * effectiveExRate * Number(detail.sign_ind || 1);
+      }
       grouped[table].push(cleaned);
     });
   });

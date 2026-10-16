@@ -62,7 +62,9 @@ export function PamsBulkAppraisalPage() {
   ];
 
   const isKpiType = selectedType === "KPI";
-  const colCount = isKpiType ? 5 : 4;
+  // ✅ NEW: Weightage is shown/required for KPI and GOAL
+  const showWeightage = selectedType === "KPI" || selectedType === "GOAL";
+  const colCount = showWeightage ? 5 : 4;
 
   const typeLabel =
     selectedType === "SKILL" ? "Skill"
@@ -70,7 +72,8 @@ export function PamsBulkAppraisalPage() {
         : selectedType === "CHARACTERISTICS" ? "Characteristic"
           : "KPI";
 
-  const canEditRow = selectedType === "KPI" || selectedType === "CHARACTERISTICS";
+  // ✅ NEW: All item types now support Edit
+  const canEditRow = true;
 
   useEffect(() => {
     if (!selectedPeriod) {
@@ -135,6 +138,15 @@ export function PamsBulkAppraisalPage() {
         code4: selectedPeriod,
       });
 
+      await pamsSelect({
+        parameter: "populate_new_dept_kpi",
+        loginid,
+        code1: companyCode,
+        code2: selectedEmployee,
+        code3: selectedType,
+        code4: selectedPeriod,
+      });
+
       const data = await pamsSelect({
         parameter: "kpi_assignment_page",
         loginid,
@@ -159,8 +171,8 @@ export function PamsBulkAppraisalPage() {
   useEffect(() => {
     if (selectedEmployee && selectedType && selectedPeriod) void loadAssignments();
     else setRows([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedType, selectedPeriod]);
-
 
   useEffect(() => {
     setHasSameDesgEmployees(false);
@@ -199,19 +211,22 @@ export function PamsBulkAppraisalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, selectedPeriod, companyCode, loginid]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // PROCESS (single employee)
+  // ═══════════════════════════════════════════════════════════════
   const process = async () => {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
     if (!selectedEmployee) { toast.warning("Select an employee first"); return; }
+
+    if (showWeightage && totalWeightage !== 100) {
+      toast.error(
+        `Total weightage is ${totalWeightage}%. It must be exactly 100% to process.`
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      await pamsCommonProcedure({
-        parameter: "PROC_CLONE_DEPT_KPI_FROM_PREV_PERIOD",
-        loginid,
-        val1s1: companyCode,
-        val1s2: selectedEmployee,
-        val1s3: selectedPeriod,
-      });
-
       await pamsCommonProcedure({
         parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
         loginid,
@@ -252,6 +267,9 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // PROCESS ALL (by designation)
+  // ═══════════════════════════════════════════════════════════════
   const openProcessAllPreview = async () => {
     if (!selectedPeriod) {
       toast.warning("Select a period first");
@@ -259,6 +277,13 @@ export function PamsBulkAppraisalPage() {
     }
     if (!selectedEmployee) {
       toast.warning("Select a source employee first (whose KPI will be copied)");
+      return;
+    }
+
+    if (showWeightage && totalWeightage !== 100) {
+      toast.error(
+        `Total weightage is ${totalWeightage}%. It must be exactly 100% to process all.`
+      );
       return;
     }
 
@@ -296,12 +321,30 @@ export function PamsBulkAppraisalPage() {
     const failed: string[] = [];
 
     try {
+      const sourceRows = await pamsSelect({
+        parameter: "kpi_assignment_page",
+        loginid,
+        code1: companyCode,
+        code2: selectedType,
+        code3: selectedEmployee,
+        code4: selectedPeriod,
+      });
+
+      if (!sourceRows || sourceRows.length === 0) {
+        toast.error(
+          `Source (${selectedEmployee}) ke paas is period ke liye koi KPI nahi hai. Pehle usse KPI assign karo.`
+        );
+        setSaving(false);
+        return;
+      }
+
+      const copiedTargets: string[] = [];
+
       for (const target of processAllTargets) {
         const targetEmp = text(target.EMPLOYEE_CODE);
         if (!targetEmp) continue;
 
         try {
-          // 1. Copy KPI rows source → target
           const copyResult = await pamsSelect({
             parameter: "copy_kpi_to_employee",
             loginid,
@@ -314,11 +357,47 @@ export function PamsBulkAppraisalPage() {
           const copyMsg = String(
             (copyResult?.[0] as Record<string, unknown>)?.RESULT ?? ""
           );
+
           if (copyMsg.toUpperCase().startsWith("ERROR")) {
             throw new Error(copyMsg.replace(/^ERROR:\s*/i, ""));
           }
 
-          // 2. Create appraisal doc for target
+          const verify = await pamsSelect({
+            parameter: "kpi_assignment_page",
+            loginid,
+            code1: companyCode,
+            code2: selectedType,
+            code3: targetEmp,
+            code4: selectedPeriod,
+          });
+
+          if (!verify || verify.length === 0) {
+            throw new Error("Copy succeeded but no rows found for target");
+          }
+
+          copiedTargets.push(targetEmp);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          failed.push(`${text(target.RPT_NAME) || targetEmp}: ${msg}`);
+        }
+      }
+
+      try {
+        await pamsCommonProcedure({
+          parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
+          loginid,
+          val1s1: companyCode,
+          val1s2: selectedPeriod,
+          val1s3: selectedEmployee,
+        });
+        okCount++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        failed.push(`Source (${selectedEmployee}): ${msg}`);
+      }
+
+      for (const targetEmp of copiedTargets) {
+        try {
           await pamsCommonProcedure({
             parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
             loginid,
@@ -326,15 +405,16 @@ export function PamsBulkAppraisalPage() {
             val1s2: selectedPeriod,
             val1s3: targetEmp,
           });
-
           okCount++;
         } catch (err) {
+          const target = processAllTargets.find(
+            (t) => text(t.EMPLOYEE_CODE) === targetEmp
+          );
           const msg = err instanceof Error ? err.message : "Unknown error";
-          failed.push(`${text(target.RPT_NAME) || targetEmp}: ${msg}`);
+          failed.push(`${text(target?.RPT_NAME) || targetEmp}: ${msg}`);
         }
       }
 
-      // Refresh processed employees list
       try {
         const hdrData = await pamsSelect({
           parameter: "appraisal_hdr_employees",
@@ -343,29 +423,23 @@ export function PamsBulkAppraisalPage() {
           code2: selectedPeriod,
         });
         const codes = new Set(
-          hdrData
-            .map((d) => text(d.EMPLOYEE_CODE || d.employee_code))
-            .filter(Boolean)
+          hdrData.map((d) => text(d.EMPLOYEE_CODE || d.employee_code)).filter(Boolean)
         );
         setProcessedEmployees(codes);
       } catch { /* silent */ }
 
-      // Show result
       if (failed.length === 0) {
         toast.success(
           `Successfully processed ${okCount} employee(s) for period ${selectedPeriod}.`
         );
       } else if (okCount === 0) {
-        toast.error(
-          `All ${failed.length} employee(s) failed. ` + failed.slice(0, 3).join(" | ")
-        );
+        toast.error(`All failed. ` + failed.slice(0, 3).join(" | "));
       } else {
         toast.warning(
           `${okCount} processed, ${failed.length} failed. ` + failed.slice(0, 3).join(" | ")
         );
       }
 
-      // Reset
       setSelectedEmployee("");
       setSelectedEmployeeLabel("");
       setRows([]);
@@ -379,16 +453,12 @@ export function PamsBulkAppraisalPage() {
     }
   };
 
-  // Add KPI button
+  // ═══════════════════════════════════════════════════════════════
+  // ADD / EDIT / DELETE KPI
+  // ═══════════════════════════════════════════════════════════════
   const openAddKpi = () => {
     if (!selectedEmployee) {
       toast.warning("Select an employee first");
-      return;
-    }
-    if (isKpiType && totalWeightage >= 100) {
-      toast.error(
-        `Total weightage is already ${totalWeightage}%. Maximum 100% allowed. Cannot add more KPI.`
-      );
       return;
     }
     setKpiEditorTarget(null);
@@ -420,9 +490,13 @@ export function PamsBulkAppraisalPage() {
         code6: selectedType,
         code7: selectedPeriod,
       });
+
       setDeleteTarget(null);
       toast.success(`${typeLabel} removed from this period`);
-      await loadAssignments();
+
+      setRows((prevRows) =>
+        prevRows.filter((row) => text(row.KPI_CODE) !== kpiCode)
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Delete failed");
     }
@@ -670,7 +744,7 @@ export function PamsBulkAppraisalPage() {
                   <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">
                     {isKpiType ? "KPI Group · Activity" : typeLabel}
                   </th>
-                  {isKpiType && (
+                  {showWeightage && (
                     <th className="w-32 px-3 py-2.5 text-right text-[10px] uppercase tracking-wider font-semibold text-slate-500">
                       Weightage %
                     </th>
@@ -770,7 +844,7 @@ export function PamsBulkAppraisalPage() {
                           )}
                         </td>
 
-                        {isKpiType && (
+                        {showWeightage && (
                           <td className="px-3 py-3 text-right">
                             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
                               {formatValue(row.WEIGHTAGE || row.STANDARD_WEIGHTAGE) || "—"}
@@ -806,7 +880,7 @@ export function PamsBulkAppraisalPage() {
                 )}
               </tbody>
 
-              {isKpiType && (
+              {showWeightage && (
                 <tfoot className="sticky bottom-0 bg-slate-50 dark:bg-slate-900">
                   <tr className="border-t border-slate-200 dark:border-slate-800">
                     <td
@@ -1048,7 +1122,6 @@ export function PamsBulkAppraisalPage() {
   );
 }
 
-
 // ═══════════════════════════════════════════════════════════════════
 // KPI EDITOR MODAL
 // ═══════════════════════════════════════════════════════════════════
@@ -1072,9 +1145,10 @@ function KpiEditorModal({
   const isEdit = !!existingRow;
 
   const isTask = itemType === "KPI";
-  const needsWeightage = isTask;
+  const isGoal = itemType === "GOAL";
+  const needsWeightage = isTask || isGoal;
   const needsActivities = isTask;
-  const isMulti = !isEdit && !isTask;
+  const isMulti = !isEdit && !needsWeightage;
 
   const label =
     itemType === "SKILL" ? "Skill"
@@ -1223,20 +1297,6 @@ function KpiEditorModal({
         toast.warning("Weightage must be greater than 0");
         return;
       }
-
-      const originalWeightage = isEdit
-        ? number(existingRow?.WEIGHTAGE || existingRow?.STANDARD_WEIGHTAGE)
-        : 0;
-
-      const projectedTotal = totalWeightage - originalWeightage + weightage;
-
-      if (projectedTotal > 100) {
-        toast.error(
-          `Total weightage would become ${projectedTotal}%. Maximum 100% allowed. ` +
-          `Available: ${100 - (totalWeightage - originalWeightage)}%.`
-        );
-        return;
-      }
     }
 
     const finalActivities = needsActivities
@@ -1244,23 +1304,6 @@ function KpiEditorModal({
       : [];
 
     if (needsActivities) {
-      if (finalActivities.length < 3) {
-        toast.warning("Minimum 3 KPI items (activities) are required per designation/role.");
-        return;
-      }
-      if (finalActivities.length > 6) {
-        toast.warning("Maximum 6 KPI items (activities) are allowed per designation/role.");
-        return;
-      }
-
-      const invalidItem = finalActivities.find((a) => a.length < 5);
-      if (invalidItem) {
-        toast.warning(
-          `KPI item "${invalidItem}" is too short. Please make it measurable and descriptive (min 5 characters).`
-        );
-        return;
-      }
-
       const seen = new Set<string>();
       const duplicates: string[] = [];
       for (const act of finalActivities) {
@@ -1420,7 +1463,6 @@ function KpiEditorModal({
             <Input
               value={kpiDesc}
               onChange={(e) => setKpiDesc(e.target.value)}
-              disabled={isEdit && (itemType === "SKILL" || itemType === "GOAL")}
               placeholder={
                 isTask
                   ? "Enter KPI group name (e.g. General Accountabilities)"
@@ -1456,24 +1498,19 @@ function KpiEditorModal({
           <Field label="Activities" required>
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <span className={`text-xs ${activities.length < 3 || activities.length > 6 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                <span className="text-xs text-muted-foreground">
                   {activities.length === 0
                     ? "Add activities below"
-                    : ``}
+                    : `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addActivityRow}
-                  disabled={activities.length >= 6}
-                >
+                <Button type="button" size="sm" onClick={addActivityRow}>
                   <Plus size={13} /> Add Activity
                 </Button>
               </div>
 
               {activities.length === 0 ? (
                 <p className="rounded border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                  Click "Add Activity" to add one. Minimum 3, Maximum 6 required.
+                  Click "Add Activity" to add one.
                 </p>
               ) : (
                 <div className="grid gap-1.5">

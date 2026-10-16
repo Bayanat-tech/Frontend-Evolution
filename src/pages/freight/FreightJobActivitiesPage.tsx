@@ -1,3 +1,4 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, ListPlus, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
@@ -6,6 +7,8 @@ import { freightSelect, freightTaxCategories, freightTaxComponents } from "../..
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
@@ -61,6 +64,10 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function FreightJobActivitiesPage({
   target,
   initialJob = null,
@@ -93,14 +100,25 @@ export function FreightJobActivitiesPage({
 
   const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
+  const [activeListTab, setActiveListTab] = useState<"active" | "confirmed" | "all">("active");
   const [query, setQuery] = useState("");
   const [header, setHeader] = useState<LookupRow | null>(null);
   const [lines, setLines] = useState<ActivityLine[]>([]);
+  const [invalidLineIndices, setInvalidLineIndices] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [populating, setPopulating] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const isConf = Boolean(lookupText(r, "confirm_date"));
+      if (activeListTab === "active") return !isConf;
+      if (activeListTab === "confirmed") return isConf;
+      return true;
+    });
+  }, [rows, activeListTab]);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -201,6 +219,25 @@ export function FreightJobActivitiesPage({
       notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
       return;
     }
+
+    const invalidIndices: number[] = [];
+    lines.forEach((l, i) => {
+      if (!l.act_code || !l.act_code.trim() || Number(l.quantity || 0) <= 0) {
+        invalidIndices.push(i);
+      }
+    });
+
+    for (const [index, line] of lines.entries()) {
+      const schemaError = freightValidationError("TN_INVOICE_DET", line);
+      if (schemaError) { notify({ type: "error", text: `Activity line ${index + 1}: ${schemaError}` }); return; }
+    }
+
+    if (invalidIndices.length > 0) {
+      setInvalidLineIndices(invalidIndices);
+      notify({ type: "error", text: "Kindly fill in the missing fields." });
+      return;
+    }
+
     setSaving(true);
     setNotice(null);
     try {
@@ -305,9 +342,7 @@ export function FreightJobActivitiesPage({
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))}>
-          <ArrowLeft size={14} />List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
@@ -328,26 +363,61 @@ export function FreightJobActivitiesPage({
 
   if (view === "list") {
     return (
-    <section className="freight-list-screen grid gap-3">
+      <section className="freight-list-screen grid gap-3">
         <Header eyebrow={copy.eyebrow} title={`${mode.label} ${direction.label} ${copy.title}`} subtitle={copy.subtitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
         </Header>
+        {/* Filter Tabs Bar */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          {(
+            [
+              { id: "active", label: "Active", count: rows.filter((r) => !lookupText(r, "confirm_date")).length },
+              { id: "confirmed", label: "Confirmed", count: rows.filter((r) => Boolean(lookupText(r, "confirm_date"))).length },
+              { id: "all", label: "All", count: rows.length },
+            ] as const
+          ).map((tab) => {
+            const active = activeListTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveListTab(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-xs font-semibold ring-2 ring-[#00378C]/20"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          data={rows}
+          data={filteredRows}
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search job, principal..."
-          title={`${rows.length} Jobs`}
+          title={`${filteredRows.length} Jobs`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
           minWidth={1100}
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
+          enableExport={false}
+          actionButton={
+            <FinanceListActionsMenu
+              onExport={() => exportToCsv(filteredRows, columns, `freight-${mode.code}-${direction.code}-job-activities.csv`)}
+              onRefresh={() => void loadRows()}
+            />
+          }
           exportFilename={`freight-${mode.code}-${direction.code}-job-activities.csv`}
           onRowClick={openJob}
         />
@@ -360,7 +430,12 @@ export function FreightJobActivitiesPage({
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-muted-foreground">Active Job:</span>
-          <strong className="text-primary font-bold">{lookupText(header, "job_no") || "No Job Selected"}</strong>
+          <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+            {lookupText(header, "job_no") || "No Job Selected"}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-xs font-bold text-[#78350f] shadow-xs">
+            {formatDate(lookupText(header, "job_date")) || today()}
+          </span>
           <span className="text-slate-300">•</span>
           <span className="font-semibold text-muted-foreground">Principal:</span>
           <strong className="text-foreground font-semibold">{lookupText(header, "prin_name") || lookupText(header, "prin_code") || "-"}</strong>
@@ -389,18 +464,67 @@ export function FreightJobActivitiesPage({
         </div>
       </div>
 
-      {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
-        {notice && <NoticeChip notice={notice} />}
-        {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
-        <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}><Plus size={14} />Line</Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void populateFromQuotation()} disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")} title={lookupText(header, "quotation_ref") ? `Load missing activities from ${lookupText(header, "quotation_ref")}` : "Job has no quotation reference"}>
-          <ListPlus size={14} />{populating ? "Loading..." : "Populate from Quotation"}
-        </Button>
-       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || populating || dirty || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))} title={dirty ? "Save activity changes before confirmation" : undefined}>
-           <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
-        </Button>
-        <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}><Save size={14} />Save</Button>
-      </Header>}
+      {!embeddedInWorkspace && (
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {!initialJob && (
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors cursor-pointer"
+                title="Back to List"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <div className="min-w-0">
+              <p className="eyebrow mb-0 text-[10px] font-bold uppercase tracking-wider text-primary">
+                {copy.eyebrow}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-1 font-mono text-base font-bold text-[#78350f] shadow-xs">
+                  {lookupText(header, "job_no") || "NEW"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+                  {formatDate(lookupText(header, "job_date")) || today()}
+                </span>
+                <h1 className="m-0 text-base font-bold leading-tight text-foreground">
+                  {copy.title}
+                </h1>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {notice && <NoticeChip notice={notice} />}
+            <Button type="button" size="sm" onClick={addLine} disabled={isLineLocked} className="!bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]">
+              <Plus size={14} /> Add Line
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void populateFromQuotation()}
+              disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")}
+              title={lookupText(header, "quotation_ref") ? `Load missing activities from ${lookupText(header, "quotation_ref")}` : "Job has no quotation reference"}
+            >
+              <ListPlus size={14} /> {populating ? "Loading..." : "Populate from Quotation"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void confirmJob()}
+              disabled={saving || populating || dirty || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}
+              title={dirty ? "Save activity changes before confirmation" : undefined}
+            >
+              <CheckCircle2 size={14} /> {lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
+            </Button>
+            <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}>
+              <Save size={14} /> Save
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <Metric label="Revenue" value={money(totals.revenue)} />
@@ -411,7 +535,7 @@ export function FreightJobActivitiesPage({
 
       <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
         <div className="min-w-[1280px]">
-          <div className="freight-job-table-head grid grid-cols-[42px_155px_minmax(230px,1fr)_70px_95px_105px_100px_110px_105px_120px_110px_40px] items-center gap-1.5 px-3 py-2 text-[11px] font-bold">
+          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[42px_155px_minmax(230px,1fr)_70px_95px_105px_100px_110px_105px_120px_110px_40px] items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
             <span>No</span>
             <span>Activity</span>
             <span>Description</span>
@@ -426,12 +550,14 @@ export function FreightJobActivitiesPage({
             <span />
           </div>
           <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-border/60">
-            {lines.map((line, index) => (
-              <div key={`${line.srno}-${index}`} className="freight-job-table-row flex flex-col transition-colors hover:bg-slate-50/70">
+            {lines.map((line, index) => {
+              const isInvalid = invalidLineIndices.includes(index);
+              return (
+              <div key={`${line.srno}-${index}`} className={`freight-job-table-row flex flex-col transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/70"}`}>
                 <div className="freight-activity-primary-row grid grid-cols-[42px_155px_minmax(230px,1fr)_70px_95px_105px_100px_110px_105px_120px_110px_40px] items-center gap-1.5 px-3 py-1.5">
                   <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                   {/* <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} /> */}
-                  <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => {
+                  <ActivityLookup value={line.act_code} displayValue={line.activity} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => {
   const newBillRate = lookupText(row || undefined, "bill");
   const newCost = lookupText(row || undefined, "cost");
   updateLine(index, recalc({
@@ -445,14 +571,14 @@ export function FreightJobActivitiesPage({
     tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code"),
   }));
 }} />
-                  <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+                  <Input className="h-7 text-xs" placeholder="Service description" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })}  maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}  maxBytes={freightTextLimit("TN_INVOICE_DET", "other_services")} />
                   <MoneyInput value={line.quantity} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
                   <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
                   <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
                   <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
-                  <Input className="h-7 text-xs" placeholder="Agent" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+                  <Input className="h-7 text-xs" placeholder="Agent" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })}  maxLength={freightTextLimit("TN_INVOICE_DET", "broker_code")}  maxBytes={freightTextLimit("TN_INVOICE_DET", "broker_code")} />
                   <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
-                  <Input className="h-7 text-xs" placeholder="Transporter" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+                  <Input className="h-7 text-xs" placeholder="Transporter" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })}  maxLength={freightTextLimit("TN_INVOICE_DET", "transporter_code")}  maxBytes={freightTextLimit("TN_INVOICE_DET", "transporter_code")} />
                   <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
                   <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-red-600" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}>
                     <Trash2 size={13} />
@@ -545,7 +671,8 @@ export function FreightJobActivitiesPage({
 </div>
               
               </div>
-            ))}
+            );
+          })}
             {!lines.length && (
               <div className="px-3 py-12 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
                 <p className="font-medium text-foreground">No service & activity lines yet.</p>
@@ -574,12 +701,14 @@ export function FreightJobActivitiesPage({
 
   function removeLine(index: number) {
     if (isLineLocked) return;
+    setInvalidLineIndices((prev) => prev.filter((i) => i !== index).map((i) => i > index ? i - 1 : i));
     setLines((current) => current.filter((_, rowIndex) => rowIndex !== index).map((line, rowIndex) => ({ ...line, srno: String(rowIndex + 1) })));
     setDirty(true);
   }
 
   function updateLine(index: number, patch: Partial<ActivityLine>) {
     if (isLineLocked) return;
+    setInvalidLineIndices((prev) => prev.filter((i) => i !== index));
     setLines((current) => current.map((line, rowIndex) => rowIndex === index ? { ...line, ...patch, srno: String(index + 1) } : line));
     setDirty(true);
   }
@@ -606,16 +735,36 @@ function Metric({ label, value, tone = "neutral" }: { label: string; value: stri
   return <div className={`freight-job-metric-card${toneClass}`}><div><TrendingUp size={12} />{label}</div><strong>{value}</strong></div>;
 }
 
-function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean }) {
+function ActivityLookup({
+  companyCode,
+  value,
+  displayValue,
+  onChange,
+  disabled,
+}: {
+  companyCode: string;
+  value: string;
+  displayValue?: string;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+}) {
+  const formattedDisplayValue = useMemo(() => {
+    if (!value) return displayValue || "";
+    if (!displayValue) return value;
+    const trimmedVal = String(value).trim();
+    const trimmedDisp = String(displayValue).trim();
+    if (trimmedDisp.startsWith(trimmedVal)) return trimmedDisp;
+    return `${trimmedVal} - ${trimmedDisp}`;
+  }, [value, displayValue]);
+
   return (
     <LookupField
       value={value}
+      displayValue={formattedDisplayValue}
       compact
       valueField="ACT_CODE"
       displayFields={["ACT_CODE", "ACTIVITY"]}
-      columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }
-        // ,{ field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }
-      ]}
+      columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }]}
       loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
       onChange={onChange}
       disabled={disabled}

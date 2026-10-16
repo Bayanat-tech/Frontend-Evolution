@@ -99,6 +99,7 @@ export interface SalesOrderLineRow {
 
 export interface PurchaseOrderForm {
   doc_no: string;
+  job_card_no?:string;
     // doc_no: string;
   doc_type?: string;
   doc_date: string;
@@ -208,6 +209,9 @@ export interface PurchaseOrderForm {
   so_ex_rate?: number;
   so_dlvr_contact?: string;
   so_dlvr_mobile?: string;
+  warranty_period?: number;
+  warranty_uom?: "D" | "M" | "Y";
+  warranty_desc?: string;
   so_dlvr_email?: string;
   so_remarks?: string;
   so_disc_hdr_price?: number;
@@ -309,6 +313,8 @@ export const SO_DOC_TYPE = {
   STR: "STR",
   SAJ :"SAJ",
   SIN: "SIN",
+  LPR: "LPR",
+  MIS: "MIS",
 } as const;
 export const PROCESSSO ='sales_order'
 export const PROCESSSDN ='sales_dn'
@@ -331,6 +337,12 @@ export const SDN_CONFIG: SalesConfig = {
   docType: SO_DOC_TYPE.SDN,
   headerParameter: "PS_SDN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_SDN_ENTRY_DETAIL_PAGE",
+};
+
+export const MIS_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.MIS,
+  headerParameter: "PS_SDN_ENTRY_MATERIAL_HEADER_PAGE",
+  detailParameter: "PS_SDN_ENTRY_MATERIAL_DETAIL_PAGE",
 };
 
 export const STR_CONFIG: SalesConfig = {

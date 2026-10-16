@@ -8,7 +8,6 @@ import {
   Plus,
   Save,
   Trash2,
-  Upload,
   X,
 } from "lucide-react";
 import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
@@ -94,14 +93,26 @@ function orgLabel(row: Row, codeKey: string, nameKey: string): string {
   return code || name || "-";
 }
 
+function buildLabel(code: string, name: string): string {
+  const c = text(code).trim();
+  const n = text(name).trim();
+  if (!c && !n) return "";
+  if (!c) return n;
+  if (!n) return c;
+  if (n === c) return c;
+  if (n.startsWith(c + " ") || n.startsWith(c + "-") || n.startsWith(c + " - ")) {
+    return n;
+  }
+  return `${c} - ${n}`;
+}
+
 function displayLookup(list: Row[], codeKey: string, nameKey: string, code: string): string {
   if (!code) return "";
   const found = list.find((r) => text(r[codeKey]) === code);
   if (!found) return code;
   const name = text(found[nameKey]);
   if (!name) return code;
-  if (name.startsWith(code)) return name;
-  return `${code} - ${name}`;
+  return buildLabel(code, name);
 }
 
 function splitActivities(value: unknown): string[] {
@@ -226,9 +237,12 @@ export function KpiGroupPage() {
   const [viewMode, setViewMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // "Cannot delete" informational dialog (blocked by appraisal docs)
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
-  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  // "Are you sure?" confirmation dialog
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabKey>("groups");
   const isGroupsTab = activeTab === "groups";
@@ -262,22 +276,29 @@ export function KpiGroupPage() {
   const [departmentList, setDepartmentList] = useState<Row[]>([]);
   const [designationList, setDesignationList] = useState<Row[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-
   const [designationLookup, setDesignationLookup] = useState<
-    Record<string, DesignationInfo>
+    Record<string, DesignationInfo[]>
   >({});
 
   const tabTypeCode = isCharacteristicTab
     ? KPI_CHARACTERISTIC_TYPE_CODE
     : KPI_ACTIVITY_TYPE_CODE;
 
-  // ═════════════════════════════════════════════════════════
-  // LOAD ROWS
-  // ═════════════════════════════════════════════════════════
   const loadRows = async () => {
+    if (!selectedDivision || !selectedDepartment) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const data = await pamsSelect({ parameter: "kpi", loginid, code1: companyCode });
+      const data = await pamsSelect({
+        parameter: "kpi",
+        loginid,
+        code1: companyCode,
+        code2: selectedDivision,   
+        code3: selectedDepartment, 
+      });
       setRows(data.map(normalizeRow));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load KPI Groups");
@@ -286,10 +307,15 @@ export function KpiGroupPage() {
     }
   };
 
+
   useEffect(() => {
-    void loadRows();
+    if (selectedDivision && selectedDepartment) {
+      void loadRows();
+    } else {
+      setRows([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginid, companyCode]);
+  }, [selectedDivision, selectedDepartment, loginid, companyCode]);
 
   useEffect(() => {
     void (async () => {
@@ -298,10 +324,16 @@ export function KpiGroupPage() {
     })();
   }, [loginid, companyCode]);
 
+  // ═════════════════════════════════════════════════════════
+  // ARRAY-BASED designationLookup
+  // ═════════════════════════════════════════════════════════
   useEffect(() => {
+    if (!loginid || !companyCode) return;
+
+    let cancelled = false;
     void (async () => {
       try {
-        const map: Record<string, DesignationInfo> = {};
+        const map: Record<string, DesignationInfo[]> = {};
         const divs = await fetchDivisions(loginid, companyCode);
 
         for (const dv of divs) {
@@ -315,22 +347,32 @@ export function KpiGroupPage() {
             const deptName = text(dp.DEPT_NAME);
             if (!deptCode) continue;
 
-            const desgs = await fetchDesignations(loginid, companyCode, divCode, deptCode);
+            const desgs = await fetchDesignations(
+              loginid,
+              companyCode,
+              divCode,
+              deptCode
+            );
+
             for (const dg of desgs) {
               const desgCode = text(dg.DESG_CODE);
               if (!desgCode) continue;
-              if (!map[desgCode]) {
-                map[desgCode] = { divCode, divName, deptCode, deptName };
-              }
+
+              if (!map[desgCode]) map[desgCode] = [];
+              map[desgCode].push({ divCode, divName, deptCode, deptName });
             }
           }
         }
 
-        setDesignationLookup(map);
+        if (!cancelled) setDesignationLookup(map);
       } catch {
-        setDesignationLookup({});
+        if (!cancelled) setDesignationLookup({});
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loginid, companyCode]);
 
   useEffect(() => {
@@ -338,7 +380,7 @@ export function KpiGroupPage() {
       const first = divisionList[0];
       const code = text(first.DIV_CODE);
       setSelectedDivision(code);
-      setSelectedDivisionLabel(`${code} - ${text(first.DIV_NAME)}`);
+      setSelectedDivisionLabel(buildLabel(code, text(first.DIV_NAME)));
     }
   }, [divisionList, selectedDivision]);
 
@@ -356,7 +398,7 @@ export function KpiGroupPage() {
         const first = depts[0];
         const code = text(first.DEPT_CODE);
         setSelectedDepartment(code);
-        setSelectedDepartmentLabel(`${code} - ${text(first.DEPT_NAME)}`);
+        setSelectedDepartmentLabel(buildLabel(code, text(first.DEPT_NAME)));
       } else {
         setSelectedDepartment("");
         setSelectedDepartmentLabel("");
@@ -364,13 +406,16 @@ export function KpiGroupPage() {
     })();
   }, [selectedDivision, loginid, companyCode]);
 
+
   const filteredRows = useMemo(() => {
     if (!selectedDivision || !selectedDepartment) return [];
+    const selDiv = selectedDivision.trim().toUpperCase();
+    const selDept = selectedDepartment.trim().toUpperCase();
     return rows.filter((r) => {
-      const div = text(r.DIVISION_CODE ?? r.DIV_CODE);
-      const dept = text(r.DEPARTMENT_CODE ?? r.DEPT_CODE);
-      const typeCode = text(r.KPI_TYPE_CODE);
-      return div === selectedDivision && dept === selectedDepartment && typeCode === tabTypeCode;
+      const div = text(r.DIVISION_CODE ?? r.DIV_CODE).trim().toUpperCase();
+      const dept = text(r.DEPARTMENT_CODE ?? r.DEPT_CODE).trim().toUpperCase();
+      const typeCode = text(r.KPI_TYPE_CODE).trim();
+      return div === selDiv && dept === selDept && typeCode === tabTypeCode;
     });
   }, [rows, selectedDivision, selectedDepartment, tabTypeCode]);
 
@@ -391,23 +436,38 @@ export function KpiGroupPage() {
       }
       const g = map.get(key)!;
       g.rows.push(r);
-      g.totalWeightage += number(r.STANDARD_WEIGHTAGE);
     });
+
+    // Dedupe within each designation group
+    map.forEach((group) => {
+      const seen = new Set<string>();
+      group.rows = group.rows.filter((r) => {
+        const kpiCode = text(r.KPI_CODE).trim();
+        const kpiDesc = text(r.KPI_DESC).trim().toLowerCase();
+        const dedupKey = kpiCode || kpiDesc;
+        if (!dedupKey) return true;
+        if (seen.has(dedupKey)) return false;
+        seen.add(dedupKey);
+        return true;
+      });
+
+      // Recompute weightage after dedupe
+      group.totalWeightage = group.rows.reduce(
+        (sum, r) => sum + number(r.STANDARD_WEIGHTAGE),
+        0
+      );
+    });
+
     return Array.from(map.values()).sort((a, b) =>
       a.designationLabel.localeCompare(b.designationLabel)
     );
   }, [filteredRows]);
 
-  const isExpanded = (key: string) => expandedGroups[key] !== false;
+  const isExpanded = (key: string) => expandedGroups[key] === true;
   const toggleGroup = (key: string) => {
-    const current = expandedGroups[key] !== false;
+    const current = expandedGroups[key] === true;
     setExpandedGroups((prev) => ({ ...prev, [key]: !current }));
   };
-
-  const grandTotal = useMemo(
-    () => filteredRows.reduce((s, r) => s + number(r.STANDARD_WEIGHTAGE), 0),
-    [filteredRows]
-  );
 
   // ═════════════════════════════════════════════════════════
   // ACTIVITY HANDLERS
@@ -428,7 +488,13 @@ export function KpiGroupPage() {
       return next;
     });
 
-  const loadActivities = async (kpiCode: string) => {
+ 
+  const loadActivities = async (
+    kpiCode: string,
+    divCode: string,
+    deptCode: string,
+    desgCode: string
+  ) => {
     if (!kpiCode) {
       setActivities([]);
       return;
@@ -439,6 +505,9 @@ export function KpiGroupPage() {
         loginid,
         code1: companyCode,
         code2: kpiCode,
+        code3: divCode || "NULL",     
+        code4: deptCode || "NULL",    
+        code5: desgCode || "NULL",    
       });
       setActivities(
         data.map((r: Row) => ({
@@ -518,6 +587,7 @@ export function KpiGroupPage() {
   const openEdit = async (row: Row) => {
     const divCode = text(row.DIVISION_CODE ?? row.DIV_CODE);
     const deptCode = text(row.DEPARTMENT_CODE ?? row.DEPT_CODE);
+    const desgCode = text(row.DESG_CODE);
 
     setEditMode(true);
     setViewMode(false);
@@ -543,19 +613,21 @@ export function KpiGroupPage() {
       DIVISION_CODE: divCode,
       DEPARTMENT_CODE: deptCode,
       SECTION_CODE: text(row.SECTION_CODE),
-      DESG_CODE: text(row.DESG_CODE),
+      DESG_CODE: desgCode,
       STANDARD_WEIGHTAGE: number(row.STANDARD_WEIGHTAGE),
     });
 
     setFormOpen(true);
     if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
-      await loadActivities(text(row.KPI_CODE));
+  
+      await loadActivities(text(row.KPI_CODE), divCode, deptCode, desgCode);
     }
   };
 
   const openView = async (row: Row) => {
     const divCode = text(row.DIVISION_CODE ?? row.DIV_CODE);
     const deptCode = text(row.DEPARTMENT_CODE ?? row.DEPT_CODE);
+    const desgCode = text(row.DESG_CODE);
 
     setEditMode(false);
     setViewMode(true);
@@ -581,13 +653,14 @@ export function KpiGroupPage() {
       DIVISION_CODE: divCode,
       DEPARTMENT_CODE: deptCode,
       SECTION_CODE: text(row.SECTION_CODE),
-      DESG_CODE: text(row.DESG_CODE),
+      DESG_CODE: desgCode,
       STANDARD_WEIGHTAGE: number(row.STANDARD_WEIGHTAGE),
     });
 
     setFormOpen(true);
     if (text(row.KPI_TYPE_CODE) === KPI_ACTIVITY_TYPE_CODE) {
-      await loadActivities(text(row.KPI_CODE));
+   
+      await loadActivities(text(row.KPI_CODE), divCode, deptCode, desgCode);
     }
   };
 
@@ -608,16 +681,6 @@ export function KpiGroupPage() {
     if (!form.KPI_DESC.trim()) { toast.warning("KPI Description is required"); return; }
 
     if (form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
-      const validActivities = activities.filter((a) => a.desc.trim());
-      if (validActivities.length < 3) {
-        toast.warning(`Minimum 3 KPI Items (Activities) required. Currently: ${validActivities.length}`);
-        return;
-      }
-      if (validActivities.length > 6) {
-        toast.warning(`Maximum 6 KPI Items (Activities) allowed. Currently: ${validActivities.length}`);
-        return;
-      }
-
       const dupIndices = findDuplicateActivityIndices(activities);
       if (dupIndices.length > 0) {
         setDuplicateIndices(dupIndices);
@@ -635,6 +698,7 @@ export function KpiGroupPage() {
     setSaving(true);
 
     try {
+      // ── Save / Update KPI master ─────────────────────────
       await pamsSave({
         parameter: "kpi_ins_upd",
         loginid,
@@ -651,15 +715,21 @@ export function KpiGroupPage() {
 
       let kpiCode = form.KPI_CODE;
       if (!kpiCode) {
-        const refreshed = await pamsSelect({ parameter: "kpi", loginid, code1: companyCode });
+        const refreshed = await pamsSelect({
+          parameter: "kpi",
+          loginid,
+          code1: companyCode,
+          code2: form.DIVISION_CODE,   
+          code3: form.DEPARTMENT_CODE, 
+        });
         const matches = refreshed
           .map(normalizeRow)
           .filter(
             (r) =>
               text(r.KPI_DESC) === form.KPI_DESC &&
-              text(r.DIVISION_CODE) === form.DIVISION_CODE &&
-              text(r.DEPARTMENT_CODE) === form.DEPARTMENT_CODE &&
-              text(r.DESG_CODE) === form.DESG_CODE
+              text(r.DIVISION_CODE).trim() === form.DIVISION_CODE.trim() &&
+              text(r.DEPARTMENT_CODE).trim() === form.DEPARTMENT_CODE.trim() &&
+              text(r.DESG_CODE).trim() === form.DESG_CODE.trim()
           )
           .sort((a, b) => Number(text(b.KPI_CODE)) - Number(text(a.KPI_CODE)));
 
@@ -667,14 +737,20 @@ export function KpiGroupPage() {
       }
 
       if (kpiCode && form.KPI_TYPE_CODE === KPI_ACTIVITY_TYPE_CODE) {
+        
         if (editMode) {
-          await pamsSave({
+          await pamsDelete({
             parameter: "kpi_item_delete_all",
             loginid,
-            val1s1: companyCode,
-            val1s2: kpiCode,
+            code1: companyCode,
+            code2: kpiCode,
+            code3: form.DIVISION_CODE || "NULL",   
+            code4: form.DEPARTMENT_CODE || "NULL", 
+            code5: form.DESG_CODE || "NULL",       
           });
         }
+
+        // Insert new activities via pamsSave — div/dept/desg bhi pass
         let srno = 1;
         for (const act of activities) {
           if (!act.desc.trim()) continue;
@@ -684,6 +760,9 @@ export function KpiGroupPage() {
             val1s1: companyCode,
             val1s2: kpiCode,
             val1s3: act.desc,
+            val1s4: form.DIVISION_CODE || "",   
+            val1s5: form.DEPARTMENT_CODE || "", 
+            val1s6: form.DESG_CODE || "",      
             val1n1: srno,
           });
           srno++;
@@ -701,14 +780,21 @@ export function KpiGroupPage() {
   };
 
   // ═════════════════════════════════════════════════════════
-  // DELETE — single call to safe_delete_kpi
+  // DELETE
   // ═════════════════════════════════════════════════════════
-  const handleDeleteClick = async (row: Row) => {
+  const handleDeleteClick = (row: Row) => {
+    setConfirmDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteTarget) return;
+
+    const row = confirmDeleteTarget;
     const kpiCode = text(row.KPI_CODE);
     const kpiDesc = text(row.KPI_DESC);
     const kpiTypeCode = text(row.KPI_TYPE_CODE);
 
-    setDeleteCheckLoading(true);
+    setDeleting(true);
     try {
       const result = await pamsSelect({
         parameter: "safe_delete_kpi",
@@ -718,11 +804,10 @@ export function KpiGroupPage() {
         code3: kpiTypeCode,
       });
 
-      const res = String(
-        (result?.[0] as Record<string, unknown>)?.RESULT ?? ""
-      );
+      const res = String((result?.[0] as Record<string, unknown>)?.RESULT ?? "");
 
       if (res.toUpperCase().startsWith("ERROR_DOC_EXISTS")) {
+        setConfirmDeleteTarget(null);
         setDeleteTarget(row);
         return;
       }
@@ -731,6 +816,7 @@ export function KpiGroupPage() {
       }
 
       toast.success(`"${kpiDesc || kpiCode}" deleted successfully`);
+      setConfirmDeleteTarget(null);
       await loadRows();
     } catch (error: any) {
       const raw = String(error?.message || error?.details || error || "");
@@ -738,12 +824,8 @@ export function KpiGroupPage() {
         raw.length > 200 ? raw.slice(0, 200) + "..." : raw || "Unable to delete"
       );
     } finally {
-      setDeleteCheckLoading(false);
+      setDeleting(false);
     }
-  };
-
-  const confirmDelete = async () => {
-    setDeleteTarget(null);
   };
 
   const kpiTypeOptions = kpiTypeList.map(normalizeRow);
@@ -790,7 +872,9 @@ export function KpiGroupPage() {
               loadOptions={async () => divisionOptions as LookupRow[]}
               onChange={(val, row) => {
                 setSelectedDivision(val);
-                setSelectedDivisionLabel(row ? `${val} - ${text(row.DIV_NAME)}` : val);
+                setSelectedDivisionLabel(
+                  row ? buildLabel(val, text(row.DIV_NAME)) : val
+                );
               }}
             />
           </Field>
@@ -812,7 +896,9 @@ export function KpiGroupPage() {
               loadOptions={async () => deptOptions as LookupRow[]}
               onChange={(val, row) => {
                 setSelectedDepartment(val);
-                setSelectedDepartmentLabel(row ? `${val} - ${text(row.DEPT_NAME)}` : val);
+                setSelectedDepartmentLabel(
+                  row ? buildLabel(val, text(row.DEPT_NAME)) : val
+                );
               }}
             />
           </Field>
@@ -869,9 +955,6 @@ export function KpiGroupPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                <Upload size={15} /> Import from Excel
-              </Button>
               <Button onClick={openAdd}>
                 <Plus size={15} /> {addButtonLabel}
               </Button>
@@ -900,9 +983,11 @@ export function KpiGroupPage() {
                       KPI Activities
                     </th>
                   )}
-                  <th className="w-32 px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    Weightage %
-                  </th>
+                  {!isCharacteristicTab && (
+                    <th className="w-32 px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      Weightage %
+                    </th>
+                  )}
                   <th className="w-28 px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     Actions
                   </th>
@@ -913,7 +998,7 @@ export function KpiGroupPage() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={isActivitiesTab ? 6 : 5}
+                      colSpan={isActivitiesTab ? 6 : isCharacteristicTab ? 4 : 5}
                       className="px-3 py-14 text-center text-muted-foreground"
                     >
                       Loading...
@@ -922,7 +1007,7 @@ export function KpiGroupPage() {
                 ) : !selectedDivision || !selectedDepartment ? (
                   <tr>
                     <td
-                      colSpan={isActivitiesTab ? 6 : 5}
+                      colSpan={isActivitiesTab ? 6 : isCharacteristicTab ? 4 : 5}
                       className="px-3 py-14 text-center text-muted-foreground"
                     >
                       Select division and department to load rows.
@@ -931,7 +1016,7 @@ export function KpiGroupPage() {
                 ) : designationGroups.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isActivitiesTab ? 6 : 5}
+                      colSpan={isActivitiesTab ? 6 : isCharacteristicTab ? 4 : 5}
                       className="px-3 py-14 text-center text-muted-foreground"
                     >
                       No records found.
@@ -977,11 +1062,7 @@ export function KpiGroupPage() {
                               </span>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-right">
-                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                              {group.totalWeightage}
-                            </span>
-                          </td>
+                          {!isCharacteristicTab && <td />}
                           <td />
                         </tr>
 
@@ -1030,11 +1111,14 @@ export function KpiGroupPage() {
                                   </td>
                                 )}
 
-                                <td className="px-3 py-2.5 text-right">
-                                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                                    {formatValue(row.STANDARD_WEIGHTAGE) || "—"}
-                                  </span>
-                                </td>
+                                {!isCharacteristicTab && (
+                                  <td className="px-3 py-2.5 text-right">
+                                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                                      {formatValue(row.STANDARD_WEIGHTAGE) || "—"}
+                                    </span>
+                                  </td>
+                                )}
+
                                 <td className="px-3 py-2.5">
                                   <div className="flex justify-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
                                     <button
@@ -1056,9 +1140,9 @@ export function KpiGroupPage() {
                                     <button
                                       type="button"
                                       title="Delete"
-                                      onClick={() => void handleDeleteClick(row)}
-                                      disabled={deleteCheckLoading || saving}
-                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                                      onClick={() => handleDeleteClick(row)}
+                                      disabled={deleting || saving}
+                                      className="grid h-7 w-7 place-items-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                       <Trash2 size={13} />
                                     </button>
@@ -1072,51 +1156,10 @@ export function KpiGroupPage() {
                   })
                 )}
               </tbody>
-
-              {!loading && designationGroups.length > 0 && (
-                <tfoot className="sticky bottom-0 bg-slate-50 dark:bg-slate-900">
-                  <tr className="border-t border-slate-200 dark:border-slate-800">
-                    <td
-                      colSpan={isActivitiesTab ? 4 : 3}
-                      className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
-                    >
-                      Total Weightage
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <span className="inline-flex items-center rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">
-                        {grandTotal}
-                      </span>
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
         </CardContent>
       </Card>
-
-      <Dialog
-        open={importOpen}
-        wide
-        title="Import from Excel"
-        description="Upload an Excel file with columns DESG_CODE, DESG_NAME, KPI_GROUP, WEIGHTAGE, KPI_ACTIVITY."
-        onClose={() => setImportOpen(false)}
-      >
-        <ImportKpiEdi
-          designationLookup={designationLookup}
-          divisionCode={selectedDivision}
-          divisionName={selectedDivisionLabel}
-          departmentCode={selectedDepartment}
-          departmentName={selectedDepartmentLabel}
-          onClose={() => setImportOpen(false)}
-          onSuccess={async () => {
-            setImportOpen(false);
-            toast.success("Records imported successfully.");
-            await loadRows();
-          }}
-        />
-      </Dialog>
 
       <Dialog
         open={formOpen}
@@ -1397,7 +1440,6 @@ export function KpiGroupPage() {
                           size="sm"
                           variant="outline"
                           onClick={addActivity}
-                          disabled={activities.length >= 6}
                           className="gap-1"
                         >
                           <Plus size={14} /> Add Activity
@@ -1476,7 +1518,73 @@ export function KpiGroupPage() {
         </div>
       </Dialog>
 
-      {/* Block-only dialog — opens only when KPI is used in an appraisal doc */}
+      {/* ─────────────────────────────────────────────────────
+          Confirm Delete Dialog
+      ───────────────────────────────────────────────────── */}
+      <Dialog
+        open={Boolean(confirmDeleteTarget)}
+        compact
+        tone="danger"
+        title="Confirm Delete"
+        onClose={() => {
+          if (!deleting) setConfirmDeleteTarget(null);
+        }}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDeleteTarget(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+              disabled={deleting}
+            >
+              <Trash2 size={14} />
+              {deleting ? "Deleting..." : "Yes, Delete"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="m-0 text-sm font-medium text-foreground">
+                Are you sure you want to delete this record?
+              </p>
+              <p className="m-0 mt-1 text-xs text-muted-foreground">
+                This action cannot be undone. The record will be permanently removed
+                from the system.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">KPI Code</span>
+              <span className="font-medium text-foreground">
+                {text(confirmDeleteTarget?.KPI_CODE) || "—"}
+              </span>
+            </div>
+            <div className="mt-1 flex justify-between gap-3">
+              <span className="text-muted-foreground">Description</span>
+              <span className="max-w-[60%] truncate text-right font-medium text-foreground">
+                {text(confirmDeleteTarget?.KPI_DESC) || "—"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ─────────────────────────────────────────────────────
+          Cannot Delete Dialog (blocked by appraisal docs)
+      ───────────────────────────────────────────────────── */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact

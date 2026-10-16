@@ -129,12 +129,23 @@ export function AttachmentDialog({
   };
 
   const saveRename = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.sr_no || !editName.trim()) return;
+    if (!requestNumber) return;
+    if (!editName.trim()) {
+      setNotice({ type: "error", message: "Display name cannot be empty." });
+      return;
+    }
     try {
       if (module.toUpperCase() === "FREIGHT") {
+        if (file.sr_no === undefined || !Number.isFinite(file.sr_no)) {
+          setNotice({ type: "error", message: "This freight attachment has no saved record ID." });
+          return;
+        }
         await renameFreightAccountFile(requestNumber, file.sr_no, editName.trim());
       } else {
-        if (!file.aws_file_locn) return;
+        if (!file.aws_file_locn) {
+          setNotice({ type: "error", message: "This attachment has no storage location." });
+          return;
+        }
         await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
       }
       setFiles((current) => current.map((item) => fileKey(item) === fileKey(file) ? { ...item, user_file_name: editName.trim() } : item));
@@ -147,10 +158,19 @@ export function AttachmentDialog({
   };
 
   const removeFile = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.sr_no) return;
+    if (!requestNumber) return;
+    const isFreight = module.toUpperCase() === "FREIGHT";
+    if (!isFreight && !file.aws_file_locn) {
+      setNotice({ type: "error", message: "This attachment has no storage location." });
+      return;
+    }
     if (!window.confirm(`Delete ${file.user_file_name || file.org_file_name || "this attachment"}? This also removes it from OCI Object Storage.`)) return;
     try {
-      if (module.toUpperCase() === "FREIGHT") {
+      if (isFreight) {
+        if (file.sr_no === undefined || !Number.isFinite(file.sr_no)) {
+          setNotice({ type: "error", message: "This freight attachment has no saved record ID." });
+          return;
+        }
         await deleteFreightAccountFile(requestNumber, file.sr_no);
       } else {
         if (!file.aws_file_locn) return;
@@ -166,11 +186,11 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
+      contentClassName="w-[min(96vw,1100px)] max-h-[86vh] attachment-dialog"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
-      footer={<Button variant="outline" onClick={onClose}>Close</Button>}
+      // footer={<Button variant="outline" onClick={onClose}>Close</Button>}
     >
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">
@@ -258,7 +278,7 @@ export function AttachmentDialog({
                           {!readOnly && primary && editing ? (
                             <>
                               <Button size="sm" type="button" onClick={() => void saveRename(file)}>Save</Button>
-                              <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")}><X size={14} /></Button>
+                              <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")} title="Cancel rename"><X size={14} /></Button>
                             </>
                           ) : !readOnly && primary ? (
                             <>

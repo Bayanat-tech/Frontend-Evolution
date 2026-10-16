@@ -23,6 +23,8 @@ export type UserProfile = {
   COMPANY_CODE?: string;
   company_name?: string;
   COMPANY_NAME?: string;
+  company_logo?: string;
+  COMPANY_LOGO?: string;
   tenantId?: string;
   tenant_name?: string;
   TENANT_NAME?: string;

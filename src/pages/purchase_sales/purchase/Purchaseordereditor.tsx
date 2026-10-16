@@ -127,18 +127,27 @@ export function PurchaseOrderEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
       })
     );
+
+
   }, [
     form.tx_compntcat_code_1,
     form.tx_cat_code,
@@ -194,13 +203,14 @@ export function PurchaseOrderEditor({
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
           credit_period: Number(headerRaw.credit_period || acRow?.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
           party_phone: text(headerRaw.tel || acRow?.party_phone || current.party_phone),
           party_fax: text(headerRaw.fax || acRow?.party_fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           ex_rate: Number(headerRaw.ex_rate || acRow?.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -221,6 +231,7 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
           discount_scoope:
@@ -278,12 +289,7 @@ export function PurchaseOrderEditor({
     computedQty: computeQuantity(r),
     lineTotal: Totalunitprice(r)
   })));
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
   const baseTotalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
@@ -292,7 +298,9 @@ export function PurchaseOrderEditor({
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+  const finalTotal = grandTotal + totalTaxAmount;
 
   // const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
   //   setForm((current) => {
@@ -469,9 +477,28 @@ export function PurchaseOrderEditor({
   };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  const hasValidLinesforprod = rows.some((row) => text(row.prod_code).trim().length > 0);
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
+
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
@@ -485,36 +512,62 @@ export function PurchaseOrderEditor({
   //   setShowSubmitConfirm(true);
   // };
 
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+  //   const invalidRow = rows.find((row) => {
+  //     const qtyPuom = numberOrZero(row.qty_puom);
+  //     const uppp = numberOrZero(row.uppp);
+  //     const qtyLuom = numberOrZero(row.qty_luom);
+  //     const unitPrice = numberOrZero(row.unit_price);
+  //     const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+  //     return !(total > 0);
+  //   });
+  //   if (invalidRow) {
+  //     return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+  //   }
+  //   const rect = submitBtnRef.current?.getBoundingClientRect();
+  //   if (rect) {
+  //     setSubmitConfirmPos({
+  //       top: rect.bottom + 8,
+  //       right: window.innerWidth - rect.right,
+  //     });
+  //   }
+  //   setShowSubmitConfirm(true);
+  // };
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
@@ -606,6 +659,18 @@ export function PurchaseOrderEditor({
     }, "Purchase order sent back");
   };
 
+  const handleExcel = async () => {
+    if (!form.doc_no) return;
+    try {
+      await getPoOrderReportExcel({
+        doc_no: String(form.doc_no),
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    }
+  };
+
   const actionBarBusy = actionLoading !== null || saving;
   console.log("flowLevelRunning------------------>", flowLevelRunning)
 
@@ -652,7 +717,7 @@ export function PurchaseOrderEditor({
                 title="Purchase Order"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -661,27 +726,7 @@ export function PurchaseOrderEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      title="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleReportPreviewExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+
 
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
@@ -690,7 +735,7 @@ export function PurchaseOrderEditor({
                       {actionLoading === "draft" ? "Saving..." : "Save Draft"}
                     </Button>
                   )}
-                  <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
+                  {/* <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
                     {isPendingTab && (
                       <Button
                         type="button"
@@ -723,7 +768,21 @@ export function PurchaseOrderEditor({
                         </div>,
                         document.body
                       )}
-                  </div>
+                  </div> */}
+                  {isPendingTab && (
+                    <Button
+                      type="button"
+                      onClick={handleSubmitClick}
+                      disabled={actionDisabled || actionBarBusy}
+                    >
+                      {actionLoading === "submit" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-4 w-4" />
+                      )}
+                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                    </Button>
+                  )}
 
                   {isPendingTab && canSendBackOrReject && (
                     <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
@@ -736,13 +795,42 @@ export function PurchaseOrderEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab  && form.doc_no &&  (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
 
                 </div>
+                {form.doc_no && (
+                  <>
+                    <Button type="button" variant="secondary" onClick={handlePrint}>
+                      <Printer size={15} /> Print
+                    </Button>
+                    {/* <Button
+                      aria-label="Excel"
+                      title="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleReportPreviewExcel()}
+                      disabled={reportPreviewExporting}
+                    >
+                      <Download size={15} />
+                    </Button> */}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleExcel()}
+                    >
+                      <Download size={15} />
+                      Excel
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
               </div>
             </div>
@@ -760,7 +848,7 @@ export function PurchaseOrderEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Order...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

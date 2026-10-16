@@ -1,3 +1,6 @@
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
+import { Textarea as TextAreaControl } from "../../components/ui/Textarea";
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -27,6 +30,8 @@ import { freightSelect, freightTaxCategories } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
@@ -206,12 +211,22 @@ export function FreightJobPage({
 
   const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
+  const [activeListTab, setActiveListTab] = useState<"active" | "cancelled" | "all">("active");
   const [query, setQuery] = useState("");
   const [job, setJob] = useState<JobForm>(() => emptyJob(companyCode, userId, mode.code, direction.code));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const isC = lookupText(r, "canceled") === "Y";
+      if (activeListTab === "active") return !isC;
+      if (activeListTab === "cancelled") return isC;
+      return true;
+    });
+  }, [rows, activeListTab]);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -317,6 +332,13 @@ export function FreightJobPage({
       notify({ type: "error", text: editLockMessage });
       return;
     }
+    // Missing required field validation
+    if (!job.prin_code || !job.dept_code || !job.div_code || !job.job_category || !job.port_code || !job.destination_port) {
+      notify({ type: "error", text: "Kindly fill in the missing fields." });
+      return;
+    }
+    const schemaError = freightValidationError("TI_JOB", job);
+    if (schemaError) { notify({ type: "error", text: schemaError }); return; }
     setSaving(true);
     setNotice(null);
     try {
@@ -363,9 +385,7 @@ export function FreightJobPage({
     onEmbeddedActionsChange(
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
-          <ArrowLeft size={14} /> List
-        </Button>
+        {!onEmbeddedList && (<Button type="button" size="sm" onClick={() => setView("list")} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
         <Button
           type="button"
           size="sm"
@@ -422,26 +442,70 @@ export function FreightJobPage({
 
   if (view === "list") {
     return (
-    <section className="freight-list-screen grid gap-3">
+      <section className="freight-list-screen grid gap-3">
         <Header title={`${mode.label} ${direction.label} Jobs`} subtitle="Freight operations job listing" icon={Icon}>
           {notice && <NoticeChip notice={notice} />}
         </Header>
+        {/* Filter Tabs Bar */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          {(
+            [
+              { id: "active", label: "Active", count: rows.filter((r) => lookupText(r, "canceled") !== "Y").length },
+              { id: "cancelled", label: "Cancelled", count: rows.filter((r) => lookupText(r, "canceled") === "Y").length },
+              { id: "all", label: "All", count: rows.length },
+            ] as const
+          ).map((tab) => {
+            const active = activeListTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveListTab(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-xs font-semibold ring-2 ring-[#00378C]/20"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          data={rows}
+          data={filteredRows}
+          actionButton={
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                title="Add Job"
+                onClick={openAdd}
+              >
+                <Plus size={14} /> Add Job
+              </Button>
+              <FinanceListActionsMenu
+                onExport={() => exportToCsv(filteredRows, columns, `freight-${modeKey}-${directionKey}-jobs.csv`)}
+                onRefresh={() => void loadRows()}
+              />
+            </div>
+          }
           loading={loading}
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search job, principal, BL/AWB..."
-          title={`${rows.length} Jobs`}
+          title={`${filteredRows.length} Jobs`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
           minWidth={1280}
           density="grid"
           enablePagination
           pageSize={25}
-          enableExport
-          exportFilename={`freight-${modeKey}-${directionKey}-jobs.csv`}
+          enableExport={false}
           onRowClick={openJob}
         />
       </section>
@@ -453,6 +517,14 @@ export function FreightJobPage({
       {!embeddedInWorkspace && (
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 transition-colors cursor-pointer"
+              title="Back to List"
+            >
+              <ArrowLeft size={16} />
+            </button>
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
               <Icon size={16} />
             </div>
@@ -461,16 +533,27 @@ export function FreightJobPage({
                 Freight Job &bull; {mode.label} {direction.label}
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-base font-bold leading-tight text-foreground">
-                  {job.job_no || "New Freight Job"}
-                </h1>
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-3 py-1 font-mono text-base font-bold text-[#78350f] shadow-xs">
+                  {job.job_no || "NEW"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-[#f59e0b] bg-[#fef3c7] px-2.5 py-0.5 font-mono text-sm font-bold text-[#78350f] shadow-xs">
+                  {toDisplayDate(job.job_date) || today()}
+                </span>
+                {isCanceled ? (
+                  <span className="inline-flex items-center rounded border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Cancelled</span>
+                ) : isTruthyFlag(job.invoiced) ? (
+                  <span className="inline-flex items-center rounded border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Invoiced</span>
+                ) : isTruthyFlag(job.completed) ? (
+                  <span className="inline-flex items-center rounded border border-blue-300 bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">Completed</span>
+                ) : isTruthyFlag(job.confirmed) ? (
+                  <span className="inline-flex items-center rounded border border-sky-300 bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">Confirmed</span>
+                ) : (
+                  <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Open</span>
+                )}
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button type="button" size="sm" onClick={() => setView("list")}>
-              <ArrowLeft size={14} /> List
-            </Button>
             {notice && (
               <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
                 {notice.text}
@@ -494,7 +577,8 @@ export function FreightJobPage({
 
       <fieldset disabled={isEditLocked} className="contents">
         <div className="freight-job-editor-shell w-full flex flex-col gap-2.5">
-          <JobProgressRail job={job} />
+          {/* Workflow status is hidden until its presentation is revised.
+          <JobProgressRail job={job} /> */}
           <div className="freight-job-main-content grid gap-2 lg:grid-cols-12">
             {/* Section 1: Job Identity & Core Booking */}
             <SectionPanel
@@ -644,9 +728,9 @@ export function FreightJobPage({
                 meta={job.ref_jobno || job.combined_jobno || "Import job reference"}
               >
                 <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
-                  <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
+                  <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "ref_jobno")} />
                   <SelectField label="Job Indicator" value={job.job_flag} options={[["M", "Master"], ["H", "House"], ["C", "Console"]]} onChange={(value) => setJobField(setJob, "job_flag", value)} />
-                  <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
+                  <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "combined_jobno")} />
                   <ReadOnlyField label="Re-export" value="Yes" />
                 </div>
               </SectionPanel>
@@ -677,7 +761,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
+               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)}  maxLength={freightTextLimit("TI_JOB", "place_receipt")} />
                 <Lookup
                   label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"}
                   value={job.destination_port}
@@ -695,7 +779,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-                <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)} />
+                <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)}  maxLength={freightTextLimit("TI_JOB", "place_delivery")} />
               </div>
             </SectionPanel>
 
@@ -716,13 +800,13 @@ export function FreightJobPage({
                   onChange={(value) => setJobField(setJob, "vessel_name", value)}
                 />
                 {mode.code === "S" && (
-                  <Field label="Feeder Vessel" value={job.feeder_vessel_name} onChange={(value) => setJobField(setJob, "feeder_vessel_name", value)} />
+                  <Field label="Feeder Vessel" value={job.feeder_vessel_name} onChange={(value) => setJobField(setJob, "feeder_vessel_name", value)}  maxLength={freightTextLimit("TI_JOB", "feeder_vessel_name")} />
                 )}
                 <Field
                   label={mode.code === "R" ? "Trip / Route No" : mode.code === "A" ? "Flight No" : "Voyage No"}
                   value={job.voyage_no}
                   onChange={(value) => setJobField(setJob, "voyage_no", value)}
-                />
+                 maxLength={freightTextLimit("TI_JOB", "voyage_no")} />
                 {mode.code === "S" && !isExportLike && (
                   <SelectField
                     label="Health Status"
@@ -733,15 +817,15 @@ export function FreightJobPage({
                 )}
                 {mode.code === "R" ? (
                   <>
-                    <Field label="Driver Name / Ref" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)} />
-                    <Field label="Doc Ref" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
-                    <Field label="House Ref" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
-                    <Textarea className="sm:col-span-2" label="Driver Remarks / Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)} />
+                    <Field label="Driver Name / Ref" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)}  maxLength={freightTextLimit("TI_JOB", "driver_ref")} />
+                    <Field label="Doc Ref" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)}  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
+                    <Field label="House Ref" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)}  maxLength={freightTextLimit("TI_JOB", "hawb")} />
+                    <Textarea className="sm:col-span-2" label="Driver Remarks / Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)}  maxLength={freightTextLimit("TI_JOB", "driver_remarks")} />
                   </>
                 ) : (
                   <>
-                    <Field label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} required />
-                    <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} required />
+                    <Field label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} required  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
+                    <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} required  maxLength={freightTextLimit("TI_JOB", "hawb")} />
                   </>
                 )}
               </div>
@@ -760,13 +844,13 @@ export function FreightJobPage({
                   value={job.description1}
                   onChange={(value) => setJobField(setJob, "description1", value)}
                   rows={3}
-                />
+                 maxLength={freightTextLimit("TI_JOB", "description1")} />
                 <Textarea
                   label="Operational Remarks & Instructions"
                   value={job.remarks}
                   onChange={(value) => setJobField(setJob, "remarks", value)}
                   rows={3}
-                />
+                 maxLength={freightTextLimit("TI_JOB", "remarks")} />
               </div>
             </SectionPanel>
 
@@ -785,7 +869,7 @@ export function FreightJobPage({
                     <DateField label="Date of Pickup" value={job.picked_date} onChange={(value) => setJobField(setJob, "picked_date", value)} />
                     <DateField label="Date of Departure" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
                     <DateField label="Schedule Date" value={job.schedule_date} onChange={(value) => setJobField(setJob, "schedule_date", value)} />
-                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
+                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)}  maxLength={freightTextLimit("TI_JOB", "transit_time")} />
                   </>
                 ) : (
                   <>
@@ -793,7 +877,7 @@ export function FreightJobPage({
                     <DateField label="Exp. Date of Arrival" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
                     <DateField label="Act. Date of Arrival" value={job.ata} onChange={(value) => setJobField(setJob, "ata", value)} />
                     <DateField label="Clearance Date" value={job.clearance_date} onChange={(value) => setJobField(setJob, "clearance_date", value)} />
-                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
+                    <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)}  maxLength={freightTextLimit("TI_JOB", "transit_time")} />
                     {mode.code === "S" && (
                       <DateField label="LOU" value={job.letter_undertaking} onChange={(value) => setJobField(setJob, "letter_undertaking", value)} />
                     )}
@@ -902,26 +986,26 @@ export function FreightJobPage({
                 />
                 {isExportLike ? (
                   <>
-                    <Field label="Customer Dec No" value={job.dec_no} onChange={(value) => setJobField(setJob, "dec_no", value)} />
+                    <Field label="Customer Dec No" value={job.dec_no} onChange={(value) => setJobField(setJob, "dec_no", value)}  maxLength={freightTextLimit("TI_JOB", "dec_no")} />
                     <DateField label="Customer Dec Date" value={job.dec_date} onChange={(value) => setJobField(setJob, "dec_date", value)} />
-                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)} />
+                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)}  maxLength={freightTextLimit("TI_JOB", "ref_customs")} />
                     <DateField label="FHCR Date" value={job.ref_customs_date} onChange={(value) => setJobField(setJob, "ref_customs_date", value)} />
                   </>
                 ) : (
                   <>
-                    <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)} />
+                    <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)}  maxLength={freightTextLimit("TI_JOB", "be_no")} />
                     <DateField label="BE Date" value={job.be_date} onChange={(value) => setJobField(setJob, "be_date", value)} />
                     <SelectField label="BE Deposits" value={job.be_deposits} options={[["Y", "Yes"], ["N", "No"]]} onChange={(value) => setJobField(setJob, "be_deposits", value)} />
                     <Field label="BE Deposit Amt" type="number" value={job.be_dep_amount} onChange={(value) => setJobField(setJob, "be_dep_amount", value)} />
-                    <Field label="Custom Rec No" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)} />
-                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)} />
+                    <Field label="Custom Rec No" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)}  maxLength={freightTextLimit("TI_JOB", "custom_recno")} />
+                    <Field label="FHCR No" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)}  maxLength={freightTextLimit("TI_JOB", "ref_customs")} />
                     <DateField label="FHCR Date" value={job.ref_customs_date} onChange={(value) => setJobField(setJob, "ref_customs_date", value)} />
                   </>
                 )}
                 {!isReexport && (
                   <>
-                    <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
-                    <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
+                    <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "ref_jobno")} />
+                    <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)}  maxLength={freightTextLimit("TI_JOB", "combined_jobno")} />
                   </>
                 )}
               </div>
@@ -1015,24 +1099,25 @@ function SectionPanel({
   className?: string;
 }) {
   return (
-    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
+    <section className={`freight-panel overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700 bg-white shadow-xs ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-100/90 to-slate-50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={12} />
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-blue-50 text-[#00378C]">
+            <Icon size={13} />
           </span>
           <div className="min-w-0">
-            <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-foreground">{title}</h3>
-
+            <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3>
           </div>
         </div>
+        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
       </div>
-      <div className="freight-panel-body p-2">{children}</div>
+      <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
 }
 
 function Field({
+  maxLength,
   label,
   value,
   onChange,
@@ -1041,6 +1126,7 @@ function Field({
   required,
   placeholder,
 }: {
+  maxLength?: number;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -1051,12 +1137,21 @@ function Field({
 }) {
   const safeValue = type === "date" ? dateInputValue(value) : value;
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input
-        className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
+      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+        value={safeValue}
+        required={required}
+        placeholder={placeholder}
+        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
+        value={safeValue}
+        required={required}
+        placeholder={placeholder}
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
+        maxLength={maxLength}
+        className={`h-7.5 rounded-md border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:border-[#00378C] ${type === "number" ? "text-right tabular-nums" : ""}`}
         type={type}
         value={safeValue}
         required={required}
@@ -1064,7 +1159,7 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
         onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+       maxBytes={maxLength} />)}
     </label>
   );
 }
@@ -1085,12 +1180,12 @@ function SelectField({
   className?: string;
 }) {
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <select
-        className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground font-normal"
+        className="h-7.5 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 font-medium focus:border-[#00378C]"
         value={value}
         required={required}
         onChange={(event) => onChange(event.target.value)}
@@ -1124,19 +1219,14 @@ function DateField({
 }) {
   const inputValue = dateInputValue(value);
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input
-        className="h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground"
-        type="date"
+      <FreightDatePicker className="freight-calendar-field"
         value={inputValue}
         required={required}
-        onChange={(event) => onChange(event.target.value)}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+        onChange={(nextValue) => onChange(nextValue)} />
     </label>
   );
 }
@@ -1155,19 +1245,14 @@ function DateTimeField({
   className?: string;
 }) {
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
-      <Input
-        className="h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground"
-        type="datetime-local"
+      <FreightDateTimePicker className="freight-calendar-field"
         value={dateTimeInputValue(value)}
         required={required}
-        onChange={(event) => onChange(localInputToUtcIso(event.target.value))}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />
+        onChange={(nextValue) => onChange(localInputToUtcIso(nextValue))} />
     </label>
   );
 }
@@ -1178,31 +1263,41 @@ function Textarea({
   onChange,
   className = "",
   rows = 2,
+  maxLength = 250,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
   rows?: number;
+  maxLength?: number;
 }) {
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span>{label}</span>
-      <textarea
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
+      <div className="flex items-center justify-between">
+        <span>{label}</span>
+        {maxLength && (
+          <span className={`text-[10px] font-mono ${value?.length > maxLength ? "text-red-500 font-bold" : "text-slate-400 font-normal"}`}>
+            {value?.length || 0} / {maxLength}
+          </span>
+        )}
+      </div>
+      <TextAreaControl
         rows={rows}
-        className="min-h-[44px] rounded-md border border-input bg-background px-2 py-1 text-xs font-normal text-foreground shadow-none"
+        maxLength={maxLength}
+        className="min-h-[44px] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-none focus:border-[#00378C]"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-      />
+       maxBytes={maxLength} />
     </label>
   );
 }
 
 function ReadOnlyField({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
-      <span className="text-muted-foreground">{label}</span>
-      <div className="flex h-7 items-center rounded-md border border-border bg-muted/40 px-2 text-xs font-semibold text-foreground">
+    <div className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
+      <span className="text-slate-600 dark:text-slate-400">{label}</span>
+      <div className="flex h-7.5 items-center rounded-md border border-slate-300 bg-slate-50/80 px-2 text-xs font-bold text-slate-800">
         {value || "-"}
       </div>
     </div>
@@ -1236,14 +1331,23 @@ function Lookup({
   placeholder?: string;
   className?: string;
 }) {
+  const formattedDisplayValue = useMemo(() => {
+    if (!value) return displayValue || "";
+    if (!displayValue) return value;
+    const trimmedVal = String(value).trim();
+    const trimmedDisp = String(displayValue).trim();
+    if (trimmedDisp.startsWith(trimmedVal)) return trimmedDisp;
+    return `${trimmedVal} - ${trimmedDisp}`;
+  }, [value, displayValue]);
+
   return (
-    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
+    <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <span>
-        {label} {required && <span className="text-destructive font-bold">*</span>}
+        {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
       </span>
       <LookupField
         value={value}
-        displayValue={displayValue}
+        displayValue={formattedDisplayValue}
         compact
         valueField={valueField}
         displayFields={displayFields}

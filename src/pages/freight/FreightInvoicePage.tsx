@@ -1,6 +1,8 @@
+import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Briefcase,
   Calculator,
   CheckCircle,
@@ -21,6 +23,8 @@ import { freightSelect, getFreightInvoiceDetailReport } from "../../api/freight"
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
+import { exportToCsv } from "../../components/ui/ExportCSVButton";
+import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -78,6 +82,7 @@ export function FreightInvoicePage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<InvoiceEditorMode>("add");
   const [form, setForm] = useState<InvoiceFormState>(emptyForm());
+  const candidateRequestRef = useRef(0);
   const [candidateRows, setCandidateRows] = useState<LookupRow[]>([]);
   const [selectedRows, setSelectedRows] = useState<LookupRow[]>([]);
   const [candidateSearch, setCandidateSearch] = useState("");
@@ -119,6 +124,7 @@ export function FreightInvoicePage() {
   }, [loadRows]);
 
   function openNew() {
+    candidateRequestRef.current += 1;
     setEditorMode("add");
     setForm(emptyForm());
     setSelectedRows([]);
@@ -128,6 +134,7 @@ export function FreightInvoicePage() {
   }
 
   async function openExisting(row: LookupRow, mode: Exclude<InvoiceEditorMode, "add">) {
+    candidateRequestRef.current += 1;
     setEditorMode(mode);
     setSaving(true);
     try {
@@ -239,22 +246,6 @@ export function FreightInvoicePage() {
     },
   ], [companyCode, loginId, loadRows]);
 
-  // async function loadCandidateJobs(search = candidateSearch, prinCode = form.prin_code) {
-  //   try {
-  //     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
-  //       company_code: companyCode,
-  //       prin_code: prinCode,
-  //       from_date: form.from_date || filterFromDate,
-  //       to_date: form.to_date || filterToDate,
-  //       search,
-  //     });
-  //     setCandidateRows((response.data.data || []).map(normalizeRow));
-  //   } catch (error: any) {
-  //     toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
-  //     setCandidateRows([]);
-  //   }
-  // }
-
   async function loadCandidateJobs(
   search = candidateSearch,
   prinCode = form.prin_code,
@@ -262,6 +253,8 @@ export function FreightInvoicePage() {
   toDate = form.to_date,
   invoiceNo = form.invoice_no
 ) {
+  const requestId = ++candidateRequestRef.current;
+  if (!prinCode) { setCandidateRows([]); return; }
   try {
     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
       company_code: companyCode,
@@ -271,8 +264,9 @@ export function FreightInvoicePage() {
       invoice_no: invoiceNo || undefined,
       search,
     });
-    setCandidateRows((response.data.data || []).map(normalizeRow));
+    if (requestId === candidateRequestRef.current) setCandidateRows((response.data.data || []).map(normalizeRow));
   } catch (error: any) {
+    if (requestId !== candidateRequestRef.current) return;
     toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
     setCandidateRows([]);
   }
@@ -307,12 +301,12 @@ export function FreightInvoicePage() {
   }
 
   async function saveInvoice(action: "draft" | "confirm" = "draft") {
-    if (!selectedRows.length) {
-      toast.error("Select at least one confirmed freight job activity.");
+    if (!form.prin_code) {
+      toast.error("Kindly fill in the missing fields.");
       return;
     }
-    if (!form.prin_code) {
-      toast.error("Principal is required.");
+    if (!selectedRows.length) {
+      toast.error("Kindly fill in the missing fields.");
       return;
     }
 
@@ -398,7 +392,8 @@ export function FreightInvoicePage() {
   }
 
   return (
-    <section className="freight-workspace-ui freight-list-screen freight-invoice-list-screen grid gap-2">
+    <section className={`freight-workspace-ui grid gap-2 ${editorOpen ? "freight-invoice-editor-screen" : "freight-list-screen freight-invoice-list-screen"}`}>
+      {!editorOpen && (<>
       {/* Filter Tabs Bar */}
       <div className="flex flex-wrap items-center gap-1.5 pb-1">
         {statusTabs.map((tab) => {
@@ -427,15 +422,21 @@ export function FreightInvoicePage() {
       <DataTable
         columns={columns}
         data={filteredRows}
-        toolbar={
-          <button
-            type="button"
-            onClick={openNew}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-xs cursor-pointer"
-          >
-            <Plus size={14} />
-            Create Invoice
-          </button>
+        actionButton={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              className="h-8 gap-1.5 px-3.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              title="Create Invoice"
+              onClick={openNew}
+            >
+              <Plus size={14} /> Create Invoice
+            </Button>
+            <FinanceListActionsMenu
+              onExport={() => exportToCsv(filteredRows, columns, "freight-invoice-list.csv")}
+              onRefresh={() => void loadRows()}
+            />
+          </div>
         }
         loading={loading}
         searchValue={query}
@@ -446,22 +447,25 @@ export function FreightInvoicePage() {
         density="grid"
         enablePagination
         pageSize={25}
-        enableExport
-        exportFilename="freight-invoice-list.csv"
+        enableExport={false}
         getRowId={(row, index) => text(row.invoice_no) || String(index)}
       />
 
-      <Dialog
-        open={editorOpen}
-        wide
-        title={readOnly ? "View Freight Invoice" : editorMode === "edit" ? "Edit Freight Invoice" : "Create Freight Invoice"}
-        description={form.invoice_no || "Select confirmed freight service lines and create an invoice."}
-        onClose={() => { setEditorOpen(false); setPrintDialogOpen(false); }}
-        footer={
-          <div className="flex w-full items-center justify-between">
+      </>)}
+
+      {editorOpen && <div className="freight-invoice-editor freight-document-editor">
+        <header className="freight-document-header">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <button type="button" className="freight-back-button" aria-label="Back to invoice list" title="Back to invoice list" disabled={saving} onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}><ArrowLeft size={18} /></button>
+            <Receipt size={18} className="text-primary" />
+            <h1 className="m-0 text-base font-bold">{readOnly ? "Freight Invoice" : editorMode === "edit" ? "Edit Freight Invoice" : "New Freight Invoice"}</h1>
+
+
+          </div>
+          <div className="freight-invoice-header-actions"><div className="flex w-full items-center justify-between">
             {form.invoice_no ? <Button type="button" variant="outline" onClick={() => setPrintDialogOpen(true)}><Printer size={14} /> Print</Button> : <span />}
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
               {readOnly && form.invoice_no && !isFormConfirmed && (
                 <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void confirmExistingInvoice(form.invoice_no)} disabled={saving}>
                   <CheckCircle size={14} />Confirm Invoice
@@ -478,9 +482,9 @@ export function FreightInvoicePage() {
                 </>
               )}
             </div>
-          </div>
-        }
-      >
+          </div></div>
+        </header>
+        <div className="freight-document-body">
         <div className="grid gap-3">
           <div className="grid gap-2 md:grid-cols-6">
             <MetricCard icon={Briefcase} label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
@@ -491,6 +495,7 @@ export function FreightInvoicePage() {
             <MetricCard label="Status" value={isFormConfirmed ? "Confirmed" : "Draft"} tone={isFormConfirmed ? "emerald" : "amber"} />
           </div>
 
+
           <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
             <div className="flex items-center gap-2 border-b border-slate-200/80 bg-gradient-to-r from-blue-50/50 via-slate-50 to-slate-50 px-3 py-2">
               <div className="grid h-6 w-6 place-items-center rounded-md bg-blue-100 text-[#00378C]">
@@ -499,18 +504,17 @@ export function FreightInvoicePage() {
               <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Invoice Header</h2>
             </div>
           <div className="grid gap-2 p-3 md:grid-cols-6">
-            <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
-            <Field label="Invoice Date"><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
-            <Field label="From Date"><Input type="date" value={form.from_date} disabled={readOnly} onChange={(event) => {setFormField("from_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, event.target.value, form.to_date);}}/></Field>
-            <Field label="To Date"><Input type="date" value={form.to_date} disabled={readOnly} onChange={(event) => {setFormField("to_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, event.target.value);}} /></Field>
-            <Field label="Principal">
+            <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
               <LookupField
+                label="Principal"
+                showLabelInCompact
                 compact
+                required
                 disabled={readOnly || selectedRows.length > 0}
                 value={form.prin_code}
                 displayValue={principalText(form)}
                 valueField="prin_code"
-                displayFields={["prin_code", "prin_name"]}
+                displayFields={["prin_name", "prin_code"]}
                 columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]}
                 loadOptions={(search) => loadFreightLookup("freight_principal", companyCode, search)}
                 onChange={(value, row) => {
@@ -520,10 +524,23 @@ export function FreightInvoicePage() {
                 }}
                 placeholder="Select principal"
               />
-            </Field>
+            </div>
+            <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
+            <Field label="Invoice Date" required><FreightDatePicker value={form.invoice_date}
+        disabled={readOnly}
+        onChange={(nextValue) => setFormField("invoice_date", nextValue)} /></Field>
+            <Field label="From Date"><FreightDatePicker value={form.from_date}
+        disabled={readOnly}
+        onChange={(nextValue) => {setFormField("from_date", nextValue); void loadCandidateJobs(candidateSearch, form.prin_code, nextValue, form.to_date);}} /></Field>
+            <Field label="To Date"><FreightDatePicker value={form.to_date}
+        disabled={readOnly}
+        onChange={(nextValue) => {setFormField("to_date", nextValue); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, nextValue);}} /></Field>
+
             <Field label="Total With Tax"><Input value={selectedTotal.toFixed(3)} disabled className="text-right font-semibold" /></Field>
           </div>
           </div>
+
+
 
           {!readOnly && (
             <div className="rounded-xl border border-slate-200 bg-card shadow-2xs overflow-hidden">
@@ -538,13 +555,13 @@ export function FreightInvoicePage() {
                   </div>
                 </div>
                 <div className="flex min-w-[340px] items-center gap-2">
-                  <Input value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="Search job, activity..." />
-                  <Button type="button" variant="outline" onClick={() => void loadCandidateJobs()}><Search size={14} />Find</Button>
+                  <Input value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder={form.prin_code ? "Search job, activity..." : "Select a principal first"} disabled={!form.prin_code} />
+                  <Button type="button" variant="outline" onClick={() => void loadCandidateJobs()} disabled={!form.prin_code}><Search size={14} />Find</Button>
                 </div>
               </div>
               <div className="max-h-64 overflow-auto">
                 <table className="w-full min-w-[1050px] text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                  <thead className="sticky top-0 bg-[#00378C] text-white text-xs uppercase tracking-wide">
                     <tr>
                       <th className="w-12 px-2 py-2 text-center">Use</th>
                       <th className="px-2 py-2 text-left">Job</th>
@@ -573,7 +590,7 @@ export function FreightInvoicePage() {
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
                       </tr>
                     ))}
-                    {!candidateRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={10}>No confirmed billable Freight activity lines found.</td></tr>}
+                    {!candidateRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={10}>{form.prin_code ? "No confirmed billable freight activity lines found." : "Select a principal to load billable freight lines."}</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -598,7 +615,7 @@ export function FreightInvoicePage() {
             </div>
             <div className="max-h-72 overflow-auto">
               <table className="w-full min-w-[960px] text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                <thead className="sticky top-0 bg-[#00378C] text-white text-xs uppercase tracking-wide">
                   <tr>
                     <th className="px-2 py-2 text-left">Job</th>
                     <th className="px-2 py-2 text-left">Activity</th>
@@ -631,7 +648,8 @@ export function FreightInvoicePage() {
             </div>
           </div>
         </div>
-      </Dialog>
+        </div>
+      </div>}
 
       {printDialogOpen && (
         <Dialog open compact title="Print Invoice" onClose={() => setPrintDialogOpen(false)}>
@@ -663,8 +681,16 @@ function emptyForm(): InvoiceFormState {
   };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">{label}{children}</label>;
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
+      <span>
+        {label}
+        {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
+      </span>
+      {children}
+    </label>
+  );
 }
 
 
@@ -759,7 +785,7 @@ function centered(value: string) {
 }
 
 function principalText(form: InvoiceFormState) {
-  return [form.prin_code, form.prin_name].filter(Boolean).join(" - ") || "Select a job line";
+  return [form.prin_name, form.prin_code].filter(Boolean).join(" - ") || "";
 }
 
 export default FreightInvoicePage;

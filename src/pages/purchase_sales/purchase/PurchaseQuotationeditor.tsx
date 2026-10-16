@@ -73,7 +73,7 @@ export function PurchaseQuotationEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-    const [printOpen, setPrintOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 
@@ -106,13 +106,20 @@ export function PurchaseQuotationEditor({
 
     setRows((current) =>
       current.map((row) => {
+        // Only reset % / amount when the Tax Type really changed for this line.
+        // On load (and when only category/code change) keep the saved line %.
+        const typeChanged = (row.tx_compnt_1_expmt || "") !== (form.tx_compnt_1_expmt || "");
+
         const updatedRow = {
           ...row,
 
           tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
           tx_cat_code: `${form.tx_cat_code || ""}`,
           tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-          tx_compnt_perc_1: taxPerc,
+          tx_compnt_perc_1: typeChanged ? taxPerc : row.tx_compnt_perc_1,
+          ...(typeChanged
+            ? { tx_compnt_amt_1: (Number(lineAmount(row)) || 0) * (taxPerc / 100) }
+            : {}),
         };
 
         return updatedRow;
@@ -159,7 +166,7 @@ export function PurchaseQuotationEditor({
           ),
 
         ]);
-             let acRow: Record<string, unknown> | undefined;
+        let acRow: Record<string, unknown> | undefined;
         const savedAcCode = text(headerRaw.ac_code);
         if (savedAcCode) {
           try {
@@ -188,20 +195,22 @@ export function PurchaseQuotationEditor({
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
-            address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
           address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
           address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
           prin_name: text(headerRaw.prin_name || acRow?.prin_name || current.prin_name),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           credit_amount: numberOrZero(headerRaw.credit_amount || acRow?.credit_amount || current.credit_amount || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
+
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
+          curr_code: text(headerRaw.curr_code || acRow?.curr_code || current.curr_code),
+          curr_name: text(headerRaw.curr_name || acRow?.curr_name || current.curr_name),
+          dept_code: text(headerRaw.dept_code || acRow?.dept_code || current.dept_code),
+          dept_name: text(headerRaw.dept_name || acRow?.dept_name || current.dept_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
           payment_terms: text(headerRaw.pay_terms || current.payment_terms),
           dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
@@ -222,6 +231,7 @@ export function PurchaseQuotationEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
+          tx_compnt_perc_1: Number(headerRaw.tx_compnt_perc_1 || current.tx_compnt_perc_1 || 0),
           tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
@@ -273,21 +283,20 @@ export function PurchaseQuotationEditor({
   const isCancelled = form.canceled === "Y";
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
-  const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-  })();
+
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
   const baseTotalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
   const totalDiscountAmt = TotalDiscAmount(rows);
+
+
   const amountBeforeTax = baseTotalAmount - totalDiscountAmt;
   const totalTaxAmt = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const amountAfterTax = amountBeforeTax + totalTaxAmt;
-    const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+  const finalTotal = grandTotal + totalTaxAmount;
   const updateField = (
     field: keyof PurchaseOrderForm,
     value: string | number
@@ -399,8 +408,26 @@ export function PurchaseQuotationEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
+
     return runAction("draft", async () => {
-      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation saved as draft");
   };
   // const handleSubmitClick = () => {
@@ -411,47 +438,107 @@ export function PurchaseQuotationEditor({
   //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
   //   setShowSubmitConfirm(true);
   // };
+  // const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+
+  //   const invalidRow = rows.find((row) => {
+  //     const qtyPuom = numberOrZero(row.qty_puom);
+  //     const uppp = numberOrZero(row.uppp);
+  //     const qtyLuom = numberOrZero(row.qty_luom);
+  //     const unitPrice = numberOrZero(row.unit_price);
+  //     const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
+  //     return !(total > 0);
+  //   });
+
+  //   if (invalidRow) {
+  //     return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+  //   }
+
+  //   const rect = submitBtnRef.current?.getBoundingClientRect();
+  //   if (rect) {
+  //     setSubmitConfirmPos({
+  //       top: rect.bottom + 8,
+  //       right: window.innerWidth - rect.right,
+  //     });
+  //   }
+  //   setShowSubmitConfirm(true);
+  // };
+
+  //   const handleSubmitClick = () => {
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError("A/c Code is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (rows.length === 0) return setError("Add at least one line item before submitting");
+
+  //   for (let i = 0; i < rows.length; i++) {
+  //     const row = rows[i];
+  //     const lineNo = i + 1;
+
+  //     if (!text(row.prod_code).trim()) {
+  //       return setError(`Line ${lineNo}: Product should not be empty`);
+  //     }
+
+  //     const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+  //     if (!(netQty > 0)) {
+  //       return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+  //     }
+
+  //     if (!(numberOrZero(row.unit_price) > 0)) {
+  //       return setError(`Line ${lineNo}: Rate should not be 0`);
+  //     }
+  //   }
+
+  //   const rect = submitBtnRef.current?.getBoundingClientRect();
+  //   if (rect) {
+  //     setSubmitConfirmPos({
+  //       top: rect.bottom + 8,
+  //       right: window.innerWidth - rect.right,
+  //     });
+  //   }
+  //   setShowSubmitConfirm(true);
+  // };
   const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+    if (rows.length === 0) return setError("Add at least one line item before submitting");
 
-    const invalidRow = rows.find((row) => {
-      const qtyPuom = numberOrZero(row.qty_puom);
-      const uppp = numberOrZero(row.uppp);
-      const qtyLuom = numberOrZero(row.qty_luom);
-      const unitPrice = numberOrZero(row.unit_price);
-      const total = (qtyPuom * uppp + qtyLuom) * unitPrice;
-      return !(total > 0);
-    });
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
 
-    if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
 
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setShowSubmitConfirm(true);
+    return confirmSubmit();
   };
 
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Order updated successfully" : "Purchase Order created successfully");
   };
+
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED", PO_DOC_TYPE.PQO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase Quotation cancelled");
 
   // ---- Reject handlers ----
@@ -472,7 +559,7 @@ export function PurchaseQuotationEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", PO_DOC_TYPE.PQA, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", PO_DOC_TYPE.PQO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
     }, "Purchase Quotation rejected");
   };
@@ -529,7 +616,7 @@ export function PurchaseQuotationEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", PO_DOC_TYPE.PQA, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", PO_DOC_TYPE.PQO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
     }, "Purchase Quotation sent back");
   };
@@ -571,7 +658,7 @@ export function PurchaseQuotationEditor({
                 title="Quotation"
                 documentNo={form.doc_no}
                 documentDate={form.doc_date}
-                total={formatAmount(grandTotal)}
+                total={formatAmount(finalTotal)}
                 divCode={form.div_code}
                 divName={form.div_name}
                 onBack={onClose}
@@ -580,15 +667,7 @@ export function PurchaseQuotationEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+
 
 
                 <div className="flex items-center gap-2">
@@ -599,20 +678,20 @@ export function PurchaseQuotationEditor({
                     </Button>
                   )}
                   <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                      {isPendingTab && (
-                    <Button
-                      type="button"
-                      onClick={handleSubmitClick}
-                      disabled={actionDisabled || actionBarBusy}
-                    >
-                      {actionLoading === "submit" ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                    </Button>
-   )}
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
                     {showSubmitConfirm &&
                       createPortal(
                         <div
@@ -644,15 +723,33 @@ export function PurchaseQuotationEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
-
+                  {form.doc_no && (
+                    <>
+                      <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                        <Printer size={15} /> Print
+                      </Button>
+                      <Button
+                        aria-label="Excel"
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setPrintOpen(true)}
+                      >
+                        <Download size={15} /> Excel
+                      </Button>
+                    </>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
                   <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
 
                 </div>
+
               </div>
             </div>
           </CardHeader>
@@ -709,7 +806,7 @@ export function PurchaseQuotationEditor({
                     <PurchaseOrderHeaderForm
                       calculateDiscount={applyDiscountCalculation}
                       form={form}
-                      docType={PO_DOC_TYPE.PQA}
+                      docType={PO_DOC_TYPE.PQO}
                       setForm={setForm}
                       updateField={updateField}
                       disabled={disabled}
@@ -726,7 +823,7 @@ export function PurchaseQuotationEditor({
                   rows={rows}
                   form={form}
                   setdetails={setRows}
-                  docType={PO_DOC_TYPE.PQA}
+                  docType={PO_DOC_TYPE.PQO}
                   updateRow={updateRow}
                   addRow={addRow}
                   removeRow={removeRow}
@@ -817,6 +914,14 @@ export function PurchaseQuotationEditor({
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
+      />
+
+      <PurchaseQuotationPrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        form={form}
+        companyCode={user?.company_code || ""}
+        docType={PO_DOC_TYPE.PQO}
       />
 
     </>

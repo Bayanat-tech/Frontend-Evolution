@@ -18,6 +18,8 @@ import { SIN_CONFIG } from "./SalesOrdertypes";
 import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
 import { downloadSalesInvoiceExcel, SalesInvoiceReport } from "./SalesInvoiceReport";
 import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
+import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 export interface SalesOrderRow {
   doc_type: string;
@@ -169,7 +171,7 @@ const loadRows = async (clearNotice = true) => {
   const results = await Promise.all(
     visibleTabs.map(async (tabValue) => {
       const response = await getDynamicLookup({
-        parameter: "PS_POORDER_ENTRY_TAB_List",
+        parameter: "PS_SALE_PURCHASE_ENTRY_SINV_TAB_LIST",
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tabValue,
@@ -263,6 +265,14 @@ useEffect(() => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+    const openEditor = (row: SalesOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
   const columns = useMemo<ColumnDef<SalesOrderRow>[]>(
     () => [
       {
@@ -277,17 +287,14 @@ useEffect(() => {
       { accessorKey: "curr_code", header: "Currency" },
         { accessorKey: "total_so_amount", header: "Sales Order Amount" },
       {
-        accessorKey: "canceled",
-        header: "Status",
-        cell: ({ getValue }) =>
-          String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive">
-              Cancelled
-            </Badge>
-          ) : (
-            <Badge>Active</Badge>
+          accessorKey: "cancelled",
+          header: () => <div className="text-center font-bold">Status</div>,
+          cell: ({ getValue }) => (
+            <div className="flex justify-center">
+              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+            </div>
           ),
-      },
+        },
       {
         id: "reason",
         header: "Reason",
@@ -312,7 +319,7 @@ useEffect(() => {
             <Button
   size="icon"
   variant="ghost"
-  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+        onClick={() => openEditor(row.original)}
   title={isViewOnlyTab ? "View" : "Edit"}
 >
   {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
@@ -513,9 +520,3 @@ useEffect(() => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}

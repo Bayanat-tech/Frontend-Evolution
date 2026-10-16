@@ -2349,3 +2349,196 @@ input[tabindex="-1"].opacity-0,
   .freight-dashboard-kpis-summary { grid-template-columns: 1fr; }
 }
 
+/* Freight documents share the Finance header, section borders and navigation. */
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-airline-tariff-screen, .freight-master-screen) {
+  --freight-document-border: #94a3b8;
+  --freight-document-heading: #f1f5f9;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-airline-tariff-screen, .freight-master-screen) :is(.freight-form-card, .freight-tabs-shell, .freight-panel, .freight-info-section, .freight-job-table-shell, .freight-master-form-card),
+.freight-workspace-ui .freight-invoice-editor .freight-document-body > .grid > .overflow-hidden {
+  border: 1px solid var(--freight-document-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 12%) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-airline-tariff-screen, .freight-master-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header),
+.freight-ui-standard .freight-form-card > .border-b,
+.freight-invoice-editor .freight-document-body > .grid > .overflow-hidden > :first-child {
+  border-bottom: 1px solid var(--freight-document-border) !important;
+  background: var(--freight-document-heading) !important;
+  border-radius: 7px 7px 0 0;
+}
+
+.freight-workspace-ui .freight-panel-title > div > span {
+  background: #00378c;
+  color: #fff;
+}
+
+.freight-workspace-ui .freight-ops-toolbar-document,
+.freight-ui-standard .freight-transaction-header,
+.freight-document-editor {
+  border: 1px solid var(--freight-document-border) !important;
+  border-top: 5px solid #00378c !important;
+  border-radius: 10px !important;
+  background: var(--panel, #fff);
+  overflow: hidden;
+}
+
+.freight-workspace-ui .freight-workspace-header-shell {
+  padding: 8px 10px 0 !important;
+  gap: 8px 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.freight-workspace-ui .freight-workspace-title-cluster {
+  display: flex;
+  gap: 10px;
+}
+
+.freight-workspace-ui .freight-workspace-mode-mark {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 6px;
+  background: #00378c;
+  box-shadow: none;
+}
+
+.freight-workspace-ui .freight-workspace-mode-mark::after { display: none; }
+.freight-workspace-ui .freight-workspace-mode-mark svg { width: 20px; height: 20px; }
+.freight-workspace-ui .freight-workspace-title-block h1 { font-size: 16px; }
+.freight-workspace-ui .freight-workspace-command-slot { border-left: 0; padding-left: 0; }
+.freight-workspace-ui .freight-job-main-content { grid-row: auto; }
+
+.freight-back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+}
+.freight-back-button:hover { background: #e2e8f0; color: #00378c; }
+.freight-back-button:focus-visible { outline: 2px solid #00378c; outline-offset: 2px; }
+.freight-back-button:disabled { opacity: .5; cursor: default; }
+
+.freight-document-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--freight-document-border);
+  background: var(--freight-document-heading);
+}
+.freight-document-badge {
+  padding: 4px 10px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 12px;
+  font-weight: 700;
+}
+.freight-invoice-header-actions > div,
+.freight-invoice-header-actions > div > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.freight-workspace-ui .freight-invoice-header-actions .ui-button,
+.freight-workspace-ui .freight-invoice-header-actions .ui-button:is(:hover, :focus, :active, :disabled) {
+  background: #00378c !important;
+  border-color: #00378c !important;
+  color: #fff !important;
+}
+.freight-workspace-ui .freight-invoice-header-actions .ui-button:hover:not(:disabled) {
+  background: #002b70 !important;
+  border-color: #002b70 !important;
+}
+.freight-workspace-ui .freight-invoice-header-actions .ui-button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+.freight-document-body { padding: 10px; }
+
+.app.dark :is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-airline-tariff-screen, .freight-master-screen) {
+  --freight-document-border: #475569;
+  --freight-document-heading: #17263b;
+}
+.app.dark .freight-back-button { color: #cbd5e1; }
+.app.dark .freight-back-button:hover { background: #24364e; }
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form) .freight-calendar-field {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .freight-workspace-ui .freight-workspace-command-slot { justify-content: flex-end; }
+  .freight-invoice-header-actions { width: 100%; }
+  .freight-invoice-header-actions > div { justify-content: flex-end; }
+  .freight-document-body { padding: 8px; }
+}
+
+/* Consistent bordered headers and detail panels across every Freight screen. */
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) {
+  --freight-document-border: #aab8ca;
+  --freight-document-heading: #f1f6fc;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-form-card, .freight-tabs-shell, .freight-panel, .freight-info-section, .freight-document-paper, .freight-report-card, .freight-job-table-shell, .freight-master-form-card, .freight-dashboard-section, .data-table-shell) {
+  border: 1px solid var(--freight-document-border) !important;
+  border-radius: 9px !important;
+  background: var(--panel, #fff) !important;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 8%) !important;
+  overflow: hidden;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header, .freight-dashboard-section-title, .freight-report-filter-heading),
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) .freight-form-card > .border-b {
+  min-height: 36px;
+  border-bottom: 1px solid var(--freight-document-border) !important;
+  background: linear-gradient(105deg, var(--freight-document-heading), #fff 88%) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header) :is(h2, h3) {
+  color: #17345f !important;
+  font-weight: 700 !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-body, .freight-info-body, .freight-master-form-body) {
+  background: var(--panel, #fff) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-form-header, .freight-transaction-header, .freight-document-header, .tariff-page-header) {
+  border: 1px solid var(--freight-document-border) !important;
+  border-top: 4px solid #00378c !important;
+  border-radius: 9px !important;
+  background: var(--panel, #fff) !important;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 8%) !important;
+}
+
+:is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen) .freight-tabs-list {
+  border-bottom: 1px solid var(--freight-document-border);
+  background: #f5f8fc;
+}
+
+.app.dark :is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) {
+  --freight-document-border: #52647b;
+  --freight-document-heading: #17263b;
+}
+
+.app.dark :is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header, .freight-form-header, .freight-transaction-header, .freight-document-header, .tariff-page-header) {
+  background: var(--freight-document-heading) !important;
+}

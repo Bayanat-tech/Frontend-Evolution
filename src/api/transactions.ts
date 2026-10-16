@@ -61,6 +61,7 @@ export type TransactionHeader = {
   cheque_bank?: string;
   ac_payee?: string;
   tx_compntcat_code_1?: string;
+  tx_compntcat_name_1?: string;
   tx_compnt_1_expmt?: string;
   files?: unknown[];
   detail: TransactionDetail[];
@@ -115,6 +116,7 @@ export type TransactionChildRow = Record<string, unknown> & {
   isEditMode?: boolean;
   IsDeletable?: boolean;
   inv_no?: string;
+  ref_no?: string;
   inv_date?: string;
   inv_amt?: number | null;
   c_bal_amt_org?: number | null;
@@ -130,10 +132,13 @@ export type TransactionChildRow = Record<string, unknown> & {
 
 export type TransactionDefaultData = {
   ac_code?: string;
+  ac_name?: string;
   Account?: { ac_code?: string; ac_name?: string };
   curr_code?: string;
+  curr_name?: string;
   Currency?: { curr_code?: string; curr_name?: string };
   div_code?: string;
+  div_name?: string;
   Division?: { div_code?: string; div_name?: string };
   ex_rate?: number;
   Accountsetup?: { tax_perc?: number; lcur_decimal_nos?: number };
@@ -163,11 +168,14 @@ export type CompanyInfo = {
 
 export type FinanceOutstandingBalance = {
   inv_no: string;
+  doc_no?: string;
+  ref_no?: string;
   original_amount: number;
   paid_amount: number;
   outstanding_amount: number;
   payment_percentage: number;
   is_fully_paid: boolean;
+  is_cancelled?: boolean;
   error?: string;
 };
 
@@ -206,7 +214,7 @@ export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInf
   return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
 }
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100, columnFilters?: { field: string; values: string }[]) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100, columnFilters?: { field: string; values: string | { from?: string; to?: string } }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
@@ -221,7 +229,21 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
 
   if (columnFilters?.length) {
     columnFilters.forEach(({ field, values }) => {
-      if (values.trim()) {
+      if (typeof values === "object" && values !== null) {
+        const { from, to } = values as { from?: string; to?: string };
+        if (from || to) {
+          filters.push([{ field_name: field, field_value: { from, to }, operator: "datebetween" }]);
+        }
+      } else if (typeof values === "string" && values.trim()) {
+        try {
+          const parsed = JSON.parse(values);
+          if (parsed && typeof parsed === "object" && (parsed.from || parsed.to)) {
+            filters.push([{ field_name: field, field_value: parsed, operator: "datebetween" }]);
+            return;
+          }
+        } catch {
+          // not JSON, regular string
+        }
         filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
       }
     });
@@ -304,13 +326,22 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
-export async function getFinanceOutstanding(divCode: string, invNos: string | string[]) {
+export async function getFinanceOutstanding(
+  divCode: string,
+  invNos: string | string[],
+  acCode?: string,
+  docType?: string,
+  excludeDocNo?: string
+) {
   const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
     "/api/finance/transactions/invoice_outstanding",
     {
       params: {
         div_code: divCode,
         inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
+        ...(acCode ? { ac_code: acCode } : {}),
+        ...(docType ? { doc_type: docType } : {}),
+        ...(excludeDocNo ? { exclude_doc_no: excludeDocNo } : {}),
       },
     },
   );
@@ -513,6 +544,14 @@ export async function cancelTransactionDocument(docNo: string, docType: Transact
     params: { doc_no: docNo, doc_type: docType },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to cancel document");
+  return response.data;
+}
+
+export async function cancelLpoDocument(docNo: string, docType: TransactionType) {
+  const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_LPO", {}, {
+    params: { doc_no: docNo, doc_type: docType },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to cancel LPO");
   return response.data;
 }
 
@@ -1499,6 +1538,61 @@ export async function getPrRegisterOldDetailReportExcel(params: Record<string, a
 
 
 
+export async function getStockSummaryReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockSummary/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getStockSummaryReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockSummary/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+ a.download = "Stock_Summary_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+export async function getStockTransactionReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockTransaction/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getStockTransactionReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PSStockTransaction/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Stock_Transaction_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
 
 export async function getSOrderReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(
@@ -1675,6 +1769,265 @@ export async function getVisaExpiryReportExcelDownload(params: ReportParams): Pr
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
+
+// ----------Employee Assessment Report — HTML (inline preview)----------------
+export async function getEmployeeAssessmentReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Assessment Report — Excel download----------------
+export async function getEmployeeAssessmentReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAssessmentReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeAssessmentReport_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+// ----------Employee Ticket Eligibility — HTML (inline preview)----------------
+export async function getEmployeeTicketEligibilityReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Assessment Report — Excel download----------------
+export async function getEmployeeTicketEligibilityReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+// ----------MONTHLY SALARY SUMMARY— HTML (inline preview)----------------
+export async function getMonthlySalarySummaryReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getMonthlySalarySummaryReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Monthy salary Report — Excel download----------------
+export async function getMonthlySalarySummaryReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getMonthlySalarySummaryReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+
+
+
+// ----------Employee Salary Not Proceed— HTML (inline preview)----------------
+export async function getEmployeeSalaryNotProcessedReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeSalaryNotProcessedReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Salary Not Proceed — Excel download----------------
+export async function getEmployeeSalaryNotProcessedReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeSalaryNotProcessedReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+
+// ----------YEARLY LEAVE BALANCE— HTML (inline preview)----------------
+export async function getYearlyLeaveBalanceReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getYearlyLeaveBalanceReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------YEARLY LEAVE BALANCE — Excel download----------------
+export async function getYearlyLeaveBalanceReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getYearlyLeaveBalanceReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+
+
+// ----------LEAVE RESUMPTION REPORT— HTML (inline preview)----------------
+export async function getLeaveResumptionReportHtml (params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getLeaveResumptionReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ---------- LEAVE RESUMPTION REPORT — Excel download----------------
+export async function getLeaveResumptionReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getLeaveResumptionReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+
+
+
+// ----------Employee Address List— HTML (inline preview)----------------
+export async function getEmployeeAddressListReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAddressListReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Address List — Excel download----------------
+export async function getEmployeeAddressListReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getEmployeeAddressListReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+// ----------VACATION SEPARATION DETAILS — HTML (inline preview)----------------
+export async function getVacationSeparationReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getVacationSeparationReportHtml/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+// ----------Employee Address List — Excel download----------------
+export async function getVacationSeparationReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getVacationSeparationReportExcel/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
+
 
 export async function TransationReport(params: ReportParams) {
   const html = await openReportInTab(

@@ -14,9 +14,11 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../../components/commonComponents";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
-import { LPO_CONFIG } from "./Purchaseordertypes";
+import { LPO_CONFIG, PO_DOC_TYPE } from "./Purchaseordertypes";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
+import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -181,6 +183,7 @@ const loadRows = async (clearNotice = true) => {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+      code4: PO_DOC_TYPE.LPO,
     });
 
     return response as unknown as PurchaseOrderRow[];
@@ -205,6 +208,7 @@ const loadRows = async (clearNotice = true) => {
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tabValue,
+           code4: PO_DOC_TYPE.LPO,
       });
 
       return {
@@ -316,6 +320,14 @@ useEffect(() => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+    const openEditor = (row: PurchaseOrderRow) => {
+      const cancelledRow =
+        String(row.canceled || "N").toUpperCase() === "Y" ||
+        tab === "CANCELED" ||
+        String(row.last_action || "").toUpperCase() === "CANCELED";
+      setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+    };
+
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -327,11 +339,15 @@ useEffect(() => {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
+     {
+              accessorKey: "cancelled",
+              header: () => <div className="text-center font-bold">Status</div>,
+              cell: ({ getValue }) => (
+                <div className="flex justify-center">
+                  <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+                </div>
+              ),
+            },
     {
       id: "reason",
       header: "Reason",
@@ -353,7 +369,7 @@ useEffect(() => {
           <Button
             size="icon"
             variant="ghost"
-            onClick={() => setEditor({ mode: "edit", row: row.original })}
+                  onClick={() => openEditor(row.original)}
             title={isViewOnlyTab ? "View" : "Edit"}
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
@@ -367,7 +383,7 @@ useEffect(() => {
         </div>
       ),
     },
-  ], [isViewOnlyTab]);
+  ], [isViewOnlyTab,tab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -527,9 +543,3 @@ useEffect(() => {
   );
 }
 
-function formatDate(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}
