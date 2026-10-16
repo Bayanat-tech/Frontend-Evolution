@@ -1793,12 +1793,33 @@ if (tooLong.length) {
                               loginid: user?.loginid || user?.username || "ADMIN"
                             })}
                             disabled={disabled}
-                            onChange={(value, row) => setForm((current) => ({
-                              ...current,
-                              curr_code: value,
-                              curr_name: text(getLookupValue(row || {}, "curr_name")),
-                              ex_rate: Number(row?.ex_rate ?? 1),
-                            }))}
+                            onChange={(value, row) => {
+                              const newRate = Number(
+                                getLookupValue(row || {}, "ex_rate") ||
+                                (row as any)?.ex_rate ||
+                                (row as any)?.EX_RATE ||
+                                1
+                              );
+                              const validRate = Number.isFinite(newRate) && newRate > 0 ? newRate : 1;
+                              const currName = text(getLookupValue(row || {}, "curr_name"));
+                              setForm((current) => ({
+                                ...current,
+                                curr_code: value,
+                                curr_name: currName,
+                                ex_rate: validRate,
+                                detail: current.detail.map((d) =>
+                                  !d.curr_code || d.curr_code === current.curr_code
+                                    ? {
+                                        ...d,
+                                        curr_code: value,
+                                        curr_name: currName,
+                                        ex_rate: validRate,
+                                        lcur_amount: Math.abs(Number(d.amount || 0)) * validRate * Number(d.sign_ind || 1),
+                                      }
+                                    : d
+                                ),
+                              }));
+                            }}
                           />
                         </div>
 
@@ -3061,17 +3082,17 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number) {
-  if (!Number.isFinite(value)) return "0.000";
-  return value.toFixed(3);
+function formatNumber(value: number, decimals = 2) {
+  if (!Number.isFinite(value)) return (0).toFixed(decimals);
+  return value.toFixed(decimals);
 }

@@ -47,6 +47,7 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
@@ -419,6 +420,7 @@ function JVDocument({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const [currencyDecimals, setCurrencyDecimals] = useState<number>(2);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -590,6 +592,16 @@ function JVDocument({
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          if (defaults.lcur_decimal_nos != null) {
+            setCurrencyDecimals(Number(defaults.lcur_decimal_nos));
+          } else {
+            getCompanyInfo().then((ci) => {
+              if (mounted && ci) {
+                const d = Number(ci.lcur_decimal_nos ?? ci.decimals ?? (ci.currency === "OMR" ? 3 : 2));
+                if (Number.isFinite(d) && d > 0) setCurrencyDecimals(d);
+              }
+            }).catch(() => {});
+          }
           const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
           const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
           const effectiveDiv = defaultDiv || (editor?.mode === "create" ? text(editor.divCode) : "") || text(form.div_code);
@@ -752,7 +764,9 @@ function JVDocument({
         const isTaxable = merged.tx_compnt_1_expmt === "S" || (merged.tx_compnt_perc_1 != null && Number(merged.tx_compnt_perc_1) > 0);
         const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
         const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(3)) : (Number(merged.tx_compnt_amt_1) || 0);
-        return { ...merged, tx_compnt_amt_1: taxAmt };
+        const effectiveRate = Number(merged.ex_rate || current.ex_rate || 1);
+        const lcurAmt = Math.abs(Number(merged.amount || 0)) * effectiveRate * Number(merged.sign_ind || 1);
+        return { ...merged, tx_compnt_amt_1: taxAmt, lcur_amount: lcurAmt };
       }),
     }));
   };
@@ -1067,9 +1081,9 @@ function JVDocument({
     const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
     if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
 
-    const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
-    if (diff > 0.001) {
-      return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    const diff = Math.abs(Number(debitTotal.toFixed(currencyDecimals)) - Number(creditTotal.toFixed(currencyDecimals)));
+    if (diff > (currencyDecimals === 3 ? 0.001 : 0.01)) {
+      return setError(`Journal Voucher must balance to zero! Debit: ${formatAmount(debitTotal, currencyDecimals)}, Credit: ${formatAmount(creditTotal, currencyDecimals)} (Difference: ${formatAmount(diff, currencyDecimals)})`);
     }
 
     // Validation on child allocations (Expense, Invoice, Job)
@@ -1093,8 +1107,8 @@ function JVDocument({
               if (!c.inv_no?.trim()) missingFields.push("Invoice No");
               const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
               const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
-              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
-                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              if (maxAllowed > 0 && amt > maxAllowed + (currencyDecimals === 3 ? 0.001 : 0.01)) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${formatAmount(maxAllowed, currencyDecimals)}`);
               }
             }
           }
@@ -1108,12 +1122,12 @@ function JVDocument({
           }
         }
 
-        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
-        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
-        if (Math.abs(childSum - lineAmt) > 0.001) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(currencyDecimals));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(currencyDecimals));
+        if (Math.abs(childSum - lineAmt) > (currencyDecimals === 3 ? 0.001 : 0.01)) {
           setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
           setSelectedDetailId(d.id);
-          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+          return setError(`Allocated amount (${formatAmount(childSum, currencyDecimals)}) does not match line amount (${formatAmount(lineAmt, currencyDecimals)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
         }
       }
     }
@@ -1196,8 +1210,8 @@ function JVDocument({
     });
   };
   const isBalanced =
-    Number(creditTotal.toFixed(3)) ===
-    Number(debitTotal.toFixed(3));
+    Number(creditTotal.toFixed(currencyDecimals)) ===
+    Number(debitTotal.toFixed(currencyDecimals));
   console.log({
     disabled,
     loading,
@@ -1374,26 +1388,62 @@ function JVDocument({
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                         valueField="curr_code"
                         displayFields={["curr_code", "curr_name"]}
-                        loadOptions={getCurrencyRows}
+                        loadOptions={() => getDynamicLookup({
+                          parameter: "Account_Currency_CODE_Serach",
+                          code1: user?.company_code,
+                          loginid: user?.loginid || user?.username || "ADMIN"
+                        })}
                         disabled={disabled}
-                        onChange={(value, row) => setForm((current) => ({
-                          ...current,
-                          curr_code: value,
-                          curr_name: text(getLookupValue(row || {}, "curr_name")),
-                          ex_rate: Number(row?.ex_rate ?? 1)
-                        }))}
+                        onChange={(value, row) => {
+                          const newRate = Number(
+                            getLookupValue(row || {}, "ex_rate") ||
+                            (row as any)?.ex_rate ||
+                            (row as any)?.EX_RATE ||
+                            1
+                          );
+                          const validRate = Number.isFinite(newRate) && newRate > 0 ? newRate : 1;
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: validRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? {
+                                    ...d,
+                                    curr_code: value,
+                                    curr_name: currName,
+                                    ex_rate: validRate,
+                                    lcur_amount: Math.abs(Number(d.amount || 0)) * validRate * Number(d.sign_ind || 1),
+                                  }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
                     </div>
                     <Field label="Exchange Rate *" required>
-                      <Input
+                      <ExchangeRateInput
                         disabled={disabled}
                         required
-                        type="number"
-                        style={{ textAlign: "right" }}
-                        step="0.0001"
                         className="h-7 text-xs font-mono"
-                        value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(4) : ""}
-                        onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))}
+                        value={form.ex_rate}
+                        onChange={(newRate) => {
+                          setForm((current) => ({
+                            ...current,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? {
+                                    ...d,
+                                    ex_rate: newRate,
+                                    lcur_amount: Math.abs(Number(d.amount || 0)) * newRate * Number(d.sign_ind || 1),
+                                  }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
                     </Field>
                   </div>
@@ -1576,14 +1626,45 @@ function JVDocument({
                                   loginid: user?.loginid || user?.username || "ADMIN"
                                 })}
                                 disabled={disabled}
-                                onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
+                                onChange={(value, row) => {
+                                  const lineRate = Number(
+                                    getLookupValue(row || {}, "ex_rate") ||
+                                    (row as any)?.ex_rate ||
+                                    (row as any)?.EX_RATE ||
+                                    (value === form.curr_code ? form.ex_rate : 1)
+                                  );
+                                  const validLineRate = Number.isFinite(lineRate) && lineRate > 0 ? lineRate : 1;
+                                  const lineCurrName = text(getLookupValue(row || {}, "curr_name"));
+                                  updateDetail(detail.id, {
+                                    curr_code: value,
+                                    curr_name: lineCurrName,
+                                    ex_rate: validLineRate,
+                                  });
+                                }}
                               />
                             </td>
                           )}
                           {showAllColumns && (
-                            <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                            <td className="w-28 px-2 py-1">
+                              <ExchangeRateInput
+                                disabled={disabled}
+                                className="finance-money-input h-7 text-xs font-mono"
+                                value={detail.ex_rate}
+                                onChange={(newRate) => updateDetail(detail.id, { ex_rate: newRate })}
+                              />
+                            </td>
                           )}
-                          <td className="finance-amount-cell w-36 px-2 py-1"><Input className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`} disabled={disabled} type="number" step="0.001" style={{ textAlign: "right" }} value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                          <td className="finance-amount-cell w-36 px-2 py-1">
+                            <Input
+                              className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              disabled={disabled}
+                              type="number"
+                              step={currencyDecimals === 3 ? "0.001" : "0.01"}
+                              style={{ textAlign: "right" }}
+                              value={detail.amount}
+                              onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })}
+                            />
+                          </td>
                           <td className="w-24 px-2 py-1 text-center">
                             <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
                               <button
@@ -2444,6 +2525,14 @@ function groupChildren(form: TransactionHeader) {
 }
 
 async function getCurrencyRows(): Promise<LookupRow[]> {
+  try {
+    const rows = await getDynamicLookup({
+      parameter: "Account_Currency_CODE_Serach",
+      code1: "10",
+      loginid: "ADMIN"
+    });
+    if (rows && rows.length > 0) return rows;
+  } catch {}
   const response = await api.get("/api/wms/currency", { params: { page: 1, limit: 1000 } });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load currencies");
   return response.data.data?.tableData || response.data.data || [];
@@ -2481,17 +2570,17 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number) {
-  if (!Number.isFinite(value)) return "0.000";
-  return value.toFixed(3);
+function formatNumber(value: number, decimals = 2) {
+  if (!Number.isFinite(value)) return (0).toFixed(decimals);
+  return value.toFixed(decimals);
 }

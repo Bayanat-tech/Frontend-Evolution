@@ -142,6 +142,8 @@ export type TransactionDefaultData = {
   Division?: { div_code?: string; div_name?: string };
   ex_rate?: number;
   Accountsetup?: { tax_perc?: number; lcur_decimal_nos?: number };
+  lcur_decimal_nos?: number;
+  decimals?: number;
   MS_AC_BANKCODE?: { ac_code?: string; ac_name?: string; Account?: { ac_name?: string } };
   bank_ac_code?: string;
   bank_ac_name?: string;
@@ -161,6 +163,12 @@ export type Division = {
 
 export type CompanyInfo = {
   company_code?: string;
+  company_name?: string;
+  currency?: string;
+  base_curr_code?: string;
+  decimals?: number;
+  lcur_decimal_nos?: number;
+  amount_decimal_nos?: number;
   ac_fy_period?: string;
   setup_required?: boolean;
   message?: string;
