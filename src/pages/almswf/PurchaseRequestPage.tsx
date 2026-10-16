@@ -13,8 +13,9 @@ import { almsCommonSelect } from "../../api/alms";
 import type { Division } from "../../api/transactions";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 
-const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED"] as const;
-const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"];
+// ✅ Added "CANCELLED" tab
+const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated", "Cancelled"];
 
 function fmtDate(val: unknown): string {
   const raw = String(val || "");
@@ -24,9 +25,12 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+// ✅ Cancelled check takes precedence
 function statusOf(row: TPurchaseSummaryTxn): string {
-  const finalApproved = String((row as any).FINAL_APPROVED ?? "").toUpperCase();
+  const cancelFlag = String((row as any).CANCEL_FLAG ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
+  if (cancelFlag === "Y" || lastAction === "CANCELED" || lastAction === "CANCELLED") return "CANCELLED";
+  const finalApproved = String((row as any).FINAL_APPROVED ?? "").toUpperCase();
   if (finalApproved === "Y") return "APPROVED";
   if (lastAction) return lastAction;
   return "PENDING";
@@ -41,6 +45,8 @@ function getStatusBadgeStyle(status: string) {
   else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
   else if (val === "SENDBACK" || val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
   else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
+  // ✅ Cancelled badge — red
+  else if (val === "CANCELLED" || val === "CANCELED") { bg = "#fee2e2"; color = "#991b1b"; border = "#fca5a5"; }
   return { bg, color, border };
 }
 
@@ -60,9 +66,6 @@ type TaskPopupData = {
 
 type FlowRow = { flowCode: string; flowDescription: string; divCode: string; divName: string };
 
-/**
- * Safe value picker — tries multiple key casings and returns first non-empty.
- */
 function pick(obj: any, ...keys: string[]): string {
   if (!obj) return "";
   for (const k of keys) {
@@ -110,7 +113,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     selectedFlowCode: "",
   });
 
-  // ── Division picker state ──────────────────────────────────────────────
   const [divisionPicker, setDivisionPicker] = useState<{
     open: boolean;
     divisions: Division[];
@@ -121,12 +123,12 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     allFlows: [],
   });
 
-  // ── NEW: loading flag for Add PR button (avoid flicker dialog) ────────
   const [flowFetching, setFlowFetching] = useState(false);
 
   const activeCode3 = TAB_CODE3[activeTab];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
   const isPendingTab = activeCode3 === "PENDING";
+  const isCancelledTab = activeCode3 === "CANCELLED";
 
   const prQuery = useQuery({
     queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "pr"],
@@ -179,15 +181,9 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     }
   }, [isError, error]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Open Add PR — NO dialog flicker.
-  //    Fetch karte waqt sirf button pe spinner. Data ready hone pe hi
-  //    DivisionPickerDialog open hoga.
-  // ═══════════════════════════════════════════════════════════════════════
   const openAddPopup = async () => {
     setFlowFetching(true);
     setNotice(null);
-
     try {
       const rawRows = (await almsCommonSelect<Record<string, unknown>>({
         parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
@@ -199,34 +195,18 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
       })) as unknown as Record<string, unknown>[];
 
-      // 🐞 DEBUG
-      console.log("[DivisionPicker] rawRows:", rawRows);
-      console.log("[DivisionPicker] divisionsRaw:", divisionsRaw);
-
       const flowRows: FlowRow[] = (rawRows || [])
         .map((row) => {
           const flowCode = pick(row, "FLOW_CODE", "flow_code");
-          const flowDivCode = pick(
-            row,
-            "DIV_CODE", "div_code",
-            "DIVISION_CODE", "division_code"
-          );
-          const inlineDivName = pick(
-            row,
-            "DIV_NAME", "div_name",
-            "DIVISION_NAME", "division_name"
-          );
-
+          const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
+          const inlineDivName = pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name");
           const div = (divisionsRaw || []).find((d) => {
             const dCode = pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
             return dCode && dCode.toUpperCase() === flowDivCode.toUpperCase();
           });
-
           const divName =
             (div && pick(div, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name")) ||
-            inlineDivName ||
-            flowDivCode;
-
+            inlineDivName || flowDivCode;
           return {
             flowCode,
             flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
@@ -236,14 +216,11 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         })
         .filter((r) => r.flowCode);
 
-      console.log("[DivisionPicker] normalized flowRows:", flowRows);
-
       if (flowRows.length === 0) {
         setNotice({ type: "error", message: "No approval flow found for this user." });
         return;
       }
 
-      // Unique divisions
       const divMap = new Map<string, Division>();
       for (const row of flowRows) {
         const code = (row.divCode || "__NO_DIV__").toUpperCase();
@@ -256,14 +233,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       }
       const uniqueDivisions = Array.from(divMap.values());
 
-      console.log("[DivisionPicker] uniqueDivisions:", uniqueDivisions);
-
-      // ✅ Data ready — ab picker kholo (pehle kuch nahi khulna chahiye)
-      setDivisionPicker({
-        open: true,
-        divisions: uniqueDivisions,
-        allFlows: flowRows,
-      });
+      setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
     } catch (err) {
       setNotice({
         type: "error",
@@ -274,16 +244,10 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Division select → filter flows → next step
-  // ═══════════════════════════════════════════════════════════════════════
   const handleDivisionSelect = (division: Division) => {
     const selectedCode = String(
       (division as any).div_code ?? (division as any).DIV_CODE ?? ""
     ).trim().toUpperCase();
-
-    console.log("[DivisionPicker] selected:", division, "→ normalized code:", selectedCode);
-    console.log("[DivisionPicker] allFlows:", divisionPicker.allFlows);
 
     const filteredFlows = divisionPicker.allFlows.filter((f) => {
       const c = String(f.divCode || "").trim().toUpperCase();
@@ -291,21 +255,15 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       return c === selectedCode;
     });
 
-    console.log("[DivisionPicker] filteredFlows:", filteredFlows);
-
     setDivisionPicker({ open: false, divisions: [], allFlows: [] });
 
     if (filteredFlows.length === 0) {
-      // Fallback: strict match fail → sab flows dikha do
       if (divisionPicker.allFlows.length > 0) {
         setFlowConfirm({
           open: true,
           loading: false,
           rows: divisionPicker.allFlows,
-          selectedFlowCode:
-            divisionPicker.allFlows.length === 1
-              ? divisionPicker.allFlows[0].flowCode
-              : "",
+          selectedFlowCode: divisionPicker.allFlows.length === 1 ? divisionPicker.allFlows[0].flowCode : "",
         });
         return;
       }
@@ -313,7 +271,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       return;
     }
 
-    // Single flow → direct editor
     if (filteredFlows.length === 1) {
       const selected = filteredFlows[0];
       setTaskPopup({
@@ -330,13 +287,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       return;
     }
 
-    // Multiple flows → flow confirm dialog
-    setFlowConfirm({
-      open: true,
-      loading: false,
-      rows: filteredFlows,
-      selectedFlowCode: "",
-    });
+    setFlowConfirm({ open: true, loading: false, rows: filteredFlows, selectedFlowCode: "" });
   };
 
   const confirmFlowAndOpenPR = () => {
@@ -422,11 +373,37 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         accessorKey: "AMOUNT",
         header: "Amount",
         cell: ({ row }) => {
-          const amt = (row.original as any).AMOUNT || 0;
-          return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
+          const r = row.original as any;
+          const amt = r.TOTAL_WITH_TAX ?? r.total_with_tax ?? r.AMOUNT ?? 0;
+          return (
+            <span className="font-semibold">
+              {Number(amt).toLocaleString(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </span>
+          );
         },
       },
-      { accessorKey: "CREATE_USER", header: "Create User" },
+      {
+        accessorKey: "CREATE_USER",
+        header: "Create User",
+        cell: ({ row }) => {
+          const r = row.original as any;
+          const code = r.CREATE_USER || r.create_user || "";
+          if (!code) return "—";
+          const name =
+            r.CREATE_USER_NAME ||
+            r.create_user_name ||
+            r.CREATE_USERNAME ||
+            r.CREATED_BY_NAME ||
+            r.CREATE_BY_NAME ||
+            r.USER_NAME ||
+            r.CREATE_USER_DESC ||
+            "";
+          return name ? `${code} - ${name}` : code;
+        },
+      },
       {
         accessorKey: "create_date",
         header: "Create Date",
@@ -456,6 +433,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           return (
             r.SENTBACK_REASON || r.sentback_reason ||
             r.REJECT_REASON || r.reject_reason ||
+            r.CANCEL_REMARK || r.cancel_remark ||
             r.REASON || "—"
           );
         },
@@ -465,10 +443,10 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         header: "Next Action By",
         cell: ({ row }) => {
           const r = row.original as any;
-          if (!r.NEXT_ACTION_BY) return "—";
-          return r.NEXT_ACTION_BY_NAME
-            ? `${r.NEXT_ACTION_BY} - ${r.NEXT_ACTION_BY_NAME}`
-            : r.NEXT_ACTION_BY;
+          const code = r.NEXT_ACTION_BY || r.next_action_by || "";
+          if (!code) return "—";
+          const name = r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "";
+          return name ? `${code} - ${name}` : code;
         },
       },
       {
@@ -476,7 +454,11 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         header: "Actions",
         enableSorting: false,
         cell: ({ row }) => {
-          const isFinalApproved = String((row.original as any).FINAL_APPROVED || "").toUpperCase() === "Y";
+          const r = row.original as any;
+          const isFinalApproved = String(r.FINAL_APPROVED || "").toUpperCase() === "Y";
+          const isCancelled = String(r.CANCEL_FLAG || "").toUpperCase() === "Y"
+            || String(r.LAST_ACTION || "").toUpperCase() === "CANCELED"
+            || String(r.LAST_ACTION || "").toUpperCase() === "CANCELLED";
           return (
             <div className="flex items-center gap-1">
               <Button size="icon" variant="ghost" title="View" onClick={() => handleActions("view", row.original)}>
@@ -485,9 +467,9 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
               {isPendingTab && (
                 <Button
                   size="icon" variant="ghost"
-                  title={isFinalApproved ? "Approved — cannot edit" : "Edit"}
+                  title={isFinalApproved ? "Approved — cannot edit" : isCancelled ? "Cancelled — cannot edit" : "Edit"}
                   onClick={() => handleActions("edit", row.original)}
-                  disabled={isFinalApproved}
+                  disabled={isFinalApproved || isCancelled}
                 >
                   <Edit2 size={15} />
                 </Button>
@@ -539,9 +521,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
 
   const columns = isPoGeneratedTab ? poColumns : prColumns;
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Full-page PR editor — sidebar visible
-  // ═══════════════════════════════════════════════════════════════════════
   if (taskPopup.open) {
     return (
       <AddPRRequestPage
@@ -561,9 +540,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // LIST PAGE
-  // ═══════════════════════════════════════════════════════════════════════
   return (
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
@@ -614,14 +590,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
               >
                 {flowFetching ? (
                   <>
-                    <svg
-                      className="animate-spin"
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
+                    <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.3" strokeWidth="4" />
                       <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
                     </svg>
@@ -660,7 +629,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         />
       </div>
 
-      {/* ── Division Picker Dialog ─────────────────────────────────── */}
       <DivisionPickerDialog
         open={divisionPicker.open}
         divisions={divisionPicker.divisions}
@@ -669,7 +637,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         title="Select Division"
       />
 
-      {/* Approval Flow Dialog — NO loading branch (flicker-proof) */}
       <Dialog
         open={flowConfirm.open}
         wide={false}

@@ -141,6 +141,9 @@ export type TPRItem = {
   QUANTITY: number;
   AMOUNT_BEFORE_DISC: number;
   DISC_PRICE: number;
+  APPROVED_QTY_PUOM: number;
+  APPROVED_QTY_LUOM: number;
+  APPROVED_UPPP: number;
 };
 
 export type TPRterm = {
@@ -151,6 +154,7 @@ export type TPRterm = {
   TERM_VALUE: '';
   IS_MANDATORY: 'N';
   REMARKS: '';
+
 };
 
 export interface TPPOGenerated {
