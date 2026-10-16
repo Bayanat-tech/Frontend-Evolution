@@ -1891,8 +1891,8 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
-                      <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      <th className="px-2 py-2 text-right text-amber-800 bg-amber-50/70 border-b-2 border-amber-300">Tax %</th>
+                      <th className="finance-amount-cell px-2 py-2 text-right text-amber-800 bg-amber-100/70 border-b-2 border-amber-400 font-bold">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
@@ -2021,7 +2021,7 @@ function PaymentDocumentEditor({
                               <Input
                                 disabled={disabled}
                                 type="number"
-                                className={`commercial-number-input finance-money-input w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
                                 step="0.001"
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
@@ -2182,7 +2182,7 @@ function PaymentDocumentEditor({
 
                           <td className="w-16 min-w-[62px] px-1 py-1">
                             <Input
-                              className="commercial-number-input finance-money-input"
+                              className="commercial-number-input finance-money-input text-right font-semibold !bg-amber-50/50 !text-amber-800 !border-amber-200"
                               disabled={disabled}
                               type="number"
                               step="0.001"
@@ -2201,7 +2201,7 @@ function PaymentDocumentEditor({
                           </td>
                           <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
                             <Input
-                              className="commercial-number-input finance-money-input"
+                              className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-amber-900 !bg-amber-50/80 !border-amber-300 focus:!border-amber-500 focus:!ring-1 focus:!ring-amber-400/40 !text-xs md:!text-[13px] text-right shadow-xs"
                               disabled={disabled}
                               type="number"
                               step="0.001"
@@ -2238,7 +2238,7 @@ function PaymentDocumentEditor({
 
                           {showAllColumns && (
                             <td className="finance-amount-cell w-24 px-1 py-1">
-                              <Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} />
+                              <Input className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/60 !border-blue-200 text-right" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} />
                             </td>
                           )}
 
