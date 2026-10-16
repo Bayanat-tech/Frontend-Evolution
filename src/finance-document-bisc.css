@@ -594,11 +594,13 @@
 }
 
 /* Active / Selected detail row in Payment Detail Table */
-:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail {
-  background-color: #eff6ff !important;
+:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:focus-within {
+  background-color: #f0f7ff !important;
 }
-:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail td:first-child {
-  border-left: 3px solid #00378C !important;
+:where(.finance-document-ui, .finance-document-editor) table tbody tr.is-selected-detail td:first-child,
+:where(.finance-document-ui, .finance-document-editor) .finance-lines-table tbody tr:focus-within td:first-child {
+  border-left: 3.5px solid #00378C !important;
 }
 
 /* Modern BISC Table Row Inline Inputs & Controls */

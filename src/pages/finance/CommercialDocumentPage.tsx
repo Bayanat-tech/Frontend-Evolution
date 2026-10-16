@@ -1729,7 +1729,7 @@ const limitProps = (f: keyof FormState) => ({
                     type="button"
                     onClick={addLine}
                     className="commercial-add-line-btn"
-                    title="Add detail line"
+                    title="Add detail line (Alt + A)"
                   >
                     <Plus size={14} /> Add Line
                   </Button>

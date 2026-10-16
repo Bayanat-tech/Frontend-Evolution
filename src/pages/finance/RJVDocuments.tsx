@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { AlertCircle, Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -1436,6 +1436,17 @@ function JVDocument({
                       Filtered ({filteredDetail.length})
                     </span>
                   )}
+                  {form.detail.length > 0 && (
+                    isBalanced ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-300 px-3 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
+                        <CheckCircle2 size={13} className="text-emerald-600" /> Balanced (Dr = Cr = {formatAmount(debitTotal)})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-300 px-3 py-0.5 text-xs font-bold text-amber-800 shadow-2xs">
+                        <AlertCircle size={13} className="text-amber-600" /> Dr: {formatAmount(debitTotal)} | Cr: {formatAmount(creditTotal)} (Diff: {formatAmount(Math.abs(debitTotal - creditTotal))})
+                      </span>
+                    )
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1467,7 +1478,7 @@ function JVDocument({
                       </button>
                     )}
                   </div>
-                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line">
+                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>

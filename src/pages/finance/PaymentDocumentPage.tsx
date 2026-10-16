@@ -788,6 +788,8 @@ function PaymentDocumentEditor({
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
+  const totalDr = form.detail.filter((d) => Number(d.sign_ind) === 1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const totalCr = form.detail.filter((d) => Number(d.sign_ind) === -1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
   const isCancelled = form.canceled === "Y";
 
   const filteredDetail = useMemo(() => {
@@ -1842,6 +1844,13 @@ function PaymentDocumentEditor({
                       Filtered ({filteredDetail.length})
                     </span>
                   )}
+                  {form.detail.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[11px] font-bold text-slate-700 shadow-2xs">
+                      <span className="text-emerald-700">Dr: {formatAmount(totalDr)}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-[#00378c]">Cr: {formatAmount(totalCr)}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1873,7 +1882,7 @@ function PaymentDocumentEditor({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
