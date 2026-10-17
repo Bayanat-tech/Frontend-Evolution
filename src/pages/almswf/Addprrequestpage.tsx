@@ -2,26 +2,28 @@ import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Save, Send, X, CheckCircle,
-  ChevronLeft, Paperclip, FileText, Printer,
+  ArrowLeft, ChevronLeft, Paperclip, FileText, Printer,
   Receipt, Percent, Columns3, Search, List, ChevronUp, ChevronDown, Trash2,
+  Loader2, Download,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
+import { Badge } from "../../components/ui/Badge";
 import { Input } from "../../components/ui/Input";
 import { Dialog } from "../../components/ui/Dialog";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
-import { CardHeader } from "../../components/ui/Card";
+import { CardHeader, CardContent } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
+import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsCommonSelect, almsSavePrequestBulk } from "../../api/alms";
 import { openPRPurchaseReport } from "../../api/transactions";
 import { useToast } from "../../components/ui/AlertToast";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════
+const PO_BLUE = "#00378C";
+
 type AddPRRequestPageProps = {
   isEditMode: boolean;
   isViewMode?: boolean;
@@ -35,36 +37,48 @@ type AddPRRequestPageProps = {
 
 type LookupItem = Record<string, any>;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SMALL UTILITIES
-// ═══════════════════════════════════════════════════════════════════════════
 function fmt3(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
 function num(v: unknown) { return Number(v) || 0; }
 function newId() { return `${Date.now()}_${Math.random().toString(36).slice(2)}`; }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PRESENTATION HELPERS (same structure as the PO page)
-// ═══════════════════════════════════════════════════════════════════════════
+const INPUT_BG = "!bg-white disabled:!bg-slate-100 disabled:!text-slate-500";
+const AMOUNT_CELL = "px-2 py-1 text-right font-bold text-emerald-600 bg-slate-200";
+const UOM_LABEL = "bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500";
+const BAND = (bg: string): React.CSSProperties => ({ backgroundColor: bg, color: "#1e293b" });
+
 function HeaderBlock({
   label,
   icon,
   children,
-  gridCols = "grid-cols-4",
+  gridCols = "grid-cols-2",
+  grow = false,
 }: {
   label: string;
   icon: ReactNode;
   children: ReactNode;
   gridCols?: string;
+  grow?: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-sm border border-slate-300 bg-card">
-      <div className="flex items-center gap-2 border-b border-slate-300 bg-slate-100 px-2 py-1">
-        <span className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] bg-[#00378C] text-white">{icon}</span>
+    <div
+      className={`flex flex-col overflow-hidden rounded-sm border bg-card ${grow ? "flex-1" : ""}`}
+      style={{ borderColor: `${PO_BLUE}99` }}
+    >
+      <div
+        className="flex flex-none items-center gap-2 border-b bg-slate-100 px-2 py-1"
+        style={{ borderColor: `${PO_BLUE}66` }}
+      >
+        <span
+          className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] text-white"
+          style={{ backgroundColor: PO_BLUE }}
+        >
+          {icon}
+        </span>
         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-800">{label}</span>
       </div>
-      <div className={`grid gap-x-1 gap-y-1 px-2.5 py-1.5 ${gridCols} max-md:grid-cols-1`}>
+      <div className={`grid gap-x-2 gap-y-1 px-2.5 py-1.5 content-start auto-rows-min ${gridCols} max-md:grid-cols-1 ${grow ? "flex-1" : ""}`}>
         {children}
       </div>
     </div>
@@ -83,7 +97,7 @@ function CField({
   children: ReactNode;
 }) {
   return (
-    <label className={`field ${className || ""}`}>
+    <label className={`field flex flex-col gap-0.5 ${className || ""}`}>
       <span className="text-[10px] font-semibold">
         {label}
         {required && <span className="ml-1 text-destructive">*</span>}
@@ -93,29 +107,23 @@ function CField({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BUSINESS HELPERS (unchanged)
-// ═══════════════════════════════════════════════════════════════════════════
 function isSameUom(item: TPRItem): boolean {
   const primary = String(item.P_UOM || "").trim().toUpperCase();
   const loose = String(item.L_UOM || "").trim().toUpperCase();
   return !!primary && primary === loose;
 }
-
 function computeQuantity(item: TPRItem): number {
   const qtyPuom = num(item.QTY_PUOM);
   const qtyLuom = num(item.QTY_LUOM);
   const uppp = num(item.UPPP);
   return isSameUom(item) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
-
 function computeApprovedQuantity(item: TPRItem): number {
   const qtyPuom = num((item as any).APPROVED_QTY_PUOM);
   const qtyLuom = num((item as any).APPROVED_QTY_LUOM);
   const uppp = num((item as any).APPROVED_UPPP);
   return isSameUom(item) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
-
 function amountBeforeDisc(item: TPRItem): number {
   return num(item.ITEM_RATE) * computeQuantity(item);
 }
@@ -153,7 +161,6 @@ function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number): T {
   const lcurrAmt = itemLcurrAmount(item as TPRItem, rate);
   const taxLcurr = itemTaxLcurrAmount(item as TPRItem, rate);
   const lcurrAfterDisc = itemLcurrAfterDisc(item as TPRItem, rate);
-
   item.FINAL_RATE = finalRate;
   item.AMOUNT = amount;
   item.TX_COMPNT_AMT_1 = taxAmt;
@@ -167,7 +174,6 @@ function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number): T {
   (item as any).QUANTITY = qty;
   (item as any).ITEM_QTY = qty;
   (item as any).ALLOCATED_APPROVED_QUANTITY = computeApprovedQuantity(item as TPRItem);
-
   return item;
 }
 
@@ -180,12 +186,10 @@ function recalcItemOnApprovedQty<T extends Partial<TPRItem>>(item: T, exRate: nu
   const looseUom = String(item.L_UOM || "").trim().toUpperCase();
   const sameUom = !!primaryUom && primaryUom === looseUom;
   const approvedQty = sameUom ? apprQtyPuom : apprQtyPuom * apprUppp + apprQtyLuom;
-
   const reqQtyPuom = num(item.QTY_PUOM);
   const reqQtyLuom = num(item.QTY_LUOM);
   const reqUppp = num(item.UPPP);
   const requestedQty = sameUom ? reqQtyPuom : reqQtyPuom * reqUppp + reqQtyLuom;
-
   const unitPrice = num(item.ITEM_RATE);
   const amtBeforeDisc = unitPrice * approvedQty;
   const discPercent = num(item.DISCOUNT_AMOUNT);
@@ -197,7 +201,6 @@ function recalcItemOnApprovedQty<T extends Partial<TPRItem>>(item: T, exRate: nu
   const lcurrAmt = amount * rate;
   const taxLcurr = taxAmt * rate;
   const lcurrAfterDisc = lcurrAmt + taxLcurr;
-
   item.FINAL_RATE = finalRate;
   item.AMOUNT = amount;
   item.TX_COMPNT_AMT_1 = taxAmt;
@@ -228,9 +231,7 @@ function distributeDiscountToItems(items: TPRItem[], discPercent: number, userAp
     return items.map((item) => {
       const updated = { ...item, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
-      return userApprovalLevel >= 2
-        ? recalcItemOnApprovedQty(updated, exRate)
-        : recalcItem(updated, exRate);
+      return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
     });
   }
   return items.map((item) => {
@@ -240,9 +241,7 @@ function distributeDiscountToItems(items: TPRItem[], discPercent: number, userAp
     const itemDiscPercent = (itemTotal / totalUnitPrice) * discPercent;
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
-    return userApprovalLevel >= 2
-      ? recalcItemOnApprovedQty(updated, exRate)
-      : recalcItem(updated, exRate);
+    return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
   });
 }
 
@@ -252,9 +251,7 @@ function distributeDiscountFromAmount(items: TPRItem[], discAmount: number, user
     return items.map((item) => {
       const updated = { ...item, DISCOUNT_AMOUNT: 0 };
       const exRate = num(updated.CURRENCY_RATE) || 1;
-      return userApprovalLevel >= 2
-        ? recalcItemOnApprovedQty(updated, exRate)
-        : recalcItem(updated, exRate);
+      return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
     });
   }
   return items.map((item) => {
@@ -262,12 +259,10 @@ function distributeDiscountFromAmount(items: TPRItem[], discAmount: number, user
     const unitPrice = num(item.ITEM_RATE);
     const itemTotal = unitPrice * itemQtyVal;
     const itemDiscAmount = (itemTotal / totalUnitPrice) * discAmount;
-    const itemDiscPercent = (itemDiscAmount / itemTotal) * 100;
+    const itemDiscPercent = (itemTotal > 0) ? (itemDiscAmount / itemTotal) * 100 : 0;
     const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
     const exRate = num(updated.CURRENCY_RATE) || 1;
-    return userApprovalLevel >= 2
-      ? recalcItemOnApprovedQty(updated, exRate)
-      : recalcItem(updated, exRate);
+    return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, exRate) : recalcItem(updated, exRate);
   });
 }
 
@@ -341,9 +336,6 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
   return { valid: errors.length === 0, errors };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════
 const AddPRRequestPage = ({
   isEditMode,
   isViewMode = false,
@@ -381,7 +373,6 @@ const AddPRRequestPage = ({
   const [terms, setTerms] = useState<any[]>([]);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  // Lines card UI state (same as PO lines table)
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(true);
@@ -402,7 +393,15 @@ const AddPRRequestPage = ({
   }, [requestNumber]);
 
   const isFinalApproved = String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y";
-  const effectiveViewMode = isFinalApproved || (isViewMode && !isEditMode);
+
+  // ✅ Cancelled state — CANCEL_FLAG or LAST_ACTION = CANCELED/CANCELLED
+  const isCancelled =
+    String((header as any).CANCEL_FLAG || "").toUpperCase() === "Y" ||
+    String(header.LAST_ACTION || "").toUpperCase() === "CANCELED" ||
+    String(header.LAST_ACTION || "").toUpperCase() === "CANCELLED";
+
+  // ✅ Cancelled docs are read-only
+  const effectiveViewMode = isFinalApproved || isCancelled || (isViewMode && !isEditMode);
   const disabled = saving || effectiveViewMode;
 
   useEffect(() => {
@@ -447,11 +446,8 @@ const AddPRRequestPage = ({
           loginid, code1: companyCode, code2: header.FLOW_CODE || "",
           code3: user?.loginid || "", code4: "",
         });
-        if (result && result.length > 0) {
-          setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
-        } else {
-          setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
-        }
+        if (result && result.length > 0) setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
+        else setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
       } catch {
         setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
       }
@@ -460,10 +456,8 @@ const AddPRRequestPage = ({
   }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, isEditMode, isViewMode]);
 
   const shouldShowSupplier = () => userApprovalLevel >= 6;
-  const shouldShowApprovedQty = () => userApprovalLevel >= 2;
   const shouldShowTermsTab = () => userApprovalLevel >= 6 || (header as any).FINAL_APPROVED === "Y";
 
-  // ─── Lookups ───
   const { data: productCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-product-lookup", companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" }),
@@ -698,22 +692,23 @@ const AddPRRequestPage = ({
   const setHdr = (field: keyof TPRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
 
+  const isApprovedLevel = userApprovalLevel >= 2;
   const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
-  const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
-  const totalAmountBeforeDisc = calculateAmountBeforeDisc(items);
 
-  const isApprovedLevel = userApprovalLevel >= 2;
-  const totalQtyPuom = items.reduce((sum, i) => sum + (isApprovedLevel ? num((i as any).APPROVED_QTY_PUOM) : num(i.QTY_PUOM)), 0);
-  const totalQtyLuom = items.reduce((sum, i) => sum + (isApprovedLevel ? num((i as any).APPROVED_QTY_LUOM) : num(i.QTY_LUOM)), 0);
+  const totalAmountBeforeDisc = items.reduce((sum, item) => {
+    const qty = isApprovedLevel ? computeApprovedQuantity(item) : computeQuantity(item);
+    return sum + (num(item.ITEM_RATE) * qty);
+  }, 0);
 
   const [discountScope, setDiscountScope] = useState<"ITEM" | "PO">("ITEM");
 
-  const totalDiscAmount = items.reduce((sum, item) =>
-    sum + (num(item.ITEM_RATE) * num(item.DISCOUNT_AMOUNT) / 100 * computeQuantity(item)), 0);
+  const totalDiscAmount = items.reduce((sum, item) => {
+    const qty = isApprovedLevel ? computeApprovedQuantity(item) : computeQuantity(item);
+    return sum + (num(item.ITEM_RATE) * num(item.DISCOUNT_AMOUNT) / 100 * qty);
+  }, 0);
 
-  // Line search (same behaviour as PO lines table)
   const filteredItems = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
     if (!q) return items;
@@ -725,19 +720,37 @@ const AddPRRequestPage = ({
     );
   }, [items, lineSearch]);
 
-  // Column widths for the items table — compact vs all columns
   const colWidths = useMemo(() => {
-    const qtyGroup = [60, 60, 60, ...(showAllColumns ? [60] : []), 70];
-    const w: number[] = [30, 270, 60, ...qtyGroup, ...qtyGroup];
-    if (userApprovalLevel >= 6) w.push(300);
-    w.push(80, 90, 65, 75, 80, 90, 95);
-    if (showAllColumns) w.push(75, 60, 80, 210, 210, 85, 95);
-    w.push(44);
+    const qtyGroup = [75, 65, 75, 85];
+    const w: number[] = [
+      50, 280, 70,
+      ...qtyGroup,
+      ...qtyGroup,
+    ];
+    if (userApprovalLevel >= 6) w.push(320);
+    w.push(90);
+    w.push(120);
+    w.push(53);
+    w.push(130);
+    w.push(155);
+    w.push(48);
+    w.push(120);
+    w.push(135);
+    if (showAllColumns) {
+      w.push(185);
+      w.push(90);
+      w.push(110);
+      w.push(110);
+      w.push(140);
+      w.push(175);
+    }
+    w.push(80);
     return w;
   }, [showAllColumns, userApprovalLevel]);
+
   const tableMinWidth = colWidths.reduce((a, b) => a + b, 0);
   const itemsColSpan = colWidths.length;
-  const qtyColSpan = showAllColumns ? 5 : 4;
+  const qtyColSpan = 4;
 
   const calculateDiscountFromAmount = (type: "amount" | "percent") => {
     if (items.length === 0) { toast.warning("Please add items first", 4000); return; }
@@ -783,9 +796,13 @@ const AddPRRequestPage = ({
       ATTACH_FILE_NAME: "", ATTACH_FILE_NAME1: "", ATTACH_FILE_NAME2: "",
       REJECT_HISTRY: "", SENDBACK_HISTRY: "", REQ_DOC_NO: 0, REQ_DIV_CODE: "",
       COST_CODE: "", PO_AMOUNT: 0, DOC_DATE: new Date().toISOString(),
-      CANCEL_FLAG: "", CANCEL_DATE: null, CANCEL_USER: "", MOBILE_APP_UPDATE: "",
+      CANCEL_FLAG: "",
+      CANCEL_DATE: null,
+      CANCEL_USER: "",
+      MOBILE_APP_UPDATE: "",
       FA_USER: "", HOD_USER: "", MAIL_CC: "", WARRANTY: "", PO_CREATOR: "", REQUEST_HOD_USER: "",
-      CANCEL_REMARK: "", PDO_TYPE: header.PDO_TYPE || "N", TYPE_OF_CONTRACT: "",
+      CANCEL_REMARK: "",
+      PDO_TYPE: header.PDO_TYPE || "N", TYPE_OF_CONTRACT: "",
       AC_CODE: "", AC_NAME: "", COUNTRY_CODE: "", TERRITORY_CODE: "",
       ADDRESS_1: "", ADDRESS_2: "", ADDRESS_3: "", PHONE: "", FAX: "", E_MAIL: "",
       CONTACT_PERSON: "", MOBILE_NO: "", AC_TYPE: "", AC_ACTIVE: "",
@@ -850,12 +867,10 @@ const AddPRRequestPage = ({
       WARRANTY: t.WARRANTY || "", DOC_NO: null,
     }));
 
-    const cleanedHeader = cleanNumericData(headerData);
-    const cleanedDetails = cleanNumericData(detailsData);
-    const cleanedTerms = cleanNumericData(termsData);
-
     const result = await almsSavePrequestBulk({
-      header: cleanedHeader, details: cleanedDetails, terms: cleanedTerms,
+      header: cleanNumericData(headerData),
+      details: cleanNumericData(detailsData),
+      terms: cleanNumericData(termsData),
     });
     return result;
   };
@@ -866,11 +881,15 @@ const AddPRRequestPage = ({
     queryClient.invalidateQueries({ queryKey: ["pr-header"] });
     queryClient.invalidateQueries({ queryKey: ["pr-item-list"] });
     queryClient.invalidateQueries({ queryKey: ["pr-terms"] });
+    queryClient.invalidateQueries({ queryKey: ["purchase-request-page"] });
   };
 
   const runAction = async (status: string, successMsg: string, remark = "", overrides: Partial<Record<string, any>> = {}) => {
     if (saving) return;
-    if (status !== "SAVEASDRAFT") { if (!validateAndShowErrors()) return; }
+    // ✅ Skip validation for draft AND cancel
+    if (status !== "SAVEASDRAFT" && status !== "CANCELED") {
+      if (!validateAndShowErrors()) return;
+    }
     setSavingAction(status);
     setNotice(null);
     try {
@@ -895,6 +914,23 @@ const AddPRRequestPage = ({
     runAction("SAVEASDRAFT", "Draft saved successfully!");
   };
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
+
+  // ✅ Cancel handler — cancels the document and moves it to Cancelled tab
+  const handleCancel = () => {
+    if (!requestNumber) {
+      onClose();
+      return;
+    }
+    if (!window.confirm("Are you sure you want to cancel this Purchase Request? This action cannot be undone.")) {
+      return;
+    }
+    runAction("CANCELED", "PR cancelled successfully!", "", {
+      CANCEL_FLAG: "Y",
+      CANCEL_DATE: new Date().toISOString(),
+      CANCEL_USER: loginid,
+      NEXT_ACTION_BY: "",
+    });
+  };
 
   const handlePrint = () => {
     if (!requestNumber) { toast.warning("Please save the request before printing.", 4000); return; }
@@ -1005,6 +1041,18 @@ const AddPRRequestPage = ({
     setItems((prev) => {
       const index = prev.findIndex((i) => (i as any).id === id);
       if (index === -1) return prev;
+
+      if (field === "APPROVED_QTY_PUOM" || field === "APPROVED_QTY_LUOM") {
+        const existing = prev[index];
+        const draft = { ...existing, [field]: value } as TPRItem;
+        const reqQty = computeQuantity(existing);
+        const apprQty = computeApprovedQuantity(draft);
+        if (reqQty > 0 && apprQty > reqQty) {
+          toast.warning(`Approved quantity cannot exceed requested quantity (${fmt3(reqQty)})`, 4000);
+          return prev;
+        }
+      }
+
       const updated = [...prev];
       const item = { ...updated[index], [field]: value };
 
@@ -1101,993 +1149,852 @@ const AddPRRequestPage = ({
 
   const tabBtn = (active: boolean) =>
     `inline-flex cursor-pointer items-center gap-2 border-b-2 pb-0.5 text-xs font-bold uppercase tracking-wide transition-colors ${active
-      ? (shouldShowTermsTab() ? "border-[#00378C] text-slate-900" : "border-transparent text-slate-900")
+      ? (shouldShowTermsTab() ? "border-[#00378C] text-[#00378C]" : "border-transparent text-[#00378C]")
       : "border-transparent text-slate-400 hover:text-slate-700"}`;
   const tabCount =
     "rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-[#00378C]";
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═════════════════════════════════════════════════════════════════════════
   return (
-    <div className="w-full bg-background">
-      <style>{`
-        .commercial-lines-scroll { scrollbar-width: auto; scrollbar-color: #94a3b8 #e2e8f0; }
-        .commercial-lines-scroll::-webkit-scrollbar { height: 16px; width: 16px; }
-        .commercial-lines-scroll::-webkit-scrollbar-track { background: #e2e8f0; }
-        .commercial-lines-scroll::-webkit-scrollbar-thumb {
-          background-color: #94a3b8; border-radius: 8px; border: 3px solid #e2e8f0;
-        }
-        .commercial-lines-scroll::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
-        .commercial-lines-scroll::-webkit-scrollbar-corner { background: #e2e8f0; }
-        .finance-lines-table td, .finance-lines-table th { overflow: hidden; }
-        .finance-lines-table td > * { max-width: 100%; }
-      `}</style>
+    <>
+      <div className="finance-document-ui finance-document-editor commercial-editor payment-workbench flex h-screen flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm px-4 py-2">
+        <style>{`
+          .commercial-lines-scroll { scrollbar-width: auto; scrollbar-color: #94a3b8 #e2e8f0; }
+          .commercial-lines-scroll::-webkit-scrollbar { height: 16px; width: 16px; }
+          .commercial-lines-scroll::-webkit-scrollbar-track { background: #e2e8f0; }
+          .commercial-lines-scroll::-webkit-scrollbar-thumb {
+            background-color: #94a3b8; border-radius: 8px; border: 8px solid #e2e8f0;
+          }
+          .commercial-lines-scroll::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+          .commercial-lines-scroll::-webkit-scrollbar-corner { background: #e2e8f0; }
+          .finance-lines-table td { overflow: hidden; }
+          .finance-lines-table th { overflow: visible; }
+          .finance-lines-table td > * { max-width: 100%; }
+          .finance-action-col {
+            position: sticky;
+            right: 0;
+            z-index: 25;
+            background-color: #ffffff !important;
+            border-left: 1px solid #cbd5e1;
+            box-shadow: -6px 0 8px -6px rgba(0,0,0,0.15);
+          }
+          .finance-action-col-head {
+            position: sticky;
+            right: 0;
+            z-index: 45;
+            background-color: ${PO_BLUE} !important;
+            border-left: 1px solid #1e40af;
+            box-shadow: -6px 0 8px -6px rgba(0,0,0,0.35);
+          }
 
-      {/* ═══════════════ FULL PAGE WRAPPER (sidebar visible) ═══════════════ */}
-      <section
-        className="payment-workbench commercial-editor m-1.5 flex flex-col overflow-hidden rounded-xl border border-slate-200 shadow-sm"
-        style={{ height: "calc(100vh - 68px)", maxHeight: "calc(100vh - 68px)" }}
-      >
-        {/* ═══════════════ TOP BAR ═══════════════ */}
-        <CardHeader className="flex-none border-b bg-[#00378C] px-4 py-2.5 text-white shadow-sm">
-          <div className="flex min-h-11 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <button
-                type="button"
-                onClick={() => onClose()}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/20 bg-white/10 hover:bg-white/20"
-                title="Back"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <FileText size={16} />
-              <h2 className="m-0 text-sm font-bold leading-tight text-white">
-                {docType !== "PR" ? "Purchase Order" : "Purchase Request"}
-              </h2>
-              <span className="rounded-md border border-amber-300 bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-slate-900">
-                DOC NO - {docType !== "PR" ? (docNo || "NEW") : (requestNumber || "NEW")}
-              </span>
-              <span className="rounded-md border border-white/25 bg-[#002a6b] px-2.5 py-1 text-xs font-bold tracking-wide text-white">
-                <span className="mr-1.5 text-[10px] font-bold">DATE</span><span className="text-sm font-bold">{displayDate || "--"}</span>
-              </span>
-              <span className="rounded-md border border-emerald-500/50 bg-[#04283a] px-2.5 py-1 text-xs font-bold tracking-wide text-white">
-                <span className="mr-1.5 text-[10px] font-bold">TOTAL</span><span className="text-sm font-bold">{fmt3(totalAmount)}</span>
-              </span>
-              {/* <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/90">
-                FLOW {header.FLOW_CODE || "—"}
-              </span> */}
-              <button
-                type="button"
-                onClick={() => setHeaderOpen((v) => !v)}
-                className="inline-flex h-8 w-9 items-center justify-center rounded-lg border border-white/30 bg-white/10 hover:bg-white/20"
-                title={headerOpen ? "Hide header" : "Show header"}
-              >
-                {headerOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              </button>
-              {(header as any).purch_status && (
-                <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white/90">
-                  {(header as any).purch_status}
-                </span>
-              )}
-            </div>
+          /* ✅ Cancelled banner — diagonal stripes */
+          .cancelled-document-banner {
+            background-image: repeating-linear-gradient(
+              45deg,
+              #fee2e2 0px,
+              #fee2e2 12px,
+              #fecaca 12px,
+              #fecaca 24px
+            ) !important;
+            border-bottom: 1px solid #f87171;
+          }
 
-            <div className="flex items-center gap-2">
-              <Button type="button" size="sm" variant="secondary" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={() => setAttachmentOpen(true)}>
-                <Paperclip size={14} className="text-[#00378C]" /> Files
-              </Button>
-              {!effectiveViewMode && !(docType !== "PR") && (
-                <>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={handleSaveDraft}>
-                    <Save size={14} className="text-[#00378C]" /> {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}
-                  </Button>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={handleSubmit}>
-                    <Send size={14} className="text-[#00378C]" /> {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}
-                  </Button>
-                </>
-              )}
-              {!effectiveViewMode && userApprovalLevel >= 2 && userApprovalLevel <= 6 && (
-                <>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}>
-                    <ChevronLeft size={14} className="text-purple-600" /> Send Back
-                  </Button>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={() => { setRemarkText(""); setRejectOpen(true); }}>
-                    <X size={14} className="text-red-600" /> Reject
-                  </Button>
-                </>
-              )}
-              {!effectiveViewMode && userApprovalLevel === 7 && (
-                <>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={handleApprove}>
-                    <CheckCircle size={14} className="text-emerald-600" /> {savingAction === "APPROVED" ? "Approving..." : "Approve"}
-                  </Button>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}>
-                    <ChevronLeft size={14} className="text-purple-600" /> Send Back
-                  </Button>
-                  <Button disabled={saving} type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={() => { setRemarkText(""); setRejectOpen(true); }}>
-                    <X size={14} className="text-red-600" /> Reject
-                  </Button>
-                </>
-              )}
-              <Button type="button" size="sm" className="h-8 rounded-lg border border-slate-200 !bg-white px-3 text-xs font-semibold !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={handlePrint}>
-                <Printer size={14} className="text-[#00378C]" /> Print
-              </Button>
-              <Button aria-label="Close" type="button" size="icon" variant="secondary" className="h-8 w-8 rounded-lg border border-slate-200 !bg-white !px-0 !text-slate-800 shadow-sm hover:!bg-slate-50" onClick={() => onClose()}>
-                <X size={16} />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
+          /* ✅ Big rotated CANCELLED watermark */
+          .cancelled-watermark {
+            position: absolute;
+            right: -40px;
+            bottom: -20px;
+            font-size: 140px;
+            font-weight: 900;
+            letter-spacing: 8px;
+            color: #ef4444;
+            opacity: 0.08;
+            transform: rotate(-15deg);
+            pointer-events: none;
+            user-select: none;
+            z-index: 0;
+            white-space: nowrap;
+            line-height: 1;
+          }
 
-        {/* ═══════════════ SCROLLABLE CONTENT ═══════════════ */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-2">
-          {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
-              Loading document...
-            </div>
-          ) : (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-              <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+          /* ✅ Wrapper that hosts the watermark */
+          .cancelled-content-wrapper {
+            position: relative;
+            overflow: hidden;
+            min-height: 100%;
+          }
 
-              {/* ═══════════ HEADER (same 2-column layout as PO) ═══════════ */}
-              {headerOpen && (
-              <div className="flex-none rounded-md border-2 border-gray-100 bg-card overflow-hidden">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2 items-start">
+          /* ✅ Keep all real content above watermark */
+          .cancelled-content-wrapper > *:not(.cancelled-watermark) {
+            position: relative;
+            z-index: 1;
+          }
+        `}</style>
 
-                  {/* ── LEFT COLUMN ── */}
-                  <div className="flex flex-col gap-2">
-                    <HeaderBlock label="Description & Remarks" icon={<FileText size={11} />} gridCols="grid-cols-2">
-                      <CField label="Description / Reason" required>
-                        <textarea
-                          disabled={disabled}
-                          value={String(header.DESCRIPTION || "")}
-                          onChange={(e) => {
-                            setHdr("DESCRIPTION", e.target.value);
-                            const t = e.target; t.style.height = "auto"; t.style.height = t.scrollHeight + "px";
-                          }}
-                          className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none overflow-hidden min-h-[52px]"
-                          placeholder="Enter description or reason..."
-                          rows={2}
-                        />
-                      </CField>
-                      <CField label="Remarks" required>
-                        <textarea
-                          disabled={disabled}
-                          value={String(header.REMARKS || "")}
-                          onChange={(e) => {
-                            setHdr("REMARKS", e.target.value);
-                            const t = e.target; t.style.height = "auto"; t.style.height = t.scrollHeight + "px";
-                          }}
-                          className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none overflow-hidden min-h-[52px]"
-                          placeholder="Enter remarks..."
-                          rows={2}
-                        />
-                      </CField>
-                    </HeaderBlock>
+        <form
+          data-header-expanded={headerOpen}
+          className={`finance-document-ui payment-workbench commercial-editor grid h-full ${isCancelled
+            ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+            : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+          onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        >
+          <CardHeader
+            className="commercial-command-header border-b bg-primary px-4 text-primary-foreground shadow-sm"
+            style={{ paddingTop: "10px", paddingBottom: "10px", minHeight: "52px" }}
+          >
+            <div className="flex items-center justify-between gap-3" style={{ minHeight: "44px" }}>
+              <FinanceDocumentIdentity
+                title={docType !== "PR" ? "Purchase Order" : "Purchase Request"}
+                documentNo={docType !== "PR" ? (docNo || "") : (requestNumber || "")}
+                documentDate={displayDate || (header.REQUEST_DATE ? String(header.REQUEST_DATE) : "")}
+                total={fmt3(totalFinalAmount)}
+                divCode={header.DIV_CODE}
+                divName={header.DIV_NAME}
+                onBack={() => onClose()}
+                headerExpanded={headerOpen}
+                onToggleHeader={() => setHeaderOpen((v) => !v)}
+              />
 
-                    <HeaderBlock label="Discount Scope & Delivery Terms" icon={<Percent size={11} />} gridCols="grid-cols-4">
-                      <div className="col-span-4 flex items-center gap-6 border-b border-gray-100 pb-1 mb-0.5">
-                        <span className="text-[9px] font-semibold text-foreground/75">Discount Applied To:</span>
-                        <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
-                          <input
-                            type="radio" name="discount_scope" value="PO"
-                            checked={discountScope === "PO"}
-                            disabled={disabled || items.length === 0}
-                            onChange={() => {
-                              setDiscountScope("PO");
-                              resetDiscountItems();
-                              setHdr("DISCOUNT_AMOUNT", 0); setHdr("DISC_AMOUNT", 0);
-                            }}
-                          />
-                          Entire PR
-                        </label>
-                        <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
-                          <input
-                            type="radio" name="discount_scope" value="ITEM"
-                            checked={discountScope === "ITEM"}
-                            disabled={disabled || items.length === 0}
-                            onChange={() => {
-                              setDiscountScope("ITEM");
-                              setHdr("DISCOUNT_AMOUNT", 0); setHdr("DISC_AMOUNT", 0);
-                            }}
-                          />
-                          Individual Items
-                        </label>
-                      </div>
+              <div className="flex items-center gap-2">
+                {/* ✅ Cancelled badge — Badge component */}
+                {isCancelled && (
+                  <Badge
+                    variant="outline"
+                    className="!border-red-300 !bg-red-500 !text-white font-bold shadow-sm"
+                  >
+                    Cancelled
+                  </Badge>
+                )}
+                {isFinalApproved && !isCancelled && (
+                  <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Approved</Badge>
+                )}
+                {effectiveViewMode && !isFinalApproved && !isCancelled && (
+                  <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">View Only</Badge>
+                )}
 
-                      <CField label="Disc Amt">
-                        <Input
-                          className="h-7 text-right text-xs" type="number" step="0.01"
-                          disabled={disabled || items.length === 0 || discountScope === "ITEM"}
-                          value={discountScope === "ITEM" ? totalDiscAmount.toFixed(3) : num(header.DISC_AMOUNT).toFixed(3)}
-                          onChange={(e) => {
-                            const a = Number(e.target.value) || 0;
-                            setHdr("DISC_AMOUNT", a);
-                            if (a > 0 && discountScope === "PO") {
-                              setHdr("DISCOUNT_AMOUNT", 0);
-                              setItems(distributeDiscountFromAmount(items, a, userApprovalLevel));
-                              const t = calculateTotalUnitPrice(items);
-                              if (t > 0) setHdr("DISCOUNT_AMOUNT", (a / t) * 100);
-                            } else if (a === 0 && discountScope === "PO") {
-                              resetDiscountItems();
-                              setHdr("DISCOUNT_AMOUNT", 0);
-                            }
-                          }}
-                        />
-                      </CField>
-                      <CField label="Disc %">
-                        <Input
-                          className="h-7 text-right text-xs" type="number" step="0.001"
-                          disabled={disabled || items.length === 0 || discountScope === "ITEM"}
-                          value={
-                            discountScope === "ITEM"
-                              ? (calculateTotalUnitPrice(items) > 0 ? ((totalDiscAmount / calculateTotalUnitPrice(items)) * 100).toFixed(3) : "0.000")
-                              : num(header.DISCOUNT_AMOUNT).toFixed(3)
-                          }
-                          onChange={(e) => {
-                            const p = Number(e.target.value) || 0;
-                            setHdr("DISCOUNT_AMOUNT", p);
-                            if (p > 0 && discountScope === "PO") {
-                              setHdr("DISC_AMOUNT", 0);
-                              setItems(distributeDiscountToItems(items, p, userApprovalLevel));
-                              const t = calculateTotalUnitPrice(items);
-                              if (t > 0) setHdr("DISC_AMOUNT", (p / 100) * t);
-                            } else if (p === 0 && discountScope === "PO") {
-                              resetDiscountItems();
-                              setHdr("DISC_AMOUNT", 0);
-                            }
-                          }}
-                        />
-                      </CField>
-
-                      {discountScope === "PO" ? (
-                        <div className="col-span-2 flex items-end gap-2">
-                          {Number(header.DISC_AMOUNT) > 0 && (
-                            <Button type="button" size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => calculateDiscountFromAmount("amount")} disabled={disabled || items.length === 0}>
-                              Calculate From Amount
-                            </Button>
-                          )}
-                          {Number(header.DISCOUNT_AMOUNT) > 0 && (
-                            <Button type="button" size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => calculateDiscountFromAmount("percent")} disabled={disabled || items.length === 0}>
-                              Calculate From %
-                            </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="col-span-2" />
-                      )}
-                    </HeaderBlock>
-                  </div>
-
-                  {/* ── RIGHT COLUMN ── */}
-                  <div className="flex flex-col gap-2">
-                    <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-6">
-                      <CField label="Doc No" className="col-span-2">
-                        <Input disabled value={requestNumber || "New"} className="h-7 bg-muted/30 text-xs" />
-                      </CField>
-                      <CField label="Request Date" className="col-span-2">
-                        <Input disabled type="text" value={displayDate} className="h-7 text-xs" />
-                      </CField>
-                      <CField label="POD Type" required className="col-span-2">
-                        <Select
-                          disabled={disabled}
-                          value={header.PDO_TYPE || "N"}
-                          onChange={(e) => setHdr("PDO_TYPE", e.target.value)}
-                          className="h-7 text-xs"
-                        >
-                          <option value="P">PDO-OTO</option>
-                          <option value="Q">PDO-NON-OTO</option>
-                          <option value="N">NON-PDO</option>
-                        </Select>
-                      </CField>
-
-
-                      <div className="col-span-4">
-                        <LookupField
-                          label="Currency *"
-                          placeholder="Search Currency"
-                          value={header.CURR_CODE || ""}
-                          displayValue={header.CURR_CODE && header.CURR_NAME ? `${header.CURR_CODE} - ${header.CURR_NAME}` : header.CURR_CODE || ""}
-                          columns={currencyColumns}
-                          valueField="CURR_CODE"
-                          displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
-                          loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_CURRENCY", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                          onChange={(value, row) => {
-                            const n = String(row?.CURR_NAME || row?.curr_name || "");
-                            const ex = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
-                            setHdr("CURR_CODE", value); setHdr("CURR_NAME", n); setHdr("CURRENCY_RATE", ex);
-                            updateAllItemsWithHeader({ CURR_CODE: value, CURR_NAME: n, CURRENCY_RATE: ex });
-                          }}
-                          disabled={disabled}
-                        />
-                      </div>
-                      <CField label="Ex Rate" className="col-span-2">
-                        <Input
-                          className="h-7 w-full text-right text-xs" type="number" step="0.0001"
-                          disabled={disabled}
-                          value={header.CURRENCY_RATE ?? ""}
-                          onChange={(e) => {
-                            const r = Number(e.target.value);
-                            setHdr("CURRENCY_RATE", r);
-                            updateAllItemsWithHeader({ CURRENCY_RATE: r });
-                          }}
-                        />
-                      </CField>
-                    </HeaderBlock>
-
-                    <HeaderBlock label="Tax Configuration" icon={<Receipt size={11} />} gridCols="grid-cols-3">
-                      <CField label="Tax Type">
-                        <Select
-                          className="h-7 text-xs"
-                          value={String(header.TAX_TYPE || "Std.")}
-                          disabled={disabled}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            const perc = v === "Std." ? 5 : 0;
-                            setHdr("TAX_TYPE", v);
-                            setItems((prev) => prev.map((item) => {
-                              const m: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
-                              const ex = num(m.CURRENCY_RATE) || 1;
-                              return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(m, ex) : recalcItem(m, ex);
-                            }));
-                          }}
-                        >
-                          <option value="Std.">Std.</option>
-                          <option value="Zero">Zero</option>
-                          <option value="Exempt">Exempt</option>
-                        </Select>
-                      </CField>
-
-                      <LookupField
-                        label="Tax Category"
-                        placeholder="Search Tax Category"
-                        value={header.TX_CAT_CODE || ""}
-                        displayValue={header.TX_CAT_CODE && header.TX_CAT_NAME ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}` : header.TX_CAT_CODE || ""}
-                        columns={taxCategoryColumns}
-                        valueField="TX_CAT_CODE"
-                        displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
-                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                        onChange={(val, row) => {
-                          if (row) {
-                            const tc = String(row.TX_COMPNTCAT_CODE_1 || "");
-                            const tp = Number(row.TX_COMPNT_PERC_1) || 0;
-                            const tn = String(row.TX_CAT_NAME || "");
-                            setHdr("TX_CAT_CODE", val); setHdr("TX_CAT_NAME", tn);
-                            setHdr("TX_COMPNTCAT_CODE_1", tc); setHdr("TX_COMPNT_PERC_1", tp);
-                            updateAllItemsWithHeader({ TX_CAT_CODE: val, TX_CAT_NAME: tn, TX_COMPNTCAT_CODE_1: tc, TX_COMPNT_PERC_1: tp });
-                          }
-                        }}
-                        disabled={disabled}
-                      />
-
-                      <LookupField
-                        label="Tax Code"
-                        placeholder="Search Tax Component"
-                        value={header.TX_COMPNTCAT_CODE_1 || ""}
-                        displayValue={
-                          header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME
-                            ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}`
-                            : header.TX_COMPNTCAT_CODE_1 || ""
-                        }
-                        columns={taxComponentColumns}
-                        valueField="TX_COMPNTCAT_CODE"
-                        displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
-                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                        onChange={(val, row) => {
-                          if (row && typeof row === "object") {
-                            const n = String(row.TX_COMPNTCAT_NAME || "");
-                            const p = Number(row.TX_PERCNT) || 0;
-                            setHdr("TX_COMPNTCAT_CODE_1", val); setHdr("TX_COMPNTCAT_NAME", n); setHdr("TX_COMPNT_PERC_1", p);
-                            updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val, TX_COMPNTCAT_NAME: n, TX_COMPNT_PERC_1: p });
-                          } else {
-                            setHdr("TX_COMPNTCAT_CODE_1", val);
-                            updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
-                          }
-                        }}
-                        disabled={disabled}
-                      />
-                    </HeaderBlock>
-                  </div>
-                </div>
-              </div>
-              )}
-
-              {/* ═══════════ LINES CARD (same as PO lines table) ═══════════ */}
-              <div className="flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden rounded-md border-2 border-gray-100 bg-card">
-                {/* Actions bar */}
-                <div className="flex flex-none flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-2">
-                  <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[#00378C] text-white">
-                      <List size={14} />
-                    </span>
-                    <button type="button" onClick={() => setActiveTab("items")} className={tabBtn(activeTab === "items")}>
-                      <span>Details Items</span>
-                      <span className={tabCount}>{items.length} {items.length === 1 ? "line" : "lines"}</span>
-                    </button>
-                    {shouldShowTermsTab() && (
-                      <>
-                        <span className="h-4 w-px bg-slate-300" />
-                        <button type="button" onClick={() => setActiveTab("terms")} className={tabBtn(activeTab === "terms")}>
-                          <span>Terms & Conditions</span>
-                          <span className={tabCount}>{terms.length}</span>
-                        </button>
-                      </>
-                    )}
-                    {activeTab === "items" && lineSearch.trim() && (
-                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                        Filtered ({filteredItems.length} of {items.length})
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {activeTab === "items" && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setShowAllColumns(!showAllColumns)}
-                          className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all ${showAllColumns
-                            ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]"
-                            : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
-                          title={showAllColumns ? "Switch to Compact View" : "Show all columns including UPPP, Tax Type, Tax %, Tax Cat, Tax Code & Lcurr After Tax"}
-                        >
-                          <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                          <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
-                        </button>
-
-                        <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-7 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
-                          <Search size={13} className="absolute left-3 text-slate-400" />
-                          <input
-                            className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400"
-                            type="text"
-                            value={lineSearch}
-                            onChange={(e) => setLineSearch(e.target.value)}
-                            placeholder="Search lines..."
-                          />
-                          {lineSearch && (
-                            <button type="button" onClick={() => setLineSearch("")} className="absolute right-2 text-slate-400 hover:text-slate-700" title="Clear">
-                              <X size={11} />
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                    {!effectiveViewMode && activeTab === "items" && (
-                      <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addItemLine} className="h-8 rounded-full px-3 text-xs">
-                        <Plus size={14} /> Add Line
-                      </Button>
-                    )}
-                    {!effectiveViewMode && activeTab === "terms" && shouldShowTermsTab() && (
-                      <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addTermLine} className="h-8 rounded-full px-3 text-xs">
-                        <Plus size={14} /> Add Line
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* ───────────── ITEMS TAB ───────────── */}
-                {activeTab === "items" && (
-                  <>
-                    <div
-                      ref={tableContainerRef}
-                      className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0"
-                      style={{ overscrollBehavior: "contain" }}
+                <div className="flex items-center gap-2">
+                  {!effectiveViewMode && docType === "PR" && (
+                    <Button type="button" onClick={handleSaveDraft} disabled={disabled || saving} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                      {savingAction === "SAVEASDRAFT" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
+                      {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}
+                    </Button>
+                  )}
+                  {!effectiveViewMode && docType === "PR" && (
+                    <Button type="button" onClick={handleSubmit} disabled={disabled || saving}>
+                      {savingAction === "SUBMITTED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}
+                    </Button>
+                  )}
+                  {!effectiveViewMode && userApprovalLevel === 7 && (
+                    <Button type="button" onClick={handleApprove} disabled={disabled || saving} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+                      {savingAction === "APPROVED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle size={15} />}
+                      {savingAction === "APPROVED" ? "Approving..." : "Approve"}
+                    </Button>
+                  )}
+                  {!effectiveViewMode && userApprovalLevel >= 2 && (
+                    <Button type="button" onClick={() => { setRemarkText(""); setSendBackOpen(true); }} disabled={disabled || saving} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+                      <ChevronLeft size={15} /> Send Back
+                    </Button>
+                  )}
+                  {!effectiveViewMode && userApprovalLevel >= 2 && (
+                    <Button type="button" onClick={() => { setRemarkText(""); setRejectOpen(true); }} disabled={disabled || saving} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+                      <X size={15} /> Reject
+                    </Button>
+                  )}
+                  {/* ✅ Cancel now CANCELS the document (moves to Cancelled tab) */}
+                  {/* ✅ Cancel — only visible for level 1 (requester). Hidden for level 2+ approvers. */}
+                  {!effectiveViewMode && userApprovalLevel < 2 && (
+                    <Button
+                      type="button"
+                      onClick={handleCancel}
+                      disabled={disabled || saving}
+                      className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60"
                     >
-                      <table
-                        className="finance-lines-table w-full table-fixed text-[10px] border-separate border-spacing-0"
-                        style={{ minWidth: tableMinWidth }}
-                      >
-                        <colgroup>
-                          {colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
-                        </colgroup>
-                        <thead className="sticky top-0 z-30 bg-[#00378C] text-[10px] font-semibold text-white shadow-sm">
-                          <tr>
-                            <th rowSpan={2} className="sticky left-0 z-40 bg-[#00378C] px-1 py-1.5 text-center align-middle border-r border-white/20">SNo</th>
-                            <th rowSpan={2} className="sticky left-[30px] z-40 bg-[#00378C] px-1 py-1.5 text-center align-middle border-r border-white/20">Product Code</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">P Uom</th>
-                            <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle border-l-2 border-r-2 border-b-2 border-white/60">Requested Qty</th>
-                            <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle border-l-2 border-r-2 border-b-2 border-white/60">Approved Qty</th>
-                            {shouldShowSupplier() && (
-                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-white/20 bg-[#00378C]">Supplier *</th>
+                      {savingAction === "CANCELED" ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Cancelling...
+                        </>
+                      ) : "Cancel"}
+                    </Button>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
+                  {requestNumber && (
+                    <Button type="button" variant="secondary" onClick={handlePrint}>
+                      <Printer size={15} /> Print
+                    </Button>
+                  )}
+                </div>
+
+                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
+                  <X size={16} />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+
+          {/* ✅ Cancelled banner — striped, Badge component */}
+          {isCancelled && (
+            <div
+              className="cancelled-document-banner"
+              role="status"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                padding: "10px 16px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                <Badge
+                  variant="outline"
+                  className="!rounded !bg-red-600 !text-white !border-red-700 font-bold uppercase tracking-wider !text-[11px] !px-2.5 !py-1 shadow-sm whitespace-nowrap"
+                >
+                  Cancelled Document
+                </Badge>
+                <strong
+                  style={{
+                    color: "#991b1b",
+                    fontSize: "14px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {requestNumber || "Purchase Request"}
+                </strong>
+              </div>
+              <p style={{ margin: 0, color: "#991b1b", fontSize: "12px", fontWeight: 600 }}>
+                This Purchase Request is cancelled and opened in read-only mode.
+              </p>
+            </div>
+          )}
+
+          <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
+            {loading ? (
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
+                Loading document...
+              </div>
+            ) : (
+              <div className={`commercial-editor-sections grid gap-3 min-w-0 ${isCancelled ? "cancelled-content-wrapper" : ""}`}>
+                {/* ✅ Cancelled watermark (behind all content) */}
+                {isCancelled && (
+                  <div className="cancelled-watermark" aria-hidden="true">
+                    CANCELLED
+                  </div>
+                )}
+
+                <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+
+                {headerOpen ? (
+                  <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1.35fr)] gap-1 p-1 items-stretch">
+                      <div className="flex flex-col gap-1.5">
+                        <HeaderBlock label="Description & Remarks" icon={<FileText size={11} />} gridCols="grid-cols-1" grow>
+                          <CField label="Description / Reason" required>
+                            <textarea rows={4} disabled={disabled} value={String(header.DESCRIPTION || "")} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs" placeholder="Enter description or reason..." />
+                          </CField>
+                          <CField label="Remarks" required>
+                            <textarea rows={4} disabled={disabled} value={String(header.REMARKS || "")} onChange={(e) => setHdr("REMARKS", e.target.value)} className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs" placeholder="Enter remarks..." />
+                          </CField>
+                        </HeaderBlock>
+                      </div>
+
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
+                          <CField label="Request Date">
+                            <Input className="h-7 text-xs" disabled type="text" value={displayDate} />
+                          </CField>
+                          <CField label="POD Type" required>
+                            <Select disabled={disabled} value={header.PDO_TYPE || "N"} onChange={(e) => setHdr("PDO_TYPE", e.target.value)} className="h-7 text-xs">
+                              <option value="P">PDO-OTO</option>
+                              <option value="Q">PDO-NON-OTO</option>
+                              <option value="N">NON-PDO</option>
+                            </Select>
+                          </CField>
+                          <CField label="Currency" required>
+                            <LookupField
+                              placeholder="Currency..."
+                              value={header.CURR_CODE || ""}
+                              displayValue={header.CURR_CODE && header.CURR_NAME ? `${header.CURR_CODE} - ${header.CURR_NAME}` : header.CURR_CODE || ""}
+                              columns={currencyColumns}
+                              valueField="CURR_CODE"
+                              displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
+                              loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_CURRENCY", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                              onChange={(value, row) => {
+                                const n = String(row?.CURR_NAME || row?.curr_name || "");
+                                const ex = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
+                                setHdr("CURR_CODE", value); setHdr("CURR_NAME", n); setHdr("CURRENCY_RATE", ex);
+                                updateAllItemsWithHeader({ CURR_CODE: value, CURR_NAME: n, CURRENCY_RATE: ex });
+                              }}
+                              disabled={disabled}
+                            />
+                          </CField>
+                          <CField label="Ex Rate">
+                            <Input className="h-7 text-xs text-right" type="number" step="0.0001" disabled={disabled} value={header.CURRENCY_RATE ?? ""} onChange={(e) => { const r = Number(e.target.value); setHdr("CURRENCY_RATE", r); updateAllItemsWithHeader({ CURRENCY_RATE: r }); }} />
+                          </CField>
+                          <CField label="Flow">
+                            <Input className="h-7 text-xs" disabled type="text" value={header.FLOW_DESCRIPTION || ""} placeholder="—" />
+                          </CField>
+                        </HeaderBlock>
+                      </div>
+
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <HeaderBlock label="Tax Configuration" icon={<Receipt size={11} />} gridCols="grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+                          <CField label="Tax Type">
+                            <Select className="h-7 text-xs w-auto min-w-[68px]" value={String(header.TAX_TYPE || "Std.")} disabled={disabled} onChange={(e) => {
+                              const v = e.target.value;
+                              const perc = v === "Std." ? 5 : 0;
+                              setHdr("TAX_TYPE", v);
+                              setItems((prev) => prev.map((item) => {
+                                const m: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
+                                const ex = num(m.CURRENCY_RATE) || 1;
+                                return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(m, ex) : recalcItem(m, ex);
+                              }));
+                            }}>
+                              <option value="Std.">Std.</option>
+                              <option value="Zero">Zero</option>
+                              <option value="Exempt">Exempt</option>
+                              <option value="No VAT">No VAT</option>
+                            </Select>
+                          </CField>
+
+                          <CField label="Tax Category">
+                            <LookupField
+                              placeholder="Tax Category..."
+                              value={header.TX_CAT_CODE || ""}
+                              displayValue={header.TX_CAT_CODE && header.TX_CAT_NAME ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}` : header.TX_CAT_CODE || ""}
+                              columns={taxCategoryColumns}
+                              valueField="TX_CAT_CODE"
+                              displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                              loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                              onChange={(val, row) => {
+                                if (row) {
+                                  const tc = String(row.TX_COMPNTCAT_CODE_1 || "");
+                                  const tp = Number(row.TX_COMPNT_PERC_1) || 0;
+                                  const tn = String(row.TX_CAT_NAME || "");
+                                  setHdr("TX_CAT_CODE", val); setHdr("TX_CAT_NAME", tn);
+                                  setHdr("TX_COMPNTCAT_CODE_1", tc); setHdr("TX_COMPNT_PERC_1", tp);
+                                  updateAllItemsWithHeader({ TX_CAT_CODE: val, TX_CAT_NAME: tn, TX_COMPNTCAT_CODE_1: tc, TX_COMPNT_PERC_1: tp });
+                                }
+                              }}
+                              disabled={disabled}
+                            />
+                          </CField>
+
+                          <CField label="Tax Code">
+                            <LookupField
+                              placeholder="Tax Code..."
+                              value={header.TX_COMPNTCAT_CODE_1 || ""}
+                              displayValue={header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}` : header.TX_COMPNTCAT_CODE_1 || ""}
+                              columns={taxComponentColumns}
+                              valueField="TX_COMPNTCAT_CODE"
+                              displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                              loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                              onChange={(val, row) => {
+                                if (row && typeof row === "object") {
+                                  const n = String(row.TX_COMPNTCAT_NAME || "");
+                                  const p = Number(row.TX_PERCNT) || 0;
+                                  setHdr("TX_COMPNTCAT_CODE_1", val); setHdr("TX_COMPNTCAT_NAME", n); setHdr("TX_COMPNT_PERC_1", p);
+                                  updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val, TX_COMPNTCAT_NAME: n, TX_COMPNT_PERC_1: p });
+                                } else {
+                                  setHdr("TX_COMPNTCAT_CODE_1", val);
+                                  updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
+                                }
+                              }}
+                              disabled={disabled}
+                            />
+                          </CField>
+                        </HeaderBlock>
+
+                        <HeaderBlock label="Discount" icon={<Percent size={11} />} gridCols="grid-cols-2" grow>
+                          <div className="col-span-2 flex flex-col gap-0.5">
+                            <span className="text-[10px] font-semibold">Discount Applied To</span>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                              <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                                <input type="radio" name="discount_scope" value="PO" checked={discountScope === "PO"} disabled={disabled || items.length === 0} onChange={() => { setDiscountScope("PO"); resetDiscountItems(); setHdr("DISCOUNT_AMOUNT", 0); setHdr("DISC_AMOUNT", 0); }} />
+                                Entire PR
+                              </label>
+                              <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                                <input type="radio" name="discount_scope" value="ITEM" checked={discountScope === "ITEM"} disabled={disabled || items.length === 0} onChange={() => { setDiscountScope("ITEM"); setHdr("DISCOUNT_AMOUNT", 0); setHdr("DISC_AMOUNT", 0); }} />
+                                Individual Items
+                              </label>
+                            </div>
+                          </div>
+
+                          <CField label="Disc Amt">
+                            <Input className="h-7 text-xs text-right" type="number" step="0.01" disabled={disabled || items.length === 0 || discountScope === "ITEM"} value={discountScope === "ITEM" ? totalDiscAmount.toFixed(3) : num(header.DISC_AMOUNT).toFixed(3)} onChange={(e) => {
+                              const a = Number(e.target.value) || 0;
+                              setHdr("DISC_AMOUNT", a);
+                              if (a > 0 && discountScope === "PO") {
+                                setHdr("DISCOUNT_AMOUNT", 0);
+                                setItems(distributeDiscountFromAmount(items, a, userApprovalLevel));
+                                const t = calculateTotalUnitPrice(items);
+                                if (t > 0) setHdr("DISCOUNT_AMOUNT", (a / t) * 100);
+                              } else if (a === 0 && discountScope === "PO") {
+                                resetDiscountItems();
+                                setHdr("DISCOUNT_AMOUNT", 0);
+                              }
+                            }} />
+                          </CField>
+
+                          <CField label="Disc %">
+                            <Input className="h-7 text-xs text-right" type="number" step="0.001" disabled={disabled || items.length === 0 || discountScope === "ITEM"} value={discountScope === "ITEM" ? (calculateTotalUnitPrice(items) > 0 ? ((totalDiscAmount / calculateTotalUnitPrice(items)) * 100).toFixed(3) : "0.000") : num(header.DISCOUNT_AMOUNT).toFixed(3)} onChange={(e) => {
+                              const p = Number(e.target.value) || 0;
+                              setHdr("DISCOUNT_AMOUNT", p);
+                              if (p > 0 && discountScope === "PO") {
+                                setHdr("DISC_AMOUNT", 0);
+                                setItems(distributeDiscountToItems(items, p, userApprovalLevel));
+                                const t = calculateTotalUnitPrice(items);
+                                if (t > 0) setHdr("DISC_AMOUNT", (p / 100) * t);
+                              } else if (p === 0 && discountScope === "PO") {
+                                resetDiscountItems();
+                                setHdr("DISC_AMOUNT", 0);
+                              }
+                            }} />
+                          </CField>
+
+                          {discountScope === "PO" && (
+                            <div className="col-span-2 flex items-center gap-1">
+                              {Number(header.DISC_AMOUNT) > 0 && (
+                                <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-[10px] whitespace-nowrap" onClick={() => calculateDiscountFromAmount("amount")} disabled={disabled || items.length === 0}>From Amount</Button>
+                              )}
+                              {Number(header.DISCOUNT_AMOUNT) > 0 && (
+                                <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-[10px] whitespace-nowrap" onClick={() => calculateDiscountFromAmount("percent")} disabled={disabled || items.length === 0}>From %</Button>
+                              )}
+                            </div>
+                          )}
+                        </HeaderBlock>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                    <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                      <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Doc Date:</span><span className="font-medium">{displayDate}</span></span>
+                      <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Flow:</span><span className="font-medium">{header.FLOW_DESCRIPTION || "-"}</span></span>
+                      <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Currency:</span><span className="font-medium">{header.CURR_CODE || "-"} ({Number(header.CURRENCY_RATE || 1).toFixed(4)})</span></span>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" className="h-6 text-xs font-semibold text-[#00378C] border-[#00378C] hover:bg-blue-100/60 ml-2 shrink-0 cursor-pointer" onClick={() => setHeaderOpen(true)}>
+                      Show Header Fields <ChevronDown size={13} className="ml-1" />
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden rounded-md border-2 border-gray-100 bg-card">
+                  <div className="flex flex-none flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-white" style={{ backgroundColor: PO_BLUE }}>
+                        <List size={14} />
+                      </span>
+                      <button type="button" onClick={() => setActiveTab("items")} className={tabBtn(activeTab === "items")}>
+                        <span>Details Items</span>
+                        <span className={tabCount}>{items.length} {items.length === 1 ? "line" : "lines"}</span>
+                      </button>
+                      {shouldShowTermsTab() && (
+                        <>
+                          <span className="h-4 w-px bg-slate-300" />
+                          <button type="button" onClick={() => setActiveTab("terms")} className={tabBtn(activeTab === "terms")}>
+                            <span>Terms & Conditions</span>
+                            <span className={tabCount}>{terms.length}</span>
+                          </button>
+                        </>
+                      )}
+                      {activeTab === "items" && lineSearch.trim() && (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Filtered ({filteredItems.length} of {items.length})
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {activeTab === "items" && (
+                        <>
+                          <button type="button" onClick={() => setShowAllColumns(!showAllColumns)} className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all ${showAllColumns ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+                            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+                            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+                          </button>
+                          <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-7 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
+                            <Search size={13} className="absolute left-3 text-slate-400" />
+                            <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />
+                            {lineSearch && (
+                              <button type="button" onClick={() => setLineSearch("")} className="absolute right-2 text-slate-400 hover:text-slate-700" title="Clear"><X size={11} /></button>
                             )}
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-white/20">Unit Price</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Amount Before Disc</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Disc %</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Disc Price</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Unit Price Net Amt</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Amount</th>
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Lcurr Amt Before Tax</th>
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Tax Type</th>}
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Tax %</th>}
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Tax Amount</th>}
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Tax Cat</th>}
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Tax Code</th>}
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Tax Lcurr Amount</th>}
-                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle border-r border-white/20">Lcurr Amt After Tax</th>}
-                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Action</th>
-                          </tr>
-                          <tr>
-                            <th className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-white/20">PQTY</th>
-                            <th className="px-1 py-1.5 text-center align-middle border-r border-white/20">LUOM</th>
-                            <th className="px-1 py-1.5 text-center align-middle border-r border-white/20">LQTY</th>
-                            {showAllColumns && <th className="px-1 py-1.5 text-center align-middle border-r border-white/20">UPPP</th>}
-                            <th className="px-1 py-1.5 text-center align-middle border-r-2 border-white/20">ReqQty</th>
-                            <th className="px-1 py-1.5 text-center align-middle border-l-2 border-r border-white/20">PQTY</th>
-                            <th className="px-1 py-1.5 text-center align-middle border-r border-white/20">LUOM</th>
-                            <th className="px-1 py-1.5 text-center align-middle border-r border-white/20">LQTY</th>
-                            {showAllColumns && <th className="px-1 py-1.5 text-center align-middle border-r border-white/20">UPPP</th>}
-                            <th className="px-1 py-1.5 text-center align-middle border-r-2 border-white/20">ApprQty</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {items.length === 0 ? (
+                          </div>
+                        </>
+                      )}
+                      {!effectiveViewMode && activeTab === "items" && userApprovalLevel < 2 && (
+                        <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addItemLine} className="h-8 rounded-full px-3 text-xs"><Plus size={14} /> Add Line</Button>
+                      )}
+                      {!effectiveViewMode && activeTab === "terms" && shouldShowTermsTab() && (
+                        <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addTermLine} className="h-8 rounded-full px-3 text-xs"><Plus size={14} /> Add Line</Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {activeTab === "items" && (
+                    <>
+                      <div ref={tableContainerRef} className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
+                        <table
+                          className="finance-lines-table w-full table-fixed border-collapse text-[10px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 [&_th]:whitespace-nowrap [&_th]:leading-tight"
+                          style={showAllColumns ? { minWidth: tableMinWidth } : undefined}
+                        >
+                          <colgroup>
+                            {colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+                          </colgroup>
+                          <thead className="sticky top-0 z-30 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: PO_BLUE }}>
                             <tr>
-                              <td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>
-                                No detail lines yet — click "Add Line" to get started
-                              </td>
+                              <th rowSpan={2} className="sticky left-0 z-40 px-1 py-1.5 text-center align-middle" style={{ backgroundColor: PO_BLUE }}>Sr No</th>
+                              <th rowSpan={2} className="sticky left-[50px] z-40 px-1 py-1.5 text-center align-middle" style={{ backgroundColor: PO_BLUE }}>Product</th>
+                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">P Uom</th>
+                              <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle">Requested Qty</th>
+                              <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle">Approved Qty</th>
+                              {shouldShowSupplier() && (
+                                <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Supplier *</th>
+                              )}
+                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Unit Price</th>
+                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Amount</th>
+                              <th colSpan={2} className="px-1 py-1.5 text-center align-middle" style={BAND("#bbf7d0")}>Discount</th>
+                              <th rowSpan={2} className="group relative px-1 py-1.5 text-center align-middle !overflow-visible hover:!z-40">
+                                Total Amount(E.T)
+                                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Total Amount Excluding Tax</span>
+                              </th>
+                              <th colSpan={2} className="px-1 py-1.5 text-center align-middle" style={BAND("#f5d0fe")}>TAX</th>
+                              <th rowSpan={2} className="group relative px-1 py-1.5 text-center align-middle !overflow-visible hover:!z-40">
+                                Total Amount(I.T)
+                                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Total Amount Including Tax</span>
+                              </th>
+                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Lcurr Amount Before Tax</th>}
+                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Tax Type</th>}
+                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Tax Cat</th>}
+                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Tax Code</th>}
+                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Tax Lcurr Amount</th>}
+                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">Lcurr Amount After Tax</th>}
+                              <th rowSpan={2} className="finance-action-col-head px-1 py-1.5 text-center align-middle">Action</th>
                             </tr>
-                          ) : filteredItems.length === 0 ? (
                             <tr>
-                              <td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>
-                                No lines match "<strong>{lineSearch}</strong>"
-                              </td>
+                              <th className="px-1 py-1.5 text-center align-middle">PQTY</th>
+                              <th className="px-1 py-1.5 text-center align-middle">LUOM</th>
+                              <th className="px-1 py-1.5 text-center align-middle">LQTY</th>
+                              <th className="px-1 py-1.5 text-center align-middle">ReqQty</th>
+                              <th className="px-1 py-1.5 text-center align-middle">PQTY</th>
+                              <th className="px-1 py-1.5 text-center align-middle">LUOM</th>
+                              <th className="px-1 py-1.5 text-center align-middle">LQTY</th>
+                              <th className="px-1 py-1.5 text-center align-middle">ApprQty</th>
+                              <th className="px-1 py-1.5 text-center align-middle" style={BAND("#bbf7d0")}>Disc %</th>
+                              <th className="px-1 py-1.5 text-center align-middle" style={BAND("#bbf7d0")}>Disc Amount</th>
+                              <th className="px-1 py-1.5 text-center align-middle" style={BAND("#f5d0fe")}>Tax %</th>
+                              <th className="px-1 py-1.5 text-center align-middle" style={BAND("#f5d0fe")}>Tax Amount</th>
                             </tr>
-                          ) : filteredItems.map((item) => {
-                            const itemId = (item as any).id || String(item.ITEM_SRNO);
-                            const qty = computeQuantity(item);
-                            const approvedQty = computeApprovedQuantity(item);
-                            const amtBeforeDisc = num((item as any).AMOUNT_BEFORE_DISC) || amountBeforeDisc(item);
-                            const discPrice = num((item as any).DISC_PRICE) || itemDiscPrice(item);
-                            const finalRate = num(item.FINAL_RATE) || itemFinalRate(item);
-                            const amount = num(item.AMOUNT) || itemAmount(item);
-                            const taxAmt = num(item.TX_COMPNT_AMT_1) || itemTaxAmount(item);
-                            const lcurrAmt = num((item as any).LCURR_AMT) || itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
-                            const taxLcurr = num((item as any).TX_COMPNT_LCURAMT_1) || itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
-                            const lcurrAfterDisc = num((item as any).LCURR_AFTER_DISCOUNT) || itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
-                            const productDisplay = item.ITEM_CODE && item.ITEM_DESP ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` : (item.ITEM_CODE || "");
-                            const supplierDisplay = item.SUPPLIER && (item as any).SUPPLIER_NAME ? `${item.SUPPLIER} - ${(item as any).SUPPLIER_NAME}` : (item.SUPPLIER || "");
+                          </thead>
+                          <tbody>
+                            {items.length === 0 ? (
+                              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>No detail lines yet — click "Add Line" to get started</td></tr>
+                            ) : filteredItems.length === 0 ? (
+                              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                            ) : filteredItems.map((item) => {
+                              const itemId = (item as any).id || String(item.ITEM_SRNO);
+                              const qty = computeQuantity(item);
+                              const approvedQty = computeApprovedQuantity(item);
+                              const discPrice = num((item as any).DISC_PRICE) || itemDiscPrice(item);
+                              const amount = num(item.AMOUNT) || itemAmount(item);
+                              const taxAmt = num(item.TX_COMPNT_AMT_1) || itemTaxAmount(item);
+                              const lcurrAmt = num((item as any).LCURR_AMT) || itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                              const taxLcurr = num((item as any).TX_COMPNT_LCURAMT_1) || itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                              const lcurrAfterDisc = num((item as any).LCURR_AFTER_DISCOUNT) || itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
+                              const productDisplay = item.ITEM_CODE && item.ITEM_DESP ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` : (item.ITEM_CODE || "");
+                              const supplierDisplay = item.SUPPLIER && (item as any).SUPPLIER_NAME ? `${item.SUPPLIER} - ${(item as any).SUPPLIER_NAME}` : (item.SUPPLIER || "");
+                              const finalRateValue = num(item.FINAL_RATE) || itemFinalRate(item);
 
-                            return (
-                              <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
-                                <td className="sticky left-0 z-20 bg-card px-1 py-1 text-center border-r border-border">{item.ITEM_SRNO}</td>
-                                <td className="sticky left-[30px] z-20 bg-card px-1 py-1 border-r border-border">
-                                  <LookupField
-                                    label="" compact placeholder="Search Product *"
-                                    value={item.ITEM_CODE || ""}
-                                    displayValue={productDisplay}
-                                    columns={productColumns}
-                                    valueField="PROD_CODE"
-                                    displayFields={["PROD_CODE", "PROD_NAME"]}
-                                    loadOptions={async () => {
-                                      const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
-                                      const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
-                                      return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
-                                    }}
-                                    onChange={(val, row) => {
-                                      if (row) {
-                                        setItems((prev) => prev.map((it) => {
-                                          if ((it as any).id !== itemId) return it;
-                                          const tr = String(val ?? "").trim().toUpperCase();
-                                          if (tr) {
-                                            const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
-                                            if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
-                                          }
-                                          const updated: TPRItem = {
-                                            ...it,
-                                            ITEM_CODE: String(val ?? ""),
-                                            ITEM_DESP: String(row.PROD_NAME ?? ""),
-                                            P_UOM: String(row.P_UOM ?? ""),
-                                            L_UOM: String(row.L_UOM ?? ""),
-                                            UPPP: Number(row.UPPP) || 0,
-                                            ITEM_RATE: Number(row.BASE_PRICE) || 0,
-                                          };
-                                          updated.REQUEST_QUANTITY = computeQuantity(updated);
-                                          const ex = num(updated.CURRENCY_RATE) || 1;
-                                          return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
-                                        }));
-                                      }
-                                    }}
-                                    disabled={disabled}
-                                  />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input disabled readOnly value={item.P_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
-                                </td>
-
-                                {/* Requested qty */}
-                                <td className="px-1 py-1 border-l-2 border-r border-border">
-                                  <Input type="number" step="0.001" value={item.QTY_PUOM || ""}
-                                    onChange={(e) => updateItemField(itemId, "QTY_PUOM", Number(e.target.value) || 0)}
-                                    disabled={!canEditRequested}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input disabled readOnly value={item.L_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input type="number" step="0.001" value={isSameUom(item) ? 0 : item.QTY_LUOM || ""}
-                                    onChange={(e) => updateItemField(itemId, "QTY_LUOM", Number(e.target.value) || 0)}
-                                    disabled={!canEditRequested || isSameUom(item)}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                </td>
-                                {showAllColumns && (
-                                  <td className="px-1 py-1 border-r border-border">
-                                    <Input type="number" step="0.001" value={item.UPPP || ""}
-                                      onChange={(e) => updateItemField(itemId, "UPPP", Number(e.target.value) || 0)}
-                                      disabled={!canEditRequested}
-                                      className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                  </td>
-                                )}
-                                <td className="px-1 py-1 border-r-2 border-border">
-                                  <Input disabled readOnly value={qty} className="h-7 w-full text-right text-[10px] px-1 font-semibold" />
-                                </td>
-
-                                {/* Approved qty */}
-                                <td className="px-1 py-1 border-l-2 border-r border-border">
-                                  <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_PUOM || ""}
-                                    onChange={(e) => updateItemField(itemId, "APPROVED_QTY_PUOM" as any, Number(e.target.value) || 0)}
-                                    disabled={!canEditApproved}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input disabled readOnly value={item.L_UOM || ""} className="h-7 w-full text-center text-[10px] px-1" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_LUOM || ""}
-                                    onChange={(e) => updateItemField(itemId, "APPROVED_QTY_LUOM" as any, Number(e.target.value) || 0)}
-                                    disabled={!canEditApproved || isSameUom(item)}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                </td>
-                                {showAllColumns && (
-                                  <td className="px-1 py-1 border-r border-border">
-                                    <Input type="number" step="0.001" value={(item as any).APPROVED_UPPP || ""}
-                                      onChange={(e) => updateItemField(itemId, "APPROVED_UPPP" as any, Number(e.target.value) || 0)}
-                                      disabled={!canEditApproved}
-                                      className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                  </td>
-                                )}
-                                <td className="px-1 py-1 border-r-2 border-border">
-                                  <Input disabled readOnly value={approvedQty} className="h-7 w-full text-right text-[10px] px-1 font-semibold" />
-                                </td>
-
-                                {shouldShowSupplier() && (
-                                  <td className="px-1 py-1 border-l-2 border-r border-border">
+                              return (
+                                <tr className="border-t odd:bg-muted/20" key={itemId}>
+                                  <td className="sticky left-0 z-20 bg-card px-1 py-1 text-center">{item.ITEM_SRNO}</td>
+                                  <td className="group sticky left-[50px] z-20 bg-card px-1 py-1 !overflow-visible hover:!z-[25]">
                                     <LookupField
-                                      label="" compact placeholder="Search Supplier *"
-                                      value={item.SUPPLIER || ""}
-                                      displayValue={supplierDisplay}
+                                      label="" compact placeholder="Search Product *"
+                                      value={item.ITEM_CODE || ""}
+                                      displayValue={productDisplay}
+                                      columns={productColumns}
+                                      valueField="PROD_CODE"
+                                      displayFields={["PROD_CODE", "PROD_NAME"]}
+                                      loadOptions={async () => {
+                                        const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
+                                        const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
+                                        return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
+                                      }}
+                                      onChange={(val, row) => {
+                                        if (row) {
+                                          setItems((prev) => prev.map((it) => {
+                                            if ((it as any).id !== itemId) return it;
+                                            const tr = String(val ?? "").trim().toUpperCase();
+                                            if (tr) {
+                                              const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
+                                              if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
+                                            }
+                                            const updated: TPRItem = {
+                                              ...it,
+                                              ITEM_CODE: String(val ?? ""),
+                                              ITEM_DESP: String(row.PROD_NAME ?? ""),
+                                              P_UOM: String(row.P_UOM ?? ""),
+                                              L_UOM: String(row.L_UOM ?? ""),
+                                              UPPP: Number(row.UPPP) || 0,
+                                              ITEM_RATE: Number(row.BASE_PRICE) || 0,
+                                            };
+                                            updated.REQUEST_QUANTITY = computeQuantity(updated);
+                                            const ex = num(updated.CURRENCY_RATE) || 1;
+                                            return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
+                                          }));
+                                        }
+                                      }}
+                                      disabled={disabled}
+                                    />
+                                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Unit Per Primary: {item.UPPP || 0}</span>
+                                  </td>
+
+                                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>{item.P_UOM || ""}</td>
+
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.001" value={item.QTY_PUOM || ""} onChange={(e) => updateItemField(itemId, "QTY_PUOM", Number(e.target.value) || 0)} disabled={!canEditRequested} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>{item.L_UOM || ""}</td>
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.001" value={isSameUom(item) ? 0 : item.QTY_LUOM || ""} onChange={(e) => updateItemField(itemId, "QTY_LUOM", Number(e.target.value) || 0)} disabled={!canEditRequested || isSameUom(item)} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className="bg-slate-200 px-2 py-1 text-right font-semibold">{fmt3(qty)}</td>
+
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_PUOM || ""} onChange={(e) => updateItemField(itemId, "APPROVED_QTY_PUOM" as any, Number(e.target.value) || 0)} disabled={!canEditApproved} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className={UOM_LABEL} style={{ textAlign: "center", padding: "0.25rem 0.5rem" }}>{item.L_UOM || ""}</td>
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_LUOM || ""} onChange={(e) => updateItemField(itemId, "APPROVED_QTY_LUOM" as any, Number(e.target.value) || 0)} disabled={!canEditApproved || isSameUom(item)} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className="bg-slate-200 px-2 py-1 text-right font-semibold">{fmt3(approvedQty)}</td>
+
+                                  {shouldShowSupplier() && (
+                                    <td className="px-1 py-1">
+                                      <LookupField
+                                        label="" compact placeholder="Search Supplier *"
+                                        value={item.SUPPLIER || ""}
+                                        displayValue={supplierDisplay}
+                                        columns={supplierColumns}
+                                        valueField="SUPPLIER_CODE"
+                                        displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
+                                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_SUPPLIERS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                                        onChange={(val, row) => { updateItemField(itemId, "SUPPLIER", val); if (row) updateItemField(itemId, "SUPPLIER_NAME", row.SUPPLIER_NAME || ""); }}
+                                        disabled={disabled}
+                                      />
+                                    </td>
+                                  )}
+
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userApprovalLevel < 1} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className={AMOUNT_CELL}>{fmt3(finalRateValue)}</td>
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.001" value={item.DISCOUNT_AMOUNT || ""} onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className={AMOUNT_CELL}>{fmt3(discPrice)}</td>
+                                  <td className={AMOUNT_CELL}>{fmt3(amount)}</td>
+                                  <td className="px-1 py-1">
+                                    <Input type="number" step="0.01" value={item.TX_COMPNT_PERC_1 || ""} onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)} disabled={disabled} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                  </td>
+                                  <td className={AMOUNT_CELL}>{fmt3(taxAmt)}</td>
+                                  <td className={AMOUNT_CELL}>{fmt3(amount + taxAmt)}</td>
+
+                                  {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAmt)}</td>}
+                                  {showAllColumns && (
+                                    <td className="px-1 py-1">
+                                      <Select className="h-7 w-full text-[10px] px-1" value={item.TAX_TYPE || "Std."} onChange={(e) => updateItemField(itemId, "TAX_TYPE", e.target.value)} disabled={disabled}>
+                                        <option value="Std.">Std.</option>
+                                        <option value="Zero">Zero</option>
+                                        <option value="Exempt">Exempt</option>
+                                        <option value="No VAT">No VAT</option>
+                                      </Select>
+                                    </td>
+                                  )}
+                                  {showAllColumns && (
+                                    <td className="px-1 py-1">
+                                      <LookupField
+                                        label="" compact placeholder="Tax Cat"
+                                        value={item.TX_CAT_CODE || ""}
+                                        displayValue={item.TX_CAT_CODE && item.TX_CAT_NAME ? `${item.TX_CAT_CODE} - ${item.TX_CAT_NAME}` : item.TX_CAT_CODE || ""}
+                                        columns={taxCategoryColumns}
+                                        valueField="TX_CAT_CODE"
+                                        displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                                        onChange={(val, row) => { updateItemField(itemId, "TX_CAT_CODE", val); if (row) { updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || ""); updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || ""); } }}
+                                        disabled={disabled}
+                                      />
+                                    </td>
+                                  )}
+                                  {showAllColumns && (
+                                    <td className="px-1 py-1">
+                                      <LookupField
+                                        label="" compact placeholder="Tax Code"
+                                        value={item.TX_COMPNTCAT_CODE_1 || ""}
+                                        displayValue={item.TX_COMPNTCAT_CODE_1 && item.TX_COMPNTCAT_NAME ? `${item.TX_COMPNTCAT_CODE_1} - ${item.TX_COMPNTCAT_NAME}` : item.TX_COMPNTCAT_CODE_1 || ""}
+                                        columns={taxComponentColumns}
+                                        valueField="TX_COMPNTCAT_CODE"
+                                        displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                                        onChange={(val, row) => { updateItemField(itemId, "TX_COMPNTCAT_CODE_1", val); if (row) { updateItemField(itemId, "TX_COMPNTCAT_NAME", row.TX_COMPNTCAT_NAME || ""); if (row.TX_PERCNT !== undefined) updateItemField(itemId, "TX_COMPNT_PERC_1", Number(row.TX_PERCNT) || 0); } }}
+                                        disabled={disabled}
+                                      />
+                                    </td>
+                                  )}
+                                  {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(taxLcurr)}</td>}
+                                  {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAfterDisc)}</td>}
+
+                                  <td className="finance-action-col px-1 py-1 text-center">
+                                    <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] px-3 py-2" style={{ backgroundColor: "#f8fafc", boxShadow: "0 -2px 6px rgba(0,0,0,0.06)", fontSize: 14 }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Amount</span>
+                          <strong className="text-emerald-600">{fmt3(totalAmountBeforeDisc)}</strong>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Discount</span>
+                          <strong>{fmt3(totalDiscAmount)}</strong>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Total Amount Excluding Tax</span>
+                          <strong>{fmt3(totalAmount)}</strong>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Tax</span>
+                          <strong>{fmt3(totalTax)}</strong>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
+                          <span className="font-semibold" style={{ color: PO_BLUE }}>Total Amount Including Tax</span>
+                          <strong className="text-sm text-emerald-600">{fmt3(totalFinalAmount)}</strong>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {activeTab === "terms" && shouldShowTermsTab() && (
+                    <>
+                      <div className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
+                        <table className="finance-lines-table w-full table-fixed border-collapse text-[10px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 [&_th]:whitespace-nowrap">
+                          <colgroup>
+                            <col style={{ width: "70px" }} />
+                            <col style={{ width: "340px" }} />
+                            <col style={{ width: "220px" }} />
+                            <col style={{ width: "240px" }} />
+                            <col style={{ width: "180px" }} />
+                            <col />
+                            <col style={{ width: "90px" }} />
+                          </colgroup>
+                          <thead className="sticky top-0 z-30 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: PO_BLUE }}>
+                            <tr>
+                              <th className="px-2 py-2 text-center align-middle">Sr No</th>
+                              <th className="px-2 py-2 text-center align-middle">Supplier</th>
+                              <th className="px-2 py-2 text-center align-middle">Delivery Term</th>
+                              <th className="px-2 py-2 text-center align-middle">Payment Terms</th>
+                              <th className="px-2 py-2 text-center align-middle">Warranty</th>
+                              <th className="px-2 py-2 text-center align-middle">Remarks</th>
+                              <th className="finance-action-col-head px-2 py-2 text-center align-middle">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {terms.length === 0 ? (
+                              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={7}>No terms yet — they are added automatically for each supplier selected on the items</td></tr>
+                            ) : terms.map((term, idx) => {
+                              const disp = term.SUPPLIER && term.SUPPLIER_NAME ? `${term.SUPPLIER} - ${term.SUPPLIER_NAME}` : (term.SUPPLIER || "");
+                              return (
+                                <tr className="border-t odd:bg-muted/20" key={term.id}>
+                                  <td className="px-2 py-1 text-center">{idx + 1}</td>
+                                  <td className="px-1 py-1">
+                                    <LookupField
+                                      label="" compact placeholder="Supplier"
+                                      value={term.SUPPLIER || ""}
+                                      displayValue={disp}
                                       columns={supplierColumns}
                                       valueField="SUPPLIER_CODE"
                                       displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
                                       loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_SUPPLIERS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                      onChange={(val, row) => {
-                                        updateItemField(itemId, "SUPPLIER", val);
-                                        if (row) updateItemField(itemId, "SUPPLIER_NAME", row.SUPPLIER_NAME || "");
-                                      }}
+                                      onChange={(val, row) => { updateTermField(term.id, "SUPPLIER", val); if (row) updateTermField(term.id, "SUPPLIER_NAME", row.SUPPLIER_NAME ?? ""); }}
                                       disabled={disabled}
                                     />
                                   </td>
-                                )}
-
-                                <td className="px-1 py-1 border-l-2 border-r border-border">
-                                  <Input type="number" step="0.0001" value={item.ITEM_RATE || ""}
-                                    onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)}
-                                    disabled={disabled || userApprovalLevel < 1}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right text-blue-600 border-r border-border">{fmt3(amtBeforeDisc)}</td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input type="number" step="0.001" value={item.DISCOUNT_AMOUNT || ""}
-                                    onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
-                                    disabled={disabled || discountScope === "PO"}
-                                    className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                </td>
-                                <td className="finance-amount-cell px-1 py-1 text-right border-r border-border">{fmt3(discPrice)}</td>
-                                <td className="finance-amount-cell px-1 py-1 text-right border-r border-border">{fmt3(finalRate)}</td>
-                                <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-green-600 border-r border-border">{fmt3(amount)}</td>
-                                <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(lcurrAmt)}</td>
-
-                                {showAllColumns && (
-                                  <td className="px-1 py-1 border-r border-border">
-                                    <Select className="h-7 w-full text-[10px] px-1" value={item.TAX_TYPE || "Std."}
-                                      onChange={(e) => updateItemField(itemId, "TAX_TYPE", e.target.value)}
-                                      disabled={disabled}>
-                                      <option value="Std.">Std.</option>
-                                      <option value="Zero">Zero</option>
-                                      <option value="Exempt">Exempt</option>
-                                      <option value="No VAT">No VAT</option>
-                                    </Select>
+                                  <td className="px-1 py-1"><Input value={term.DLVR_TERM || ""} onChange={(e) => updateTermField(term.id, "DLVR_TERM", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                  <td className="px-1 py-1"><Input value={term.PAYMENT_TERMS || ""} onChange={(e) => updateTermField(term.id, "PAYMENT_TERMS", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                  <td className="px-1 py-1"><Input value={term.WARRANTY || ""} onChange={(e) => updateTermField(term.id, "WARRANTY", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                  <td className="px-1 py-1"><Input value={term.REMARKS || ""} onChange={(e) => updateTermField(term.id, "REMARKS", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                  <td className="finance-action-col px-1 py-1 text-center">
+                                    <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeTerm(term.id)}>
+                                      <Trash2 size={13} />
+                                    </button>
                                   </td>
-                                )}
-                                {showAllColumns && (
-                                  <td className="px-1 py-1 border-r border-border">
-                                    <Input type="number" step="0.01" value={item.TX_COMPNT_PERC_1 || ""}
-                                      onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)}
-                                      disabled={disabled}
-                                      className="h-7 w-full text-right text-[10px] px-1 [appearance:textfield]" placeholder="0" />
-                                  </td>
-                                )}
-                                {showAllColumns && (
-                                  <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(taxAmt)}</td>
-                                )}
-                                {showAllColumns && (
-                                  <td className="px-1 py-1 border-r border-border">
-                                    <LookupField
-                                      label="" compact placeholder="Tax Cat"
-                                      value={item.TX_CAT_CODE || ""}
-                                      displayValue={item.TX_CAT_CODE && item.TX_CAT_NAME ? `${item.TX_CAT_CODE} - ${item.TX_CAT_NAME}` : item.TX_CAT_CODE || ""}
-                                      columns={taxCategoryColumns}
-                                      valueField="TX_CAT_CODE"
-                                      displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
-                                      loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                      onChange={(val, row) => {
-                                        updateItemField(itemId, "TX_CAT_CODE", val);
-                                        if (row) {
-                                          updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || "");
-                                          updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || "");
-                                        }
-                                      }}
-                                      disabled={disabled}
-                                    />
-                                  </td>
-                                )}
-                                {showAllColumns && (
-                                  <td className="px-1 py-1 border-r border-border">
-                                    <LookupField
-                                      label="" compact placeholder="Tax Code"
-                                      value={item.TX_COMPNTCAT_CODE_1 || ""}
-                                      displayValue={item.TX_COMPNTCAT_CODE_1 && item.TX_COMPNTCAT_NAME ? `${item.TX_COMPNTCAT_CODE_1} - ${item.TX_COMPNTCAT_NAME}` : item.TX_COMPNTCAT_CODE_1 || ""}
-                                      columns={taxComponentColumns}
-                                      valueField="TX_COMPNTCAT_CODE"
-                                      displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
-                                      loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                      onChange={(val, row) => {
-                                        updateItemField(itemId, "TX_COMPNTCAT_CODE_1", val);
-                                        if (row) {
-                                          updateItemField(itemId, "TX_COMPNTCAT_NAME", row.TX_COMPNTCAT_NAME || "");
-                                          if (row.TX_PERCNT !== undefined) updateItemField(itemId, "TX_COMPNT_PERC_1", Number(row.TX_PERCNT) || 0);
-                                        }
-                                      }}
-                                      disabled={disabled}
-                                    />
-                                  </td>
-                                )}
-                                {showAllColumns && (
-                                  <td className="finance-amount-cell px-1 py-1 text-right text-green-600 border-r border-border">{fmt3(taxLcurr)}</td>
-                                )}
-                                {showAllColumns && (
-                                  <td className="finance-amount-cell px-1 py-1 text-right font-semibold text-blue-600 border-r border-border">{fmt3(lcurrAfterDisc)}</td>
-                                )}
-                                <td className="px-1 py-1 text-center">
-                                  <button
-                                    type="button"
-                                    disabled={disabled}
-                                    title="Delete row"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                                    onClick={() => removeItem(itemId)}
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
 
-                    {/* Footer totals — PO style */}
-                    <div
-                      className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
-                      style={{
-                                        backgroundColor: "#f8fafc",
-                        boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
-                        fontSize: 14,
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Total Qty (Puom){isApprovedLevel ? " Approved" : ""}</span>
-                        <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
+                      <div className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] px-3 py-2" style={{ backgroundColor: "#f8fafc", boxShadow: "0 -2px 6px rgba(0,0,0,0.06)", fontSize: 14 }}>
+                        <div className="flex items-center gap-2"><span className="text-muted-foreground">Supplier Terms</span><strong>{terms.length}</strong></div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Total Qty (Luom){isApprovedLevel ? " Approved" : ""}</span>
-                        <strong>{totalQtyLuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Amount Before Discount</span>
-                        <strong className="text-emerald-600">{fmt3(totalAmountBeforeDisc)}</strong>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Discount</span>
-                        <strong>{fmt3(totalDiscAmount)}</strong>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Amount Before Tax</span>
-                        {/* totalAmount is already net of discount (AMOUNT = final rate × qty) */}
-                        <strong>{fmt3(totalAmount)}</strong>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Tax</span>
-                        <strong>{fmt3(totalTax)}</strong>
-                      </div>
-                      <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
-                        <span className="font-semibold text-[#00378C]">Amount After Tax</span>
-                        <strong className="text-sm text-emerald-600">{fmt3(totalFinalAmount)}</strong>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* ───────────── TERMS TAB ───────────── */}
-                {activeTab === "terms" && shouldShowTermsTab() && (
-                  <>
-                    <div className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
-                      <table
-                        className="finance-lines-table w-full table-fixed text-[10px] border-separate border-spacing-0"
-                        style={{ minWidth: 1180 }}
-                      >
-                        <colgroup>
-                          <col style={{ width: "40px" }} />
-                          <col style={{ width: "300px" }} />
-                          <col style={{ width: "200px" }} />
-                          <col style={{ width: "220px" }} />
-                          <col style={{ width: "160px" }} />
-                          <col />
-                          <col style={{ width: "50px" }} />
-                        </colgroup>
-                        <thead className="sticky top-0 z-30 bg-[#00378C] text-[10px] font-semibold text-white shadow-sm">
-                          <tr>
-                            <th className="px-2 py-2 text-center align-middle border-r border-white/20">SNo</th>
-                            <th className="px-2 py-2 text-center align-middle border-r border-white/20">Supplier</th>
-                            <th className="px-2 py-2 text-center align-middle border-r border-white/20">Delivery Term</th>
-                            <th className="px-2 py-2 text-center align-middle border-r border-white/20">Payment Terms</th>
-                            <th className="px-2 py-2 text-center align-middle border-r border-white/20">Warranty</th>
-                            <th className="px-2 py-2 text-center align-middle border-r border-white/20">Remarks</th>
-                            <th className="px-2 py-2 text-center align-middle">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {terms.length === 0 ? (
-                            <tr>
-                              <td className="px-3 py-8 text-center text-muted-foreground" colSpan={7}>
-                                No terms yet — they are added automatically for each supplier selected on the items
-                              </td>
-                            </tr>
-                          ) : terms.map((term, idx) => {
-                            const disp = term.SUPPLIER && term.SUPPLIER_NAME ? `${term.SUPPLIER} - ${term.SUPPLIER_NAME}` : (term.SUPPLIER || "");
-                            return (
-                              <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={term.id}>
-                                <td className="px-2 py-1 text-center border-r border-border">{idx + 1}</td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <LookupField
-                                    label="" compact placeholder="Supplier"
-                                    value={term.SUPPLIER || ""}
-                                    displayValue={disp}
-                                    columns={supplierColumns}
-                                    valueField="SUPPLIER_CODE"
-                                    displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
-                                    loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_SUPPLIERS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                    onChange={(val, row) => {
-                                      updateTermField(term.id, "SUPPLIER", val);
-                                      if (row) updateTermField(term.id, "SUPPLIER_NAME", row.SUPPLIER_NAME ?? "");
-                                    }}
-                                    disabled={disabled}
-                                  />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input value={term.DLVR_TERM || ""} onChange={(e) => updateTermField(term.id, "DLVR_TERM", e.target.value)} disabled={disabled} className="h-7 w-full text-[10px] px-2" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input value={term.PAYMENT_TERMS || ""} onChange={(e) => updateTermField(term.id, "PAYMENT_TERMS", e.target.value)} disabled={disabled} className="h-7 w-full text-[10px] px-2" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input value={term.WARRANTY || ""} onChange={(e) => updateTermField(term.id, "WARRANTY", e.target.value)} disabled={disabled} className="h-7 w-full text-[10px] px-2" />
-                                </td>
-                                <td className="px-1 py-1 border-r border-border">
-                                  <Input value={term.REMARKS || ""} onChange={(e) => updateTermField(term.id, "REMARKS", e.target.value)} disabled={disabled} className="h-7 w-full text-[10px] px-2" />
-                                </td>
-                                <td className="px-1 py-1 text-center">
-                                  <button
-                                    type="button"
-                                    disabled={disabled}
-                                    title="Delete row"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                                    onClick={() => removeTerm(term.id)}
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div
-                      className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end border-t border-[#cbd5e1] px-3 py-2 gap-3"
-                      style={{
-                                        backgroundColor: "#f8fafc",
-                        boxShadow: "0 -2px 6px rgba(0,0,0,0.06)",
-                        fontSize: 14,
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Supplier Terms</span>
-                        <strong>{terms.length}</strong>
-                      </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </section>
+            )}
+          </CardContent>
+        </form>
+      </div>
 
-      {/* ═══════════ DIALOGS (unchanged) ═══════════ */}
       <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={requestNumber || ""}
         title="Purchase Request Attachments"
-        module="PR"
-        type="Purchase Request"
-        companyCode={companyCode}
-        loginId={loginid}
+        module="PR" type="Purchase Request"
+        companyCode={companyCode} loginId={loginid}
         flowLevel={Number(header.FLOW_LEVEL_RUNNING) || 1}
       />
 
-      <Dialog
-        open={rejectOpen}
-        title="Reject Request"
-        description="Enter the reason for rejection."
-        onClose={() => setRejectOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
-            <Button variant="destructive" disabled={saving} onClick={handleRejectConfirm}>Confirm Reject</Button>
-          </>
-        }
-      >
+      <Dialog open={rejectOpen} title="Reject Request" description="Enter the reason for rejection." onClose={() => setRejectOpen(false)}
+        footer={<><Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button><Button variant="destructive" disabled={saving} onClick={handleRejectConfirm}>Confirm Reject</Button></>}>
         <div className="flex flex-col gap-2">
-          <label className="field">
-            <span>Rejection Reason *</span>
+          <label className="field"><span>Rejection Reason *</span>
             <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter reject remark..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
           </label>
           {!remarkText.trim() && <span className="text-xs text-red-500">Rejection reason is required</span>}
         </div>
       </Dialog>
 
-      <Dialog
-        open={sendBackOpen}
-        title="Send Back Request"
-        description="Select who to send this back to, and enter the reason."
-        onClose={() => setSendBackOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button>
-            <Button disabled={saving || !selectedSendBackTo || !remarkText.trim()} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button>
-          </>
-        }
-      >
+      <Dialog open={sendBackOpen} title="Send Back Request" description="Select who to send this back to, and enter the reason." onClose={() => setSendBackOpen(false)}
+        footer={<><Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button><Button disabled={saving || !selectedSendBackTo || !remarkText.trim()} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button></>}>
         <div className="flex flex-col gap-3">
-          <label className="field">
-            <span>Send Back To *</span>
+          <label className="field"><span>Send Back To *</span>
             <Select value={selectedSendBackTo} onChange={(e) => setSelectedSendBackTo(e.target.value)} className="w-full">
               <option value="">Select user</option>
               {sendBackOptions.map((o) => (<option key={o.loginid} value={o.loginid}>{o.label}</option>))}
             </Select>
             {!selectedSendBackTo && <span className="text-xs text-red-500">Please select a user to send back</span>}
           </label>
-          <label className="field">
-            <span>Send Back Reason *</span>
+          <label className="field"><span>Send Back Reason *</span>
             <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter send back reason..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
             {!remarkText.trim() && <span className="text-xs text-red-500">Send back reason is required</span>}
           </label>
         </div>
       </Dialog>
-    </div>
+    </>
   );
 };
 

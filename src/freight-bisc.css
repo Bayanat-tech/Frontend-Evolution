@@ -2542,3 +2542,14 @@ input[tabindex="-1"].opacity-0,
 .app.dark :is(.freight-workspace-ui, .freight-ui-standard, .freight-document-form, .freight-list-screen, .freight-airline-tariff-screen, .freight-master-screen, .freight-job-ops-screen, .freight-report-screen) :is(.freight-panel-title, .freight-info-title, .freight-master-form-header, .freight-form-header, .freight-transaction-header, .freight-document-header, .tariff-page-header) {
   background: var(--freight-document-heading) !important;
 }
+
+/* Hide number input spinners in Freight forms */
+.freight-ui-standard input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+.freight-ui-standard input[type="number"]::-webkit-outer-spin-button,
+.freight-ui-standard input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
