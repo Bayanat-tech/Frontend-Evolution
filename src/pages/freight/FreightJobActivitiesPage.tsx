@@ -534,7 +534,7 @@ export function FreightJobActivitiesPage({
 
       <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
         <div className="min-w-[1380px]">
-          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[32px_140px_minmax(180px,1.4fr)_50px_85px_90px_115px_85px_minmax(160px,1.2fr)_80px_minmax(160px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
+          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[28px_minmax(155px,1.2fr)_minmax(155px,1.2fr)_46px_80px_88px_110px_80px_minmax(165px,1.25fr)_78px_minmax(165px,1.25fr)_78px_86px] items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
             <span className="text-center">#</span>
             <span>Activity</span>
             <span>Description</span>
@@ -549,7 +549,7 @@ export function FreightJobActivitiesPage({
             <span className="text-right">Transp (OMR)</span>
             <span className="text-center border-l border-white/20 pl-2">Actions</span>
           </div>
-          <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-border/60">
+          <div className="max-h-[calc(100vh-230px)] overflow-y-auto divide-y divide-border/60">
             {lines.map((line, index) => {
               const isInvalid = invalidLineIndices.includes(index);
               const hasForeignCurrency = Boolean(line.bill_curr_code && line.bill_curr_code !== "OMR");
@@ -557,7 +557,7 @@ export function FreightJobActivitiesPage({
 
               return (
                 <div key={`${line.srno}-${index}`} className={`freight-job-table-row transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/80"}`}>
-                  <div className="freight-activity-primary-row grid grid-cols-[32px_140px_minmax(180px,1.4fr)_50px_85px_90px_115px_85px_minmax(160px,1.2fr)_80px_minmax(160px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2">
+                  <div className="freight-activity-primary-row grid grid-cols-[28px_minmax(155px,1.2fr)_minmax(155px,1.2fr)_46px_80px_88px_110px_80px_minmax(165px,1.25fr)_78px_minmax(165px,1.25fr)_78px_86px] items-center gap-1.5 px-3 py-0.5">
                     <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                     <ActivityLookup
                       value={line.act_code}
@@ -607,11 +607,11 @@ export function FreightJobActivitiesPage({
                       }}
                     />
                     <textarea
-                      className="w-full text-xs min-h-[46px] h-[48px] py-1 px-2 rounded-md border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 resize-none leading-snug font-sans"
+                      className="w-full text-[11px] min-h-[32px] h-[34px] max-h-[34px] py-1 px-2 rounded-md border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 resize-none leading-snug font-sans"
                       placeholder="Service description..."
                       value={line.other_services}
                       disabled={isLineLocked}
-                      rows={2}
+                      rows={1}
                       onChange={(event) => updateLine(index, { other_services: event.target.value })}
                       maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}
                     />
@@ -1493,7 +1493,7 @@ function ActivityLookup({
       value={value}
       displayValue={value}
       subText={fullName}
-      subTextClassName="font-bold text-[#00378C] bg-blue-50/90 border border-blue-200/90 rounded px-1.5 py-0.2 shadow-2xs max-w-full truncate inline-block"
+      subTextClassName="font-semibold text-[#00378C] bg-blue-50/90 border border-blue-200/90 rounded px-1 py-0 shadow-2xs max-w-full truncate inline-block text-[9px] leading-tight"
       triggerClassName={value ? "border-blue-300/80 bg-blue-50/20" : ""}
       compact
       placeholder="Select Act..."
@@ -1690,7 +1690,7 @@ function AgentLookup({
       value={value}
       displayValue={value}
       subText={fullName}
-      subTextClassName="font-bold text-indigo-900 bg-indigo-50/90 border border-indigo-200/90 rounded px-1.5 py-0.2 shadow-2xs max-w-full truncate inline-block"
+      subTextClassName="font-semibold text-indigo-900 bg-indigo-50/90 border border-indigo-200/90 rounded px-1 py-0 shadow-2xs max-w-full truncate inline-block text-[9px] leading-tight"
       triggerClassName={value ? "border-indigo-300/80 bg-indigo-50/20" : ""}
       compact
       placeholder="Select Broker..."
@@ -1751,7 +1751,7 @@ function TransporterLookup({
       value={value}
       displayValue={value}
       subText={fullName}
-      subTextClassName="font-bold text-amber-950 bg-amber-50/90 border border-amber-200/90 rounded px-1.5 py-0.2 shadow-2xs max-w-full truncate inline-block"
+      subTextClassName="font-semibold text-amber-950 bg-amber-50/90 border border-amber-200/90 rounded px-1 py-0 shadow-2xs max-w-full truncate inline-block text-[9px] leading-tight"
       triggerClassName={value ? "border-amber-300/80 bg-amber-50/20" : ""}
       compact
       placeholder="Select Transp..."

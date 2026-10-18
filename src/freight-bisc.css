@@ -2553,3 +2553,34 @@ input[tabindex="-1"].opacity-0,
   -webkit-appearance: none !important;
   margin: 0 !important;
 }
+
+/* Compact ERP row heights for Freight Job Activities Table */
+.freight-activity-table .freight-activity-primary-row {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+.freight-activity-table textarea {
+  min-height: 32px !important;
+  height: 34px !important;
+  max-height: 34px !important;
+  padding: 4px 7px !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  border-radius: 6px !important;
+}
+
+.freight-activity-table .lookup-field-trigger {
+  min-height: 32px !important;
+  height: 34px !important;
+  border-radius: 6px !important;
+}
+
+.freight-activity-table .ui-input,
+.freight-activity-table input {
+  min-height: 28px !important;
+  height: 28px !important;
+  font-size: 11px !important;
+  padding-inline: 6px !important;
+  border-radius: 6px !important;
+}
