@@ -15,7 +15,7 @@ import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/Dialog";
+import { Dialog } from "../../components/ui/Dialog";
 import { Coins, Globe } from "lucide-react";
 
 type ViewMode = "list" | "editor";
@@ -776,14 +776,18 @@ export function FreightJobActivitiesPage({
 
       {/* Multi-Currency & Foreign Currency Exchange Dialog (PowerBuilder dw_7 / F3) */}
       {activeFcIndex !== null && lines[activeFcIndex] && (
-        <Dialog open={true} onOpenChange={(open) => { if (!open) setActiveFcIndex(null); }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-base font-bold text-[#00378C]">
-                <Globe size={18} />
-                <span>Multi-Currency & Exchange Rate Details (Line #{activeFcIndex + 1})</span>
-              </DialogTitle>
-            </DialogHeader>
+        <Dialog
+          open={true}
+          title={`Multi-Currency & Exchange Rate Details (Line #${activeFcIndex + 1})`}
+          description="Manage foreign currency rate & original amounts (PowerBuilder multi-currency parity)"
+          onClose={() => setActiveFcIndex(null)}
+          contentClassName="w-[min(96vw,680px)]"
+          footer={
+            <Button type="button" size="sm" onClick={() => setActiveFcIndex(null)}>
+              Close & Done
+            </Button>
+          }
+        >
 
             <div className="space-y-4 py-2 text-xs">
               <div className="rounded-lg bg-amber-50/70 border border-amber-200 p-2.5 text-amber-900 flex justify-between items-center">
@@ -1068,12 +1072,6 @@ export function FreightJobActivitiesPage({
               </div>
             </div>
 
-            <DialogFooter className="mt-2">
-              <Button type="button" size="sm" onClick={() => setActiveFcIndex(null)}>
-                Close & Done
-              </Button>
-            </DialogFooter>
-          </DialogContent>
         </Dialog>
       )}
       
