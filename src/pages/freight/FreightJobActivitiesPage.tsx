@@ -528,8 +528,8 @@ export function FreightJobActivitiesPage({
       </div>
 
       <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
-        <div className="min-w-[1460px]">
-          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[36px_170px_minmax(180px,1.3fr)_55px_90px_95px_90px_minmax(190px,1.4fr)_85px_minmax(190px,1.4fr)_90px_145px] items-center gap-2 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
+        <div className="min-w-[1580px]">
+          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[36px_180px_minmax(180px,1.2fr)_55px_95px_100px_95px_minmax(190px,1.3fr)_90px_minmax(190px,1.3fr)_105px_185px] items-center gap-2 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
             <span className="text-center">#</span>
             <span>Activity</span>
             <span>Description</span>
@@ -541,7 +541,7 @@ export function FreightJobActivitiesPage({
             <span className="text-right">Agent (OMR)</span>
             <span>Transporter</span>
             <span className="text-right">Transp (OMR)</span>
-            <span className="text-center">Actions</span>
+            <span className="text-center border-l border-white/20 pl-2">Actions</span>
           </div>
           <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-border/60">
             {lines.map((line, index) => {
@@ -551,7 +551,7 @@ export function FreightJobActivitiesPage({
 
               return (
                 <div key={`${line.srno}-${index}`} className={`freight-job-table-row transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/80"}`}>
-                  <div className="freight-activity-primary-row grid grid-cols-[36px_170px_minmax(180px,1.3fr)_55px_90px_95px_90px_minmax(190px,1.4fr)_85px_minmax(190px,1.4fr)_90px_145px] items-center gap-2 px-3 py-2">
+                  <div className="freight-activity-primary-row grid grid-cols-[36px_180px_minmax(180px,1.2fr)_55px_95px_100px_95px_minmax(190px,1.3fr)_90px_minmax(190px,1.3fr)_105px_185px] items-center gap-2 px-3 py-2">
                     <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                     <ActivityLookup
                       value={line.act_code}
@@ -736,26 +736,26 @@ export function FreightJobActivitiesPage({
                     />
 
                     {/* Action Buttons: Currency, Tax, Delete in one row */}
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1.5 pl-3 border-l border-slate-200/80">
                       {/* Multi-Currency / FC Dialog Button (PowerBuilder dw_7 / F3) */}
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        className={`h-7 px-1.5 text-[10px] gap-0.5 font-mono shadow-2xs shrink-0 ${
+                        className={`h-7 px-2 text-[10.5px] gap-1 font-mono shadow-2xs shrink-0 ${
                           hasForeignCurrency
                             ? "border-amber-400 bg-amber-50 text-amber-900 font-bold hover:bg-amber-100"
                             : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                         }`}
                         title={
                           hasForeignCurrency
-                            ? `Base: OMR | Foreign Currency: ${line.bill_curr_code} @ ${line.bill_ex_rate} (Original: ${money(line.bill_oc)} ${line.bill_curr_code})`
-                            : "Multi-Currency & Exchange Rate (Base: OMR)"
+                            ? `Foreign Currency: ${line.bill_curr_code} @ ${line.bill_ex_rate} (Original: ${money(line.bill_oc)} ${line.bill_curr_code}) | Base: OMR ${money(line.bill)}`
+                            : "Configure Foreign Currency & Exchange Rate (F3)"
                         }
                         onClick={() => setActiveFcIndex(index)}
                       >
-                        <Coins size={11} className={hasForeignCurrency ? "text-amber-600" : "text-slate-400"} />
-                        <span>OMR</span>
+                        <Coins size={12} className={hasForeignCurrency ? "text-amber-600" : "text-slate-400"} />
+                        <span>{hasForeignCurrency ? `FC: ${line.bill_curr_code}` : "Currency"}</span>
                       </Button>
 
                       {/* Tax Dialog Button */}
@@ -763,7 +763,7 @@ export function FreightJobActivitiesPage({
                         type="button"
                         size="sm"
                         variant="outline"
-                        className={`h-7 px-1.5 text-[10px] gap-0.5 font-mono shadow-2xs shrink-0 ${
+                        className={`h-7 px-2 text-[10.5px] gap-1 font-mono shadow-2xs shrink-0 ${
                           hasTax
                             ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold hover:bg-emerald-100"
                             : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -775,8 +775,8 @@ export function FreightJobActivitiesPage({
                         }
                         onClick={() => setActiveTaxIndex(index)}
                       >
-                        <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
-                        <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "Tax"}</span>
+                        <Percent size={12} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
+                        <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `Tax ${line.tx_compnt_perc_1}%` : "Tax"}</span>
                       </Button>
 
                       <Button
