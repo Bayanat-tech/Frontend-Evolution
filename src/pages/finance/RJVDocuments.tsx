@@ -367,6 +367,7 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
           <JVDocument
             docType={docType}
             editor={editor}
+            fyPeriod={fyPeriod}
             onClose={() => {
               setNotice(null);
               setEditor(null);
@@ -424,11 +425,13 @@ export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
 function JVDocument({
   docType,
   editor,
+  fyPeriod,
   onClose,
   onSaved,
 }: {
   docType: TransactionType;
   editor: EditorState;
+  fyPeriod?: string;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
@@ -545,6 +548,39 @@ function JVDocument({
   const [reversing, setReversing] = useState(false);
   const [successNotice, setSuccessNotice] = useState("");
 
+  const loadJvOptions = async (searchQuery?: string) => {
+    try {
+      const activeFy = (form as any).fy_period || fyPeriod || undefined;
+      const res = await getTransactionDocuments(
+        "JV",
+        activeFy,
+        searchQuery?.trim() || undefined,
+        1,
+        100,
+        [{ field: "canceled", values: "N" }]
+      );
+      const tableData = res?.tableData || [];
+      return tableData.map((row: any) => {
+        const rawDocNo = String(row.doc_no || "").trim();
+        const formattedDocNo = rawDocNo.toUpperCase().startsWith("JV") ? rawDocNo : `JV${rawDocNo}`;
+        const formattedDate = formatDate(row.doc_date);
+        const amt = Number(row.amount ?? row.resolved_amount ?? 0);
+        return {
+          ...row,
+          doc_no: rawDocNo,
+          formatted_doc_no: formattedDocNo,
+          formatted_date: formattedDate,
+          formatted_amount: formatAmount(amt, currencyDecimals),
+          remarks: row.remarks || "Journal Voucher",
+          curr_code: row.curr_code || form.curr_code || "INR",
+        };
+      });
+    } catch (err) {
+      console.error("Failed to load JVs for reversal:", err);
+      return [];
+    }
+  };
+
   const handleReverseJV = async (jvDocNo: string) => {
     const cleanDocNo = jvDocNo.trim();
     if (!cleanDocNo) {
@@ -555,10 +591,40 @@ function JVDocument({
     setError("");
     setSuccessNotice("");
     try {
-      const [headerRaw, detailRaw] = await Promise.all([
-        getTransactionHeader(cleanDocNo, "JV"),
-        getTransactionDetail(cleanDocNo, form.div_code, "JV"),
-      ]);
+      const numOnly = cleanDocNo.replace(/^[A-Za-z]+/, "");
+      let headerRaw: any = null;
+      let detailRaw: any = null;
+
+      try {
+        [headerRaw, detailRaw] = await Promise.all([
+          getTransactionHeader(cleanDocNo, "JV"),
+          getTransactionDetail(cleanDocNo, form.div_code, "JV"),
+        ]);
+      } catch (err1) {
+        if (numOnly && numOnly !== cleanDocNo) {
+          [headerRaw, detailRaw] = await Promise.all([
+            getTransactionHeader(numOnly, "JV"),
+            getTransactionDetail(numOnly, form.div_code, "JV"),
+          ]);
+        } else {
+          throw err1;
+        }
+      }
+
+      if ((!headerRaw || !headerRaw.doc_no) && numOnly && numOnly !== cleanDocNo) {
+        try {
+          const [h2, d2] = await Promise.all([
+            getTransactionHeader(numOnly, "JV"),
+            getTransactionDetail(numOnly, form.div_code, "JV"),
+          ]);
+          if (h2 && (h2.doc_no || (Array.isArray(d2) && d2.length))) {
+            headerRaw = h2;
+            detailRaw = d2;
+          }
+        } catch {
+          // ignore fallback error
+        }
+      }
 
       if (!headerRaw) {
         setError(`JV Document ${cleanDocNo} not found`);
@@ -589,7 +655,7 @@ function JVDocument({
           curr_code: text(d.curr_code ?? d.CURR_CODE ?? form.curr_code),
           curr_name: text(d.curr_name ?? d.CURR_NAME ?? form.curr_name),
           ex_rate: lineExRate,
-          lcur_amount: Number((lineAmt * lineExRate).toFixed(3)),
+          lcur_amount: Number((lineAmt * lineExRate).toFixed(currencyDecimals)),
           job_no: text(d.job_no ?? d.JOB_NO ?? ""),
           dept_code: text(d.dept_code ?? d.DEPT_CODE ?? ""),
           cost_code: text(d.cost_code ?? d.COST_CODE ?? ""),
@@ -598,18 +664,21 @@ function JVDocument({
         };
       });
 
+      const formattedSelected = cleanDocNo.toUpperCase().startsWith("JV") ? cleanDocNo : `JV${cleanDocNo}`;
+      setSourceJvDocNo(formattedSelected);
+
       setForm((current) => ({
         ...current,
-        ref_no: cleanDocNo,
-        ref_doc_no: cleanDocNo,
+        ref_no: formattedSelected,
+        ref_doc_no: formattedSelected,
         curr_code: text(headerRaw.curr_code ?? current.curr_code),
         curr_name: text(headerRaw.curr_name ?? current.curr_name),
         ex_rate: Number(headerRaw.ex_rate ?? current.ex_rate ?? 1),
-        remarks: `Reversal of JV ${cleanDocNo}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
+        remarks: `Reversal of JV ${formattedSelected}${headerRaw.remarks ? " - " + headerRaw.remarks : ""}`,
         detail: mappedDetails,
       }));
 
-      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from JV ${cleanDocNo}`);
+      setSuccessNotice(`Successfully loaded and reversed ${mappedDetails.length} lines from JV ${formattedSelected}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to load JV ${cleanDocNo}`);
     } finally {
@@ -1351,22 +1420,49 @@ function JVDocument({
                       <BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} />
                     </Field>
                     <Field label="Source JV No (To Reverse)">
-                      <div className="flex gap-1.5 items-center">
-                        <Input
-                          maxLength={30}
-                          disabled={disabled || editMode}
-                          placeholder="e.g. JV2261000001"
-                          value={sourceJvDocNo || form.ref_no || ""}
-                          className="h-7 text-xs font-mono"
-                          onChange={(e) => setSourceJvDocNo(e.target.value)}
-                        />
+                      <div className="flex gap-1.5 items-center w-full min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <LookupField
+                            compact
+                            dense
+                            disabled={disabled || editMode}
+                            placeholder="Select JV to reverse..."
+                            value={sourceJvDocNo || form.ref_no || ""}
+                            displayValue={
+                              sourceJvDocNo || form.ref_no
+                                ? (String(sourceJvDocNo || form.ref_no).toUpperCase().startsWith("JV") ? String(sourceJvDocNo || form.ref_no) : `JV${sourceJvDocNo || form.ref_no}`)
+                                : ""
+                            }
+                            columns={[
+                              { field: "formatted_doc_no", header: "JV No" },
+                              { field: "formatted_date", header: "Date" },
+                              { field: "remarks", header: "Narration / Remarks" },
+                              { field: "formatted_amount", header: "Amount" },
+                              { field: "curr_code", header: "Currency" },
+                            ]}
+                            valueField="doc_no"
+                            displayFields={["formatted_doc_no", "formatted_date", "remarks"]}
+                            popoverWidth={620}
+                            loadOptions={loadJvOptions}
+                            onChange={(value, row) => {
+                              const selectedDoc = String(value || (row as any)?.doc_no || (row as any)?.formatted_doc_no || "").trim();
+                              if (selectedDoc) {
+                                void handleReverseJV(selectedDoc);
+                              } else {
+                                setSourceJvDocNo("");
+                                setForm((cur) => ({ ...cur, ref_no: "", ref_doc_no: "" }));
+                              }
+                            }}
+                          />
+                        </div>
                         {!editMode && (
                           <Button
                             type="button"
                             size="sm"
                             disabled={disabled || reversing || !(sourceJvDocNo || form.ref_no)}
                             onClick={() => void handleReverseJV(sourceJvDocNo || form.ref_no || "")}
-                            className="shrink-0 h-7 px-2.5 text-xs bg-[#00378C] text-white hover:bg-[#002b6d]"
+                            title="Auto-Reverse / Reload lines from selected JV"
+                            className="shrink-0 h-7 px-2.5 text-xs bg-[#00378C] text-white hover:bg-[#002b6d] cursor-pointer"
                           >
                             <RefreshCw size={12} className={reversing ? "animate-spin mr-1" : "mr-1"} />
                             {reversing ? "Reversing..." : "Auto-Reverse"}
