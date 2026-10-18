@@ -27,6 +27,7 @@ import {
 import { SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -156,6 +157,8 @@ export function PurchaseOrderLinesTable({
   const discountScope = form.discount_scoope || "ITEM";
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  // "Unit Per Primary" tooltip - rendered in a portal so rows / scroll container can't cover or clip it
+  const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
   const filteredRows = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
     if (!q) return rows;
@@ -198,7 +201,7 @@ export function PurchaseOrderLinesTable({
       if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
     });
   }, [defaultZone, rows, headerAndLineDisabled]);
-  
+
   return (
     <div
       className="commercial-lines-card rounded-md border bg-card min-w-0"
@@ -358,7 +361,15 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
 
-                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", docType, showAllColumns)}>
+                  <td
+                    className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20"
+                    style={stickyStyle("product", docType, showAllColumns)}
+                    onMouseEnter={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setUppTip({ value: numberOrZero(row.uppp), x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                    }}
+                    onMouseLeave={() => setUppTip(null)}
+                  >
                     <LookupField
                       label=""
                       value={row.prod_code || ""}
@@ -388,9 +399,6 @@ export function PurchaseOrderLinesTable({
                         updateRow(row.id, patch);
                       }}
                     />
-                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      Unit Per Primary: {row.uppp}
-                    </span>
                   </td>
 
                   {/* Primary: Qty */}
@@ -501,7 +509,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_percent}
+                      value={row.disc_percent.toFixed(2)}
                       onChange={(event) => {
                         const discPercent = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -521,7 +529,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_price}
+                      value={row.disc_price.toFixed(3)}
                       onChange={(event) => {
                         const discPrice = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -722,6 +730,23 @@ export function PurchaseOrderLinesTable({
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>
+
+      {uppTip &&
+        createPortal(
+          <div
+            className="pointer-events-none whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg"
+            style={{
+              position: "fixed",
+              top: uppTip.y,
+              left: uppTip.x,
+              transform: "translateX(-50%)",
+              zIndex: 9999,
+            }}
+          >
+            Unit Per Primary: {uppTip.value}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

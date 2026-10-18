@@ -30,6 +30,7 @@ import {
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -145,6 +146,7 @@ export function PurchaseInvoiceLinesTable({
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const discountScope = form.discount_scoope || "ITEM";
+  
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const filteredRows = useMemo(() => {
