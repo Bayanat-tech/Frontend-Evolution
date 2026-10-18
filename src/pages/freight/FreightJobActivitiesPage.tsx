@@ -528,8 +528,8 @@ export function FreightJobActivitiesPage({
       </div>
 
       <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
-        <div className="min-w-full lg:min-w-[1060px]">
-          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[28px_95px_minmax(120px,1.2fr)_44px_74px_76px_74px_minmax(120px,1fr)_72px_minmax(120px,1fr)_72px_116px] items-center gap-1 px-2.5 py-2 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
+        <div className="min-w-[1460px]">
+          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[36px_170px_minmax(180px,1.3fr)_55px_90px_95px_90px_minmax(190px,1.4fr)_85px_minmax(190px,1.4fr)_90px_145px] items-center gap-2 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
             <span className="text-center">#</span>
             <span>Activity</span>
             <span>Description</span>
@@ -551,7 +551,7 @@ export function FreightJobActivitiesPage({
 
               return (
                 <div key={`${line.srno}-${index}`} className={`freight-job-table-row transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/80"}`}>
-                  <div className="freight-activity-primary-row grid grid-cols-[28px_95px_minmax(120px,1.2fr)_44px_74px_76px_74px_minmax(120px,1fr)_72px_minmax(120px,1fr)_72px_116px] items-center gap-1 px-2.5 py-1.5">
+                  <div className="freight-activity-primary-row grid grid-cols-[36px_170px_minmax(180px,1.3fr)_55px_90px_95px_90px_minmax(190px,1.4fr)_85px_minmax(190px,1.4fr)_90px_145px] items-center gap-2 px-3 py-2">
                     <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                     <ActivityLookup
                       value={line.act_code}
@@ -1459,12 +1459,17 @@ function ActivityLookup({
       value={value}
       displayValue={formattedDisplayValue}
       compact
+      placeholder="Select Activity"
       valueField="ACT_CODE"
       displayFields={["ACT_CODE", "ACTIVITY"]}
-      columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }]}
+      columns={[
+        { field: "ACT_CODE", header: "Code" },
+        { field: "ACTIVITY", header: "Activity Name" },
+      ]}
       loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
       onChange={onChange}
       disabled={disabled}
+      popoverWidth={580}
     />
   );
 }
