@@ -314,6 +314,7 @@ export function LookupField({
             type="button"
             onClick={openLookup}
             disabled={disabled}
+            title={currentText}
           >
             <span className={`block truncate ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
               {currentText ||
