@@ -59,14 +59,18 @@ type ActivityLine = {
   transport_price_oc: string;
   // Sales Tax Components
   tx_cat_code: string;
+  tx_cat_name?: string;
   tx_compntcat_code_1: string;
+  tx_compntcat_name_1?: string;
   tx_compnt_perc_1: string;
   tx_compnt_amt_1: string;
   tx_compnt_lcuramt_1: string;
   tx_compnt_1_expmt: string;
   // Cost Tax Components
   tx_cat_code_cost: string;
+  tx_cat_name_cost?: string;
   tx_compntcat_code_1_cost: string;
+  tx_compntcat_name_1_cost?: string;
   tx_compnt_perc_1_cost: string;
   tx_compnt_amt_1_cost: string;
   tx_compnt_lcuramt_1_cost: string;
@@ -529,8 +533,8 @@ export function FreightJobActivitiesPage({
       </div>
 
       <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
-        <div className="min-w-[1360px]">
-          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[32px_140px_minmax(140px,1.2fr)_50px_85px_90px_115px_85px_minmax(150px,1.2fr)_80px_minmax(150px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
+        <div className="min-w-[1380px]">
+          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[32px_140px_minmax(180px,1.4fr)_50px_85px_90px_115px_85px_minmax(160px,1.2fr)_80px_minmax(160px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
             <span className="text-center">#</span>
             <span>Activity</span>
             <span>Description</span>
@@ -553,7 +557,7 @@ export function FreightJobActivitiesPage({
 
               return (
                 <div key={`${line.srno}-${index}`} className={`freight-job-table-row transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/80"}`}>
-                  <div className="freight-activity-primary-row grid grid-cols-[32px_140px_minmax(140px,1.2fr)_50px_85px_90px_115px_85px_minmax(150px,1.2fr)_80px_minmax(150px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2">
+                  <div className="freight-activity-primary-row grid grid-cols-[32px_140px_minmax(180px,1.4fr)_50px_85px_90px_115px_85px_minmax(160px,1.2fr)_80px_minmax(160px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2">
                     <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                     <ActivityLookup
                       value={line.act_code}
@@ -589,6 +593,7 @@ export function FreightJobActivitiesPage({
                               updatedLine = recalcSalesTax({
                                 ...updatedLine,
                                 tx_compntcat_code_1: taxCode,
+                                tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
                                 tx_compnt_perc_1: taxPerc,
                                 tx_compnt_1_expmt: isStandard,
                               });
@@ -601,14 +606,14 @@ export function FreightJobActivitiesPage({
                         updateLine(index, updatedLine);
                       }}
                     />
-                    <Input
-                      className="h-7 text-xs"
-                      placeholder="Service description"
+                    <textarea
+                      className="w-full text-xs min-h-[46px] max-h-[96px] h-[48px] py-1 px-2 rounded-md border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 resize-y leading-snug font-sans"
+                      placeholder="Service description..."
                       value={line.other_services}
                       disabled={isLineLocked}
+                      rows={2}
                       onChange={(event) => updateLine(index, { other_services: event.target.value })}
                       maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}
-                      maxBytes={freightTextLimit("TN_INVOICE_DET", "other_services")}
                     />
                     <MoneyInput
                       value={line.quantity}
@@ -1189,7 +1194,7 @@ export function FreightJobActivitiesPage({
           open={true}
           title={`Tax & VAT Configuration (Line #${activeTaxIndex + 1})`}
           onClose={() => setActiveTaxIndex(null)}
-          contentClassName="w-[min(96vw,740px)]"
+          contentClassName="w-[min(96vw,860px)]"
           footer={
             <div className="flex items-center justify-between w-full">
               <span className="text-[11px] text-muted-foreground italic">
@@ -1229,20 +1234,24 @@ export function FreightJobActivitiesPage({
                   Sales Tax Amt: <strong className="text-primary font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_amt_1)}</strong>
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_1fr_80px] gap-2.5 items-end">
                 <div>
                   <label className="text-[10px] text-muted-foreground block mb-0.5">Tax Category</label>
                   <TaxCategoryLookup
                     companyCode={companyCode}
                     divisionCode={lines[activeTaxIndex].div_code || lookupText(header, "div_code") || "10"}
                     value={lines[activeTaxIndex].tx_cat_code}
+                    displayValue={lines[activeTaxIndex].tx_cat_name}
                     disabled={isLineLocked}
                     placeholder="Tax Category"
-                    onChange={(val) => {
+                    onChange={(val, row) => {
+                      const catName = lookupText(row, "tx_cat_name");
                       updateLine(activeTaxIndex, recalcSalesTax({
                         ...lines[activeTaxIndex],
                         tx_cat_code: val,
+                        tx_cat_name: catName,
                         tx_compntcat_code_1: "",
+                        tx_compntcat_name_1: "",
                         tx_compnt_perc_1: "0",
                         tx_compnt_1_expmt: "N",
                       }));
@@ -1257,14 +1266,17 @@ export function FreightJobActivitiesPage({
                     taxCategory={lines[activeTaxIndex].tx_cat_code}
                     activityCode={lines[activeTaxIndex].act_code}
                     value={lines[activeTaxIndex].tx_compntcat_code_1}
+                    displayValue={lines[activeTaxIndex].tx_compntcat_name_1}
                     disabled={isLineLocked}
                     placeholder="Tax Code"
                     onChange={(val, row) => {
                       const perc = lookupText(row, "tx_percnt") || "0";
+                      const codeName = lookupText(row, "tx_compntcat_name");
                       const treatment = numberValue(perc) > 0 ? "S" : "Z";
                       updateLine(activeTaxIndex, recalcSalesTax({
                         ...lines[activeTaxIndex],
                         tx_compntcat_code_1: val,
+                        tx_compntcat_name_1: codeName,
                         tx_compnt_perc_1: perc,
                         tx_compnt_1_expmt: treatment,
                       }));
@@ -1309,20 +1321,24 @@ export function FreightJobActivitiesPage({
                   Cost Tax Amt: <strong className="text-emerald-700 font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_amt_1_cost)}</strong>
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_1fr_80px] gap-2.5 items-end">
                 <div>
                   <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax Category</label>
                   <TaxCategoryLookup
                     companyCode={companyCode}
                     divisionCode={lines[activeTaxIndex].div_code || lookupText(header, "div_code") || "10"}
                     value={lines[activeTaxIndex].tx_cat_code_cost}
+                    displayValue={lines[activeTaxIndex].tx_cat_name_cost}
                     disabled={isLineLocked}
                     placeholder="Cost Category"
-                    onChange={(val) => {
+                    onChange={(val, row) => {
+                      const catName = lookupText(row, "tx_cat_name");
                       updateLine(activeTaxIndex, recalcCostTax({
                         ...lines[activeTaxIndex],
                         tx_cat_code_cost: val,
+                        tx_cat_name_cost: catName,
                         tx_compntcat_code_1_cost: "",
+                        tx_compntcat_name_1_cost: "",
                         tx_compnt_perc_1_cost: "0",
                         tx_compnt_1_expmt_cost: "N",
                       }));
@@ -1337,14 +1353,17 @@ export function FreightJobActivitiesPage({
                     taxCategory={lines[activeTaxIndex].tx_cat_code_cost}
                     activityCode={lines[activeTaxIndex].act_code}
                     value={lines[activeTaxIndex].tx_compntcat_code_1_cost}
+                    displayValue={lines[activeTaxIndex].tx_compntcat_name_1_cost}
                     disabled={isLineLocked}
                     placeholder="Cost Tax Code"
                     onChange={(val, row) => {
                       const perc = lookupText(row, "tx_percnt") || "0";
+                      const codeName = lookupText(row, "tx_compntcat_name");
                       const treatment = numberValue(perc) > 0 ? "S" : "Z";
                       updateLine(activeTaxIndex, recalcCostTax({
                         ...lines[activeTaxIndex],
                         tx_compntcat_code_1_cost: val,
+                        tx_compntcat_name_1_cost: codeName,
                         tx_compnt_perc_1_cost: perc,
                         tx_compnt_1_expmt_cost: treatment,
                       }));
@@ -1449,63 +1468,197 @@ function ActivityLookup({
   onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
 }) {
+  const [cachedName, setCachedName] = useState(displayValue || "");
+
+  useEffect(() => {
+    if (displayValue) setCachedName(displayValue);
+  }, [displayValue]);
+
+  useEffect(() => {
+    if (value && !cachedName && companyCode) {
+      loadFreightLookup("freight_activity", companyCode, value).then((rows) => {
+        const found = rows.find((r) => lookupText(r, "act_code") === value);
+        if (found) {
+          const name = lookupText(found, "activity");
+          if (name) setCachedName(name);
+        }
+      }).catch(() => {});
+    }
+  }, [value, cachedName, companyCode]);
+
+  const fullName = cachedName || displayValue || "";
+
+  return (
+    <div className="flex flex-col min-w-0">
+      <LookupField
+        value={value}
+        displayValue={value}
+        compact
+        placeholder="Act Code..."
+        valueField="ACT_CODE"
+        displayFields={["ACT_CODE", "ACTIVITY"]}
+        columns={[
+          { field: "ACT_CODE", header: "Code" },
+          { field: "ACTIVITY", header: "Activity Name" },
+        ]}
+        loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
+        onChange={(val, row) => {
+          const name = lookupText(row || undefined, "activity") || "";
+          setCachedName(name);
+          onChange(val, row);
+        }}
+        disabled={disabled}
+        popoverWidth={580}
+      />
+      {fullName ? (
+        <span
+          className="text-[10px] font-semibold text-primary/90 truncate leading-tight mt-0.5 px-0.5"
+          title={fullName}
+        >
+          {fullName}
+        </span>
+      ) : (
+        <span className="text-[9.5px] text-muted-foreground/60 italic truncate leading-tight mt-0.5 px-0.5">
+          Select activity
+        </span>
+      )}
+    </div>
+  );
+}
+
+function TaxCategoryLookup({
+  companyCode,
+  divisionCode,
+  value,
+  displayValue,
+  onChange,
+  disabled,
+  placeholder,
+}: {
+  companyCode: string;
+  divisionCode: string;
+  value: string;
+  displayValue?: string;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+  placeholder: string;
+}) {
+  const [cachedName, setCachedName] = useState(displayValue || "");
+
+  useEffect(() => {
+    if (displayValue) setCachedName(displayValue);
+  }, [displayValue]);
+
+  useEffect(() => {
+    if (value && !cachedName && companyCode && divisionCode) {
+      freightTaxCategories<LookupRow>(companyCode, divisionCode, "").then((rows) => {
+        const found = rows.find((r) => lookupText(r, "tx_cat_code") === value);
+        if (found) {
+          const name = lookupText(found, "tx_cat_name");
+          if (name) setCachedName(name);
+        }
+      }).catch(() => {});
+    }
+  }, [value, cachedName, companyCode, divisionCode]);
+
   const formattedDisplayValue = useMemo(() => {
-    if (!value) return displayValue || "";
-    if (!displayValue) return value;
-    const trimmedVal = String(value).trim();
-    const trimmedDisp = String(displayValue).trim();
-    if (trimmedDisp.startsWith(trimmedVal)) return trimmedDisp;
-    return `${trimmedVal} - ${trimmedDisp}`;
-  }, [value, displayValue]);
+    if (!value) return "";
+    const name = cachedName || displayValue || "";
+    if (!name) return value;
+    if (name.startsWith(value)) return name;
+    return `${value} - ${name}`;
+  }, [value, cachedName, displayValue]);
 
   return (
     <LookupField
       value={value}
       displayValue={formattedDisplayValue}
       compact
-      placeholder="Select Activity"
-      valueField="ACT_CODE"
-      displayFields={["ACT_CODE", "ACTIVITY"]}
-      columns={[
-        { field: "ACT_CODE", header: "Code" },
-        { field: "ACTIVITY", header: "Activity Name" },
-      ]}
-      loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
-      onChange={onChange}
-      disabled={disabled}
-      popoverWidth={580}
-    />
-  );
-}
-
-function TaxCategoryLookup({ companyCode, divisionCode, value, onChange, disabled, placeholder }: { companyCode: string; divisionCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
-  return (
-    <LookupField
-      value={value}
-      compact
       placeholder={placeholder}
       valueField="TX_CAT_CODE"
       displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
-      columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]}
+      columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category Name" }]}
       loadOptions={(query) => freightTaxCategories<LookupRow>(companyCode, divisionCode, query).then((rows) => rows.map(normalizeLookupRow))}
-      onChange={onChange}
+      onChange={(val, row) => {
+        const name = lookupText(row || undefined, "tx_cat_name");
+        setCachedName(name);
+        onChange(val, row);
+      }}
       disabled={disabled || !divisionCode}
+      popoverWidth={480}
     />
   );
 }
 
-function TaxCodeLookup({ companyCode, divisionCode, taxCategory, activityCode, value, onChange, disabled, placeholder }: { companyCode: string; divisionCode: string; taxCategory: string; activityCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+function TaxCodeLookup({
+  companyCode,
+  divisionCode,
+  taxCategory,
+  activityCode,
+  value,
+  displayValue,
+  onChange,
+  disabled,
+  placeholder,
+}: {
+  companyCode: string;
+  divisionCode: string;
+  taxCategory: string;
+  activityCode: string;
+  value: string;
+  displayValue?: string;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+  placeholder: string;
+}) {
+  const [cachedName, setCachedName] = useState(displayValue || "");
+
+  useEffect(() => {
+    if (displayValue) setCachedName(displayValue);
+  }, [displayValue]);
+
+  useEffect(() => {
+    if (value && !cachedName && companyCode && divisionCode && taxCategory) {
+      freightTaxComponents<LookupRow>(companyCode, divisionCode, taxCategory, "", activityCode).then((rows) => {
+        const found = rows.find((r) => lookupText(r, "tx_compntcat_code") === value);
+        if (found) {
+          const name = lookupText(found, "tx_compntcat_name") || lookupText(found, "tx_compntcat_code");
+          if (name) setCachedName(name);
+        }
+      }).catch(() => {});
+    }
+  }, [value, cachedName, companyCode, divisionCode, taxCategory, activityCode]);
+
+  const formattedDisplayValue = useMemo(() => {
+    if (!value) return "";
+    const name = cachedName || displayValue || "";
+    if (!name) return value;
+    if (name.startsWith(value)) return name;
+    return `${value} - ${name}`;
+  }, [value, cachedName, displayValue]);
+
   return (
     <LookupField
       value={value}
+      displayValue={formattedDisplayValue}
       compact
       placeholder={placeholder}
       valueField="TX_COMPNTCAT_CODE"
       displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
-      columns={[{ field: "TX_COMPNTCAT_CODE", header: "Code" }, { field: "TX_COMPNTCAT_NAME", header: "Tax Code" }, { field: "TX_CAT_CODE", header: "Tax Category" }, { field: "TX_PERCNT", header: "Tax %" }]}
+      columns={[
+        { field: "TX_COMPNTCAT_CODE", header: "Code" },
+        { field: "TX_COMPNTCAT_NAME", header: "Tax Code Name" },
+        { field: "TX_CAT_CODE", header: "Category" },
+        { field: "TX_PERCNT", header: "Tax %" },
+      ]}
       loadOptions={(query) => freightTaxComponents<LookupRow>(companyCode, divisionCode, taxCategory, query, activityCode).then((rows) => rows.map(normalizeLookupRow))}
-      onChange={onChange}
+      onChange={(val, row) => {
+        const name = lookupText(row || undefined, "tx_compntcat_name");
+        setCachedName(name);
+        onChange(val, row);
+      }}
       disabled={disabled || !divisionCode || !taxCategory}
+      popoverWidth={580}
     />
   );
 }
@@ -1523,33 +1676,58 @@ function AgentLookup({
   onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
 }) {
-  const formattedDisplayValue = useMemo(() => {
-    if (!value) return displayValue || "";
-    if (!displayValue) return value;
-    const trimmedVal = String(value).trim();
-    const trimmedDisp = String(displayValue).trim();
-    if (trimmedDisp.startsWith(trimmedVal)) return trimmedDisp;
-    return `${trimmedVal} - ${trimmedDisp}`;
-  }, [value, displayValue]);
+  const [cachedName, setCachedName] = useState(displayValue || "");
+
+  useEffect(() => {
+    if (displayValue) setCachedName(displayValue);
+  }, [displayValue]);
+
+  useEffect(() => {
+    if (value && !cachedName && companyCode) {
+      loadFreightLookup("freight_broker", companyCode, value).then((rows) => {
+        const found = rows.find((r) => lookupText(r, "broker_code") === value);
+        if (found) {
+          const name = lookupText(found, "broker_name") || lookupText(found, "agent_name");
+          if (name) setCachedName(name);
+        }
+      }).catch(() => {});
+    }
+  }, [value, cachedName, companyCode]);
+
+  const fullName = cachedName || displayValue || "";
 
   return (
-    <LookupField
-      value={value}
-      displayValue={formattedDisplayValue}
-      compact
-      placeholder="Select Agent / Broker"
-      valueField="BROKER_CODE"
-      displayFields={["BROKER_CODE", "BROKER_NAME"]}
-      columns={[
-        { field: "BROKER_CODE", header: "Code" },
-        { field: "BROKER_NAME", header: "Agent / Broker Full Name" },
-        { field: "BROKER_CITY", header: "City" },
-      ]}
-      loadOptions={(query) => loadFreightLookup("freight_broker", companyCode, query)}
-      onChange={onChange}
-      disabled={disabled}
-      popoverWidth={650}
-    />
+    <div className="flex flex-col min-w-0">
+      <LookupField
+        value={value}
+        displayValue={value}
+        compact
+        placeholder="Broker..."
+        valueField="BROKER_CODE"
+        displayFields={["BROKER_CODE", "BROKER_NAME"]}
+        columns={[
+          { field: "BROKER_CODE", header: "Code" },
+          { field: "BROKER_NAME", header: "Agent / Broker Full Name" },
+          { field: "BROKER_CITY", header: "City" },
+        ]}
+        loadOptions={(query) => loadFreightLookup("freight_broker", companyCode, query)}
+        onChange={(val, row) => {
+          const name = lookupText(row || undefined, "broker_name") || lookupText(row || undefined, "agent_name") || "";
+          setCachedName(name);
+          onChange(val, row);
+        }}
+        disabled={disabled}
+        popoverWidth={650}
+      />
+      {fullName ? (
+        <span
+          className="text-[10px] font-semibold text-slate-700 truncate leading-tight mt-0.5 px-0.5"
+          title={fullName}
+        >
+          {fullName}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -1566,32 +1744,57 @@ function TransporterLookup({
   onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
 }) {
-  const formattedDisplayValue = useMemo(() => {
-    if (!value) return displayValue || "";
-    if (!displayValue) return value;
-    const trimmedVal = String(value).trim();
-    const trimmedDisp = String(displayValue).trim();
-    if (trimmedDisp.startsWith(trimmedVal)) return trimmedDisp;
-    return `${trimmedVal} - ${trimmedDisp}`;
-  }, [value, displayValue]);
+  const [cachedName, setCachedName] = useState(displayValue || "");
+
+  useEffect(() => {
+    if (displayValue) setCachedName(displayValue);
+  }, [displayValue]);
+
+  useEffect(() => {
+    if (value && !cachedName && companyCode) {
+      loadFreightLookup("freight_transporter", companyCode, value).then((rows) => {
+        const found = rows.find((r) => lookupText(r, "transporter_code") === value);
+        if (found) {
+          const name = lookupText(found, "transporter_name");
+          if (name) setCachedName(name);
+        }
+      }).catch(() => {});
+    }
+  }, [value, cachedName, companyCode]);
+
+  const fullName = cachedName || displayValue || "";
 
   return (
-    <LookupField
-      value={value}
-      displayValue={formattedDisplayValue}
-      compact
-      placeholder="Select Transporter"
-      valueField="TRANSPORTER_CODE"
-      displayFields={["TRANSPORTER_CODE", "TRANSPORTER_NAME"]}
-      columns={[
-        { field: "TRANSPORTER_CODE", header: "Code" },
-        { field: "TRANSPORTER_NAME", header: "Transporter Full Name" },
-      ]}
-      loadOptions={(query) => loadFreightLookup("freight_transporter", companyCode, query)}
-      onChange={onChange}
-      disabled={disabled}
-      popoverWidth={650}
-    />
+    <div className="flex flex-col min-w-0">
+      <LookupField
+        value={value}
+        displayValue={value}
+        compact
+        placeholder="Transp..."
+        valueField="TRANSPORTER_CODE"
+        displayFields={["TRANSPORTER_CODE", "TRANSPORTER_NAME"]}
+        columns={[
+          { field: "TRANSPORTER_CODE", header: "Code" },
+          { field: "TRANSPORTER_NAME", header: "Transporter Full Name" },
+        ]}
+        loadOptions={(query) => loadFreightLookup("freight_transporter", companyCode, query)}
+        onChange={(val, row) => {
+          const name = lookupText(row || undefined, "transporter_name") || "";
+          setCachedName(name);
+          onChange(val, row);
+        }}
+        disabled={disabled}
+        popoverWidth={650}
+      />
+      {fullName ? (
+        <span
+          className="text-[10px] font-semibold text-slate-700 truncate leading-tight mt-0.5 px-0.5"
+          title={fullName}
+        >
+          {fullName}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -1691,6 +1894,11 @@ function toLine(row: LookupRow, index: number, header?: LookupRow | null): Activ
   // Fallbacks for display names
   line.broker_name = lookupText(row, "broker_name") || lookupText(row, "agent_name") || "";
   line.transporter_name = lookupText(row, "transporter_name") || "";
+  line.activity = lookupText(row, "activity") || "";
+  line.tx_cat_name = lookupText(row, "tx_cat_name") || "";
+  line.tx_compntcat_name_1 = lookupText(row, "tx_compntcat_name_1") || lookupText(row, "tx_compntcat_name") || "";
+  line.tx_cat_name_cost = lookupText(row, "tx_cat_name_cost") || "";
+  line.tx_compntcat_name_1_cost = lookupText(row, "tx_compntcat_name_1_cost") || "";
   return line;
 }
 
