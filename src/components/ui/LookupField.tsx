@@ -12,6 +12,7 @@ type LookupFieldProps = {
   label?: string;
   value: string;
   displayValue?: string;
+  subText?: string;
   columns: LookupColumn[];
   valueField: string;
   displayFields: string[];
@@ -35,6 +36,7 @@ export function LookupField({
   label,
   value,
   displayValue,
+  subText,
   columns,
   valueField,
   displayFields,
@@ -289,8 +291,8 @@ export function LookupField({
           className={`lookup-field-trigger relative flex w-full min-w-0 items-center overflow-hidden rounded-md border transition-all ${
             disabled
               ? "bg-slate-100/90 border-slate-200 cursor-not-allowed"
-              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20"
-          } ${dense ? "h-7" : compact ? "h-7" : "h-8"}`}
+              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20 shadow-2xs"
+          } ${dense ? "h-7" : subText ? "h-[48px] min-h-[46px]" : compact ? "h-7" : "h-8"}`}
         >
           {enforceRequired && !disabled && (
             <input
@@ -306,26 +308,31 @@ export function LookupField({
             />
           )}
           <button
-            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate ${
+            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate flex flex-col justify-center ${
               disabled ? "cursor-not-allowed text-slate-700 font-medium" : "cursor-pointer"
             } ${
-              dense || compact ? "px-2" : "px-2.5"
-            } ${!disabled && currentText ? "text-slate-800 font-medium text-[11px]" : !disabled ? "text-slate-400 text-[10px]" : "text-[11px]"}`}
+              dense || (compact && !subText) ? "px-2" : "px-2"
+            } ${subText ? "py-0.5" : ""}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
-            title={currentText}
+            title={subText ? `${currentText} - ${subText}` : currentText}
           >
-            <span className={`block truncate ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
+            <span className={`block truncate ${!disabled && currentText ? "text-slate-800 font-bold text-[11px]" : !disabled ? "text-slate-400 text-[10.5px]" : "text-[11px]"} ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
               {currentText ||
                 (placeholder
                   ? `${placeholder.replace(/\.*$/, "")}...`
                   : `${cleanLabel || label || ""}...`)}
             </span>
+            {subText && (
+              <span className="block truncate text-[10px] font-medium text-slate-500 leading-tight mt-0.5">
+                {subText}
+              </span>
+            )}
           </button>
           {value && !disabled && (
             <button
-              className={`${dense || compact ? "w-6" : "w-6.5"} shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer`}
+              className={`${dense || (compact && !subText) ? "w-6" : "w-6.5"} shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer self-center`}
               type="button"
               aria-label="Clear lookup"
               onClick={(e) => {
@@ -333,13 +340,13 @@ export function LookupField({
                 onChange("", null);
               }}
             >
-              <X size={dense ? 11 : 13} />
+              <X size={dense ? 11 : 12} />
             </button>
           )}
           <button
-            className={`${dense || compact ? "w-6" : "w-7"} shrink-0 grid place-items-center ${
+            className={`${dense || (compact && !subText) ? "w-6" : "w-7"} shrink-0 grid place-items-center ${
               disabled ? "text-slate-300 pointer-events-none" : "text-slate-400 hover:bg-slate-100 cursor-pointer"
-            }`}
+            } self-center`}
             type="button"
             onClick={openLookup}
             disabled={disabled}

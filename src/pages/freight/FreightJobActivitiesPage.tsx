@@ -1489,40 +1489,27 @@ function ActivityLookup({
   const fullName = cachedName || displayValue || "";
 
   return (
-    <div className="flex flex-col min-w-0">
-      <LookupField
-        value={value}
-        displayValue={value}
-        compact
-        placeholder="Act Code..."
-        valueField="ACT_CODE"
-        displayFields={["ACT_CODE", "ACTIVITY"]}
-        columns={[
-          { field: "ACT_CODE", header: "Code" },
-          { field: "ACTIVITY", header: "Activity Name" },
-        ]}
-        loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
-        onChange={(val, row) => {
-          const name = lookupText(row || undefined, "activity") || "";
-          setCachedName(name);
-          onChange(val, row);
-        }}
-        disabled={disabled}
-        popoverWidth={580}
-      />
-      {fullName ? (
-        <span
-          className="text-[10px] font-bold text-[#00378C] bg-blue-50/90 border border-blue-200/80 rounded px-1.5 py-0.5 truncate leading-tight mt-1 shadow-2xs block"
-          title={fullName}
-        >
-          {fullName}
-        </span>
-      ) : (
-        <span className="text-[10px] text-muted-foreground/50 italic truncate leading-tight mt-1 px-1 block">
-          Select activity...
-        </span>
-      )}
-    </div>
+    <LookupField
+      value={value}
+      displayValue={value}
+      subText={fullName}
+      compact
+      placeholder="Select Act..."
+      valueField="ACT_CODE"
+      displayFields={["ACT_CODE", "ACTIVITY"]}
+      columns={[
+        { field: "ACT_CODE", header: "Code" },
+        { field: "ACTIVITY", header: "Activity Name" },
+      ]}
+      loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
+      onChange={(val, row) => {
+        const name = lookupText(row || undefined, "activity") || "";
+        setCachedName(name);
+        onChange(val, row);
+      }}
+      disabled={disabled}
+      popoverWidth={580}
+    />
   );
 }
 
@@ -1697,41 +1684,28 @@ function AgentLookup({
   const fullName = cachedName || displayValue || "";
 
   return (
-    <div className="flex flex-col min-w-0">
-      <LookupField
-        value={value}
-        displayValue={value}
-        compact
-        placeholder="Broker..."
-        valueField="BROKER_CODE"
-        displayFields={["BROKER_CODE", "BROKER_NAME"]}
-        columns={[
-          { field: "BROKER_CODE", header: "Code" },
-          { field: "BROKER_NAME", header: "Agent / Broker Full Name" },
-          { field: "BROKER_CITY", header: "City" },
-        ]}
-        loadOptions={(query) => loadFreightLookup("freight_broker", companyCode, query)}
-        onChange={(val, row) => {
-          const name = lookupText(row || undefined, "broker_name") || lookupText(row || undefined, "agent_name") || "";
-          setCachedName(name);
-          onChange(val, row);
-        }}
-        disabled={disabled}
-        popoverWidth={650}
-      />
-      {fullName ? (
-        <span
-          className="text-[10px] font-bold text-indigo-900 bg-indigo-50/90 border border-indigo-200/80 rounded px-1.5 py-0.5 truncate leading-tight mt-1 shadow-2xs block"
-          title={fullName}
-        >
-          {fullName}
-        </span>
-      ) : (
-        <span className="text-[10px] text-muted-foreground/50 italic truncate leading-tight mt-1 px-1 block">
-          No broker
-        </span>
-      )}
-    </div>
+    <LookupField
+      value={value}
+      displayValue={value}
+      subText={fullName}
+      compact
+      placeholder="Select Broker..."
+      valueField="BROKER_CODE"
+      displayFields={["BROKER_CODE", "BROKER_NAME"]}
+      columns={[
+        { field: "BROKER_CODE", header: "Code" },
+        { field: "BROKER_NAME", header: "Agent / Broker Full Name" },
+        { field: "BROKER_CITY", header: "City" },
+      ]}
+      loadOptions={(query) => loadFreightLookup("freight_broker", companyCode, query)}
+      onChange={(val, row) => {
+        const name = lookupText(row || undefined, "broker_name") || lookupText(row || undefined, "agent_name") || "";
+        setCachedName(name);
+        onChange(val, row);
+      }}
+      disabled={disabled}
+      popoverWidth={650}
+    />
   );
 }
 
@@ -1769,40 +1743,27 @@ function TransporterLookup({
   const fullName = cachedName || displayValue || "";
 
   return (
-    <div className="flex flex-col min-w-0">
-      <LookupField
-        value={value}
-        displayValue={value}
-        compact
-        placeholder="Transp..."
-        valueField="TRANSPORTER_CODE"
-        displayFields={["TRANSPORTER_CODE", "TRANSPORTER_NAME"]}
-        columns={[
-          { field: "TRANSPORTER_CODE", header: "Code" },
-          { field: "TRANSPORTER_NAME", header: "Transporter Full Name" },
-        ]}
-        loadOptions={(query) => loadFreightLookup("freight_transporter", companyCode, query)}
-        onChange={(val, row) => {
-          const name = lookupText(row || undefined, "transporter_name") || "";
-          setCachedName(name);
-          onChange(val, row);
-        }}
-        disabled={disabled}
-        popoverWidth={650}
-      />
-      {fullName ? (
-        <span
-          className="text-[10px] font-bold text-amber-950 bg-amber-50/90 border border-amber-200/80 rounded px-1.5 py-0.5 truncate leading-tight mt-1 shadow-2xs block"
-          title={fullName}
-        >
-          {fullName}
-        </span>
-      ) : (
-        <span className="text-[10px] text-muted-foreground/50 italic truncate leading-tight mt-1 px-1 block">
-          No transporter
-        </span>
-      )}
-    </div>
+    <LookupField
+      value={value}
+      displayValue={value}
+      subText={fullName}
+      compact
+      placeholder="Select Transp..."
+      valueField="TRANSPORTER_CODE"
+      displayFields={["TRANSPORTER_CODE", "TRANSPORTER_NAME"]}
+      columns={[
+        { field: "TRANSPORTER_CODE", header: "Code" },
+        { field: "TRANSPORTER_NAME", header: "Transporter Full Name" },
+      ]}
+      loadOptions={(query) => loadFreightLookup("freight_transporter", companyCode, query)}
+      onChange={(val, row) => {
+        const name = lookupText(row || undefined, "transporter_name") || "";
+        setCachedName(name);
+        onChange(val, row);
+      }}
+      disabled={disabled}
+      popoverWidth={650}
+    />
   );
 }
 
