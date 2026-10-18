@@ -520,22 +520,24 @@ export function FreightJobActivitiesPage({
         </div>
       )}
 
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         <Metric label="Revenue" value={money(totals.revenue)} />
+        <Metric label="Tax (VAT)" value={money(totals.tax)} />
         <Metric label="Expense" value={money(totals.expense)} />
         <Metric label="Profit" value={money(totals.profit)} tone={totals.profit < 0 ? "bad" : "good"} />
         <Metric label="Lines" value={String(lines.length)} />
       </div>
 
       <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
-        <div className="min-w-[1580px]">
-          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[36px_180px_minmax(180px,1.2fr)_55px_95px_100px_95px_minmax(190px,1.3fr)_90px_minmax(190px,1.3fr)_105px_185px] items-center gap-2 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
+        <div className="min-w-[1360px]">
+          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[32px_140px_minmax(140px,1.2fr)_50px_85px_90px_115px_85px_minmax(150px,1.2fr)_80px_minmax(150px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
             <span className="text-center">#</span>
             <span>Activity</span>
             <span>Description</span>
             <span className="text-center">Qty</span>
             <span className="text-right">Rate (OMR)</span>
             <span className="text-right">Revenue (OMR)</span>
+            <span className="text-center text-amber-200">Tax / VAT</span>
             <span className="text-right">Cost (OMR)</span>
             <span>Agent / Broker</span>
             <span className="text-right">Agent (OMR)</span>
@@ -551,7 +553,7 @@ export function FreightJobActivitiesPage({
 
               return (
                 <div key={`${line.srno}-${index}`} className={`freight-job-table-row transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/80"}`}>
-                  <div className="freight-activity-primary-row grid grid-cols-[36px_180px_minmax(180px,1.2fr)_55px_95px_100px_95px_minmax(190px,1.3fr)_90px_minmax(190px,1.3fr)_105px_185px] items-center gap-2 px-3 py-2">
+                  <div className="freight-activity-primary-row grid grid-cols-[32px_140px_minmax(140px,1.2fr)_50px_85px_90px_115px_85px_minmax(150px,1.2fr)_80px_minmax(150px,1.2fr)_85px_90px] items-center gap-1.5 px-3 py-2">
                     <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
                     <ActivityLookup
                       value={line.act_code}
@@ -657,6 +659,29 @@ export function FreightJobActivitiesPage({
                         }));
                       }}
                     />
+                    {/* Dedicated Tax (VAT) Badge Button */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTaxIndex(index)}
+                      className={`h-7 w-full px-1.5 rounded-md border flex items-center justify-between gap-1 text-[11px] font-mono transition-all cursor-pointer shadow-2xs ${
+                        hasTax
+                          ? "border-emerald-400 bg-emerald-50/90 text-emerald-900 font-bold hover:bg-emerald-100"
+                          : "border-dashed border-slate-300 bg-slate-50/60 text-slate-500 hover:border-slate-400 hover:bg-slate-100"
+                      }`}
+                      title={
+                        hasTax
+                          ? `Sales Tax: ${line.tx_compnt_perc_1 || 0}% (OMR ${money(line.tx_compnt_amt_1)}) | Cost Tax: ${line.tx_compnt_perc_1_cost || 0}% (OMR ${money(line.tx_compnt_amt_1_cost)})`
+                          : "Click to configure Tax & VAT"
+                      }
+                    >
+                      <span className="flex items-center gap-0.5 font-bold">
+                        <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
+                        <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "0%"}</span>
+                      </span>
+                      <span className="text-[10.5px] tabular-nums font-semibold truncate text-right">
+                        {hasTax ? money(line.tx_compnt_amt_1) : "No Tax"}
+                      </span>
+                    </button>
                     {/* Cost in Base Currency (OMR) */}
                     <MoneyInput
                       value={line.actual_cost}
@@ -735,14 +760,14 @@ export function FreightJobActivitiesPage({
                       }}
                     />
 
-                    {/* Action Buttons: Currency, Tax, Delete in one row */}
-                    <div className="flex items-center justify-center gap-1.5 pl-3 border-l border-slate-200/80">
+                    {/* Action Buttons: Currency & Delete */}
+                    <div className="flex items-center justify-center gap-1 pl-2 border-l border-slate-200/80">
                       {/* Multi-Currency / FC Dialog Button (PowerBuilder dw_7 / F3) */}
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        className={`h-7 px-2 text-[10.5px] gap-1 font-mono shadow-2xs shrink-0 ${
+                        className={`h-7 px-1.5 text-[10px] gap-0.5 font-mono shadow-2xs shrink-0 ${
                           hasForeignCurrency
                             ? "border-amber-400 bg-amber-50 text-amber-900 font-bold hover:bg-amber-100"
                             : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -754,29 +779,8 @@ export function FreightJobActivitiesPage({
                         }
                         onClick={() => setActiveFcIndex(index)}
                       >
-                        <Coins size={12} className={hasForeignCurrency ? "text-amber-600" : "text-slate-400"} />
-                        <span>{hasForeignCurrency ? `FC: ${line.bill_curr_code}` : "Currency"}</span>
-                      </Button>
-
-                      {/* Tax Dialog Button */}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className={`h-7 px-2 text-[10.5px] gap-1 font-mono shadow-2xs shrink-0 ${
-                          hasTax
-                            ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold hover:bg-emerald-100"
-                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
-                        title={
-                          hasTax
-                            ? `Sales Tax: OMR ${money(line.tx_compnt_amt_1)} (${line.tx_compnt_perc_1}% ${line.tx_compntcat_code_1 || ""}) | Cost Tax: OMR ${money(line.tx_compnt_amt_1_cost)}`
-                            : "Configure Sales & Cost Tax"
-                        }
-                        onClick={() => setActiveTaxIndex(index)}
-                      >
-                        <Percent size={12} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
-                        <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `Tax ${line.tx_compnt_perc_1}%` : "Tax"}</span>
+                        <Coins size={11} className={hasForeignCurrency ? "text-amber-600" : "text-slate-400"} />
+                        <span>{hasForeignCurrency ? line.bill_curr_code : (line.bill_curr_code || "OMR")}</span>
                       </Button>
 
                       <Button
@@ -1739,8 +1743,14 @@ function calculateTotals(lines: ActivityLine[]) {
   return lines.reduce((sum, line) => {
     const revenue = numberValue(line.bill);
     const expense = numberValue(line.actual_cost) + numberValue(line.partners_price) + numberValue(line.transport_price);
-    return { revenue: sum.revenue + revenue, expense: sum.expense + expense, profit: sum.profit + revenue - expense };
-  }, { revenue: 0, expense: 0, profit: 0 });
+    const tax = numberValue(line.tx_compnt_amt_1);
+    return {
+      revenue: sum.revenue + revenue,
+      expense: sum.expense + expense,
+      tax: sum.tax + tax,
+      profit: sum.profit + revenue - expense,
+    };
+  }, { revenue: 0, expense: 0, tax: 0, profit: 0 });
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
