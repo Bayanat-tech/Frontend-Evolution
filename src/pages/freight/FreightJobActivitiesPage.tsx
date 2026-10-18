@@ -607,7 +607,7 @@ export function FreightJobActivitiesPage({
                       }}
                     />
                     <textarea
-                      className="w-full text-xs min-h-[46px] max-h-[96px] h-[48px] py-1 px-2 rounded-md border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 resize-y leading-snug font-sans"
+                      className="w-full text-xs min-h-[46px] h-[48px] py-1 px-2 rounded-md border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 resize-none leading-snug font-sans"
                       placeholder="Service description..."
                       value={line.other_services}
                       disabled={isLineLocked}
@@ -1512,14 +1512,14 @@ function ActivityLookup({
       />
       {fullName ? (
         <span
-          className="text-[10px] font-semibold text-primary/90 truncate leading-tight mt-0.5 px-0.5"
+          className="text-[10px] font-bold text-[#00378C] bg-blue-50/90 border border-blue-200/80 rounded px-1.5 py-0.5 truncate leading-tight mt-1 shadow-2xs block"
           title={fullName}
         >
           {fullName}
         </span>
       ) : (
-        <span className="text-[9.5px] text-muted-foreground/60 italic truncate leading-tight mt-0.5 px-0.5">
-          Select activity
+        <span className="text-[10px] text-muted-foreground/50 italic truncate leading-tight mt-1 px-1 block">
+          Select activity...
         </span>
       )}
     </div>
@@ -1721,12 +1721,16 @@ function AgentLookup({
       />
       {fullName ? (
         <span
-          className="text-[10px] font-semibold text-slate-700 truncate leading-tight mt-0.5 px-0.5"
+          className="text-[10px] font-bold text-indigo-900 bg-indigo-50/90 border border-indigo-200/80 rounded px-1.5 py-0.5 truncate leading-tight mt-1 shadow-2xs block"
           title={fullName}
         >
           {fullName}
         </span>
-      ) : null}
+      ) : (
+        <span className="text-[10px] text-muted-foreground/50 italic truncate leading-tight mt-1 px-1 block">
+          No broker
+        </span>
+      )}
     </div>
   );
 }
@@ -1788,12 +1792,16 @@ function TransporterLookup({
       />
       {fullName ? (
         <span
-          className="text-[10px] font-semibold text-slate-700 truncate leading-tight mt-0.5 px-0.5"
+          className="text-[10px] font-bold text-amber-950 bg-amber-50/90 border border-amber-200/80 rounded px-1.5 py-0.5 truncate leading-tight mt-1 shadow-2xs block"
           title={fullName}
         >
           {fullName}
         </span>
-      ) : null}
+      ) : (
+        <span className="text-[10px] text-muted-foreground/50 italic truncate leading-tight mt-1 px-1 block">
+          No transporter
+        </span>
+      )}
     </div>
   );
 }
