@@ -1493,6 +1493,8 @@ function ActivityLookup({
       value={value}
       displayValue={value}
       subText={fullName}
+      subTextClassName="font-bold text-[#00378C] bg-blue-50/90 border border-blue-200/90 rounded px-1.5 py-0.2 shadow-2xs max-w-full truncate inline-block"
+      triggerClassName={value ? "border-blue-300/80 bg-blue-50/20" : ""}
       compact
       placeholder="Select Act..."
       valueField="ACT_CODE"
@@ -1688,6 +1690,8 @@ function AgentLookup({
       value={value}
       displayValue={value}
       subText={fullName}
+      subTextClassName="font-bold text-indigo-900 bg-indigo-50/90 border border-indigo-200/90 rounded px-1.5 py-0.2 shadow-2xs max-w-full truncate inline-block"
+      triggerClassName={value ? "border-indigo-300/80 bg-indigo-50/20" : ""}
       compact
       placeholder="Select Broker..."
       valueField="BROKER_CODE"
@@ -1747,6 +1751,8 @@ function TransporterLookup({
       value={value}
       displayValue={value}
       subText={fullName}
+      subTextClassName="font-bold text-amber-950 bg-amber-50/90 border border-amber-200/90 rounded px-1.5 py-0.2 shadow-2xs max-w-full truncate inline-block"
+      triggerClassName={value ? "border-amber-300/80 bg-amber-50/20" : ""}
       compact
       placeholder="Select Transp..."
       valueField="TRANSPORTER_CODE"

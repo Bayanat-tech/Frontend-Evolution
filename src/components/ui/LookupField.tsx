@@ -13,6 +13,8 @@ type LookupFieldProps = {
   value: string;
   displayValue?: string;
   subText?: string;
+  subTextClassName?: string;
+  triggerClassName?: string;
   columns: LookupColumn[];
   valueField: string;
   displayFields: string[];
@@ -37,6 +39,8 @@ export function LookupField({
   value,
   displayValue,
   subText,
+  subTextClassName,
+  triggerClassName,
   columns,
   valueField,
   displayFields,
@@ -292,7 +296,7 @@ export function LookupField({
             disabled
               ? "bg-slate-100/90 border-slate-200 cursor-not-allowed"
               : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20 shadow-2xs"
-          } ${dense ? "h-7" : subText ? "h-[48px] min-h-[46px]" : compact ? "h-7" : "h-8"}`}
+          } ${dense ? "h-7" : subText ? "h-[48px] min-h-[46px]" : compact ? "h-7" : "h-8"} ${triggerClassName || ""}`}
         >
           {enforceRequired && !disabled && (
             <input
@@ -325,9 +329,15 @@ export function LookupField({
                   : `${cleanLabel || label || ""}...`)}
             </span>
             {subText && (
-              <span className="block truncate text-[10px] font-medium text-slate-500 leading-tight mt-0.5">
-                {subText}
-              </span>
+              <div className="flex items-center min-w-0 mt-0.5">
+                <span
+                  className={`truncate leading-tight ${
+                    subTextClassName || "block text-[10px] font-medium text-slate-500"
+                  }`}
+                >
+                  {subText}
+                </span>
+              </div>
             )}
           </button>
           {value && !disabled && (
