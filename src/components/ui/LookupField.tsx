@@ -6,6 +6,7 @@ import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } fr
 type LookupColumn = {
   field: string;
   header: string;
+  width?: string | number;
 };
 
 type LookupFieldProps = {
@@ -409,8 +410,9 @@ export function LookupField({
                     {columns.map((column, columnIndex) => (
                       <th
                         className={`px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap ${
-                          columnIndex === 0 ? "w-[130px] min-w-[110px]" : "w-auto"
+                          column.width ? "" : columnIndex === 0 ? "min-w-[130px]" : "w-auto min-w-[160px]"
                         }`}
+                        style={column.width ? { width: column.width, minWidth: column.width } : undefined}
                         key={column.field}
                         title={column.header}
                       >
@@ -472,9 +474,10 @@ export function LookupField({
                               <td
                                 className={`px-3 py-1.5 text-xs ${
                                   columnIndex === 0
-                                    ? "font-mono font-semibold text-[#00378C] text-[11.5px] whitespace-nowrap w-[130px] min-w-[110px]"
+                                    ? "font-semibold text-[#00378C] text-[11.5px] whitespace-normal break-words"
                                     : "text-slate-800 font-medium text-[11.5px] whitespace-normal break-words leading-snug"
                                 }`}
+                                style={column.width ? { width: column.width, minWidth: column.width } : undefined}
                                 key={column.field}
                                 title={cellText}
                               >

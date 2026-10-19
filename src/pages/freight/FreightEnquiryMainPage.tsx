@@ -165,6 +165,32 @@ const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
 const shipmentStatusOptions = ["FCL/FCL", "FCL/LCL", "LCL/LCL", "LCL/FCL"];
+const containerTypeOptions = [
+  "STANDARD",
+  "HIGHCUBE",
+  "REFER",
+  "HIGH CUBE REFER",
+  "OPEN TOP",
+  "FLAT RACK",
+  "MAIN DECK PALLET",
+  "LOWER DECK PALLET",
+  "LD-2",
+  "LD-3",
+  "LD-4",
+  "LD-7",
+  "LD-11",
+  "TANK",
+  "BULK",
+  "OPEN SIDE",
+  "PLAT FORM",
+  "VENTILATED",
+];
+const tfOptions = [
+  { value: "T", label: "TEU" },
+  { value: "F", label: "FEU" },
+  { value: "V", label: "45FT" },
+  { value: "E", label: "48FT" },
+];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: PackageCheck },
@@ -1583,9 +1609,25 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   {header.transport_mode === "S" && (
     <>
-      <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "container_type")} />
+      <FormSelect
+        label="Container Type"
+        value={header.container_type}
+        onChange={(value) => setHeaderField("container_type", value)}
+        options={["", ...containerTypeOptions].map((val) => ({ value: val, label: val || "Select Container Type" }))}
+      />
+      <FormSelect
+        label="T/F"
+        value={header.t_f}
+        onChange={(value) => setHeaderField("t_f", value)}
+        options={[{ value: "", label: "Select T/F" }, ...tfOptions]}
+      />
+      <FormSelect
+        label="Shipment Status"
+        value={header.shipment_status}
+        onChange={(value) => setHeaderField("shipment_status", value)}
+        options={["", ...shipmentStatusOptions].map((val) => ({ value: val, label: val || "Select Shipment Status" }))}
+      />
       <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-      <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "t_f")} />
     </>
   )}
   {header.transport_mode === "R" && (
@@ -1617,11 +1659,112 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties">     
-                  <div className="grid gap-1 sm:grid-cols-1">
-                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" maxLength={freightTextLimit("TF_ENQUIRY", "shipper_name")} />
-                    <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "shipper_address")} />
-                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" maxLength={freightTextLimit("TF_ENQUIRY", "consignee_name")} />
-                    <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "consignee_address")} />
+                  <div className="grid gap-2 sm:grid-cols-1">
+                    <div className="grid gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+                          Shipper Name
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            className={`${fieldClassName} truncate`}
+                            value={header.shipper_name}
+                            onChange={(e) => setHeaderField("shipper_name", e.target.value)}
+                            placeholder="Enter or search Shipper Name"
+                            maxLength={freightTextLimit("TF_ENQUIRY", "shipper_name")}
+                            maxBytes={freightTextLimit("TF_ENQUIRY", "shipper_name")}
+                          />
+                        </div>
+                        <div className="w-[110px] shrink-0">
+                          <LookupField
+                            compact
+                            label="Shipper"
+                            value={header.shipper_name}
+                            displayValue={header.shipper_name ? "Change" : "Lookup"}
+                            popoverWidth={420}
+                            columns={[
+                              { field: "shipper_name", header: "Shipper Name" },
+                            ]}
+                            valueField="shipper_name"
+                            displayFields={["shipper_name"]}
+                            loadOptions={() => loadShipperLookup(header.company_code)}
+                            onChange={(val, row) => {
+                              if (row) {
+                                setHeaderField("shipper_name", lookupText(row, "shipper_name") || val);
+                                const addr = lookupText(row, "shipper_address");
+                                if (addr) setHeaderField("shipper_address", addr);
+                              } else if (val) {
+                                setHeaderField("shipper_name", val);
+                              }
+                            }}
+                            placeholder="Lookup"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <FormTextarea
+                      label="Shipper Address"
+                      value={header.shipper_address}
+                      onChange={(value) => setHeaderField("shipper_address", value)}
+                      compact
+                      maxLength={freightTextLimit("TF_ENQUIRY", "shipper_address")}
+                    />
+
+                    <div className="grid gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+                          Consignee Name
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            className={`${fieldClassName} truncate`}
+                            value={header.consignee_name}
+                            onChange={(e) => setHeaderField("consignee_name", e.target.value)}
+                            placeholder="Enter or search Consignee Name"
+                            maxLength={freightTextLimit("TF_ENQUIRY", "consignee_name")}
+                            maxBytes={freightTextLimit("TF_ENQUIRY", "consignee_name")}
+                          />
+                        </div>
+                        <div className="w-[110px] shrink-0">
+                          <LookupField
+                            compact
+                            label="Consignee"
+                            value={header.consignee_name}
+                            displayValue={header.consignee_name ? "Change" : "Lookup"}
+                            popoverWidth={420}
+                            columns={[
+                              { field: "consignee_name", header: "Consignee Name" },
+                            ]}
+                            valueField="consignee_name"
+                            displayFields={["consignee_name"]}
+                            loadOptions={() => loadConsigneeLookup(header.company_code)}
+                            onChange={(val, row) => {
+                              if (row) {
+                                setHeaderField("consignee_name", lookupText(row, "consignee_name") || val);
+                                const addr = lookupText(row, "consignee_address");
+                                if (addr) setHeaderField("consignee_address", addr);
+                              } else if (val) {
+                                setHeaderField("consignee_name", val);
+                              }
+                            }}
+                            placeholder="Lookup"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <FormTextarea
+                      label="Consignee Address"
+                      value={header.consignee_address}
+                      onChange={(value) => setHeaderField("consignee_address", value)}
+                      compact
+                      maxLength={freightTextLimit("TF_ENQUIRY", "consignee_address")}
+                    />
                   </div>
                 </SectionPanel>
 
@@ -2768,6 +2911,14 @@ function carrierLookupProps(mode: string, companyCode: string) {
 
 async function loadPrincipalLookup(companyCode: string) {
   return loadFreightLookup("freight_principal", companyCode);
+}
+
+async function loadShipperLookup(companyCode: string) {
+  return loadFreightLookup("freight_shipper", companyCode);
+}
+
+async function loadConsigneeLookup(companyCode: string) {
+  return loadFreightLookup("freight_consignee", companyCode);
 }
 
 async function loadWalkinPrincipalLookup(companyCode: string) {
