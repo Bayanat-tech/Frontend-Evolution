@@ -1099,7 +1099,17 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     );
   };
 
-  const persistEnquiry = async () => {
+  // const persistEnquiry = async () => {
+  // const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
+    const persistEnquiry = async () => {
+    const zeroAmountRows = details
+    .map((row, idx) => (row.act_code.trim() && !(Number(row.bill) > 0) ? idx : -1))
+    .filter((idx) => idx >= 0);
+  if (zeroAmountRows.length > 0) {
+    setInvalidLineIndices(new Set(zeroAmountRows));
+    setActiveTab("activities");
+    throw new Error(`Bill amount must be greater than 0 (line ${zeroAmountRows.map((i) => i + 1).join(", ")})`);
+  }
   const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
   const payload = {
     header: {
@@ -1732,8 +1742,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     <div className="mb-2 flex items-center justify-between gap-2">
       <div className="grid gap-0.5">
         <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Activity Lines</h2>
-        <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p>
-      </div>
+       </div>
       <Button
         type="button"
         size="sm"
@@ -1748,10 +1757,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
     <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-xs max-h-[50vh]">
       <table className="w-full min-w-[1450px] text-xs text-left border-collapse">
-        <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10">
+        {/* <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10"> */}
+        <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10 whitespace-nowrap">
           <tr>
             <th className="px-2 py-2 text-center w-10 text-white font-semibold">#</th>
-            <th className="px-2 py-2 w-[180px] text-white font-semibold">Activity Code</th>
+            <th className="px-2 py-2 w-[85px] text-white font-semibold">Activity Code</th>
             <th className="px-2 py-2 w-[220px] text-white font-semibold">Activity Name</th>
             <th className="px-2 py-2 w-[100px] text-white font-semibold">UOC</th>
             <th className="px-2 py-2 w-[100px] text-white font-semibold">MOC</th>
@@ -1759,11 +1769,13 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <th className="px-2 py-2 w-[120px] text-white font-semibold">Origin</th>
             <th className="px-2 py-2 w-[120px] text-white font-semibold">Destination</th>
             <th className="px-2 py-2 text-right w-[80px] text-white font-semibold">Qty</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Bill Rate</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Bill</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost Rate</th>
-            <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost</th>
-            <th className="px-2 py-2 min-w-[150px] text-white font-semibold">Remarks</th>
+            <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Bill Rate</th>
+            {/* <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Bill Rate</th> */}
+            <th className="px-2 py-2 text-right w-[140px] text-white font-semibold">Bill</th>
+            <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Cost Rate</th>
+            {/* <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost Rate</th> */}
+            <th className="px-2 py-2 text-right w-[120px] text-white font-semibold">Cost</th>
+            <th className="px-2 py-2 min-w-[250px] text-white font-semibold">Remarks</th>
             <th className="px-2 py-2 text-center w-12 text-white font-semibold">Action</th>
           </tr>
         </thead>
@@ -1792,7 +1804,8 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     compact
                     label="Activity Code"
                     value={row.act_code}
-                    displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
+                    // displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
+                    displayValue={row.act_code}
                     valueField="activity_code"
                     displayFields={["activity_code", "activity"]}
                     columns={[
@@ -1824,7 +1837,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     onChange={(e) => setDetailField(index, "uoc", e.target.value)}
                     disabled={isReadOnly}
                   >
-                    <option value="">Select</option>
+                    <option value=""> </option>
                     {uocOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -2113,7 +2126,7 @@ function SectionPanel({
             <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3>
           </div>
         </div>
-        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
+        {/* {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>} */}
       </div>
       <div className="freight-panel-body p-3">{children}</div>
     </section>
@@ -2467,18 +2480,19 @@ function FormInput({
   maxLength?: number;
 }) {
   const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
-  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
+  // const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
+  // const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
   return (
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span className="flex items-center gap-0.5">
           {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </span>
-        {maxLength !== undefined && value && value.length > 0 && (
+        {/* {maxLength !== undefined && value && value.length > 0 && (
           <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
             {value.length}/{maxLength}
           </span>
-        )}
+        )} */}
       </span>
       {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
         value={value}
@@ -2632,16 +2646,10 @@ function FormTextarea({
   maxLength?: number;
 }) {
   const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
-  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
   return (
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span>{label}</span>
-        {maxLength !== undefined && value && value.length > 0 && (
-          <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-muted-foreground/70"}`}>
-            {value.length}/{maxLength}
-          </span>
-        )}
       </span>
       <Input
         type="text"

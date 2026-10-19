@@ -524,22 +524,22 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     setDetails((current) =>
       current.map((line, rowIndex) => {
         if (rowIndex !== index) return line;
-        const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
-        const costRate = lookupText(row || {}, "cost") || line.fc_costrate || "0";
-        const billRate = lookupText(row || {}, "bill") || line.fc_billrate || "0";
+        // const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
+        // const costRate = lookupText(row || {}, "cost") || line.fc_costrate || "0";
+        // const billRate = lookupText(row || {}, "bill") || line.fc_billrate || "0";
         return recalcDetail(
           {
             ...line,
             act_code: value,
             activity: lookupText(row || {}, "activity") || line.activity,
-            quantity,
-            uom: lookupText(row || {}, "uom") || line.uom,
-            cost_curr_code: line.cost_curr_code || header.curr_code,
-            cost_ex_rate: line.cost_ex_rate || header.ex_rate,
-            fc_costrate: costRate,
-            curr_code: line.curr_code || header.curr_code,
-            ex_rate: line.ex_rate || header.ex_rate,
-            fc_billrate: billRate,
+            // quantity,
+            // uom: lookupText(row || {}, "uom") || line.uom,
+            // cost_curr_code: line.cost_curr_code || header.curr_code,
+            // cost_ex_rate: line.cost_ex_rate || header.ex_rate,
+            // fc_costrate: costRate,
+            // curr_code: line.curr_code || header.curr_code,
+            // ex_rate: line.ex_rate || header.ex_rate,
+            // fc_billrate: billRate,
           },
           "quantity"
         );
@@ -964,7 +964,18 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
   const removeTerm = (index: number) => setTerms((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, serial_no: rowIndex + 1, sr_no: String(rowIndex + 1) })));
 
-  const persistQuotation = async () => {
+  // const persistQuotation = async () => {
+  // const payload = {
+    const persistQuotation = async () => {
+      const zeroAmountRows = details
+    .map((row, idx) => (row.act_code.trim() && !(Number(row.bill) > 0 || Number(row.cost) > 0) ? idx : -1))
+    .filter((idx) => idx >= 0);
+  if (zeroAmountRows.length > 0) {
+    setInvalidLineIndices(new Set(zeroAmountRows));
+    setActiveTab("charges");
+    throw new Error(`Enter Bill Amt or Cost Amt (line ${zeroAmountRows.map((i) => i + 1).join(", ")})`);
+  }
+
   const payload = {
     header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
     details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
@@ -1374,25 +1385,25 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   <Button type="button" size="sm" onClick={addDetail} className="cursor-pointer font-semibold shadow-xs"><Plus size={14} />Add Line</Button>
                 </div>
 
-                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner max-h-[50vh]" style={{ maxWidth: "100%" }}>
-                  <table className="border-collapse text-xs w-full min-w-[1550px]">
-                    <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs">
+                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner max-h-[80vh]" style={{ maxWidth: "100%" }}>
+                  <table className="border-collapse text-xs w-full min-w-[2410px]">
+                    <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs whitespace-nowrap">
                       <tr>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "140px" }}>Activity Code</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "200px" }}>Activity</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Activity Code</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "230px" }}>Activity</th>
                         <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>UOC</th>
                         <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>MOC</th>
-                        <th className="px-2 py-2 text-center text-white font-semibold" style={{ width: "80px" }}>Mode</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>Origin</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>Dest</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "70px" }}>Qty</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>UOM</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>Cost Curr</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "80px" }}>Cost Ex</th>
+                        <th className="px-2 py-2 text-center text-white font-semibold" style={{ width: "75px" }}>Mode</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Origin</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Dest</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "50px" }}>Qty</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "90px" }}>UOM</th>
+                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "70px" }}>Cost Curr</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "70px" }}>Cost Ex</th>
                         <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Rate</th>
                         <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Amt</th>
                         <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>Bill Curr</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "80px" }}>Bill Ex</th>
+                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "60px" }}>Bill Ex</th>
                         <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Rate</th>
                         <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Amt</th>
                         <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent FC</th>
@@ -1420,7 +1431,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                               compact
                               label="Activity"
                               value={row.act_code}
-                              displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
+                              // displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
+                              displayValue={row.act_code}
                               valueField="activity_code"
                               displayFields={["activity_code", "activity"]}
                               columns={[
@@ -1433,14 +1445,14 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                              disabled={isReadOnly}
                              />
                             </td>
-                          <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-[150px]" />
+                          <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="w-full" />
                           <td className="px-1.5 py-1.5 align-middle">
                             <select
                               className={fieldClassName}
                               value={row.uoc}
                               onChange={(e) => setDetailField(index, "uoc", e.target.value)}
                             >
-                              <option value="">Select</option>
+                              <option value=""> </option>
                               {uocOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
                                   {option.label}
@@ -1464,22 +1476,23 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                               onChange={(value) => setDetailField(index, "moc1", value)}
                             />
                           </td>
-                          <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
-                          <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-[90px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "origin_port")} />
-                          <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-[90px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "destination_port")} />
-                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-[60px] text-right" />
-                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-[70px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "uom")} />
-                          <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-[80px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "cost_curr_code")} />
-                          <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-[80px] text-right" />
-                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-[100px] text-right" />
+                          {/* <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7`} value={row.transport_mode} */}
+                          <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7 w-full`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
+                          <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "origin_port")} />
+                          <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "destination_port")} />
+                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-full text-right" />
+                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "uom")} />
+                          <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "cost_curr_code")} />
+                          <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right" />
+                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-full text-right" />
+                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-full text-right" />
                           <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-[80px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "curr_code")} />
-                          <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-[80px] text-right" />
-                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-[100px] text-right" />
-                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-[100px] text-right" />
-                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="min-w-[140px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "activity_remarks")} />
+                          <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right" />
+                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-full text-right" />
+                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-full text-right" />
+                          <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-full text-right" />
+                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-full text-right" />
+                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "activity_remarks")} />
                           <td className="px-1 py-1.5 text-right align-middle">
                             <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}><Trash2 size={12} /></Button>
                           </td>
@@ -1537,7 +1550,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         {terms.map((term, index) => (
                           <tr key={term.serial_no} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
                             <td className="px-1.5 py-1.5 align-middle text-slate-600">{term.serial_no}</td>
-                            <CellInput value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} className="w-[80px]"  maxLength={freightTextLimit("TF_QUOTATION_TERMS", "type_ind")} />
+                            <CellInput value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_TERMS", "type_ind")} />
                             <td className="px-1 py-0.5">
                               <TextAreaControl
                                 className={`${fieldClassName} min-h-7 py-0.5 w-full`}
@@ -1617,8 +1630,7 @@ function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { t
           <span className="flex h-5 w-5 items-center justify-center rounded bg-blue-50 text-[#00378C]"><Icon size={13} /></span>
           <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3></div>
         </div>
-        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
-      </div>
+       </div>
       <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
@@ -1945,18 +1957,12 @@ function buildSmartChecks(header: QuotationHeader, details: QuotationDetail[], t
 
 function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "", disabled, maxLength }: { label: string; value: string; displayValue?: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean; maxLength?: number }) {
   const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
-  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
-  return (
+ return (
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span className="flex items-center gap-0.5">
           {label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}
         </span>
-        {maxLength !== undefined && value && value.length > 0 && (
-          <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
-            {value.length}/{maxLength}
-          </span>
-        )}
       </span>
       {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
         value={value}
@@ -2030,16 +2036,10 @@ function FormSelect({ label, value, onChange, options, required }: { label: stri
 
 function FormTextarea({ label, value, onChange, compact, className = "", maxLength }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean; className?: string; maxLength?: number }) {
   const isOverLimit = maxLength !== undefined && value && value.length > maxLength;
-  const isNearLimit = maxLength !== undefined && value && value.length >= maxLength * 0.9;
-  return (
+   return (
     <label className={`grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label ${className}`}>
       <span className="flex items-center justify-between">
         <span>{label}</span>
-        {maxLength !== undefined && value && value.length > 0 && (
-          <span className={`text-[10px] lowercase font-normal ${isOverLimit ? "text-red-500 font-bold" : isNearLimit ? "text-amber-500 font-medium" : "text-slate-400"}`}>
-            {value.length}/{maxLength}
-          </span>
-        )}
       </span>
       <TextAreaControl
         className={`${fieldClassName} border-slate-300 font-medium text-slate-900 bg-white ${compact ? "min-h-7" : "min-h-10"} py-0.5 ${isOverLimit ? "border-red-500 focus:border-red-500" : "focus:border-[#00378C]"}`}

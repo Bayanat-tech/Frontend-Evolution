@@ -1729,13 +1729,13 @@ const limitProps = (f: keyof FormState) => ({
                     type="button"
                     onClick={addLine}
                     className="commercial-add-line-btn"
-                    title="Add detail line"
+                    title="Add detail line (Alt + A)"
                   >
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
@@ -1750,17 +1750,17 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Amount</th>
                       {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
                       {/* <th className="px-2 py-2 text-left">Cr/Dr</th> */}
-                      <th className="w-[60px] min-w-[60px] px-2 py-2 text-center">Cr/Dr</th>
+                      <th className="w-24 min-w-[90px] px-2 py-2 text-center">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="w-[100px] min-w-[100px] px-2 py-2 text-left">Tax Type</th>}
-                      <th className="w-16 min-w-[55px] px-2 py-2 text-right">Tax %</th>
-                      <th className="finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
+                      <th className="finance-th-tax w-16 min-w-[55px] px-2 py-2 text-right">Tax %</th>
+                      <th className="finance-th-tax finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="w-28 min-w-[110px] px-2 py-2 text-left">Job</th>
                       {isPO && <th className="w-28 min-w-[110px] px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="w-56 min-w-[300px] px-2 py-2 text-left">Remarks</th>}
-                      <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
+                      <th className="finance-th-base-amt finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
                     </tr>
@@ -1836,7 +1836,7 @@ const limitProps = (f: keyof FormState) => ({
                         <td className="w-18 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         {/* {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.001" placeholder="0.000" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" step="0.001" min="0.001" required
+                        <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
                             onInput={(e) => e.currentTarget.setCustomValidity("")}
                             value={line.amount}
@@ -1846,11 +1846,35 @@ const limitProps = (f: keyof FormState) => ({
                             updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
                           }} /></td>
                         {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
-                        <td className="w-[60px] min-w-[60px] px-1 py-1">
-                          <Select disabled={isCancelled} className="h-7 text-xs text-center" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                            <option value={-1}>Cr</option>
-                            <option value={1}>Dr</option>
-                          </Select>
+                        <td className="w-24 min-w-[90px] px-1 py-1 text-center">
+                          <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                            <button
+                              type="button"
+                              disabled={isCancelled}
+                              onClick={() => updateLine(line.id, { sign_ind: 1 })}
+                              className={`px-2 py-0.5 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                Number(line.sign_ind) === 1
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                              }`}
+                              title="Debit (Dr)"
+                            >
+                              Dr
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isCancelled}
+                              onClick={() => updateLine(line.id, { sign_ind: -1 })}
+                              className={`px-2 py-0.5 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                Number(line.sign_ind) === -1
+                                  ? "bg-[#00378C] text-white shadow-xs"
+                                  : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                              }`}
+                              title="Credit (Cr)"
+                            >
+                              Cr
+                            </button>
+                          </div>
                         </td>
                         {showAllColumns && (
                           <td className="w-20 max-w-[80px] px-1 py-1"><Input disabled={isCancelled} value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
@@ -1874,13 +1898,13 @@ const limitProps = (f: keyof FormState) => ({
 </Select>
                         </td>
                       )}
-                        <td className="w-16 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
+                        <td className="w-16 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" 
+                        <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" type="number" 
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">
@@ -1934,7 +1958,7 @@ const limitProps = (f: keyof FormState) => ({
                         )}
                         <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1">
                           <Input
-                            className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]"
+                            className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]"
                             disabled
                             value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(line.ex_rate ?? form.ex_rate ?? 1))}
                           />
@@ -1948,17 +1972,19 @@ const limitProps = (f: keyof FormState) => ({
               
               <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2.5 gap-3.5">
                 <div className="commercial-line-totals flex items-center gap-3.5">
-                  <div className="flex items-center gap-2.5 bg-emerald-50/90 px-3.5 py-1.5 rounded-md border border-emerald-300 shadow-2xs">
-                    <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Total Amount</span>
-                    <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(total)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3.5 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Total Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-emerald-50/90 px-3.5 py-1.5 rounded-md border border-emerald-300 shadow-2xs">
-                    <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Tax Amount</span>
-                    <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(taxTotal)}</strong>
+                  <div className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-md border shadow-2xs ${
+                    taxTotal > 0 ? "bg-amber-50/90 border-amber-300 text-amber-900" : "bg-slate-50 border-slate-200 text-slate-700"
+                  }`}>
+                    <span className={`font-bold text-xs uppercase tracking-wider ${taxTotal > 0 ? "text-amber-800" : "text-slate-600"}`}>Tax Amount</span>
+                    <strong className={`font-mono text-sm md:text-base font-bold ${taxTotal > 0 ? "text-amber-700" : "text-slate-700"}`}>{formatAmount(taxTotal)}</strong>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-blue-50 px-4 py-1.5 rounded-md border-2 border-[#00378c]/50 shadow-xs">
-                    <span className="font-extrabold text-[#00378c] text-xs uppercase tracking-wider">Net Total</span>
-                    <strong className="text-[#00378c] font-mono text-base md:text-lg font-black">{formatAmount(total + taxTotal)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+                    <span className="text-xs font-bold text-[#00378c] uppercase tracking-wider">Net Total</span>
+                    <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(total + taxTotal)}</strong>
                   </div>
                 </div>
               </div>

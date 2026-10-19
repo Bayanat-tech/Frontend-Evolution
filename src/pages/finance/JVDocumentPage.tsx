@@ -1,6 +1,6 @@
 import { Textarea } from "../../components/ui/Textarea";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Building2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { AlertCircle, Ban, Building2, CheckCircle2, ChevronDown, ChevronUp, Coins, Columns3, Download, Edit2, FileText, List, Paperclip, Plus, Printer, Receipt, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
 import { api } from "../../api/client";
@@ -47,6 +47,7 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
@@ -419,6 +420,7 @@ function JVDocument({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const [currencyDecimals, setCurrencyDecimals] = useState<number>(2);
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -590,6 +592,16 @@ function JVDocument({
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
+          if (defaults.lcur_decimal_nos != null) {
+            setCurrencyDecimals(Number(defaults.lcur_decimal_nos));
+          } else {
+            getCompanyInfo().then((ci) => {
+              if (mounted && ci) {
+                const d = Number(ci.lcur_decimal_nos ?? ci.decimals ?? (ci.currency === "OMR" ? 3 : 2));
+                if (Number.isFinite(d) && d > 0) setCurrencyDecimals(d);
+              }
+            }).catch(() => {});
+          }
           const defaultAcCode = text(defaults.ac_code ?? defaults.Account?.ac_code ?? "");
           const defaultDiv = text(defaults.div_code ?? defaults.Division?.div_code ?? "");
           const effectiveDiv = defaultDiv || (editor?.mode === "create" ? text(editor.divCode) : "") || text(form.div_code);
@@ -752,7 +764,9 @@ function JVDocument({
         const isTaxable = merged.tx_compnt_1_expmt === "S" || (merged.tx_compnt_perc_1 != null && Number(merged.tx_compnt_perc_1) > 0);
         const perc = merged.tx_compnt_perc_1 != null ? Number(merged.tx_compnt_perc_1) : getTaxPercForCode(merged.tx_compntcat_code_1 || "");
         const taxAmt = isTaxable ? Number((((Number(merged.amount) || 0) * perc) / 100).toFixed(3)) : (Number(merged.tx_compnt_amt_1) || 0);
-        return { ...merged, tx_compnt_amt_1: taxAmt };
+        const effectiveRate = Number(merged.ex_rate || current.ex_rate || 1);
+        const lcurAmt = Math.abs(Number(merged.amount || 0)) * effectiveRate * Number(merged.sign_ind || 1);
+        return { ...merged, tx_compnt_amt_1: taxAmt, lcur_amount: lcurAmt };
       }),
     }));
   };
@@ -825,24 +839,39 @@ function JVDocument({
   };
 
   const addDetailRow = () => {
-    setForm((current) => ({
-      ...current,
-      detail: [
-        ...current.detail,
-        {
-          ...emptyDetailRow({
-            docType,
-            docNo: current.doc_no || "1",
-            docDate: current.doc_date,
-            divCode: current.div_code,
-            currCode: current.curr_code,
-            currName: current.curr_name,
-            companyCode: user?.company_code,
-          }),
-          serial_no: current.detail.length + 1,
-        },
-      ],
-    }));
+    setForm((current) => {
+      let curDr = 0;
+      let curCr = 0;
+      current.detail.forEach((d) => {
+        const amt = Number(d.amount) || 0;
+        if (Number(d.sign_ind) === 1) curDr += amt;
+        else if (Number(d.sign_ind) === -1) curCr += amt;
+      });
+      const diff = Number((curDr - curCr).toFixed(3));
+      const suggestedSign: 1 | -1 = current.detail.length === 0 ? 1 : diff > 0 ? -1 : 1;
+      const suggestedAmount = Math.abs(diff) > 0 ? Math.abs(diff) : 0;
+
+      return {
+        ...current,
+        detail: [
+          ...current.detail,
+          {
+            ...emptyDetailRow({
+              docType,
+              docNo: current.doc_no || "1",
+              docDate: current.doc_date,
+              divCode: current.div_code,
+              currCode: current.curr_code,
+              currName: current.curr_name,
+              companyCode: user?.company_code,
+            }),
+            serial_no: current.detail.length + 1,
+            sign_ind: suggestedSign,
+            amount: suggestedAmount,
+          },
+        ],
+      };
+    });
   };
 
   useEffect(() => {
@@ -1052,9 +1081,9 @@ function JVDocument({
     const divMismatch = form.detail.find((d) => d.div_code && d.div_code !== form.div_code);
     if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
 
-    const diff = Math.abs(Number(debitTotal.toFixed(3)) - Number(creditTotal.toFixed(3)));
-    if (diff > 0.001) {
-      return setError(`Journal Voucher must balance to zero! Debit: ${debitTotal.toFixed(3)}, Credit: ${creditTotal.toFixed(3)} (Difference: ${diff.toFixed(3)})`);
+    const diff = Math.abs(Number(debitTotal.toFixed(currencyDecimals)) - Number(creditTotal.toFixed(currencyDecimals)));
+    if (diff > (currencyDecimals === 3 ? 0.001 : 0.01)) {
+      return setError(`Journal Voucher must balance to zero! Debit: ${formatAmount(debitTotal, currencyDecimals)}, Credit: ${formatAmount(creditTotal, currencyDecimals)} (Difference: ${formatAmount(diff, currencyDecimals)})`);
     }
 
     // Validation on child allocations (Expense, Invoice, Job)
@@ -1078,8 +1107,8 @@ function JVDocument({
               if (!c.inv_no?.trim()) missingFields.push("Invoice No");
               const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
               const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
-              if (maxAllowed > 0 && amt > maxAllowed + 0.001) {
-                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+              if (maxAllowed > 0 && amt > maxAllowed + (currencyDecimals === 3 ? 0.001 : 0.01)) {
+                missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${formatAmount(maxAllowed, currencyDecimals)}`);
               }
             }
           }
@@ -1093,12 +1122,12 @@ function JVDocument({
           }
         }
 
-        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(3));
-        const lineAmt = Number((Number(d.amount) || 0).toFixed(3));
-        if (Math.abs(childSum - lineAmt) > 0.001) {
+        const childSum = Number(children.reduce((s, c) => s + (Number(c.amount) || 0), 0).toFixed(currencyDecimals));
+        const lineAmt = Number((Number(d.amount) || 0).toFixed(currencyDecimals));
+        if (Math.abs(childSum - lineAmt) > (currencyDecimals === 3 ? 0.001 : 0.01)) {
           setExpandedRowIds((prev) => ({ ...prev, [d.id]: true }));
           setSelectedDetailId(d.id);
-          return setError(`Allocated amount (${childSum.toFixed(3)}) does not match line amount (${lineAmt.toFixed(3)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
+          return setError(`Allocated amount (${formatAmount(childSum, currencyDecimals)}) does not match line amount (${formatAmount(lineAmt, currencyDecimals)}) on line #${d.serial_no || 1}. Please reconcile allocations before saving.`);
         }
       }
     }
@@ -1181,8 +1210,8 @@ function JVDocument({
     });
   };
   const isBalanced =
-    Number(creditTotal.toFixed(3)) ===
-    Number(debitTotal.toFixed(3));
+    Number(creditTotal.toFixed(currencyDecimals)) ===
+    Number(debitTotal.toFixed(currencyDecimals));
   console.log({
     disabled,
     loading,
@@ -1359,26 +1388,62 @@ function JVDocument({
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                         valueField="curr_code"
                         displayFields={["curr_code", "curr_name"]}
-                        loadOptions={getCurrencyRows}
+                        loadOptions={() => getDynamicLookup({
+                          parameter: "Account_Currency_CODE_Serach",
+                          code1: user?.company_code,
+                          loginid: user?.loginid || user?.username || "ADMIN"
+                        })}
                         disabled={disabled}
-                        onChange={(value, row) => setForm((current) => ({
-                          ...current,
-                          curr_code: value,
-                          curr_name: text(getLookupValue(row || {}, "curr_name")),
-                          ex_rate: Number(row?.ex_rate ?? 1)
-                        }))}
+                        onChange={(value, row) => {
+                          const newRate = Number(
+                            getLookupValue(row || {}, "ex_rate") ||
+                            (row as any)?.ex_rate ||
+                            (row as any)?.EX_RATE ||
+                            1
+                          );
+                          const validRate = Number.isFinite(newRate) && newRate > 0 ? newRate : 1;
+                          const currName = text(getLookupValue(row || {}, "curr_name"));
+                          setForm((current) => ({
+                            ...current,
+                            curr_code: value,
+                            curr_name: currName,
+                            ex_rate: validRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? {
+                                    ...d,
+                                    curr_code: value,
+                                    curr_name: currName,
+                                    ex_rate: validRate,
+                                    lcur_amount: Math.abs(Number(d.amount || 0)) * validRate * Number(d.sign_ind || 1),
+                                  }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
                     </div>
                     <Field label="Exchange Rate *" required>
-                      <Input
+                      <ExchangeRateInput
                         disabled={disabled}
                         required
-                        type="number"
-                        style={{ textAlign: "right" }}
-                        step="0.0001"
                         className="h-7 text-xs font-mono"
-                        value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(4) : ""}
-                        onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))}
+                        value={form.ex_rate}
+                        onChange={(newRate) => {
+                          setForm((current) => ({
+                            ...current,
+                            ex_rate: newRate,
+                            detail: current.detail.map((d) =>
+                              !d.curr_code || d.curr_code === current.curr_code
+                                ? {
+                                    ...d,
+                                    ex_rate: newRate,
+                                    lcur_amount: Math.abs(Number(d.amount || 0)) * newRate * Number(d.sign_ind || 1),
+                                  }
+                                : d
+                            ),
+                          }));
+                        }}
                       />
                     </Field>
                   </div>
@@ -1400,6 +1465,17 @@ function JVDocument({
                     <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                       Filtered ({filteredDetail.length})
                     </span>
+                  )}
+                  {form.detail.length > 0 && (
+                    isBalanced ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-300 px-3 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
+                        <CheckCircle2 size={13} className="text-emerald-600" /> Balanced (Dr = Cr = {formatAmount(debitTotal)})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-300 px-3 py-0.5 text-xs font-bold text-amber-800 shadow-2xs">
+                        <AlertCircle size={13} className="text-amber-600" /> Dr: {formatAmount(debitTotal)} | Cr: {formatAmount(creditTotal)} (Diff: {formatAmount(Math.abs(debitTotal - creditTotal))})
+                      </span>
+                    )
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -1432,12 +1508,12 @@ function JVDocument({
                       </button>
                     )}
                   </div>
-                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line">
+                  <Button size="sm" type="button" onClick={addDetailRow} disabled={disabled} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
@@ -1448,11 +1524,11 @@ function JVDocument({
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
-                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Dept</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
                       <th className="px-2 py-2 text-center w-14">Action</th>
                     </tr>
                   </thead>
@@ -1550,19 +1626,74 @@ function JVDocument({
                                   loginid: user?.loginid || user?.username || "ADMIN"
                                 })}
                                 disabled={disabled}
-                                onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
+                                onChange={(value, row) => {
+                                  const lineRate = Number(
+                                    getLookupValue(row || {}, "ex_rate") ||
+                                    (row as any)?.ex_rate ||
+                                    (row as any)?.EX_RATE ||
+                                    (value === form.curr_code ? form.ex_rate : 1)
+                                  );
+                                  const validLineRate = Number.isFinite(lineRate) && lineRate > 0 ? lineRate : 1;
+                                  const lineCurrName = text(getLookupValue(row || {}, "curr_name"));
+                                  updateDetail(detail.id, {
+                                    curr_code: value,
+                                    curr_name: lineCurrName,
+                                    ex_rate: validLineRate,
+                                  });
+                                }}
                               />
                             </td>
                           )}
                           {showAllColumns && (
-                            <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                            <td className="w-28 px-2 py-1">
+                              <ExchangeRateInput
+                                disabled={disabled}
+                                className="finance-money-input h-7 text-xs font-mono"
+                                value={detail.ex_rate}
+                                onChange={(newRate) => updateDetail(detail.id, { ex_rate: newRate })}
+                              />
+                            </td>
                           )}
-                          <td className="finance-amount-cell w-36 px-2 py-1"><Input className={`finance-money-input ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`} disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
-                          <td className="w-28 px-2 py-1">
-                            <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                              <option value={1}>Dr</option>
-                              <option value={-1}>Cr</option>
-                            </Select>
+                          <td className="finance-amount-cell w-36 px-2 py-1">
+                            <Input
+                              className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-rose-400" : ""}`}
+                              disabled={disabled}
+                              type="number"
+                              step={currencyDecimals === 3 ? "0.001" : "0.01"}
+                              style={{ textAlign: "right" }}
+                              value={detail.amount}
+                              onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })}
+                            />
+                          </td>
+                          <td className="w-24 px-2 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
                           </td>
                           {showAllColumns && (
                             <td className="w-28 px-2 py-1">
@@ -1595,7 +1726,7 @@ function JVDocument({
                             <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
                           )}
                           {showAllColumns && (
-                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                            <td className="finance-amount-cell w-36 px-2 py-1"><Input className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/60 !border-blue-200 text-right" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                           )}
                           <td className="px-2 py-1 text-center">
                             <button
@@ -1661,9 +1792,9 @@ function JVDocument({
                     <strong className="font-mono text-sm font-bold tabular-nums text-blue-700">{formatAmount(creditTotal)}</strong>
                   </div>
                   {totalTax > 0 && (
-                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-2xs">
-                      <span className="text-xs font-semibold text-slate-600">Tax</span>
-                      <strong className="font-mono text-sm font-bold tabular-nums text-slate-700">{formatAmount(totalTax)}</strong>
+                    <div className="flex min-h-9 items-center gap-2 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-1 text-amber-900 shadow-2xs">
+                      <span className="text-xs font-semibold text-amber-800">Tax / VAT</span>
+                      <strong className="font-mono text-sm font-bold tabular-nums text-amber-700">{formatAmount(totalTax)}</strong>
                     </div>
                   )}
                   <div className={`flex min-h-9 items-center gap-2 rounded-md border px-3 py-1 shadow-2xs ${
@@ -2394,6 +2525,14 @@ function groupChildren(form: TransactionHeader) {
 }
 
 async function getCurrencyRows(): Promise<LookupRow[]> {
+  try {
+    const rows = await getDynamicLookup({
+      parameter: "Account_Currency_CODE_Serach",
+      code1: "10",
+      loginid: "ADMIN"
+    });
+    if (rows && rows.length > 0) return rows;
+  } catch {}
   const response = await api.get("/api/wms/currency", { params: { page: 1, limit: 1000 } });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load currencies");
   return response.data.data?.tableData || response.data.data || [];
@@ -2431,17 +2570,17 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number) {
-  if (!Number.isFinite(value)) return "0.000";
-  return value.toFixed(3);
+function formatNumber(value: number, decimals = 2) {
+  if (!Number.isFinite(value)) return (0).toFixed(decimals);
+  return value.toFixed(decimals);
 }

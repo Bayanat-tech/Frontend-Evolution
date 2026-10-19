@@ -319,9 +319,9 @@ export function SalesDNEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>{
-        if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
-      for (let i = 0; i < rows.length; i++) {
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const lineNo = i + 1;
 
@@ -338,7 +338,7 @@ export function SalesDNEditor({
         return setError(`Line ${lineNo}: Rate should not be 0`);
       }
     }
-    
+
     runAction(
       "draft",
       async () => {
@@ -385,7 +385,7 @@ export function SalesDNEditor({
   // };
 
   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
- const handleSubmitClick = () => {
+  const handleSubmitClick = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (rows.length === 0) return setError("Add at least one line item before submitting");
@@ -626,7 +626,7 @@ export function SalesDNEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab  && form.doc_no && (
+                  {isPendingTab && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
@@ -637,13 +637,13 @@ export function SalesDNEditor({
                         <Printer size={15} /> Print
                       </Button>
                       <Button
-  type="button"
-  variant="secondary"
-  onClick={() => void handleExcel()}
->
-  <Download size={15} />
-  Excel
-</Button>
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleExcel()}
+                      >
+                        <Download size={15} />
+                        Excel
+                      </Button>
                     </>
                   )}
                   <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>

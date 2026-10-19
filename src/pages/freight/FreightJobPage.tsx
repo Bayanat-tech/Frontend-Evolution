@@ -876,7 +876,7 @@ export function FreightJobPage({
                     <DateField label="ETD" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
                     <DateField label="Exp. Date of Arrival" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
                     <DateField label="Act. Date of Arrival" value={job.ata} onChange={(value) => setJobField(setJob, "ata", value)} />
-                    <DateField label="Clearance Date" value={job.clearance_date} onChange={(value) => setJobField(setJob, "clearance_date", value)} />
+                    {/* <DateField label="Clearance Date" value={job.clearance_date} onChange={(value) => setJobField(setJob, "clearance_date", value)} /> */}
                     <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)}  maxLength={freightTextLimit("TI_JOB", "transit_time")} />
                     {mode.code === "S" && (
                       <DateField label="LOU" value={job.letter_undertaking} onChange={(value) => setJobField(setJob, "letter_undertaking", value)} />
@@ -1109,8 +1109,7 @@ function SectionPanel({
             <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-slate-800">{title}</h3>
           </div>
         </div>
-        {meta && <span className="text-[10px] font-semibold text-slate-500">{meta}</span>}
-      </div>
+       </div>
       <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
@@ -1276,11 +1275,6 @@ function Textarea({
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 ${className}`}>
       <div className="flex items-center justify-between">
         <span>{label}</span>
-        {maxLength && (
-          <span className={`text-[10px] font-mono ${value?.length > maxLength ? "text-red-500 font-bold" : "text-slate-400 font-normal"}`}>
-            {value?.length || 0} / {maxLength}
-          </span>
-        )}
       </div>
       <TextAreaControl
         rows={rows}

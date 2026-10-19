@@ -788,6 +788,8 @@ function PaymentDocumentEditor({
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
+  const totalDr = form.detail.filter((d) => Number(d.sign_ind) === 1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const totalCr = form.detail.filter((d) => Number(d.sign_ind) === -1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
   const isCancelled = form.canceled === "Y";
 
   const filteredDetail = useMemo(() => {
@@ -1842,6 +1844,13 @@ function PaymentDocumentEditor({
                       Filtered ({filteredDetail.length})
                     </span>
                   )}
+                  {form.detail.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[11px] font-bold text-slate-700 shadow-2xs">
+                      <span className="text-emerald-700">Dr: {formatAmount(totalDr)}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-[#00378c]">Cr: {formatAmount(totalCr)}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1873,12 +1882,12 @@ function PaymentDocumentEditor({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
@@ -1888,14 +1897,14 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-left">Description</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
-                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
-                      <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      <th className="finance-th-tax px-2 py-2 text-right text-amber-800 bg-amber-50/70 border-b-2 border-amber-300">Tax %</th>
+                      <th className="finance-th-tax finance-amount-cell px-2 py-2 text-right text-amber-800 bg-amber-100/70 border-b-2 border-amber-400 font-bold">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
                       <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
@@ -2021,7 +2030,7 @@ function PaymentDocumentEditor({
                               <Input
                                 disabled={disabled}
                                 type="number"
-                                className={`commercial-number-input finance-money-input w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
                                 step="0.001"
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
@@ -2050,11 +2059,35 @@ function PaymentDocumentEditor({
                             </div>
                           </td>
 
-                          <td className="w-14 max-w-[60px] px-1 py-1">
-                            <Select className="h-7 text-xs font-bold text-[#00378c]" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                              <option value={1}>Dr</option>
-                              <option value={-1}>Cr</option>
-                            </Select>
+                          <td className="w-24 px-1 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
                           </td>
 
                           {showAllColumns && (
@@ -2158,7 +2191,7 @@ function PaymentDocumentEditor({
 
                           <td className="w-16 min-w-[62px] px-1 py-1">
                             <Input
-                              className="commercial-number-input finance-money-input"
+                              className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold !bg-amber-50/50 !text-amber-800 !border-amber-200"
                               disabled={disabled}
                               type="number"
                               step="0.001"
@@ -2177,7 +2210,7 @@ function PaymentDocumentEditor({
                           </td>
                           <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
                             <Input
-                              className="commercial-number-input finance-money-input"
+                              className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-amber-900 !bg-amber-50/80 !border-amber-300 focus:!border-amber-500 focus:!ring-1 focus:!ring-amber-400/40 !text-xs md:!text-[13px] text-right shadow-xs"
                               disabled={disabled}
                               type="number"
                               step="0.001"
@@ -2214,7 +2247,7 @@ function PaymentDocumentEditor({
 
                           {showAllColumns && (
                             <td className="finance-amount-cell w-24 px-1 py-1">
-                              <Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} />
+                              <Input className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/60 !border-blue-200 text-right" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} />
                             </td>
                           )}
 
@@ -2262,17 +2295,17 @@ function PaymentDocumentEditor({
               </div>
               <div className="commercial-lines-footer flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2.5">
                 <div className="commercial-line-totals flex items-center gap-3">
-                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
-                    <span className="text-xs font-semibold text-slate-600">Total Amount</span>
-                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">Total Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
-                    <span className="text-xs font-semibold text-slate-600">Tax Amount</span>
-                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(totalTax)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Tax Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-amber-700">{formatAmount(totalTax)}</strong>
                   </div>
-                  <div className="flex min-h-10 items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-1.5 shadow-2xs">
-                    <span className="text-xs font-bold text-[#00378c]">Net Total</span>
-                    <strong className="font-mono text-base font-extrabold tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border-2 border-[#00378c]/60 bg-blue-50 px-4 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Net Total</span>
+                    <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
                   </div>
                 </div>
               </div>
@@ -3080,17 +3113,17 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number) {
-  if (!Number.isFinite(value)) return "0.000";
-  return value.toFixed(3);
+function formatNumber(value: number, decimals = 2) {
+  if (!Number.isFinite(value)) return (0).toFixed(decimals);
+  return value.toFixed(decimals);
 }
