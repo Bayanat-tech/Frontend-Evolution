@@ -244,37 +244,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
   const [uocOptions, setUocOptions] = useState<{ value: string; label: string }[]>([]);
-  const [currencyList, setCurrencyList] = useState<{ curr_code: string; curr_name: string; ex_rate: string }[]>(defaultCurrencies);
-  
-  useEffect(() => {
-    let alive = true;
-    loadCurrencyLookup(header.company_code || initialHeader.company_code)
-      .then((rows) => {
-        if (!alive || !rows?.length) return;
-        const mapped = rows
-          .map((r) => ({
-            curr_code: lookupText(r, "curr_code").trim(),
-            curr_name: lookupText(r, "curr_name").trim(),
-            ex_rate: lookupText(r, "ex_rate") || "1",
-          }))
-          .filter((c) => c.curr_code);
-        if (mapped.length > 0) {
-          const set = new Set<string>();
-          const deduped: typeof mapped = [];
-          for (const item of mapped) {
-            if (!set.has(item.curr_code)) {
-              set.add(item.curr_code);
-              deduped.push(item);
-            }
-          }
-          setCurrencyList(deduped);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [header.company_code, initialHeader.company_code]);
 
   useEffect(() => {
     let alive = true;
@@ -584,20 +553,11 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     );
   };
 
-  const currencyOptions = useMemo(
-    () =>
-      currencyList.map((c) => ({
-        value: c.curr_code,
-        label: `${c.curr_code} - ${c.curr_name}`,
-        title: `${c.curr_code} (${c.curr_name}) • Rate: ${c.ex_rate}`,
-      })),
-    [currencyList]
-  );
-
   const handleLineCurrencyChange = (
     index: number,
     kind: "cost" | "bill" | "partners",
-    newCurrCode: string
+    newCurrCode: string,
+    row: LookupRow | null
   ) => {
     if (invalidLineIndices.has(index)) {
       setInvalidLineIndices((prev) => {
@@ -607,32 +567,23 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       });
     }
 
-    const matched = currencyList.find(
-      (c) => c.curr_code.toUpperCase() === newCurrCode.toUpperCase()
-    );
-    const newExRate = matched?.ex_rate
-      ? String(matched.ex_rate)
-      : newCurrCode === "OMR"
-      ? "1"
-      : newCurrCode === "USD"
-      ? "0.383"
-      : "1";
+    const exFromMaster = row ? (lookupText(row, "ex_rate") || "1") : (newCurrCode === "OMR" ? "1" : "1");
 
     setDetails((current) =>
-      current.map((row, rowIndex) => {
-        if (rowIndex !== index) return row;
-        let updated = { ...row };
+      current.map((line, rowIndex) => {
+        if (rowIndex !== index) return line;
+        let updated = { ...line };
         if (kind === "cost") {
           updated.cost_curr_code = newCurrCode;
-          updated.cost_ex_rate = newExRate;
+          updated.cost_ex_rate = exFromMaster;
           updated = recalcDetail(updated, "cost_ex_rate");
         } else if (kind === "bill") {
           updated.curr_code = newCurrCode;
-          updated.ex_rate = newExRate;
+          updated.ex_rate = exFromMaster;
           updated = recalcDetail(updated, "ex_rate");
         } else if (kind === "partners") {
           updated.partners_curr_code = newCurrCode;
-          updated.partners_ex_rate = newExRate;
+          updated.partners_ex_rate = exFromMaster;
           updated = recalcDetail(updated, "partners_ex_rate");
         }
         return updated;
@@ -1576,7 +1527,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "80px" }}>UOM</th>
                         {showFcColumns && (
                           <>
-                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "88px" }}>Cost Curr</th>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Cost Curr</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Cost Ex</th>
                           </>
                         )}
@@ -1584,7 +1535,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Cost Amt</th>
                         {showFcColumns && (
                           <>
-                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "88px" }}>Bill Curr</th>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Bill Curr</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Bill Ex</th>
                           </>
                         )}
@@ -1592,7 +1543,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Bill Amt</th>
                         {showFcColumns && (
                           <>
-                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "88px" }}>Agent Curr</th>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent Curr</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Agent Ex</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent FC</th>
                           </>
@@ -1743,11 +1694,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           {/* FC Cost Curr & Ex */}
                           {showFcColumns && (
                             <>
-                              <CellSelect
+                              <CurrencyLookup
+                                companyCode={header.company_code}
                                 value={row.cost_curr_code || header.curr_code || "OMR"}
-                                onChange={(value) => handleLineCurrencyChange(index, "cost", value)}
-                                options={currencyOptions}
-                                className="w-full font-mono font-bold text-xs bg-white text-slate-800"
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "cost", value, lRow)}
                                 disabled={isReadOnly}
                               />
                               <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
@@ -1761,11 +1711,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           {/* FC Bill Curr & Ex */}
                           {showFcColumns && (
                             <>
-                              <CellSelect
+                              <CurrencyLookup
+                                companyCode={header.company_code}
                                 value={row.curr_code || header.curr_code || "OMR"}
-                                onChange={(value) => handleLineCurrencyChange(index, "bill", value)}
-                                options={currencyOptions}
-                                className="w-full font-mono font-bold text-xs bg-white text-slate-800"
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "bill", value, lRow)}
                                 disabled={isReadOnly}
                               />
                               <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
@@ -1779,11 +1728,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           {/* Agent Share / Commission */}
                           {showFcColumns && (
                             <>
-                              <CellSelect
+                              <CurrencyLookup
+                                companyCode={header.company_code}
                                 value={row.partners_curr_code || header.curr_code || "OMR"}
-                                onChange={(value) => handleLineCurrencyChange(index, "partners", value)}
-                                options={currencyOptions}
-                                className="w-full font-mono font-bold text-xs bg-white text-purple-900"
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "partners", value, lRow)}
                                 disabled={isReadOnly}
                               />
                               <CellInput type="number" value={row.partners_ex_rate || "1"} onChange={(value) => setDetailField(index, "partners_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
@@ -2368,10 +2316,10 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "", forceOpenDown = true }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
-  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string; forceOpenDown?: boolean;
   }) {
   const formattedDisplay = value && displayValue && !displayValue.startsWith(value)
     ? `${value} - ${displayValue}`
@@ -2394,6 +2342,7 @@ function FormLookup({ label, value, displayValue, valueField, displayFields, col
         disabled={disabled}
         enforceRequired={required}
         compact
+        forceOpenDown={forceOpenDown}
       />
     </label>
   );
@@ -2437,201 +2386,41 @@ function CellInput({ value, onChange, type = "text", className = "", maxLength, 
         onChange={(nextValue) => onChange(nextValue)} />) : (<Input maxLength={maxLength} className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)}  maxBytes={maxLength} disabled={disabled} />)}</td>;
 }
 
-function CellSelect({
+function CurrencyLookup({
+  companyCode,
   value,
   onChange,
-  options,
-  className = "",
   disabled,
 }: {
+  companyCode: string;
   value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string; title?: string }[];
-  className?: string;
+  onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [panelPos, setPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
-
-  const selectedOption = options.find((o) => o.value.toUpperCase() === (value || "").toUpperCase()) || {
-    value,
-    label: value,
-  };
-
-  const updatePosition = () => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const width = Math.max(rect.width, 240);
-    let left = rect.left;
-    if (left + width > window.innerWidth - 12) {
-      left = Math.max(12, window.innerWidth - width - 12);
-    }
-    // ALWAYS open strictly below the box (down side)
-    const top = rect.bottom + 3;
-    setPanelPos({ top, left, width });
-  };
-
-  const handleOpen = () => {
-    if (disabled) return;
-    updatePosition();
-    setOpen(true);
-    setSearch("");
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onScrollOrResize = () => updatePosition();
-    window.addEventListener("scroll", onScrollOrResize, true);
-    window.addEventListener("resize", onScrollOrResize);
-    return () => {
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      window.removeEventListener("resize", onScrollOrResize);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (
-        triggerRef.current?.contains(e.target as Node) ||
-        panelRef.current?.contains(e.target as Node)
-      ) {
-        return;
-      }
-      setOpen(false);
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => searchInputRef.current?.focus(), 30);
-    }
-  }, [open]);
-
-  const filteredOptions = useMemo(() => {
-    if (!search.trim()) return options;
-    const q = search.toLowerCase();
-    return options.filter(
-      (o) => o.value.toLowerCase().includes(q) || o.label.toLowerCase().includes(q)
-    );
-  }, [options, search]);
-
   return (
     <td className="px-1 py-0.5 border-r border-slate-200">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={handleOpen}
+      <LookupField
+        value={value}
+        compact
+        dense
+        forceOpenDown
+        placeholder="Curr"
+        valueField="curr_code"
+        displayFields={["curr_code", "curr_name"]}
+        columns={[
+          { field: "curr_code", header: "Currency", width: "90px" },
+          { field: "curr_name", header: "Name", width: "210px" },
+          { field: "ex_rate", header: "Ex. Rate", width: "90px" },
+        ]}
+        popoverWidth={420}
+        loadOptions={(query) => loadFreightLookup("freight_currency", companyCode, query)}
+        onChange={onChange}
         disabled={disabled}
-        className={`${fieldClassName} ${className} flex items-center justify-between text-left truncate cursor-pointer hover:border-[#00378C] focus:border-[#00378C] focus:ring-1 focus:ring-[#00378C]/20 transition-colors shadow-2xs select-none`}
-        title={selectedOption.title || selectedOption.label}
-      >
-        <span className="truncate font-mono font-bold text-xs">
-          {selectedOption.value || value || "-"}
-        </span>
-        <ChevronDown size={11} className="text-slate-400 shrink-0 ml-1" />
-      </button>
-
-      {open &&
-        panelPos &&
-        createPortal(
-          <div
-            ref={panelRef}
-            className="fixed z-[99999] rounded-md border border-slate-300 bg-white shadow-2xl overflow-hidden flex flex-col text-xs animate-in fade-in-50 zoom-in-95 duration-100"
-            style={{
-              top: panelPos.top,
-              left: panelPos.left,
-              width: panelPos.width,
-              maxHeight: Math.min(280, Math.max(140, window.innerHeight - panelPos.top - 12)),
-            }}
-          >
-            {/* Quick search input */}
-            <div className="p-1.5 border-b border-slate-200 bg-slate-50/90 flex items-center gap-1.5 shrink-0">
-              <Search size={12} className="text-slate-400 shrink-0 ml-1" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                className="w-full h-6 px-1.5 bg-white border border-slate-200 rounded text-[11px] focus:outline-none focus:border-[#00378C]"
-                placeholder="Search currency..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && filteredOptions.length > 0) {
-                    onChange(filteredOptions[0].value);
-                    setOpen(false);
-                  }
-                }}
-              />
-            </div>
-
-            {/* Currency list */}
-            <div className="overflow-y-auto flex-1 divide-y divide-slate-100 max-h-52">
-              {filteredOptions.length === 0 ? (
-                <div className="p-2 text-center text-slate-400 text-[11px]">No currency found</div>
-              ) : (
-                filteredOptions.map((opt) => {
-                  const isSelected = opt.value.toUpperCase() === (value || "").toUpperCase();
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        onChange(opt.value);
-                        setOpen(false);
-                      }}
-                      className={`w-full px-2 py-1.5 text-left flex items-center justify-between text-[11px] transition-colors cursor-pointer ${
-                        isSelected
-                          ? "bg-blue-50 text-[#00378C] font-bold"
-                          : "text-slate-700 hover:bg-slate-100"
-                      }`}
-                      title={opt.title || opt.label}
-                    >
-                      <span className="font-mono font-bold text-[#00378C] mr-2">{opt.value}</span>
-                      <span className="truncate text-slate-600 flex-1">{opt.label.replace(`${opt.value} - `, "")}</span>
-                      {isSelected && <span className="text-[#00378C] font-bold text-xs ml-1">✓</span>}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>,
-          document.body
-        )}
+      />
     </td>
   );
 }
 
-const defaultCurrencies = [
-  { curr_code: "OMR", curr_name: "OMANI RIAL", ex_rate: "1" },
-  { curr_code: "USD", curr_name: "US DOLLARS", ex_rate: "0.383" },
-  { curr_code: "EUR", curr_name: "EURO CURRENCY", ex_rate: "0.448" },
-  { curr_code: "AED", curr_name: "UAE DIRHAM", ex_rate: "0.10502" },
-  { curr_code: "GBP", curr_name: "UK POUND", ex_rate: "0.58011" },
-  { curr_code: "INR", curr_name: "INDIAN RUPEE", ex_rate: "0.00408" },
-  { curr_code: "SAR", curr_name: "SAUDI RIYAL", ex_rate: "0.1026" },
-  { curr_code: "QAR", curr_name: "QATARI RIYAL", ex_rate: "0.1057" },
-  { curr_code: "KD", curr_name: "KUWAITI DINAR", ex_rate: "1.258" },
-  { curr_code: "B.D", curr_name: "BAHRAINI DINAR", ex_rate: "1.02" },
-  { curr_code: "CNY", curr_name: "CHINESE YUAN", ex_rate: "0.053" },
-  { curr_code: "JPY", curr_name: "JAPANESE YEN", ex_rate: "0.0025" },
-  { curr_code: "SGD", curr_name: "SINGAPORE DOLLAR", ex_rate: "2.25" },
-  { curr_code: "CHF", curr_name: "SWISS FRANC", ex_rate: "3.5" },
-  { curr_code: "AUD", curr_name: "AUSTRALIAN $", ex_rate: "1.9183" },
-  { curr_code: "CAD", curr_name: "CANADIAN DOLLAR", ex_rate: "2.75" },
-];
 
 // const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
 const fieldClassName = "h-6 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
