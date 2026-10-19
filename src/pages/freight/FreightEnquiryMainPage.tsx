@@ -511,20 +511,6 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
       next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
       next.curr_code = lookupText(row, "curr_code") || next.curr_code;
       next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
-      // PowerBuilder Logic: When Principal is selected, default Consignee Name and Address
-      const prinName = lookupText(row, "prin_name");
-      if (prinName && (!current.consignee_name || current.consignee_name === current.prin_code)) {
-        next.consignee_name = prinName;
-      }
-      const addrLines = [
-        lookupText(row, "prin_addr1"),
-        lookupText(row, "prin_addr2"),
-        lookupText(row, "prin_addr3"),
-        lookupText(row, "prin_addr4"),
-      ].filter(Boolean).join("\n");
-      if (addrLines && !current.consignee_address) {
-        next.consignee_address = addrLines;
-      }
     }
     if (field === "origin_port" && row) {
       next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
@@ -1698,9 +1684,10 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                             label="Shipper"
                             value={header.shipper_name}
                             displayValue={header.shipper_name ? "Change" : "Lookup"}
+                            popoverWidth={620}
                             columns={[
-                              { field: "shipper_name", header: "Shipper Name" },
-                              { field: "shipper_address", header: "Address" },
+                              { field: "shipper_name", header: "Shipper Name", width: "240px" },
+                              { field: "shipper_address", header: "Address", width: "340px" },
                             ]}
                             valueField="shipper_name"
                             displayFields={["shipper_name"]}
@@ -1751,9 +1738,10 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                             label="Consignee"
                             value={header.consignee_name}
                             displayValue={header.consignee_name ? "Change" : "Lookup"}
+                            popoverWidth={620}
                             columns={[
-                              { field: "consignee_name", header: "Consignee Name" },
-                              { field: "consignee_address", header: "Address" },
+                              { field: "consignee_name", header: "Consignee Name", width: "240px" },
+                              { field: "consignee_address", header: "Address", width: "340px" },
                             ]}
                             valueField="consignee_name"
                             displayFields={["consignee_name"]}
