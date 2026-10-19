@@ -229,6 +229,7 @@ import LeaveResumptionPage from "../pages/hr/Reports/LeaveResumptionPage";
 import VacationSeparationReportPage from "../pages/hr/Reports/Vacationseparationreportpage ";
 import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypage";
 import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
+import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
 
 
 type WorkspaceRouteContext = {
@@ -989,15 +990,28 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
 
+  // {
+  //   name: "Purchase Request Register",
+  //   match: ({ pathname }) => {
+  //     const normalized = pathname.toLowerCase();
+  //     return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
+  //       normalized.includes("/almswf/reports/purchase_request_register");
+  //   },
+  //   element: () => <PrRegisterPage />,
+  // },
+
+
   {
-    name: "Purchase Request Register",
-    match: ({ pathname }) => {
-      const normalized = pathname.toLowerCase();
-      return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
-        normalized.includes("/almswf/reports/purchase_request_register");
-    },
-    element: () => <PurchaseRequestRegisterReport />,
+  name: "Purchase Request Register",
+  match: ({ pathname }) => {
+    const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+    return (
+      normalized.endsWith("/almswf/almswf/reports/purchase_request_register") ||
+      normalized.endsWith("/almswf/reports/purchase_request_register")
+    );
   },
+  element: () => <PrRegisterPage />,
+},
   {
     name: "ALMS My Task Pending",
     match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),

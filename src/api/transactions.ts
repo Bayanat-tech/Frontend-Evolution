@@ -1545,7 +1545,61 @@ export async function getPrRegisterOldDetailReportExcel(params: Record<string, a
 
 
 
+export async function getPrRegisterSummaryReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    // `/api/alms/reports/PR_Register_Summary/html`,
+    `/api/finance/transactions/reports/PR_Register_Summary/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
 
+export async function getPrRegisterSummaryReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    // `/api/alms/reports/PR_Register_Summary/excel`,
+        `/api/finance/transactions/reports/PR_Register_Summary/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "PR_Register_Summary_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function getPrRegisterDetailReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    // `/api/alms/reports/PR_Register_Details/html`,
+     `/api/finance/transactions/reports/PR_Register_Details/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPrRegisterDetailReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    // `/api/alms/reports/PR_Register_Details/excel`,
+        `/api/finance/transactions/reports/PR_Register_Details/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "PR_Register_Details_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
 export async function getStockSummaryReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(
     `/api/finance/transactions/reports/PSStockSummary/html`,
