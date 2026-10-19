@@ -653,21 +653,21 @@ export function FreightJobActivitiesPage({
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
           <table className="finance-lines-table w-full text-xs min-w-[1360px] border-collapse">
-            <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+            <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
               <tr>
-                <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
-                <th className="px-2 py-2 text-left w-[185px] text-white">Activity</th>
-                <th className="px-2 py-2 text-left min-w-[170px] text-white">Description</th>
-                <th className="px-2 py-2 text-right w-[55px] text-white">Qty</th>
-                <th className="px-2 py-2 text-right w-[85px] text-white">Rate (OMR)</th>
-                <th className="px-2 py-2 text-right w-[95px] text-white">Revenue (OMR)</th>
-                <th className="px-2 py-2 text-center w-[110px] text-amber-200">Tax / VAT</th>
-                <th className="px-2 py-2 text-right w-[85px] text-white">Cost (OMR)</th>
-                <th className="px-2 py-2 text-left w-[165px] text-white">Agent / Broker</th>
-                <th className="px-2 py-2 text-right w-[85px] text-white">Agent (OMR)</th>
-                <th className="px-2 py-2 text-left w-[165px] text-white">Transporter</th>
-                <th className="px-2 py-2 text-right w-[85px] text-white">Transp (OMR)</th>
-                <th className="px-2 py-2 text-center w-[75px] text-white">Actions</th>
+                <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
+                <th className="px-2 py-2 text-left w-[185px] text-slate-700 font-bold border-r border-slate-200">Activity</th>
+                <th className="px-2 py-2 text-left min-w-[170px] text-slate-700 font-bold border-r border-slate-200">Description</th>
+                <th className="px-2 py-2 text-right w-[55px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
+                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Rate (OMR)</th>
+                <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Revenue (OMR)</th>
+                <th className="px-2 py-2 text-center w-[110px] text-amber-900 bg-amber-50/80 border-r border-b-2 border-amber-300 font-bold">Tax / VAT</th>
+                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Cost (OMR)</th>
+                <th className="px-2 py-2 text-left w-[165px] text-slate-700 font-bold border-r border-slate-200">Agent / Broker</th>
+                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Agent (OMR)</th>
+                <th className="px-2 py-2 text-left w-[165px] text-slate-700 font-bold border-r border-slate-200">Transporter</th>
+                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Transp (OMR)</th>
+                <th className="px-2 py-2 text-center w-[75px] text-slate-700 font-bold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">

@@ -561,18 +561,18 @@ export function FreightInvoicePage() {
               </div>
               <div className="max-h-64 overflow-auto">
                 <table className="w-full min-w-[1050px] text-sm">
-                  <thead className="sticky top-0 bg-[#00378C] text-white text-xs uppercase tracking-wide">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
                     <tr>
-                      <th className="w-12 px-2 py-2 text-center">Use</th>
-                      <th className="px-2 py-2 text-left">Job</th>
-                      <th className="px-2 py-2 text-left">Date</th>
-                      <th className="px-2 py-2 text-left">Principal</th>
-                      <th className="px-2 py-2 text-left">Activity</th>
-                      <th className="px-2 py-2 text-right">Qty</th>
-                      <th className="px-2 py-2 text-right">Bill</th>
-                      <th className="px-2 py-2 text-right">Tax</th>
-                      <th className="px-2 py-2 text-right">Total</th>
-                      <th className="px-2 py-2 text-right">Cost</th>
+                      <th className="w-12 px-2 py-2 text-center text-slate-700 font-bold border-r border-slate-200">Use</th>
+                      <th className="px-2 py-2 text-left text-slate-700 font-bold border-r border-slate-200">Job</th>
+                      <th className="px-2 py-2 text-left text-slate-700 font-bold border-r border-slate-200">Date</th>
+                      <th className="px-2 py-2 text-left text-slate-700 font-bold border-r border-slate-200">Principal</th>
+                      <th className="px-2 py-2 text-left text-slate-700 font-bold border-r border-slate-200">Activity</th>
+                      <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Qty</th>
+                      <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Bill</th>
+                      <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Tax</th>
+                      <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Total</th>
+                      <th className="px-2 py-2 text-right text-slate-700 font-bold">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -615,17 +615,17 @@ export function FreightInvoicePage() {
             </div>
             <div className="max-h-72 overflow-auto">
               <table className="w-full min-w-[960px] text-sm">
-                <thead className="sticky top-0 bg-[#00378C] text-white text-xs uppercase tracking-wide">
+                <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
                   <tr>
-                    <th className="px-2 py-2 text-left">Job</th>
-                    <th className="px-2 py-2 text-left">Activity</th>
-                    <th className="px-2 py-2 text-right">Qty</th>
-                    <th className="px-2 py-2 text-right">Rate</th>
-                    <th className="px-2 py-2 text-right">Bill</th>
-                    <th className="px-2 py-2 text-right">Tax</th>
-                    <th className="px-2 py-2 text-right">Total</th>
-                    <th className="px-2 py-2 text-right">Cost</th>
-                    {!readOnly && <th className="px-2 py-2 text-right">Action</th>}
+                    <th className="px-2 py-2 text-left text-slate-700 font-bold border-r border-slate-200">Job</th>
+                    <th className="px-2 py-2 text-left text-slate-700 font-bold border-r border-slate-200">Activity</th>
+                    <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Qty</th>
+                    <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Rate</th>
+                    <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Bill</th>
+                    <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Tax</th>
+                    <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Total</th>
+                    <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200">Cost</th>
+                    {!readOnly && <th className="px-2 py-2 text-right text-slate-700 font-bold">Action</th>}
                   </tr>
                 </thead>
                 <tbody>

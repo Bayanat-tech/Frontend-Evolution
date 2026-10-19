@@ -1759,21 +1759,21 @@ function ContainerGrid({ rows, setRows, onSync }: { rows: ContainerLine[]; setRo
       {/* Finance Table */}
       <div className="commercial-lines-scroll overflow-auto max-h-[360px] min-h-[140px]">
         <table className="finance-lines-table w-full text-xs min-w-[1480px] border-collapse">
-          <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
             <tr>
-              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
-              <th className="px-2 py-2 text-left w-[170px] text-white">Container No</th>
-              <th className="px-2 py-2 text-left w-[150px] text-white">Container Type</th>
-              <th className="px-2 py-2 text-center w-[90px] text-white">TEU / FEU</th>
-              <th className="px-2 py-2 text-left w-[130px] text-white">Seal No</th>
-              <th className="px-2 py-2 text-right w-[105px] text-white">Cube (m³)</th>
-              <th className="px-2 py-2 text-right w-[115px] text-white">Gross Wt (kg)</th>
-              <th className="px-2 py-2 text-right w-[85px] text-white">Nos / Pkgs</th>
-              <th className="px-2 py-2 text-left w-[95px] text-white">UOM</th>
-              <th className="px-2 py-2 text-left min-w-[180px] text-white">Description</th>
-              <th className="px-2 py-2 text-center w-[135px] text-white">Pickup Date</th>
-              <th className="px-2 py-2 text-left w-[130px] text-white">BL No</th>
-              <th className="px-2 py-2 text-center w-[50px] text-white">Actions</th>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
+              <th className="px-2 py-2 text-left w-[170px] text-slate-700 font-bold border-r border-slate-200">Container No</th>
+              <th className="px-2 py-2 text-left w-[150px] text-slate-700 font-bold border-r border-slate-200">Container Type</th>
+              <th className="px-2 py-2 text-center w-[90px] text-slate-700 font-bold border-r border-slate-200">TEU / FEU</th>
+              <th className="px-2 py-2 text-left w-[130px] text-slate-700 font-bold border-r border-slate-200">Seal No</th>
+              <th className="px-2 py-2 text-right w-[105px] text-slate-700 font-bold border-r border-slate-200">Cube (m³)</th>
+              <th className="px-2 py-2 text-right w-[115px] text-slate-700 font-bold border-r border-slate-200">Gross Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Nos / Pkgs</th>
+              <th className="px-2 py-2 text-left w-[95px] text-slate-700 font-bold border-r border-slate-200">UOM</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-slate-700 font-bold border-r border-slate-200">Description</th>
+              <th className="px-2 py-2 text-center w-[135px] text-slate-700 font-bold border-r border-slate-200">Pickup Date</th>
+              <th className="px-2 py-2 text-left w-[130px] text-slate-700 font-bold border-r border-slate-200">BL No</th>
+              <th className="px-2 py-2 text-center w-[50px] text-slate-700 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -2009,13 +2009,13 @@ function CargoMeasureTable({
 
       <div className="commercial-lines-scroll overflow-auto">
         <table className="finance-lines-table w-full text-xs border-collapse">
-          <thead className="bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs whitespace-nowrap">
+          <thead className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-wider shadow-xs whitespace-nowrap border-b-2 border-slate-300">
             <tr>
               {columns.map((c) => (
                 <th
                   key={c.key}
                   style={{ width: c.width }}
-                  className={`px-2 py-2 text-white font-bold text-[11px] uppercase ${
+                  className={`px-2 py-2 text-slate-700 font-bold text-[11px] uppercase border-r border-slate-200 last:border-r-0 ${
                     c.type === "number" ? "text-right" : "text-left"
                   }`}
                 >
@@ -2204,20 +2204,20 @@ function DimensionGrid({ rows, setRows, onSync }: { rows: DimensionLine[]; setRo
       {/* Finance Table */}
       <div className="commercial-lines-scroll overflow-auto max-h-[360px] min-h-[140px]">
         <table className="finance-lines-table w-full text-xs min-w-[1240px] border-collapse">
-          <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
             <tr>
-              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
-              <th className="px-2 py-2 text-right w-[85px] text-white">Length (cm)</th>
-              <th className="px-2 py-2 text-right w-[85px] text-white">Breadth (cm)</th>
-              <th className="px-2 py-2 text-right w-[85px] text-white">Height (cm)</th>
-              <th className="px-2 py-2 text-right w-[75px] text-white">Qty</th>
-              <th className="px-2 py-2 text-right w-[95px] text-white">Gross Wt (kg)</th>
-              <th className="px-2 py-2 text-right w-[100px] text-white">Chg Wt (kg)</th>
-              <th className="px-2 py-2 text-right w-[95px] text-white">Volume (m³)</th>
-              <th className="px-2 py-2 text-right w-[80px] text-white">Total Qty</th>
-              <th className="px-2 py-2 text-left min-w-[180px] text-white">Cargo Details</th>
-              <th className="px-2 py-2 text-left min-w-[180px] text-white">Prod Description</th>
-              <th className="px-2 py-2 text-center w-[50px] text-white">Actions</th>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Length (cm)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Breadth (cm)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Height (cm)</th>
+              <th className="px-2 py-2 text-right w-[75px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
+              <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Gross Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Chg Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Volume (m³)</th>
+              <th className="px-2 py-2 text-right w-[80px] text-slate-700 font-bold border-r border-slate-200">Total Qty</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-slate-700 font-bold border-r border-slate-200">Cargo Details</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-slate-700 font-bold border-r border-slate-200">Prod Description</th>
+              <th className="px-2 py-2 text-center w-[50px] text-slate-700 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">

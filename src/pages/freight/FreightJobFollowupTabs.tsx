@@ -462,9 +462,9 @@ function EditableGrid({
       {/* Finance Styled Scrollable Table */}
       <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-310px)] min-h-[220px]">
         <table className="finance-lines-table w-full text-xs min-w-[1000px] border-collapse">
-          <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
             <tr>
-              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
               {columns.map((column) => {
                 const style = columnStyles[column.toLowerCase()] || {};
                 const isRight = style.align === "right";
@@ -473,7 +473,7 @@ function EditableGrid({
                   <th
                     key={column}
                     style={style.width && !style.isFlexible ? { width: style.width } : undefined}
-                    className={`px-2 py-2 text-white font-bold text-[11px] uppercase ${
+                    className={`px-2 py-2 text-slate-700 font-bold text-[11px] uppercase border-r border-slate-200 ${
                       isRight ? "text-right" : isCenter ? "text-center" : "text-left"
                     } ${style.isFlexible ? "w-auto" : ""}`}
                   >
@@ -481,8 +481,8 @@ function EditableGrid({
                   </th>
                 );
               })}
-              {onAttach && <th className="px-2 py-2 text-center w-[46px] text-white">Files</th>}
-              <th className="px-2 py-2 text-center w-[50px] text-white">Actions</th>
+              {onAttach && <th className="px-2 py-2 text-center w-[46px] text-slate-700 font-bold border-r border-slate-200">Files</th>}
+              <th className="px-2 py-2 text-center w-[50px] text-slate-700 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">

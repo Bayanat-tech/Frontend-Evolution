@@ -1421,29 +1421,29 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
                   <div className="commercial-lines-scroll overflow-auto max-h-[70vh] min-h-[300px]">
                     <table className="finance-lines-table border-collapse text-xs w-full min-w-[2410px]">
-                      <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs whitespace-nowrap">
+                      <thead className="sticky top-0 z-10 bg-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700 shadow-xs whitespace-nowrap border-b-2 border-slate-300">
                       <tr>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Activity Code</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "230px" }}>Activity</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>UOC</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>MOC</th>
-                        <th className="px-2 py-2 text-center text-white font-semibold" style={{ width: "75px" }}>Mode</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Origin</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Dest</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "50px" }}>Qty</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "90px" }}>UOM</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "70px" }}>Cost Curr</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "70px" }}>Cost Ex</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Rate</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Amt</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>Bill Curr</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "60px" }}>Bill Ex</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Rate</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Amt</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent FC</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent Amt</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "250px" }}>Remarks</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "45px" }}/>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "110px" }}>Activity Code</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "230px" }}>Activity</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "120px" }}>UOC</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "110px" }}>MOC</th>
+                        <th className="px-2 py-2 text-center text-slate-700 font-bold border-r border-slate-200" style={{ width: "75px" }}>Mode</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "110px" }}>Origin</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "110px" }}>Dest</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "50px" }}>Qty</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "90px" }}>UOM</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Cost Curr</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Cost Ex</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Cost Rate</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Cost Amt</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "80px" }}>Bill Curr</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "60px" }}>Bill Ex</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Bill Rate</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Bill Amt</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Agent FC</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Agent Amt</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "250px" }}>Remarks</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold" style={{ width: "45px" }}/>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">

@@ -1776,25 +1776,25 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
       <div className="commercial-lines-scroll overflow-auto max-h-[50vh] min-h-[280px]">
         <table className="finance-lines-table w-full min-w-[1450px] text-xs text-left border-collapse">
-          <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10 whitespace-nowrap">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
           <tr>
-            <th className="px-2 py-2 text-center w-10 text-white font-semibold">#</th>
-            <th className="px-2 py-2 w-[85px] text-white font-semibold">Activity Code</th>
-            <th className="px-2 py-2 w-[220px] text-white font-semibold">Activity Name</th>
-            <th className="px-2 py-2 w-[100px] text-white font-semibold">UOC</th>
-            <th className="px-2 py-2 w-[100px] text-white font-semibold">MOC</th>
-            <th className="px-2 py-2 text-center w-[75px] text-white font-semibold">Mode</th>
-            <th className="px-2 py-2 w-[120px] text-white font-semibold">Origin</th>
-            <th className="px-2 py-2 w-[120px] text-white font-semibold">Destination</th>
-            <th className="px-2 py-2 text-right w-[80px] text-white font-semibold">Qty</th>
-            <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Bill Rate</th>
-            {/* <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Bill Rate</th> */}
-            <th className="px-2 py-2 text-right w-[140px] text-white font-semibold">Bill</th>
-            <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Cost Rate</th>
-            {/* <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost Rate</th> */}
-            <th className="px-2 py-2 text-right w-[120px] text-white font-semibold">Cost</th>
-            <th className="px-2 py-2 min-w-[250px] text-white font-semibold">Remarks</th>
-            <th className="px-2 py-2 text-center w-12 text-white font-semibold">Action</th>
+            <th className="px-2 py-2 text-center w-10 text-slate-700 font-bold border-r border-slate-200">#</th>
+            <th className="px-2 py-2 w-[85px] text-slate-700 font-bold border-r border-slate-200">Activity Code</th>
+            <th className="px-2 py-2 w-[220px] text-slate-700 font-bold border-r border-slate-200">Activity Name</th>
+            <th className="px-2 py-2 w-[100px] text-slate-700 font-bold border-r border-slate-200">UOC</th>
+            <th className="px-2 py-2 w-[100px] text-slate-700 font-bold border-r border-slate-200">MOC</th>
+            <th className="px-2 py-2 text-center w-[75px] text-slate-700 font-bold border-r border-slate-200">Mode</th>
+            <th className="px-2 py-2 w-[120px] text-slate-700 font-bold border-r border-slate-200">Origin</th>
+            <th className="px-2 py-2 w-[120px] text-slate-700 font-bold border-r border-slate-200">Destination</th>
+            <th className="px-2 py-2 text-right w-[80px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
+            <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Bill Rate</th>
+            {/* <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Bill Rate</th> */}
+            <th className="px-2 py-2 text-right w-[140px] text-slate-700 font-bold border-r border-slate-200">Bill</th>
+            <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Cost Rate</th>
+            {/* <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Cost Rate</th> */}
+            <th className="px-2 py-2 text-right w-[120px] text-slate-700 font-bold border-r border-slate-200">Cost</th>
+            <th className="px-2 py-2 min-w-[250px] text-slate-700 font-bold border-r border-slate-200">Remarks</th>
+            <th className="px-2 py-2 text-center w-12 text-slate-700 font-bold">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200">
