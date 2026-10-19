@@ -1811,7 +1811,7 @@ export async function getEmployeeAssessmentReportExcelDownload(params: ReportPar
 // ----------Employee Ticket Eligibility — HTML (inline preview)----------------
 export async function getEmployeeTicketEligibilityReportHtml(params: ReportParams): Promise<string> {
   const response = await api.post(
-    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReportHtml/html`,
+    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReport/html`,
     params,
     { responseType: "text" }
   );
@@ -1821,7 +1821,7 @@ export async function getEmployeeTicketEligibilityReportHtml(params: ReportParam
 // ----------Employee Assessment Report — Excel download----------------
 export async function getEmployeeTicketEligibilityReportExcelDownload(params: ReportParams): Promise<void> {
   const response = await api.post(
-    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReportExcel/excel`,
+    `/api/finance/transactions/reports/getEmployeeTicketEligibilityReport/excel`,
     params,
     { responseType: "blob" }
   );
@@ -1859,7 +1859,7 @@ export async function getMonthlySalarySummaryReportExcelDownload(params: ReportP
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `MonthlySalarySummary_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1894,7 +1894,7 @@ export async function getEmployeeSalaryNotProcessedReportExcelDownload(params: R
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `EmployeePayrollProcessFail_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1923,11 +1923,26 @@ export async function getYearlyLeaveBalanceReportExcelDownload(params: ReportPar
     params,
     { responseType: "blob" }
   );
-  const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
+
+  // Data na ho to controller JSON bhejta hai, usko file mat banao
+  const raw = response.data as Blob;
+  if (raw.type.includes("json")) {
+    const msg = JSON.parse(await raw.text())?.message;
+    throw new Error(msg || "No data found for the selected criteria.");
+  }
+
+  const blob = new Blob([raw], { type: "application/vnd.ms-excel" });
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+
+  // code7 = LIST | CURRENT (controller ke filename se match)
+  const prefix =
+    String(params.code7).toUpperCase() === "CURRENT"
+      ? "CurrentLeaveBalance"
+      : "YearlyLeaveBalanceList";
+  link.download = `${prefix}_${new Date().toISOString().slice(0, 10)}.xls`;
+
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1961,7 +1976,7 @@ export async function getLeaveResumptionReportExcelDownload(params: ReportParams
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `LeaveResumption_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1996,7 +2011,7 @@ export async function getEmployeeAddressListReportExcelDownload(params: ReportPa
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `EmployeeAddressList_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -2015,7 +2030,7 @@ export async function getVacationSeparationReportHtml(params: ReportParams): Pro
   return response.data as string;
 }
 
-// ----------Employee Address List — Excel download----------------
+// ----------VACATION SEPARATION List — Excel download----------------
 export async function getVacationSeparationReportExcelDownload(params: ReportParams): Promise<void> {
   const response = await api.post(
     `/api/finance/transactions/reports/getVacationSeparationReportExcel/excel`,
@@ -2026,15 +2041,14 @@ export async function getVacationSeparationReportExcelDownload(params: ReportPar
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `EmployeeTicketEligibility_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `${
+    String(params.code2).toUpperCase() === "SEPARATION" ? "SeparationReport" : "VacationReport"
+  }_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
 }
-
-
-
 
 
 export async function TransationReport(params: ReportParams) {
