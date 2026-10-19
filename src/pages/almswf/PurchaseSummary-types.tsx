@@ -88,6 +88,7 @@ export interface TPRHeader {
   TX_COMPNTCAT_NAME?: string;
   DISCOUNT_AMOUNT?: number;
   DISC_AMOUNT?: number;
+  NEXT_ACTION_BY?: string;
 }
 
 export type TPRItem = {
