@@ -1,7 +1,7 @@
 import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Calculator, CheckCircle2, Edit2, ListPlus, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Calculator, CheckCircle2, Edit2, List, ListPlus, Plus, RefreshCw, Save, Search, Trash2, TrendingUp, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect, freightTaxCategories, freightTaxComponents } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
@@ -132,11 +132,27 @@ export function FreightJobActivitiesPage({
   const [invalidLineIndices, setInvalidLineIndices] = useState<number[]>([]);
   const [activeFcIndex, setActiveFcIndex] = useState<number | null>(null);
   const [activeTaxIndex, setActiveTaxIndex] = useState<number | null>(null);
+  const [selectedLineIndex, setSelectedLineIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [populating, setPopulating] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [lineSearch, setLineSearch] = useState("");
+
+  const filteredLines = useMemo(() => {
+    if (!lineSearch.trim()) return lines;
+    const q = lineSearch.toLowerCase();
+    return lines.filter((l) =>
+      (l.act_code || "").toLowerCase().includes(q) ||
+      (l.activity || "").toLowerCase().includes(q) ||
+      (l.other_services || "").toLowerCase().includes(q) ||
+      (l.broker_name || "").toLowerCase().includes(q) ||
+      (l.broker_code || "").toLowerCase().includes(q) ||
+      (l.transporter_name || "").toLowerCase().includes(q) ||
+      (l.transporter_code || "").toLowerCase().includes(q)
+    );
+  }, [lines, lineSearch]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
@@ -205,6 +221,20 @@ export function FreightJobActivitiesPage({
     if (!initialJob) return;
     void openJob(initialJob);
   }, [initialJob]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "F3") {
+        e.preventDefault();
+        if (lines.length > 0) {
+          const idx = activeFcIndex ?? selectedLineIndex ?? 0;
+          if (lines[idx]) setActiveFcIndex(idx);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeFcIndex, selectedLineIndex, lines]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
@@ -456,7 +486,7 @@ export function FreightJobActivitiesPage({
   }
 
   return (
-    <section className="freight-ui-standard grid gap-2 freight-job-ops-screen min-w-0">
+    <section className="finance-document-ui freight-ui-standard grid gap-2 freight-job-ops-screen min-w-0">
       {!embeddedInWorkspace && (
         <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -524,293 +554,522 @@ export function FreightJobActivitiesPage({
         </div>
       )}
 
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        <Metric label="Revenue" value={money(totals.revenue)} />
-        <Metric label="Tax (VAT)" value={money(totals.tax)} />
-        <Metric label="Expense" value={money(totals.expense)} />
-        <Metric label="Profit" value={money(totals.profit)} tone={totals.profit < 0 ? "bad" : "good"} />
-        <Metric label="Lines" value={String(lines.length)} />
-      </div>
+      <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
+        {/* Finance Line Actions Header */}
+        <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+          <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+            <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+              <List size={14} />
+            </span>
+            <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+              Service & Activity Lines
+            </span>
+            <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+              {lineSearch.trim()
+                ? `${filteredLines.length} of ${lines.length} lines`
+                : `${lines.length} ${lines.length === 1 ? "line" : "lines"}`}
+            </span>
+            {lineSearch.trim() && (
+              <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                Filtered ({filteredLines.length})
+              </span>
+            )}
 
-      <div className="freight-job-table-shell freight-activity-table overflow-x-auto min-w-0">
-        <div className="min-w-[1380px]">
-          <div className="freight-job-table-head sticky top-0 z-10 grid grid-cols-[28px_minmax(155px,1.2fr)_minmax(155px,1.2fr)_46px_80px_88px_110px_80px_minmax(165px,1.25fr)_78px_minmax(165px,1.25fr)_78px_86px] items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold bg-[#00378C] text-white tracking-wide rounded-t-lg shadow-xs">
-            <span className="text-center">#</span>
-            <span>Activity</span>
-            <span>Description</span>
-            <span className="text-center">Qty</span>
-            <span className="text-right">Rate (OMR)</span>
-            <span className="text-right">Revenue (OMR)</span>
-            <span className="text-center text-amber-200">Tax / VAT</span>
-            <span className="text-right">Cost (OMR)</span>
-            <span>Agent / Broker</span>
-            <span className="text-right">Agent (OMR)</span>
-            <span>Transporter</span>
-            <span className="text-right">Transp (OMR)</span>
-            <span className="text-center border-l border-white/20 pl-2">Actions</span>
+            {/* Inline KPI Strip */}
+            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} OMR
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+                <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} OMR
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
+                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} OMR
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
+                  totals.profit >= 0
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                    : "bg-rose-50 border-rose-300 text-rose-800"
+                }`}
+              >
+                <span>Profit:</span> {money(totals.profit)} OMR
+              </span>
+            </div>
           </div>
-          <div className="max-h-[calc(100vh-230px)] overflow-y-auto divide-y divide-border/60">
-            {lines.map((line, index) => {
-              const isInvalid = invalidLineIndices.includes(index);
-              const hasForeignCurrency = Boolean(line.bill_curr_code && line.bill_curr_code !== "OMR");
-              const hasTax = numberValue(line.tx_compnt_amt_1) > 0 || numberValue(line.tx_compnt_amt_1_cost) > 0 || line.tx_compnt_1_expmt === "S";
 
-              return (
-                <div key={`${line.srno}-${index}`} className={`freight-job-table-row transition-colors ${isInvalid ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400" : "hover:bg-slate-50/80"}`}>
-                  <div className="freight-activity-primary-row grid grid-cols-[28px_minmax(155px,1.2fr)_minmax(155px,1.2fr)_46px_80px_88px_110px_80px_minmax(165px,1.25fr)_78px_minmax(165px,1.25fr)_78px_86px] items-center gap-1.5 px-3 py-0.5">
-                    <span className="text-xs font-semibold text-muted-foreground text-center">{index + 1}</span>
-                    <ActivityLookup
-                      value={line.act_code}
-                      displayValue={line.activity}
-                      companyCode={companyCode}
-                      disabled={isLineLocked}
-                      onChange={async (value, row) => {
-                        const newBillRate = lookupText(row || undefined, "bill");
-                        const newCost = lookupText(row || undefined, "cost");
-                        const divCode = line.div_code || lookupText(header, "div_code") || "10";
-                        const txCat = line.tx_cat_code || lookupText(header, "tx_cat_code") || "11";
+          <div className="flex items-center gap-2">
+            {/* Search Filter input */}
+            <div className="bisc-table-search relative flex items-center">
+              <Search size={13} className="bisc-table-search-icon absolute left-2 text-slate-400" />
+              <input
+                className="bisc-search-input h-7 pl-6 pr-6 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-36 sm:w-48"
+                type="text"
+                value={lineSearch}
+                onChange={(e) => setLineSearch(e.target.value)}
+                placeholder="Search activities..."
+              />
+              {lineSearch && (
+                <button
+                  type="button"
+                  onClick={() => setLineSearch("")}
+                  className="bisc-table-search-clear absolute right-1.5 text-slate-400 hover:text-slate-700"
+                  title="Clear"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
 
-                        let updatedLine: ActivityLine = recalc({
-                          ...line,
-                          act_code: value,
-                          activity: lookupText(row || undefined, "activity"),
-                          other_services: lookupText(row || undefined, "activity") || line.other_services,
-                          bill_rate: newBillRate !== "" ? newBillRate : line.bill_rate,
-                          actual_cost: newCost !== "" ? newCost : line.actual_cost,
-                          div_code: divCode,
-                          tx_cat_code: txCat,
-                        });
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void populateFromQuotation()}
+              disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")}
+              title={
+                lookupText(header, "quotation_ref")
+                  ? `Load missing activities from ${lookupText(header, "quotation_ref")}`
+                  : "Job has no quotation reference"
+              }
+              className="h-7 text-xs font-medium"
+            >
+              <ListPlus size={13} className="mr-1" /> {populating ? "Loading..." : "Populate Quotation"}
+            </Button>
 
-                        // Match PowerBuilder uof_get_tax_compnentcat: auto-populate tax code and percentage
-                        if (value && companyCode && divCode && txCat) {
-                          try {
-                            const compRows = await freightTaxComponents<LookupRow>(companyCode, divCode, txCat, "", value);
-                            if (compRows.length > 0) {
-                              const firstComp = normalizeLookupRow(compRows[0]);
-                              const taxCode = lookupText(firstComp, "tx_compntcat_code");
-                              const taxPerc = lookupText(firstComp, "tx_percnt") || "0";
-                              const isStandard = numberValue(taxPerc) > 0 ? "S" : "N";
-                              updatedLine = recalcSalesTax({
-                                ...updatedLine,
-                                tx_compntcat_code_1: taxCode,
-                                tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
-                                tx_compnt_perc_1: taxPerc,
-                                tx_compnt_1_expmt: isStandard,
-                              });
+            <Button
+              type="button"
+              size="sm"
+              onClick={addLine}
+              disabled={isLineLocked}
+              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+              title="Add activity line (Alt + A)"
+            >
+              <Plus size={13} className="mr-1" /> Add Line
+            </Button>
+          </div>
+        </div>
+
+        {/* Scrollable Table matching Finance Detail Tables */}
+        <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
+          <table className="finance-lines-table w-full text-xs min-w-[1360px] border-collapse">
+            <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+              <tr>
+                <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
+                <th className="px-2 py-2 text-left w-[185px] text-white">Activity</th>
+                <th className="px-2 py-2 text-left min-w-[170px] text-white">Description</th>
+                <th className="px-2 py-2 text-right w-[55px] text-white">Qty</th>
+                <th className="px-2 py-2 text-right w-[85px] text-white">Rate (OMR)</th>
+                <th className="px-2 py-2 text-right w-[95px] text-white">Revenue (OMR)</th>
+                <th className="px-2 py-2 text-center w-[110px] text-amber-200">Tax / VAT</th>
+                <th className="px-2 py-2 text-right w-[85px] text-white">Cost (OMR)</th>
+                <th className="px-2 py-2 text-left w-[165px] text-white">Agent / Broker</th>
+                <th className="px-2 py-2 text-right w-[85px] text-white">Agent (OMR)</th>
+                <th className="px-2 py-2 text-left w-[165px] text-white">Transporter</th>
+                <th className="px-2 py-2 text-right w-[85px] text-white">Transp (OMR)</th>
+                <th className="px-2 py-2 text-center w-[75px] text-white">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {filteredLines.map((line) => {
+                const index = lines.indexOf(line);
+                const isInvalid = invalidLineIndices.includes(index);
+                const hasForeignCurrency = Boolean(line.bill_curr_code && line.bill_curr_code !== "OMR");
+                const hasTax =
+                  numberValue(line.tx_compnt_amt_1) > 0 ||
+                  numberValue(line.tx_compnt_amt_1_cost) > 0 ||
+                  line.tx_compnt_1_expmt === "S";
+
+                return (
+                  <tr
+                    key={`${line.srno}-${index}`}
+                    onClick={() => setSelectedLineIndex(index)}
+                    onFocusCapture={() => setSelectedLineIndex(index)}
+                    className={`transition-colors ${
+                      selectedLineIndex === index
+                        ? "bg-blue-50/70 border-l-4 border-l-[#00378C]"
+                        : isInvalid
+                        ? "bg-rose-50/70 border-l-4 border-l-rose-500 ring-1 ring-rose-400"
+                        : index % 2 === 1
+                        ? "bg-slate-50/40 hover:bg-blue-50/40"
+                        : "bg-white hover:bg-blue-50/40"
+                    }`}
+                  >
+                    {/* Row # */}
+                    <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                      {index + 1}
+                    </td>
+
+                    {/* Activity Lookup */}
+                    <td className="px-1.5 py-1 w-[185px]">
+                      <ActivityLookup
+                        value={line.act_code}
+                        displayValue={line.activity}
+                        companyCode={companyCode}
+                        disabled={isLineLocked}
+                        onChange={async (value, row) => {
+                          const newBillRate = lookupText(row || undefined, "bill");
+                          const newCost = lookupText(row || undefined, "cost");
+                          const divCode = line.div_code || lookupText(header, "div_code") || "10";
+                          const txCat = line.tx_cat_code || lookupText(header, "tx_cat_code") || "11";
+
+                          let updatedLine: ActivityLine = recalc({
+                            ...line,
+                            act_code: value,
+                            activity: lookupText(row || undefined, "activity"),
+                            other_services: lookupText(row || undefined, "activity") || line.other_services,
+                            bill_rate: newBillRate !== "" ? newBillRate : line.bill_rate,
+                            actual_cost: newCost !== "" ? newCost : line.actual_cost,
+                            div_code: divCode,
+                            tx_cat_code: txCat,
+                          });
+
+                          if (value && companyCode && divCode && txCat) {
+                            try {
+                              const compRows = await freightTaxComponents<LookupRow>(companyCode, divCode, txCat, "", value);
+                              if (compRows.length > 0) {
+                                const firstComp = normalizeLookupRow(compRows[0]);
+                                const taxCode = lookupText(firstComp, "tx_compntcat_code");
+                                const taxPerc = lookupText(firstComp, "tx_percnt") || "0";
+                                const isStandard = numberValue(taxPerc) > 0 ? "S" : "N";
+                                updatedLine = recalcSalesTax({
+                                  ...updatedLine,
+                                  tx_compntcat_code_1: taxCode,
+                                  tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
+                                  tx_compnt_perc_1: taxPerc,
+                                  tx_compnt_1_expmt: isStandard,
+                                });
+                              }
+                            } catch (err) {
+                              console.warn("Could not auto-populate tax components:", err);
                             }
-                          } catch (err) {
-                            console.warn("Could not auto-populate tax components:", err);
                           }
-                        }
 
-                        updateLine(index, updatedLine);
-                      }}
-                    />
-                    <textarea
-                      className="w-full text-[11px] min-h-[32px] h-[34px] max-h-[34px] py-1 px-2 rounded-md border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 resize-none leading-snug font-sans"
-                      placeholder="Service description..."
-                      value={line.other_services}
-                      disabled={isLineLocked}
-                      rows={1}
-                      onChange={(event) => updateLine(index, { other_services: event.target.value })}
-                      maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}
-                    />
-                    <MoneyInput
-                      value={line.quantity}
-                      disabled={isLineLocked}
-                      onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))}
-                    />
-                    {/* Rate in Base Currency (OMR) */}
-                    <MoneyInput
-                      value={line.bill_rate}
-                      disabled={isLineLocked}
-                      onChange={(value) => {
-                        const newRate = numberValue(value);
-                        const qty = numberValue(line.quantity) || 1;
-                        const bill = qty * newRate;
-                        const billEx = numberValue(line.bill_ex_rate) || 1;
-                        const rateOc = line.bill_curr_code && line.bill_curr_code !== "OMR" && billEx > 0
-                          ? newRate / billEx
-                          : newRate;
-                        const billOc = qty * rateOc;
-                        updateLine(index, recalcSalesTax({
-                          ...line,
-                          bill_rate: value,
-                          bill: String(bill),
-                          bill_rate_oc: String(rateOc),
-                          bill_oc: String(billOc),
-                        }));
-                      }}
-                    />
-                    {/* Revenue in Base Currency (OMR) */}
-                    <MoneyInput
-                      value={line.bill}
-                      disabled={isLineLocked}
-                      onChange={(value) => {
-                        const newBill = numberValue(value);
-                        const qty = numberValue(line.quantity) || 1;
-                        const newRate = qty > 0 ? newBill / qty : newBill;
-                        const billEx = numberValue(line.bill_ex_rate) || 1;
-                        const billOc = line.bill_curr_code && line.bill_curr_code !== "OMR" && billEx > 0
-                          ? newBill / billEx
-                          : newBill;
-                        const rateOc = qty > 0 ? billOc / qty : billOc;
-                        updateLine(index, recalcSalesTax({
-                          ...line,
-                          bill: value,
-                          bill_rate: String(newRate),
-                          bill_oc: String(billOc),
-                          bill_rate_oc: String(rateOc),
-                        }));
-                      }}
-                    />
-                    {/* Dedicated Tax (VAT) Badge Button */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveTaxIndex(index)}
-                      className={`h-7 w-full px-1.5 rounded-md border flex items-center justify-between gap-1 text-[11px] font-mono transition-all cursor-pointer shadow-2xs ${
-                        hasTax
-                          ? "border-emerald-400 bg-emerald-50/90 text-emerald-900 font-bold hover:bg-emerald-100"
-                          : "border-dashed border-slate-300 bg-slate-50/60 text-slate-500 hover:border-slate-400 hover:bg-slate-100"
-                      }`}
+                          updateLine(index, updatedLine);
+                        }}
+                      />
+                    </td>
+
+                    {/* Description */}
+                    <td className="px-1.5 py-1 min-w-[170px]">
+                      <input
+                        className="h-7 w-full text-[11px] px-2 rounded border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                        placeholder="Service description..."
+                        value={line.other_services}
+                        disabled={isLineLocked}
+                        onChange={(event) => updateLine(index, { other_services: event.target.value })}
+                        maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}
+                      />
+                    </td>
+
+                    {/* Qty */}
+                    <td className="px-1.5 py-1 w-[55px]">
+                      <MoneyInput
+                        value={line.quantity}
+                        disabled={isLineLocked}
+                        onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))}
+                      />
+                    </td>
+
+                    {/* Rate (OMR) */}
+                    <td
+                      className="px-1.5 py-1 w-[85px]"
                       title={
-                        hasTax
-                          ? `Sales Tax: ${line.tx_compnt_perc_1 || 0}% (OMR ${money(line.tx_compnt_amt_1)}) | Cost Tax: ${line.tx_compnt_perc_1_cost || 0}% (OMR ${money(line.tx_compnt_amt_1_cost)})`
-                          : "Click to configure Tax & VAT"
+                        hasForeignCurrency
+                          ? `Base: OMR ${money(line.bill_rate)} | Foreign: ${money(line.bill_rate_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
+                          : undefined
                       }
                     >
-                      <span className="flex items-center gap-0.5 font-bold">
-                        <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
-                        <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "0%"}</span>
-                      </span>
-                      <span className="text-[10.5px] tabular-nums font-semibold truncate text-right">
-                        {hasTax ? money(line.tx_compnt_amt_1) : "No Tax"}
-                      </span>
-                    </button>
-                    {/* Cost in Base Currency (OMR) */}
-                    <MoneyInput
-                      value={line.actual_cost}
-                      disabled={isLineLocked}
-                      onChange={(value) => {
-                        const newCost = numberValue(value);
-                        const acEx = numberValue(line.ac_ex_rate) || 1;
-                        const costOc = line.ac_curr_code && line.ac_curr_code !== "OMR" && acEx > 0
-                          ? newCost / acEx
-                          : newCost;
-                        updateLine(index, recalcCostTax({
-                          ...line,
-                          actual_cost: value,
-                          actual_cost_oc: String(costOc),
-                        }));
-                      }}
-                    />
+                      <MoneyInput
+                        value={line.bill_rate}
+                        disabled={isLineLocked}
+                        onChange={(value) => {
+                          const newRate = numberValue(value);
+                          const qty = numberValue(line.quantity) || 1;
+                          const bill = round3(qty * newRate);
+                          const billEx = numberValue(line.bill_ex_rate) || 1;
+                          const isFc = Boolean(line.bill_curr_code && line.bill_curr_code !== "OMR");
+                          const newRateOc = isFc && billEx > 0 ? round3(newRate / billEx) : newRate;
+                          const newBillOc = isFc && billEx > 0 ? round3(bill / billEx) : bill;
+                          updateLine(
+                            index,
+                            recalcSalesTax({
+                              ...line,
+                              bill_rate: value,
+                              bill: String(bill),
+                              bill_rate_oc: String(newRateOc),
+                              bill_oc: String(newBillOc),
+                            })
+                          );
+                        }}
+                      />
+                    </td>
 
-                    {/* Agent / Broker Dropdown */}
-                    <AgentLookup
-                      companyCode={companyCode}
-                      value={line.broker_code}
-                      displayValue={line.broker_name}
-                      disabled={isLineLocked}
-                      onChange={(val, row) => {
-                        updateLine(index, {
-                          broker_code: val,
-                          broker_name: lookupText(row, "broker_name") || lookupText(row, "agent_name") || "",
-                        });
-                      }}
-                    />
-                    {/* Agent Price in Base Currency (OMR) */}
-                    <MoneyInput
-                      value={line.partners_price}
-                      disabled={isLineLocked}
-                      onChange={(value) => {
-                        const newPrice = numberValue(value);
-                        const pEx = numberValue(line.partner_ex_rate) || 1;
-                        const priceOc = line.partner_curr_code && line.partner_curr_code !== "OMR" && pEx > 0
-                          ? newPrice / pEx
-                          : newPrice;
-                        updateLine(index, {
-                          partners_price: value,
-                          partner_price_oc: String(priceOc),
-                        });
-                      }}
-                    />
+                    {/* Revenue (OMR) */}
+                    <td
+                      className="px-1.5 py-1 w-[95px]"
+                      title={
+                        hasForeignCurrency
+                          ? `Base: OMR ${money(line.bill)} | Foreign: ${money(line.bill_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
+                          : undefined
+                      }
+                    >
+                      <MoneyInput
+                        value={line.bill}
+                        disabled={isLineLocked}
+                        onChange={(value) => {
+                          const newBill = numberValue(value);
+                          const qty = numberValue(line.quantity) || 1;
+                          const newRate = qty > 0 ? round3(newBill / qty) : newBill;
+                          const billEx = numberValue(line.bill_ex_rate) || 1;
+                          const isFc = Boolean(line.bill_curr_code && line.bill_curr_code !== "OMR");
+                          const newBillOc = isFc && billEx > 0 ? round3(newBill / billEx) : newBill;
+                          const newRateOc = isFc && billEx > 0 ? round3(newRate / billEx) : newRate;
+                          updateLine(
+                            index,
+                            recalcSalesTax({
+                              ...line,
+                              bill: value,
+                              bill_rate: String(newRate),
+                              bill_oc: String(newBillOc),
+                              bill_rate_oc: String(newRateOc),
+                            })
+                          );
+                        }}
+                      />
+                    </td>
 
-                    {/* Transporter Dropdown */}
-                    <TransporterLookup
-                      companyCode={companyCode}
-                      value={line.transporter_code}
-                      displayValue={line.transporter_name}
-                      disabled={isLineLocked}
-                      onChange={(val, row) => {
-                        updateLine(index, {
-                          transporter_code: val,
-                          transporter_name: lookupText(row, "transporter_name") || "",
-                        });
-                      }}
-                    />
-                    {/* Transporter Price in Base Currency (OMR) */}
-                    <MoneyInput
-                      value={line.transport_price}
-                      disabled={isLineLocked}
-                      onChange={(value) => {
-                        const newPrice = numberValue(value);
-                        const tpEx = numberValue(line.tp_ex_rate) || 1;
-                        const priceOc = line.tp_curr_code && line.tp_curr_code !== "OMR" && tpEx > 0
-                          ? newPrice / tpEx
-                          : newPrice;
-                        updateLine(index, {
-                          transport_price: value,
-                          transport_price_oc: String(priceOc),
-                        });
-                      }}
-                    />
-
-                    {/* Action Buttons: Currency & Delete */}
-                    <div className="flex items-center justify-center gap-1 pl-2 border-l border-slate-200/80">
-                      {/* Multi-Currency / FC Dialog Button (PowerBuilder dw_7 / F3) */}
-                      <Button
+                    {/* Tax (VAT) Dedicated Button */}
+                    <td className="px-1.5 py-1 w-[110px]">
+                      <button
                         type="button"
-                        size="sm"
-                        variant="outline"
-                        className={`h-7 px-1.5 text-[10px] gap-0.5 font-mono shadow-2xs shrink-0 ${
-                          hasForeignCurrency
-                            ? "border-amber-400 bg-amber-50 text-amber-900 font-bold hover:bg-amber-100"
-                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        onClick={() => setActiveTaxIndex(index)}
+                        className={`h-7 w-full px-1.5 rounded border flex items-center justify-between gap-1 text-[11px] font-mono transition-all cursor-pointer shadow-2xs ${
+                          hasTax
+                            ? "border-emerald-400 bg-emerald-50/90 text-emerald-900 font-bold hover:bg-emerald-100"
+                            : "border-dashed border-slate-300 bg-slate-50/60 text-slate-500 hover:border-slate-400 hover:bg-slate-100"
                         }`}
                         title={
-                          hasForeignCurrency
-                            ? `Foreign Currency: ${line.bill_curr_code} @ ${line.bill_ex_rate} (Original: ${money(line.bill_oc)} ${line.bill_curr_code}) | Base: OMR ${money(line.bill)}`
-                            : "Configure Foreign Currency & Exchange Rate (F3)"
+                          hasTax
+                            ? `Sales Tax: ${line.tx_compnt_perc_1 || 0}% | OMR ${money(line.tx_compnt_lcuramt_1)}${
+                                hasForeignCurrency ? ` (${money(line.tx_compnt_amt_1)} ${line.bill_curr_code})` : ""
+                              }`
+                            : "Click to configure Tax & VAT"
                         }
-                        onClick={() => setActiveFcIndex(index)}
                       >
-                        <Coins size={11} className={hasForeignCurrency ? "text-amber-600" : "text-slate-400"} />
-                        <span>{hasForeignCurrency ? line.bill_curr_code : (line.bill_curr_code || "OMR")}</span>
-                      </Button>
+                        <span className="flex items-center gap-0.5 font-bold">
+                          <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
+                          <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "0%"}</span>
+                        </span>
+                        <span className="text-[10.5px] tabular-nums font-semibold truncate text-right">
+                          {hasTax ? money(line.tx_compnt_lcuramt_1) : "No Tax"}
+                        </span>
+                      </button>
+                    </td>
 
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0"
-                        title="Remove line"
+                    {/* Cost (OMR) */}
+                    <td
+                      className="px-1.5 py-1 w-[85px]"
+                      title={
+                        line.ac_curr_code && line.ac_curr_code !== "OMR"
+                          ? `Base Cost: OMR ${money(line.actual_cost)} | Foreign: ${money(line.actual_cost_oc)} ${line.ac_curr_code} (Ex: ${line.ac_ex_rate})`
+                          : undefined
+                      }
+                    >
+                      <MoneyInput
+                        value={line.actual_cost}
                         disabled={isLineLocked}
-                        onClick={() => removeLine(index)}
-                      >
-                        <Trash2 size={13} />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {!lines.length && (
-              <div className="px-3 py-12 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-                <p className="font-medium text-foreground">No service & activity lines yet.</p>
-                <p className="text-xs text-muted-foreground">Click "+ Line" to add services or "Populate from Quotation" to import approved activities.</p>
-              </div>
+                        onChange={(value) => {
+                          const newCost = numberValue(value);
+                          const acEx = numberValue(line.ac_ex_rate) || 1;
+                          const isFc = Boolean(line.ac_curr_code && line.ac_curr_code !== "OMR");
+                          const newCostOc = isFc && acEx > 0 ? round3(newCost / acEx) : newCost;
+                          updateLine(
+                            index,
+                            recalcCostTax({
+                              ...line,
+                              actual_cost: value,
+                              actual_cost_oc: String(newCostOc),
+                            })
+                          );
+                        }}
+                      />
+                    </td>
+
+                    {/* Agent / Broker */}
+                    <td className="px-1.5 py-1 w-[165px]">
+                      <AgentLookup
+                        companyCode={companyCode}
+                        value={line.broker_code}
+                        displayValue={line.broker_name}
+                        disabled={isLineLocked}
+                        onChange={(val, row) => {
+                          updateLine(index, {
+                            broker_code: val,
+                            broker_name: lookupText(row, "broker_name") || lookupText(row, "agent_name") || "",
+                          });
+                        }}
+                      />
+                    </td>
+
+                    {/* Agent Price (OMR) */}
+                    <td
+                      className="px-1.5 py-1 w-[85px]"
+                      title={
+                        line.partner_curr_code && line.partner_curr_code !== "OMR"
+                          ? `Base Agent: OMR ${money(line.partners_price)} | Foreign: ${money(line.partner_price_oc)} ${line.partner_curr_code} (Ex: ${line.partner_ex_rate})`
+                          : undefined
+                      }
+                    >
+                      <MoneyInput
+                        value={line.partners_price}
+                        disabled={isLineLocked}
+                        onChange={(value) => {
+                          const newPrice = numberValue(value);
+                          const pEx = numberValue(line.partner_ex_rate) || 1;
+                          const isFc = Boolean(line.partner_curr_code && line.partner_curr_code !== "OMR");
+                          const newPriceOc = isFc && pEx > 0 ? round3(newPrice / pEx) : newPrice;
+                          updateLine(index, {
+                            ...line,
+                            partners_price: value,
+                            partner_price_oc: String(newPriceOc),
+                          });
+                        }}
+                      />
+                    </td>
+
+                    {/* Transporter */}
+                    <td className="px-1.5 py-1 w-[165px]">
+                      <TransporterLookup
+                        companyCode={companyCode}
+                        value={line.transporter_code}
+                        displayValue={line.transporter_name}
+                        disabled={isLineLocked}
+                        onChange={(val, row) => {
+                          updateLine(index, {
+                            transporter_code: val,
+                            transporter_name: lookupText(row, "transporter_name") || "",
+                          });
+                        }}
+                      />
+                    </td>
+
+                    {/* Transporter Price (OMR) */}
+                    <td
+                      className="px-1.5 py-1 w-[85px]"
+                      title={
+                        line.tp_curr_code && line.tp_curr_code !== "OMR"
+                          ? `Base Transp: OMR ${money(line.transport_price)} | Foreign: ${money(line.transport_price_oc)} ${line.tp_curr_code} (Ex: ${line.tp_ex_rate})`
+                          : undefined
+                      }
+                    >
+                      <MoneyInput
+                        value={line.transport_price}
+                        disabled={isLineLocked}
+                        onChange={(value) => {
+                          const newPrice = numberValue(value);
+                          const tpEx = numberValue(line.tp_ex_rate) || 1;
+                          const isFc = Boolean(line.tp_curr_code && line.tp_curr_code !== "OMR");
+                          const newPriceOc = isFc && tpEx > 0 ? round3(newPrice / tpEx) : newPrice;
+                          updateLine(index, {
+                            ...line,
+                            transport_price: value,
+                            transport_price_oc: String(newPriceOc),
+                          });
+                        }}
+                      />
+                    </td>
+
+                    {/* Action Buttons: Currency Calculator & Delete */}
+                    <td className="px-1.5 py-1 w-[75px] text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          className={`h-7 w-7 rounded border flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 ${
+                            hasForeignCurrency
+                              ? "border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 ring-1 ring-amber-300"
+                              : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                          }`}
+                          title={
+                            hasForeignCurrency
+                              ? `Currency Calculator (${line.bill_curr_code} @ ${line.bill_ex_rate}) - Click to view/edit`
+                              : "Currency Calculator (Click to enter foreign currency)"
+                          }
+                          onClick={() => setActiveFcIndex(index)}
+                        >
+                          <Calculator size={13} className={hasForeignCurrency ? "text-amber-700" : "text-slate-500"} />
+                        </button>
+
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0 cursor-pointer"
+                          title="Remove line"
+                          disabled={isLineLocked}
+                          onClick={() => removeLine(index)}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {!lines.length && (
+                <tr>
+                  <td colSpan={13} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">No service & activity lines yet.</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Click "+ Add Line" to add services or "Populate Quotation" to import approved activities.
+                    </p>
+                  </td>
+                </tr>
+              )}
+
+              {lines.length > 0 && filteredLines.length === 0 && (
+                <tr>
+                  <td colSpan={13} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    No activity lines match "<strong>{lineSearch}</strong>"
+                  </td>
+                </tr>
+              )}
+            </tbody>
+
+            {/* Pinned Totals Footer */}
+            {lines.length > 0 && (
+              <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
+                <tr>
+                  <td colSpan={3} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
+                    Totals ({lines.length} lines):
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono text-slate-700">-</td>
+                  <td className="px-2 py-1.5 text-right">-</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
+                    {money(totals.revenue)}
+                  </td>
+                  <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800">
+                    {money(totals.tax)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                    {money(totals.cost)}
+                  </td>
+                  <td className="px-2 py-1.5 text-left">-</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700">
+                    {money(totals.partners)}
+                  </td>
+                  <td className="px-2 py-1.5 text-left">-</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700">
+                    {money(totals.transport)}
+                  </td>
+                  <td className="px-2 py-1.5 text-center text-[10px] text-slate-500 font-mono">
+                    OMR
+                  </td>
+                </tr>
+              </tfoot>
             )}
-          </div>
+          </table>
         </div>
       </div>
 
@@ -818,16 +1077,16 @@ export function FreightJobActivitiesPage({
       {activeFcIndex !== null && lines[activeFcIndex] && (
         <Dialog
           open={true}
-          title={`Multi-Currency & Exchange Rate (Line #${activeFcIndex + 1})`}
+          title={`Currency Calculator & Exchange Rate (Line #${activeFcIndex + 1})`}
           onClose={() => setActiveFcIndex(null)}
           contentClassName="w-[min(96vw,720px)]"
           footer={
             <div className="flex items-center justify-between w-full">
               <span className="text-[11px] text-muted-foreground italic">
-                * Main table values are maintained in base currency (OMR).
+                * Main table displays Base Currency (OMR). Foreign amounts are converted via Exchange Rate: Base = Foreign × Ex. Rate.
               </span>
               <Button type="button" size="sm" onClick={() => setActiveFcIndex(null)}>
-                Apply & Close (Keep in OMR)
+                Apply & Close
               </Button>
             </div>
           }
@@ -847,17 +1106,59 @@ export function FreightJobActivitiesPage({
                 </div>
                 <div>
                   <span className="text-amber-800 font-semibold">Base Currency: </span>
-                  <span className="font-mono font-bold text-primary">OMR</span>
+                  <span className="font-mono font-bold text-primary">OMR (AAA LOGISTICS)</span>
                 </div>
               </div>
+            </div>
+
+            <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 flex items-center justify-between">
+              <span>Enter figures from your sheet in <strong>Foreign Currency (FC)</strong>. The system calculates and displays <strong>Base OMR</strong> on the main table: <code className="bg-slate-200/80 px-1 rounded font-mono text-[10.5px]">Base (OMR) = Foreign × Ex. Rate</code></span>
             </div>
 
             {/* 1. Sales / Billing Currency */}
             <div className="rounded-lg border border-border p-3 space-y-2.5 bg-card">
               <div className="font-bold text-primary flex items-center justify-between uppercase tracking-wider text-[11px]">
-                <span>1. Sales / Customer Billing Currency</span>
+                <div className="flex items-center gap-2">
+                  <span>1. Sales / Customer Billing Currency</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = lines[activeFcIndex];
+                      const code = cur.bill_curr_code || "OMR";
+                      const ex = cur.bill_ex_rate || "1";
+                      const exNum = numberValue(ex) || 1;
+                      const costOc = numberValue(cur.actual_cost_oc) || numberValue(cur.actual_cost);
+                      const pOc = numberValue(cur.partner_price_oc) || numberValue(cur.partners_price);
+                      const tpOc = numberValue(cur.transport_price_oc) || numberValue(cur.transport_price);
+
+                      const costBase = round3(costOc * exNum);
+                      const pBase = round3(pOc * exNum);
+                      const tpBase = round3(tpOc * exNum);
+
+                      updateLine(activeFcIndex, recalcCostTax(recalcSalesTax({
+                        ...cur,
+                        ac_curr_code: code,
+                        ac_ex_rate: ex,
+                        actual_cost_oc: String(costOc),
+                        actual_cost: String(costBase),
+                        partner_curr_code: code,
+                        partner_ex_rate: ex,
+                        partner_price_oc: String(pOc),
+                        partners_price: String(pBase),
+                        tp_curr_code: code,
+                        tp_ex_rate: ex,
+                        transport_price_oc: String(tpOc),
+                        transport_price: String(tpBase),
+                      })));
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 font-semibold cursor-pointer tracking-normal lowercase normal-case"
+                    title="Copy Billing Currency and Exchange Rate to Cost, Agent, and Transporter"
+                  >
+                    Sync Currency to All Sections (Cost, Agent, Transp)
+                  </button>
+                </div>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].bill)}</strong>
+                  base revenue: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].bill)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -870,26 +1171,43 @@ export function FreightJobActivitiesPage({
                     onChange={(currCode, row) => {
                       const ex = lookupText(row, "ex_rate") || "1";
                       const exNum = numberValue(ex) || 1;
-                      const qty = numberValue(lines[activeFcIndex].quantity) || 1;
-                      const currentBaseRate = numberValue(lines[activeFcIndex].bill_rate);
-                      let currentOcRate = numberValue(lines[activeFcIndex].bill_rate_oc);
+                      const cur = lines[activeFcIndex];
+                      const qty = numberValue(cur.quantity) || 1;
+                      // Entered sheet values
+                      const billRateOc = numberValue(cur.bill_rate_oc) || numberValue(cur.bill_rate);
+                      const billOc = round3(billRateOc * qty);
+                      const costOc = numberValue(cur.actual_cost_oc) || numberValue(cur.actual_cost);
+                      const pOc = numberValue(cur.partner_price_oc) || numberValue(cur.partners_price);
+                      const tpOc = numberValue(cur.transport_price_oc) || numberValue(cur.transport_price);
 
-                      if (currentOcRate === 0 && currentBaseRate > 0 && exNum > 0) {
-                        currentOcRate = currentBaseRate / exNum;
-                      }
-                      const newBaseRate = currentOcRate > 0 ? currentOcRate * exNum : currentBaseRate;
-                      const newBill = qty * newBaseRate;
-                      const newBillOc = qty * currentOcRate;
+                      // Convert foreign sheet values to Base Currency (OMR) via exchange rate
+                      const billRateBase = round3(billRateOc * exNum);
+                      const billBase = round3(billOc * exNum);
+                      const costBase = round3(costOc * exNum);
+                      const pBase = round3(pOc * exNum);
+                      const tpBase = round3(tpOc * exNum);
 
-                      updateLine(activeFcIndex, recalcSalesTax({
-                        ...lines[activeFcIndex],
+                      updateLine(activeFcIndex, recalcCostTax(recalcSalesTax({
+                        ...cur,
                         bill_curr_code: currCode,
                         bill_ex_rate: ex,
-                        bill_rate_oc: String(currentOcRate),
-                        bill_rate: String(newBaseRate),
-                        bill: String(newBill),
-                        bill_oc: String(newBillOc),
-                      }));
+                        bill_rate_oc: String(billRateOc),
+                        bill_oc: String(billOc),
+                        bill_rate: String(billRateBase),
+                        bill: String(billBase),
+                        ac_curr_code: currCode,
+                        ac_ex_rate: ex,
+                        actual_cost_oc: String(costOc),
+                        actual_cost: String(costBase),
+                        partner_curr_code: currCode,
+                        partner_ex_rate: ex,
+                        partner_price_oc: String(pOc),
+                        partners_price: String(pBase),
+                        tp_curr_code: currCode,
+                        tp_ex_rate: ex,
+                        transport_price_oc: String(tpOc),
+                        transport_price: String(tpBase),
+                      })));
                     }}
                   />
                 </div>
@@ -899,20 +1217,31 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].bill_ex_rate}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const exNum = numberValue(val) || 1;
-                      const qty = numberValue(lines[activeFcIndex].quantity) || 1;
-                      const ocRate = numberValue(lines[activeFcIndex].bill_rate_oc);
-                      const newBaseRate = ocRate > 0 ? ocRate * exNum : numberValue(lines[activeFcIndex].bill_rate);
-                      const newBill = qty * newBaseRate;
-                      const newBillOc = qty * ocRate;
+                      const newEx = numberValue(val) || 1;
+                      const cur = lines[activeFcIndex];
+                      const qty = numberValue(cur.quantity) || 1;
+                      const billRateOc = numberValue(cur.bill_rate_oc) || numberValue(cur.bill_rate);
+                      const billOc = round3(billRateOc * qty);
+                      const billRateBase = round3(billRateOc * newEx);
+                      const billBase = round3(billOc * newEx);
+                      const costBase = round3((numberValue(cur.actual_cost_oc) || numberValue(cur.actual_cost)) * newEx);
+                      const pBase = round3((numberValue(cur.partner_price_oc) || numberValue(cur.partners_price)) * newEx);
+                      const tpBase = round3((numberValue(cur.transport_price_oc) || numberValue(cur.transport_price)) * newEx);
 
-                      updateLine(activeFcIndex, recalcSalesTax({
-                        ...lines[activeFcIndex],
+                      updateLine(activeFcIndex, recalcCostTax(recalcSalesTax({
+                        ...cur,
                         bill_ex_rate: val,
-                        bill_rate: String(newBaseRate),
-                        bill: String(newBill),
-                        bill_oc: String(newBillOc),
-                      }));
+                        bill_rate_oc: String(billRateOc),
+                        bill_oc: String(billOc),
+                        bill_rate: String(billRateBase),
+                        bill: String(billBase),
+                        ac_ex_rate: val,
+                        actual_cost: String(costBase),
+                        partner_ex_rate: val,
+                        partners_price: String(pBase),
+                        tp_ex_rate: val,
+                        transport_price: String(tpBase),
+                      })));
                     }}
                   />
                 </div>
@@ -922,19 +1251,18 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].bill_rate_oc}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const ocRate = numberValue(val);
-                      const exNum = numberValue(lines[activeFcIndex].bill_ex_rate) || 1;
+                      const rateOc = numberValue(val);
                       const qty = numberValue(lines[activeFcIndex].quantity) || 1;
-                      const newBaseRate = ocRate * exNum;
-                      const newBill = qty * newBaseRate;
-                      const newBillOc = qty * ocRate;
-
+                      const billOc = round3(qty * rateOc);
+                      const ex = numberValue(lines[activeFcIndex].bill_ex_rate) || 1;
+                      const rateBase = round3(rateOc * ex);
+                      const billBase = round3(billOc * ex);
                       updateLine(activeFcIndex, recalcSalesTax({
                         ...lines[activeFcIndex],
                         bill_rate_oc: val,
-                        bill_rate: String(newBaseRate),
-                        bill: String(newBill),
-                        bill_oc: String(newBillOc),
+                        bill_oc: String(billOc),
+                        bill_rate: String(rateBase),
+                        bill: String(billBase),
                       }));
                     }}
                   />
@@ -953,7 +1281,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>2. Vendor / Actual Cost Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].actual_cost)}</strong>
+                  base cost: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].actual_cost)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -966,20 +1294,15 @@ export function FreightJobActivitiesPage({
                     onChange={(currCode, row) => {
                       const ex = lookupText(row, "ex_rate") || "1";
                       const exNum = numberValue(ex) || 1;
-                      const currentBaseCost = numberValue(lines[activeFcIndex].actual_cost);
-                      let currentOcCost = numberValue(lines[activeFcIndex].actual_cost_oc);
-
-                      if (currentOcCost === 0 && currentBaseCost > 0 && exNum > 0) {
-                        currentOcCost = currentBaseCost / exNum;
-                      }
-                      const newBaseCost = currentOcCost > 0 ? currentOcCost * exNum : currentBaseCost;
-
+                      const cur = lines[activeFcIndex];
+                      const costOc = numberValue(cur.actual_cost_oc) || numberValue(cur.actual_cost);
+                      const costBase = round3(costOc * exNum);
                       updateLine(activeFcIndex, recalcCostTax({
-                        ...lines[activeFcIndex],
+                        ...cur,
                         ac_curr_code: currCode,
                         ac_ex_rate: ex,
-                        actual_cost_oc: String(currentOcCost),
-                        actual_cost: String(newBaseCost),
+                        actual_cost_oc: String(costOc),
+                        actual_cost: String(costBase),
                       }));
                     }}
                   />
@@ -990,14 +1313,15 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].ac_ex_rate}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const exNum = numberValue(val) || 1;
-                      const ocCost = numberValue(lines[activeFcIndex].actual_cost_oc);
-                      const newBaseCost = ocCost > 0 ? ocCost * exNum : numberValue(lines[activeFcIndex].actual_cost);
-
+                      const newEx = numberValue(val) || 1;
+                      const cur = lines[activeFcIndex];
+                      const costOc = numberValue(cur.actual_cost_oc) || numberValue(cur.actual_cost);
+                      const costBase = round3(costOc * newEx);
                       updateLine(activeFcIndex, recalcCostTax({
-                        ...lines[activeFcIndex],
+                        ...cur,
                         ac_ex_rate: val,
-                        actual_cost: String(newBaseCost),
+                        actual_cost_oc: String(costOc),
+                        actual_cost: String(costBase),
                       }));
                     }}
                   />
@@ -1008,14 +1332,13 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].actual_cost_oc}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const ocCost = numberValue(val);
-                      const exNum = numberValue(lines[activeFcIndex].ac_ex_rate) || 1;
-                      const newBaseCost = ocCost * exNum;
-
+                      const costOc = numberValue(val);
+                      const ex = numberValue(lines[activeFcIndex].ac_ex_rate) || 1;
+                      const costBase = round3(costOc * ex);
                       updateLine(activeFcIndex, recalcCostTax({
                         ...lines[activeFcIndex],
                         actual_cost_oc: val,
-                        actual_cost: String(newBaseCost),
+                        actual_cost: String(costBase),
                       }));
                     }}
                   />
@@ -1034,7 +1357,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-sky-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>3. Agent / Partner Price Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].partners_price)}</strong>
+                  base agent: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].partners_price)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1047,19 +1370,15 @@ export function FreightJobActivitiesPage({
                     onChange={(currCode, row) => {
                       const ex = lookupText(row, "ex_rate") || "1";
                       const exNum = numberValue(ex) || 1;
-                      const currentBasePrice = numberValue(lines[activeFcIndex].partners_price);
-                      let currentOcPrice = numberValue(lines[activeFcIndex].partner_price_oc);
-
-                      if (currentOcPrice === 0 && currentBasePrice > 0 && exNum > 0) {
-                        currentOcPrice = currentBasePrice / exNum;
-                      }
-                      const newBasePrice = currentOcPrice > 0 ? currentOcPrice * exNum : currentBasePrice;
-
+                      const cur = lines[activeFcIndex];
+                      const pOc = numberValue(cur.partner_price_oc) || numberValue(cur.partners_price);
+                      const pBase = round3(pOc * exNum);
                       updateLine(activeFcIndex, {
+                        ...cur,
                         partner_curr_code: currCode,
                         partner_ex_rate: ex,
-                        partner_price_oc: String(currentOcPrice),
-                        partners_price: String(newBasePrice),
+                        partner_price_oc: String(pOc),
+                        partners_price: String(pBase),
                       });
                     }}
                   />
@@ -1070,13 +1389,15 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].partner_ex_rate}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const exNum = numberValue(val) || 1;
-                      const ocPrice = numberValue(lines[activeFcIndex].partner_price_oc);
-                      const newBasePrice = ocPrice > 0 ? ocPrice * exNum : numberValue(lines[activeFcIndex].partners_price);
-
+                      const newEx = numberValue(val) || 1;
+                      const cur = lines[activeFcIndex];
+                      const pOc = numberValue(cur.partner_price_oc) || numberValue(cur.partners_price);
+                      const pBase = round3(pOc * newEx);
                       updateLine(activeFcIndex, {
+                        ...cur,
                         partner_ex_rate: val,
-                        partners_price: String(newBasePrice),
+                        partner_price_oc: String(pOc),
+                        partners_price: String(pBase),
                       });
                     }}
                   />
@@ -1087,13 +1408,13 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].partner_price_oc}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const ocPrice = numberValue(val);
-                      const exNum = numberValue(lines[activeFcIndex].partner_ex_rate) || 1;
-                      const newBasePrice = ocPrice * exNum;
-
+                      const pOc = numberValue(val);
+                      const ex = numberValue(lines[activeFcIndex].partner_ex_rate) || 1;
+                      const pBase = round3(pOc * ex);
                       updateLine(activeFcIndex, {
+                        ...lines[activeFcIndex],
                         partner_price_oc: val,
-                        partners_price: String(newBasePrice),
+                        partners_price: String(pBase),
                       });
                     }}
                   />
@@ -1112,7 +1433,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-indigo-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>4. Transporter Price Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].transport_price)}</strong>
+                  base transp: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].transport_price)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1125,19 +1446,15 @@ export function FreightJobActivitiesPage({
                     onChange={(currCode, row) => {
                       const ex = lookupText(row, "ex_rate") || "1";
                       const exNum = numberValue(ex) || 1;
-                      const currentBasePrice = numberValue(lines[activeFcIndex].transport_price);
-                      let currentOcPrice = numberValue(lines[activeFcIndex].transport_price_oc);
-
-                      if (currentOcPrice === 0 && currentBasePrice > 0 && exNum > 0) {
-                        currentOcPrice = currentBasePrice / exNum;
-                      }
-                      const newBasePrice = currentOcPrice > 0 ? currentOcPrice * exNum : currentBasePrice;
-
+                      const cur = lines[activeFcIndex];
+                      const tpOc = numberValue(cur.transport_price_oc) || numberValue(cur.transport_price);
+                      const tpBase = round3(tpOc * exNum);
                       updateLine(activeFcIndex, {
+                        ...cur,
                         tp_curr_code: currCode,
                         tp_ex_rate: ex,
-                        transport_price_oc: String(currentOcPrice),
-                        transport_price: String(newBasePrice),
+                        transport_price_oc: String(tpOc),
+                        transport_price: String(tpBase),
                       });
                     }}
                   />
@@ -1148,13 +1465,15 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].tp_ex_rate}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const exNum = numberValue(val) || 1;
-                      const ocPrice = numberValue(lines[activeFcIndex].transport_price_oc);
-                      const newBasePrice = ocPrice > 0 ? ocPrice * exNum : numberValue(lines[activeFcIndex].transport_price);
-
+                      const newEx = numberValue(val) || 1;
+                      const cur = lines[activeFcIndex];
+                      const tpOc = numberValue(cur.transport_price_oc) || numberValue(cur.transport_price);
+                      const tpBase = round3(tpOc * newEx);
                       updateLine(activeFcIndex, {
+                        ...cur,
                         tp_ex_rate: val,
-                        transport_price: String(newBasePrice),
+                        transport_price_oc: String(tpOc),
+                        transport_price: String(tpBase),
                       });
                     }}
                   />
@@ -1165,19 +1484,19 @@ export function FreightJobActivitiesPage({
                     value={lines[activeFcIndex].transport_price_oc}
                     disabled={isLineLocked}
                     onChange={(val) => {
-                      const ocPrice = numberValue(val);
-                      const exNum = numberValue(lines[activeFcIndex].tp_ex_rate) || 1;
-                      const newBasePrice = ocPrice * exNum;
-
+                      const tpOc = numberValue(val);
+                      const ex = numberValue(lines[activeFcIndex].tp_ex_rate) || 1;
+                      const tpBase = round3(tpOc * ex);
                       updateLine(activeFcIndex, {
+                        ...lines[activeFcIndex],
                         transport_price_oc: val,
-                        transport_price: String(newBasePrice),
+                        transport_price: String(tpBase),
                       });
                     }}
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Transp. (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Price (OMR)</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].transport_price)}
                   </div>
@@ -1231,7 +1550,12 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-primary flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>1. Sales Tax / Output VAT (Customer Billing)</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  Sales Tax Amt: <strong className="text-primary font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_amt_1)}</strong>
+                  Sales Tax Amt: <strong className="text-primary font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
+                  {Boolean(lines[activeTaxIndex].bill_curr_code && lines[activeTaxIndex].bill_curr_code !== "OMR") && (
+                    <span className="ml-1 text-[10px] text-sky-700 font-normal">
+                      ({money(lines[activeTaxIndex].tx_compnt_amt_1)} {lines[activeTaxIndex].bill_curr_code})
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_1fr_80px] gap-2.5 items-end">
@@ -1318,7 +1642,12 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>2. Vendor Cost Tax / Input VAT (Expenses)</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_amt_1_cost)}</strong>
+                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
+                  {Boolean(lines[activeTaxIndex].ac_curr_code && lines[activeTaxIndex].ac_curr_code !== "OMR") && (
+                    <span className="ml-1 text-[10px] text-emerald-700 font-normal">
+                      ({money(lines[activeTaxIndex].tx_compnt_amt_1_cost)} {lines[activeTaxIndex].ac_curr_code})
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_1fr_80px] gap-2.5 items-end">
@@ -1491,14 +1820,12 @@ function ActivityLookup({
   return (
     <LookupField
       value={value}
-      displayValue={value}
-      subText={fullName}
-      subTextClassName="font-semibold text-[#00378C] bg-blue-50/90 border border-blue-200/90 rounded px-1 py-0 shadow-2xs max-w-full truncate inline-block text-[9px] leading-tight"
-      triggerClassName={value ? "border-blue-300/80 bg-blue-50/20" : ""}
+      displayValue={fullName || ""}
+      triggerClassName={value ? "border-blue-300/80 bg-blue-50/40 text-[#00378C]" : ""}
       compact
       placeholder="Select Act..."
       valueField="ACT_CODE"
-      displayFields={["ACT_CODE", "ACTIVITY"]}
+      displayFields={["ACTIVITY"]}
       columns={[
         { field: "ACT_CODE", header: "Code" },
         { field: "ACTIVITY", header: "Activity Name" },
@@ -1688,14 +2015,12 @@ function AgentLookup({
   return (
     <LookupField
       value={value}
-      displayValue={value}
-      subText={fullName}
-      subTextClassName="font-semibold text-indigo-900 bg-indigo-50/90 border border-indigo-200/90 rounded px-1 py-0 shadow-2xs max-w-full truncate inline-block text-[9px] leading-tight"
-      triggerClassName={value ? "border-indigo-300/80 bg-indigo-50/20" : ""}
+      displayValue={fullName || ""}
+      triggerClassName={value ? "border-indigo-300/80 bg-indigo-50/40 text-indigo-900" : ""}
       compact
       placeholder="Select Broker..."
       valueField="BROKER_CODE"
-      displayFields={["BROKER_CODE", "BROKER_NAME"]}
+      displayFields={["BROKER_NAME"]}
       columns={[
         { field: "BROKER_CODE", header: "Code" },
         { field: "BROKER_NAME", header: "Agent / Broker Full Name" },
@@ -1749,14 +2074,12 @@ function TransporterLookup({
   return (
     <LookupField
       value={value}
-      displayValue={value}
-      subText={fullName}
-      subTextClassName="font-semibold text-amber-950 bg-amber-50/90 border border-amber-200/90 rounded px-1 py-0 shadow-2xs max-w-full truncate inline-block text-[9px] leading-tight"
-      triggerClassName={value ? "border-amber-300/80 bg-amber-50/20" : ""}
+      displayValue={fullName || ""}
+      triggerClassName={value ? "border-amber-300/80 bg-amber-50/40 text-amber-950" : ""}
       compact
       placeholder="Select Transp..."
       valueField="TRANSPORTER_CODE"
-      displayFields={["TRANSPORTER_CODE", "TRANSPORTER_NAME"]}
+      displayFields={["TRANSPORTER_NAME"]}
       columns={[
         { field: "TRANSPORTER_CODE", header: "Code" },
         { field: "TRANSPORTER_NAME", header: "Transporter Full Name" },
@@ -1874,29 +2197,49 @@ function toLine(row: LookupRow, index: number, header?: LookupRow | null): Activ
   line.tx_compntcat_name_1 = lookupText(row, "tx_compntcat_name_1") || lookupText(row, "tx_compntcat_name") || "";
   line.tx_cat_name_cost = lookupText(row, "tx_cat_name_cost") || "";
   line.tx_compntcat_name_1_cost = lookupText(row, "tx_compntcat_name_1_cost") || "";
+
+  // Ensure Foreign Currency (OC) fields are properly synchronized from Base OMR
+  const billEx = numberValue(line.bill_ex_rate) || 1;
+  if (!numberValue(line.bill_rate_oc) && numberValue(line.bill_rate)) {
+    line.bill_rate_oc = billEx > 0 ? String(numberValue(line.bill_rate) / billEx) : line.bill_rate;
+  }
+  if (!numberValue(line.bill_oc) && numberValue(line.bill)) {
+    line.bill_oc = billEx > 0 ? String(numberValue(line.bill) / billEx) : line.bill;
+  }
+  const acEx = numberValue(line.ac_ex_rate) || 1;
+  if (!numberValue(line.actual_cost_oc) && numberValue(line.actual_cost)) {
+    line.actual_cost_oc = acEx > 0 ? String(numberValue(line.actual_cost) / acEx) : line.actual_cost;
+  }
+  const pEx = numberValue(line.partner_ex_rate) || 1;
+  if (!numberValue(line.partner_price_oc) && numberValue(line.partners_price)) {
+    line.partner_price_oc = pEx > 0 ? String(numberValue(line.partners_price) / pEx) : line.partners_price;
+  }
+  const tpEx = numberValue(line.tp_ex_rate) || 1;
+  if (!numberValue(line.transport_price_oc) && numberValue(line.transport_price)) {
+    line.transport_price_oc = tpEx > 0 ? String(numberValue(line.transport_price) / tpEx) : line.transport_price;
+  }
+
   return line;
+}
+
+function round3(input: number): number {
+  return Math.round((input + Number.EPSILON) * 1000) / 1000;
 }
 
 function recalc(line: ActivityLine) {
   const qty = numberValue(line.quantity) || 1;
+  const isFc = Boolean(line.bill_curr_code && line.bill_curr_code !== "OMR");
   const ex = numberValue(line.bill_ex_rate) || 1;
-  let billRate = numberValue(line.bill_rate);
-  let ocRate = numberValue(line.bill_rate_oc);
-
-  if (billRate > 0 && ex > 0) {
-    ocRate = billRate / ex;
-  } else if (billRate === 0 && ocRate > 0) {
-    billRate = ocRate * ex;
-  }
-
-  const bill = qty * billRate;
-  const billOc = qty * ocRate;
+  const rateBase = numberValue(line.bill_rate);
+  const billBase = round3(qty * rateBase);
+  const rateOc = isFc && ex > 0 ? round3(rateBase / ex) : (numberValue(line.bill_rate_oc) || rateBase);
+  const billOc = round3(qty * rateOc);
 
   return recalcSalesTax({
     ...line,
-    bill_rate: String(billRate),
-    bill_rate_oc: String(ocRate),
-    bill: String(bill),
+    bill_rate: String(rateBase),
+    bill: String(billBase),
+    bill_rate_oc: String(rateOc),
     bill_oc: String(billOc),
   });
 }
@@ -1913,27 +2256,59 @@ function TaxTreatmentSelect({ value, onChange, disabled }: { value: string; onCh
 }
 
 function recalcSalesTax(line: ActivityLine) {
-  const amount = line.tx_compnt_1_expmt === "S" ? numberValue(line.bill) * numberValue(line.tx_compnt_perc_1) / 100 : 0;
-  return { ...line, tx_compnt_amt_1: String(amount), tx_compnt_lcuramt_1: String(amount) };
+  const isStandard = line.tx_compnt_1_expmt === "S";
+  const perc = numberValue(line.tx_compnt_perc_1);
+  const billBase = numberValue(line.bill);
+  const billOc = numberValue(line.bill_oc);
+  const ex = numberValue(line.bill_ex_rate) || 1;
+  const taxBase = isStandard ? round3((billBase * perc) / 100) : 0;
+  const taxFc = isStandard
+    ? (billOc > 0 ? round3((billOc * perc) / 100) : (ex > 0 ? round3(taxBase / ex) : taxBase))
+    : 0;
+  return {
+    ...line,
+    tx_compnt_amt_1: String(taxFc),
+    tx_compnt_lcuramt_1: String(taxBase),
+  };
 }
 
 function recalcCostTax(line: ActivityLine) {
-  const amount = line.tx_compnt_1_expmt_cost === "S" ? numberValue(line.actual_cost) * numberValue(line.tx_compnt_perc_1_cost) / 100 : 0;
-  return { ...line, tx_compnt_amt_1_cost: String(amount), tx_compnt_lcuramt_1_cost: String(amount) };
+  const isStandard = line.tx_compnt_1_expmt_cost === "S";
+  const perc = numberValue(line.tx_compnt_perc_1_cost);
+  const costBase = numberValue(line.actual_cost);
+  const costOc = numberValue(line.actual_cost_oc);
+  const ex = numberValue(line.ac_ex_rate) || 1;
+  const taxBase = isStandard ? round3((costBase * perc) / 100) : 0;
+  const taxFc = isStandard
+    ? (costOc > 0 ? round3((costOc * perc) / 100) : (ex > 0 ? round3(taxBase / ex) : taxBase))
+    : 0;
+  return {
+    ...line,
+    tx_compnt_amt_1_cost: String(taxFc),
+    tx_compnt_lcuramt_1_cost: String(taxBase),
+  };
 }
 
 function calculateTotals(lines: ActivityLine[]) {
   return lines.reduce((sum, line) => {
+    // All amounts in lines are strictly maintained in Base Currency (OMR)
     const revenue = numberValue(line.bill);
-    const expense = numberValue(line.actual_cost) + numberValue(line.partners_price) + numberValue(line.transport_price);
-    const tax = numberValue(line.tx_compnt_amt_1);
+    const cost = numberValue(line.actual_cost);
+    const partners = numberValue(line.partners_price);
+    const transport = numberValue(line.transport_price);
+    const expense = cost + partners + transport;
+    const tax = numberValue(line.tx_compnt_lcuramt_1);
+
     return {
       revenue: sum.revenue + revenue,
       expense: sum.expense + expense,
+      cost: sum.cost + cost,
+      partners: sum.partners + partners,
+      transport: sum.transport + transport,
       tax: sum.tax + tax,
       profit: sum.profit + revenue - expense,
     };
-  }, { revenue: 0, expense: 0, tax: 0, profit: 0 });
+  }, { revenue: 0, expense: 0, cost: 0, partners: 0, transport: 0, tax: 0, profit: 0 });
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {

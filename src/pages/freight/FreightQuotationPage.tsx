@@ -25,7 +25,8 @@ import {
   Trash2,
   CreditCard,
   X,
-  Printer
+  Printer,
+  List
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -1371,23 +1372,56 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                                       )}
 
             {activeTab === "charges" && (
-              <section>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="grid gap-1">
-                    {/* <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Quotation Rates</h2> */}
-                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                      <HeaderChip label="Cost" value={formatAmount(totals.cost)} />
-                      <HeaderChip label="Bill" value={formatAmount(totals.bill)} />
-                      <HeaderChip label="Agent" value={formatAmount(totals.partners)} />
-                      <HeaderChip label="Profit" value={formatAmount(totals.profit)} />
-                    </div>
-                  </div>
-                  <Button type="button" size="sm" onClick={addDetail} className="cursor-pointer font-semibold shadow-xs"><Plus size={14} />Add Line</Button>
-                </div>
+              <section className="finance-document-ui">
+                <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
+                  <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+                    <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+                      <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+                        <List size={14} />
+                      </span>
+                      <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+                        Quotation Charges & Rates
+                      </span>
+                      <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                        {details.length} {details.length === 1 ? "line" : "lines"}
+                      </span>
 
-                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner max-h-[80vh]" style={{ maxWidth: "100%" }}>
-                  <table className="border-collapse text-xs w-full min-w-[2410px]">
-                    <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs whitespace-nowrap">
+                      <div className="hidden sm:flex items-center gap-2 ml-2 text-[11px]">
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
+                          <span className="text-slate-600 font-bold">Cost:</span> {formatAmount(totals.cost)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                          <span className="text-blue-700 font-bold">Bill:</span> {formatAmount(totals.bill)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded bg-purple-50 border border-purple-200 px-2 py-0.5 font-medium text-purple-900">
+                          <span className="text-purple-700 font-bold">Agent:</span> {formatAmount(totals.partners)}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
+                            totals.profit >= 0
+                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                              : "bg-rose-50 border-rose-300 text-rose-800"
+                          }`}
+                        >
+                          <span>Profit:</span> {formatAmount(totals.profit)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={addDetail}
+                      className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+                    >
+                      <Plus size={13} className="mr-1" />
+                      Add Line
+                    </Button>
+                  </div>
+
+                  <div className="commercial-lines-scroll overflow-auto max-h-[70vh] min-h-[300px]">
+                    <table className="finance-lines-table border-collapse text-xs w-full min-w-[2410px]">
+                      <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs whitespace-nowrap">
                       <tr>
                         <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Activity Code</th>
                         <th className="px-2 py-2 text-white font-semibold" style={{ width: "230px" }}>Activity</th>
@@ -1500,10 +1534,34 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                       );
                     })}
                     </tbody>
+                    {details.length > 0 && (
+                      <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
+                        <tr>
+                          <td colSpan={12} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
+                            Totals ({details.length} lines):
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                            {formatAmount(totals.cost)}
+                          </td>
+                          <td colSpan={3} className="px-2 py-1.5 text-right">-</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
+                            {formatAmount(totals.bill)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right">-</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold text-purple-900">
+                            {formatAmount(totals.partners)}
+                          </td>
+                          <td colSpan={2} className="px-2 py-1.5 text-center text-slate-500 font-mono text-[10px]">
+                            OMR
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
-              </section>
-            )}
+              </div>
+            </section>
+          )}
 
             {/* {activeTab === "terms" && (
               <section>

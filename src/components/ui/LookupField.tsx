@@ -258,20 +258,21 @@ export function LookupField({
   };
 
   const currentText =
-    displayValue ||
-    (multiSelect
-      ? rows
-        .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
-        .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
-        .join(", ") || value || ""
-      : value
-        ? getLookupText(
-          rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
-            [valueField]: value,
-          },
-          displayFields.length ? displayFields : [valueField],
-        ) || String(value)
-        : "");
+    displayValue !== undefined
+      ? displayValue
+      : (multiSelect
+        ? rows
+          .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
+          .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
+          .join(", ") || value || ""
+        : value
+          ? getLookupText(
+            rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
+              [valueField]: value,
+            },
+            displayFields.length ? displayFields : [valueField],
+          ) || (displayFields.length === 0 || displayFields.includes(valueField) ? String(value) : "")
+          : "");
 
   const totalCols = columns.length + (renderRowActions ? 1 : 0);
   const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
@@ -320,7 +321,7 @@ export function LookupField({
             disabled={disabled}
             title={subText ? `${currentText} - ${subText}` : currentText}
           >
-            <span className={`block truncate ${!disabled && currentText ? "text-slate-800 font-bold text-[10.5px] leading-tight" : !disabled ? "text-slate-400 text-[10px] leading-tight" : "text-[10px] leading-tight"} ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
+            <span className={`block truncate ${!disabled && currentText ? "text-inherit font-semibold text-[11px] leading-tight" : !disabled ? "text-slate-400 text-[10.5px] leading-tight" : "text-[10.5px] leading-tight"} ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
               {currentText ||
                 (placeholder
                   ? `${placeholder.replace(/\.*$/, "")}...`
