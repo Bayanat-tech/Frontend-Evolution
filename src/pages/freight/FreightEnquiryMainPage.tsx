@@ -1684,10 +1684,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                             label="Shipper"
                             value={header.shipper_name}
                             displayValue={header.shipper_name ? "Change" : "Lookup"}
-                            popoverWidth={620}
+                            popoverWidth={420}
                             columns={[
-                              { field: "shipper_name", header: "Shipper Name", width: "240px" },
-                              { field: "shipper_address", header: "Address", width: "340px" },
+                              { field: "shipper_name", header: "Shipper Name" },
                             ]}
                             valueField="shipper_name"
                             displayFields={["shipper_name"]}
@@ -1738,10 +1737,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                             label="Consignee"
                             value={header.consignee_name}
                             displayValue={header.consignee_name ? "Change" : "Lookup"}
-                            popoverWidth={620}
+                            popoverWidth={420}
                             columns={[
-                              { field: "consignee_name", header: "Consignee Name", width: "240px" },
-                              { field: "consignee_address", header: "Address", width: "340px" },
+                              { field: "consignee_name", header: "Consignee Name" },
                             ]}
                             valueField="consignee_name"
                             displayFields={["consignee_name"]}
