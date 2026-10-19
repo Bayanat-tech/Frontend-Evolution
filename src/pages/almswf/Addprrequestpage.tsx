@@ -394,13 +394,11 @@ const AddPRRequestPage = ({
 
   const isFinalApproved = String((header as any).FINAL_APPROVED || "").toUpperCase() === "Y";
 
-  // ✅ Cancelled state — CANCEL_FLAG or LAST_ACTION = CANCELED/CANCELLED
   const isCancelled =
     String((header as any).CANCEL_FLAG || "").toUpperCase() === "Y" ||
     String(header.LAST_ACTION || "").toUpperCase() === "CANCELED" ||
     String(header.LAST_ACTION || "").toUpperCase() === "CANCELLED";
 
-  // ✅ Cancelled docs are read-only
   const effectiveViewMode = isFinalApproved || isCancelled || (isViewMode && !isEditMode);
   const disabled = saving || effectiveViewMode;
 
@@ -886,7 +884,7 @@ const AddPRRequestPage = ({
 
   const runAction = async (status: string, successMsg: string, remark = "", overrides: Partial<Record<string, any>> = {}) => {
     if (saving) return;
-    // ✅ Skip validation for draft AND cancel
+    //  Skip validation for draft AND cancel
     if (status !== "SAVEASDRAFT" && status !== "CANCELED") {
       if (!validateAndShowErrors()) return;
     }
@@ -915,7 +913,7 @@ const AddPRRequestPage = ({
   };
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
 
-  // ✅ Cancel handler — cancels the document and moves it to Cancelled tab
+ 
   const handleCancel = () => {
     if (!requestNumber) {
       onClose();
@@ -1186,7 +1184,6 @@ const AddPRRequestPage = ({
             box-shadow: -6px 0 8px -6px rgba(0,0,0,0.35);
           }
 
-          /* ✅ Cancelled banner — diagonal stripes */
           .cancelled-document-banner {
             background-image: repeating-linear-gradient(
               45deg,
@@ -1198,7 +1195,7 @@ const AddPRRequestPage = ({
             border-bottom: 1px solid #f87171;
           }
 
-          /* ✅ Big rotated CANCELLED watermark */
+   
           .cancelled-watermark {
             position: absolute;
             right: -40px;
@@ -1216,14 +1213,12 @@ const AddPRRequestPage = ({
             line-height: 1;
           }
 
-          /* ✅ Wrapper that hosts the watermark */
           .cancelled-content-wrapper {
             position: relative;
             overflow: hidden;
             min-height: 100%;
           }
 
-          /* ✅ Keep all real content above watermark */
           .cancelled-content-wrapper > *:not(.cancelled-watermark) {
             position: relative;
             z-index: 1;
@@ -1255,7 +1250,7 @@ const AddPRRequestPage = ({
               />
 
               <div className="flex items-center gap-2">
-                {/* ✅ Cancelled badge — Badge component */}
+  
                 {isCancelled && (
                   <Badge
                     variant="outline"
@@ -1300,8 +1295,7 @@ const AddPRRequestPage = ({
                       <X size={15} /> Reject
                     </Button>
                   )}
-                  {/* ✅ Cancel now CANCELS the document (moves to Cancelled tab) */}
-                  {/* ✅ Cancel — only visible for level 1 (requester). Hidden for level 2+ approvers. */}
+              
                   {!effectiveViewMode && userApprovalLevel < 2 && (
                     <Button
                       type="button"
@@ -1334,7 +1328,7 @@ const AddPRRequestPage = ({
             </div>
           </CardHeader>
 
-          {/* ✅ Cancelled banner — striped, Badge component */}
+
           {isCancelled && (
             <div
               className="cancelled-document-banner"
@@ -1379,7 +1373,7 @@ const AddPRRequestPage = ({
               </div>
             ) : (
               <div className={`commercial-editor-sections grid gap-3 min-w-0 ${isCancelled ? "cancelled-content-wrapper" : ""}`}>
-                {/* ✅ Cancelled watermark (behind all content) */}
+    
                 {isCancelled && (
                   <div className="cancelled-watermark" aria-hidden="true">
                     CANCELLED

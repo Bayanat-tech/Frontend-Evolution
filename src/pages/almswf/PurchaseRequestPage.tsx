@@ -13,7 +13,7 @@ import { almsCommonSelect } from "../../api/alms";
 import type { Division } from "../../api/transactions";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 
-// ✅ Added "CANCELLED" tab
+
 const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated", "Cancelled"];
 
@@ -25,7 +25,7 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// ✅ Cancelled check takes precedence
+
 function statusOf(row: TPurchaseSummaryTxn): string {
   const cancelFlag = String((row as any).CANCEL_FLAG ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
@@ -45,7 +45,6 @@ function getStatusBadgeStyle(status: string) {
   else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
   else if (val === "SENDBACK" || val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
   else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
-  // ✅ Cancelled badge — red
   else if (val === "CANCELLED" || val === "CANCELED") { bg = "#fee2e2"; color = "#991b1b"; border = "#fca5a5"; }
   return { bg, color, border };
 }
