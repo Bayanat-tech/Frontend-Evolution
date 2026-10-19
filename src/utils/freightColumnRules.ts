@@ -1361,5 +1361,387 @@ export const freightColumnRules: Record<string, Record<string, { maxLength: numb
       "maxLength": 10,
       "maxBytes": 10
     }
+  },
+  "TF_CONTAINER_DET": {
+    "container_no": {
+      "maxLength": 250,
+      "maxBytes": 250
+    },
+    "container_type": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "t_f": {
+      "maxLength": 1,
+      "maxBytes": 1
+    },
+    "company_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "prin_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "job_no": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "bl_no": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "seal_no": {
+      "maxLength": 60,
+      "maxBytes": 60
+    },
+    "puom": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "contn_desc": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "contn_pick_by": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "user_id": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "edit_user": {
+      "maxLength": 10,
+      "maxBytes": 10
+    }
+  },
+  "TF_PACKLIST": {
+    "company_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "prin_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "vessel_name": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "voyage_no": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "container_no": {
+      "maxLength": 1000,
+      "maxBytes": 1000
+    },
+    "bl_no": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "user_id": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "container_type": {
+      "maxLength": 40,
+      "maxBytes": 40
+    },
+    "cust_code": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "job_no": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "broker_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "bl_mode": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "cargo_details": {
+      "maxLength": 2000,
+      "maxBytes": 2000
+    },
+    "remarks": {
+      "maxLength": 400,
+      "maxBytes": 400
+    },
+    "marksnos": {
+      "maxLength": 200,
+      "maxBytes": 200
+    },
+    "shipper_name": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "shipper_address": {
+      "maxLength": 300,
+      "maxBytes": 300
+    },
+    "consignee_name": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "consignee_address": {
+      "maxLength": 300,
+      "maxBytes": 300
+    },
+    "notify_name": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "notify_address": {
+      "maxLength": 300,
+      "maxBytes": 300
+    },
+    "prod_description": {
+      "maxLength": 2500,
+      "maxBytes": 2500
+    },
+    "handling_info": {
+      "maxLength": 300,
+      "maxBytes": 300
+    },
+    "import_blno": {
+      "maxLength": 25,
+      "maxBytes": 25
+    },
+    "job_type": {
+      "maxLength": 3,
+      "maxBytes": 3
+    },
+    "transport_mode": {
+      "maxLength": 1,
+      "maxBytes": 1
+    },
+    "seq_number": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "puom": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "curr_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "signature": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "po_no": {
+      "maxLength": 30,
+      "maxBytes": 30
+    },
+    "u_consignee": {
+      "maxLength": 200,
+      "maxBytes": 200
+    },
+    "u_shipper": {
+      "maxLength": 200,
+      "maxBytes": 200
+    },
+    "executed_by": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "terms_of_delivery": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "agents_iata_code": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "acc_info": {
+      "maxLength": 400,
+      "maxBytes": 400
+    },
+    "issuing_carrier": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "issuing_carrier_add": {
+      "maxLength": 400,
+      "maxBytes": 400
+    },
+    "airline": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "airline_address": {
+      "maxLength": 250,
+      "maxBytes": 250
+    },
+    "issue_place": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "shipment_status": {
+      "maxLength": 70,
+      "maxBytes": 70
+    },
+    "hawb": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "chg_code": {
+      "maxLength": 2,
+      "maxBytes": 2
+    },
+    "dec_val_carr": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "dec_val_cus": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "accnt_no": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "rate_ind": {
+      "maxLength": 1,
+      "maxBytes": 1
+    },
+    "amt_insurance": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "kg_ind": {
+      "maxLength": 1,
+      "maxBytes": 1
+    },
+    "rate_class": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "item_no": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "routing": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "flight_info": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "agent_name": {
+      "maxLength": 100,
+      "maxBytes": 100
+    },
+    "agent_address": {
+      "maxLength": 300,
+      "maxBytes": 300
+    },
+    "agent_country": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "contn_seal_desc": {
+      "maxLength": 2500,
+      "maxBytes": 2500
+    },
+    "frt_chgs_master": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "frt_chgs_house": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "org_bl_desc": {
+      "maxLength": 20,
+      "maxBytes": 20
+    }
+  },
+  "TF_PACKLIST_DIM": {
+    "company_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "prin_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "job_no": {
+      "maxLength": 50,
+      "maxBytes": 50
+    },
+    "cargo_details": {
+      "maxLength": 400,
+      "maxBytes": 400
+    },
+    "prod_description": {
+      "maxLength": 1000,
+      "maxBytes": 1000
+    },
+    "uom_code": {
+      "maxLength": 5,
+      "maxBytes": 5
+    },
+    "product_description": {
+      "maxLength": 300,
+      "maxBytes": 300
+    },
+    "invoice_no": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "scheme_code": {
+      "maxLength": 3,
+      "maxBytes": 3
+    },
+    "cat_code": {
+      "maxLength": 3,
+      "maxBytes": 3
+    },
+    "sion_no": {
+      "maxLength": 10,
+      "maxBytes": 10
+    },
+    "depb_uom": {
+      "maxLength": 3,
+      "maxBytes": 3
+    },
+    "drawback_uom": {
+      "maxLength": 3,
+      "maxBytes": 3
+    },
+    "depb_grp_code": {
+      "maxLength": 2,
+      "maxBytes": 2
+    },
+    "depb_srno": {
+      "maxLength": 15,
+      "maxBytes": 15
+    },
+    "drawback_srno": {
+      "maxLength": 15,
+      "maxBytes": 15
+    },
+    "deec_uom": {
+      "maxLength": 3,
+      "maxBytes": 3
+    },
+    "ritc_no": {
+      "maxLength": 20,
+      "maxBytes": 20
+    },
+    "user_id": {
+      "maxLength": 10,
+      "maxBytes": 10
+    }
   }
 };
