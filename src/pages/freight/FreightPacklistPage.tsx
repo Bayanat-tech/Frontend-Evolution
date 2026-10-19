@@ -218,7 +218,7 @@ export function FreightPacklistPage({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
-  const [assistOpen, setAssistOpen] = useState(true);
+  const [assistOpen, setAssistOpen] = useState(false);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -441,15 +441,29 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     setLoading(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
+      const jobTransportMode = lookupText(normalized, "transport_mode") || mode.code;
+      const jobJobType = lookupText(normalized, "job_type") || direction.code;
+
+      let response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
         company_code: companyCode,
-        transport_mode: mode.code,
-        job_type: direction.code,
+        transport_mode: jobTransportMode,
+        job_type: jobJobType,
         search: jobNo,
       });
-      const match = (response.data.data || [])
+      let match = (response.data.data || [])
         .map(normalizeLookupRow)
         .find((item) => lookupText(item, "job_no") === jobNo && (!prinCode || lookupText(item, "prin_code") === prinCode));
+
+      if (!match) {
+        // Fallback search without transport_mode and job_type restrictions to catch cross-mode or newly converted jobs
+        const fallbackRes = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
+          company_code: companyCode,
+          search: jobNo,
+        });
+        match = (fallbackRes.data.data || [])
+          .map(normalizeLookupRow)
+          .find((item) => lookupText(item, "job_no") === jobNo && (!prinCode || lookupText(item, "prin_code") === prinCode));
+      }
 
       if (match && lookupText(match, "packlist_no")) {
         await openPack(match);
@@ -1698,40 +1712,260 @@ function ContainerGrid({ rows, setRows, onSync }: { rows: ContainerLine[]; setRo
   }), { volume: 0, gross: 0, packages: 0 });
 
   return (
-    <div className="freight-container-grid overflow-hidden rounded-md border bg-background">
-      <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground">Sea Container Manifest (TF_CONTAINER_DET)</span>
-        {editable && <Button type="button" size="sm" variant="outline" onClick={addContainer}><Plus size={14} />Container</Button>}
-      </div>
-      <div className="overflow-auto">
-        <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
-          <span>Sr</span><span>Container No</span><span>Container Type</span><span>TEU / FEU</span><span>Seal No</span><span>Cube (m3)</span><span>Gross Wt (kg)</span><span>Nos</span><span>UOM</span><span>Description</span><span>Pickup Date</span><span>BL No</span><span />
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
+      {/* Finance Line Actions Header */}
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <Ship size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Sea Container Manifest (TF_CONTAINER_DET)
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {rows.length} {rows.length === 1 ? "container" : "containers"}
+          </span>
+
+          {/* Inline KPI Strip */}
+          {rows.length > 0 && (
+            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Volume:</span> {totals.volume.toFixed(3)} m³
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+                <span className="text-emerald-700 font-bold">Gross Wt:</span> {totals.gross.toFixed(2)} kg
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 font-medium text-amber-900">
+                <span className="text-amber-700 font-bold">Pkgs:</span> {totals.packages}
+              </span>
+            </div>
+          )}
         </div>
-        {rows.map((row, rowIndex) => (
-          <div key={`${row.srno}-${rowIndex}`} className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b px-2 py-1">
-            {editable ? <>
-              <Input className="h-7 text-center text-xs" value={row.srno} readOnly />
-              <Input className="h-7 uppercase text-xs" value={row.container_no} onChange={(event) => update(rowIndex, "container_no", event.target.value.toUpperCase())} />
-              <select className="h-7 rounded-md border bg-background px-1 text-xs" value={row.container_type} onChange={(event) => update(rowIndex, "container_type", event.target.value)}>{containerTypes.map((option) => <option key={option}>{option}</option>)}</select>
-              <select className="h-7 rounded-md border bg-background px-1 text-xs" value={row.t_f} onChange={(event) => update(rowIndex, "t_f", event.target.value)}><option value="T">TEU</option><option value="F">FEU</option><option value="V">45FT</option><option value="E">48FT</option></select>
-              <Input className="h-7 text-xs" value={row.seal_no} onChange={(event) => update(rowIndex, "seal_no", event.target.value)} />
-              <Input className="h-7 text-right text-xs" type="number" step="0.001" value={row.volume} onChange={(event) => update(rowIndex, "volume", event.target.value)} />
-              <Input className="h-7 text-right text-xs" type="number" step="0.01" value={row.gross_weight} onChange={(event) => update(rowIndex, "gross_weight", event.target.value)} />
-              <Input className="h-7 text-right text-xs" type="number" value={row.no_of_pkgs} onChange={(event) => update(rowIndex, "no_of_pkgs", event.target.value)} />
-              <Input className="h-7 text-xs" value={row.puom} onChange={(event) => update(rowIndex, "puom", event.target.value)} />
-              <Input className="h-7 text-xs" value={row.contn_desc} onChange={(event) => update(rowIndex, "contn_desc", event.target.value)} />
-              <FreightDatePicker className="freight-calendar-field"
-        value={row.contn_pick_date}
-        onChange={(nextValue) => update(rowIndex, "contn_pick_date", nextValue)} />
-              <Input className="h-7 text-xs" value={row.bl_no} onChange={(event) => update(rowIndex, "bl_no", event.target.value)} />
-              <Button type="button" size="icon" variant="ghost" title="Remove container" onClick={() => removeContainer(rowIndex)}><Trash2 size={14} /></Button>
-            </> : <>
-              {[row.srno, row.container_no, row.container_type, row.t_f, row.seal_no, row.volume, row.gross_weight, row.no_of_pkgs, row.puom, row.contn_desc, formatDate(row.contn_pick_date), row.bl_no].map((value, index) => <span key={index} title={value} className="min-h-7 truncate px-1 py-1 text-xs font-semibold text-foreground">{value || "-"}</span>)}<span />
-            </>}
-          </div>
-        ))}
-        {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No container details. Add every Sea container used for this job.</div>}
-        {!!rows.length && <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 bg-muted/25 px-2 py-1.5 text-xs font-semibold"><span className="col-span-5 text-right">Totals</span><span className="text-right">{totals.volume.toFixed(3)}</span><span className="text-right">{totals.gross.toFixed(2)}</span><span className="text-right">{totals.packages}</span></div>}
+
+        <div className="flex items-center gap-1.5">
+          {editable && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={addContainer}
+              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+            >
+              <Plus size={13} className="mr-1" /> Add Container
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Finance Table */}
+      <div className="commercial-lines-scroll overflow-auto max-h-[360px] min-h-[140px]">
+        <table className="finance-lines-table w-full text-xs min-w-[1480px] border-collapse">
+          <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+            <tr>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
+              <th className="px-2 py-2 text-left w-[170px] text-white">Container No</th>
+              <th className="px-2 py-2 text-left w-[150px] text-white">Container Type</th>
+              <th className="px-2 py-2 text-center w-[90px] text-white">TEU / FEU</th>
+              <th className="px-2 py-2 text-left w-[130px] text-white">Seal No</th>
+              <th className="px-2 py-2 text-right w-[105px] text-white">Cube (m³)</th>
+              <th className="px-2 py-2 text-right w-[115px] text-white">Gross Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-white">Nos / Pkgs</th>
+              <th className="px-2 py-2 text-left w-[95px] text-white">UOM</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-white">Description</th>
+              <th className="px-2 py-2 text-center w-[135px] text-white">Pickup Date</th>
+              <th className="px-2 py-2 text-left w-[130px] text-white">BL No</th>
+              <th className="px-2 py-2 text-center w-[50px] text-white">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map((row, rowIndex) => (
+              <tr
+                key={`${row.srno}-${rowIndex}`}
+                className={`transition-colors ${
+                  rowIndex % 2 === 1 ? "bg-slate-50/40 hover:bg-blue-50/40" : "bg-white hover:bg-blue-50/40"
+                }`}
+              >
+                <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                  {rowIndex + 1}
+                </td>
+                <td className="px-1.5 py-1 w-[170px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 uppercase text-xs font-semibold"
+                      value={row.container_no}
+                      onChange={(e) => update(rowIndex, "container_no", e.target.value.toUpperCase())}
+                    />
+                  ) : (
+                    <span className="font-semibold text-slate-800">{row.container_no || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[150px]">
+                  {editable ? (
+                    <select
+                      className="h-7 w-full rounded-md border bg-background px-1 text-xs"
+                      value={row.container_type}
+                      onChange={(e) => update(rowIndex, "container_type", e.target.value)}
+                    >
+                      {containerTypes.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span>{row.container_type || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[90px] text-center">
+                  {editable ? (
+                    <select
+                      className="h-7 w-full rounded-md border bg-background px-1 text-xs font-semibold text-center"
+                      value={row.t_f}
+                      onChange={(e) => update(rowIndex, "t_f", e.target.value)}
+                    >
+                      <option value="T">TEU</option>
+                      <option value="F">FEU</option>
+                      <option value="V">45FT</option>
+                      <option value="E">48FT</option>
+                    </select>
+                  ) : (
+                    <span className="font-semibold">{row.t_f || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[130px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.seal_no}
+                      onChange={(e) => update(rowIndex, "seal_no", e.target.value)}
+                    />
+                  ) : (
+                    <span>{row.seal_no || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[105px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs text-amber-700 bg-amber-50/40"
+                      type="number"
+                      step="0.001"
+                      value={row.volume}
+                      onChange={(e) => update(rowIndex, "volume", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right text-amber-700 font-semibold">{row.volume || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[115px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold text-emerald-700 bg-emerald-50/40"
+                      type="number"
+                      step="0.01"
+                      value={row.gross_weight}
+                      onChange={(e) => update(rowIndex, "gross_weight", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right text-emerald-700 font-semibold">{row.gross_weight || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold"
+                      type="number"
+                      value={row.no_of_pkgs}
+                      onChange={(e) => update(rowIndex, "no_of_pkgs", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold">{row.no_of_pkgs || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[95px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs uppercase"
+                      value={row.puom}
+                      onChange={(e) => update(rowIndex, "puom", e.target.value)}
+                    />
+                  ) : (
+                    <span>{row.puom || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 min-w-[180px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.contn_desc}
+                      onChange={(e) => update(rowIndex, "contn_desc", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block truncate">{row.contn_desc || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[135px]">
+                  {editable ? (
+                    <FreightDatePicker
+                      className="freight-calendar-field"
+                      value={row.contn_pick_date}
+                      onChange={(nextValue) => update(rowIndex, "contn_pick_date", nextValue)}
+                    />
+                  ) : (
+                    <span className="block text-center">{formatDate(row.contn_pick_date) || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[130px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.bl_no}
+                      onChange={(e) => update(rowIndex, "bl_no", e.target.value)}
+                    />
+                  ) : (
+                    <span>{row.bl_no || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 text-center w-[50px]">
+                  {editable ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                      title="Remove container"
+                      onClick={() => removeContainer(rowIndex)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={13} className="py-8 px-4 text-center text-xs text-muted-foreground">
+                  <p className="m-0 text-slate-500 font-medium">No container details recorded. Click 'Add Container' to add Sea containers.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-slate-300 bg-slate-100 font-bold text-xs text-slate-900 sticky bottom-0 z-10">
+              <tr>
+                <td colSpan={5} className="px-2 py-1.5 text-right uppercase tracking-wider text-slate-600 font-bold text-[11px]">
+                  Totals:
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-amber-800">
+                  {totals.volume.toFixed(3)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-emerald-800">
+                  {totals.gross.toFixed(2)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-slate-800">
+                  {totals.packages}
+                </td>
+                <td colSpan={5} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
     </div>
   );
@@ -1759,76 +1993,101 @@ function CargoMeasureTable({
   companyCode: string;
 }) {
   const editable = useContext(PackEditContext);
-  const gridTemplate = columns.map((c) => c.width).join(" ");
 
   return (
-    <div className="freight-cargo-table overflow-hidden rounded-md border bg-background">
-      {/* <div className="overflow-auto">
-        <div
-          className="grid gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground"
-          style={{ gridTemplateColumns: gridTemplate }}
-        > */}
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <PackageCheck size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Cargo Summary & Measurements
+          </span>
+        </div>
+      </div>
 
-              <div className="overflow-auto" style={{ width: "fit-content", minWidth: "100%" }}>
-        <div
-          className="grid gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground"
-          style={{ gridTemplateColumns: gridTemplate }}
-        >
-          {columns.map((c) => (
-            <span key={c.key}>{c.label}</span>
-          ))}
-        </div>
-        <div className="grid gap-1 px-2 py-1.5" style={{ gridTemplateColumns: gridTemplate }}>
-          {columns.map((c) => {
-            const value = (pack[c.key] as string) || "";
-            if (!editable) {
-              return (
-                <span key={c.key} className="min-h-7 truncate px-1 py-1 text-xs font-semibold text-foreground">
-                  {value || "-"}
-                </span>
-              );
-            }
-            if (c.lookupUom) {
-              return (
-                <LookupField
+      <div className="commercial-lines-scroll overflow-auto">
+        <table className="finance-lines-table w-full text-xs border-collapse">
+          <thead className="bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs whitespace-nowrap">
+            <tr>
+              {columns.map((c) => (
+                <th
                   key={c.key}
-                  value={value}
-                  compact
-                  valueField="UOM_CODE"
-                  displayFields={["UOM_CODE", "UOM_NAME"]}
-                  columns={[{ field: "UOM_CODE", header: "Code" }, { field: "UOM_NAME", header: "NAME" }]}
-                  loadOptions={(search) => lookup("freight_uom", companyCode, "NULL", "NULL", search)}
-                  onChange={(val) => setPackField(setPack, c.key, val)}
-                />
-              );
-            }
-            if (c.type === "select") {
-              return (
-                <select
-                  key={c.key}
-                  className="h-7 rounded-md border bg-background px-1 text-xs"
-                  value={value}
-                  onChange={(event) => setPackField(setPack, c.key, event.target.value)}
+                  style={{ width: c.width }}
+                  className={`px-2 py-2 text-white font-bold text-[11px] uppercase ${
+                    c.type === "number" ? "text-right" : "text-left"
+                  }`}
                 >
-                  <option value="">-</option>
-                  {c.options?.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              );
-            }
-            return (
-              <Input
-                key={c.key}
-                className={`h-7 text-xs ${c.type === "number" ? "text-right" : ""}`}
-                type={c.type === "number" ? "number" : "text"}
-                readOnly={c.readOnly}
-                value={value}
-                onChange={(event) => setPackField(setPack, c.key, event.target.value)}
-              />
-            );
-          })}
-        </div>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="bg-white hover:bg-blue-50/40 transition-colors">
+              {columns.map((c) => {
+                const value = (pack[c.key] as string) || "";
+                if (!editable) {
+                  return (
+                    <td
+                      key={c.key}
+                      style={{ width: c.width }}
+                      className={`px-1.5 py-1.5 ${c.type === "number" ? "text-right font-semibold" : ""}`}
+                    >
+                      <span className="block truncate font-medium text-slate-800">
+                        {value || "-"}
+                      </span>
+                    </td>
+                  );
+                }
+                if (c.lookupUom) {
+                  return (
+                    <td key={c.key} style={{ width: c.width }} className="px-1.5 py-1">
+                      <LookupField
+                        value={value}
+                        compact
+                        valueField="UOM_CODE"
+                        displayFields={["UOM_CODE", "UOM_NAME"]}
+                        columns={[{ field: "UOM_CODE", header: "Code" }, { field: "UOM_NAME", header: "NAME" }]}
+                        loadOptions={(search) => lookup("freight_uom", companyCode, "NULL", "NULL", search)}
+                        onChange={(val) => setPackField(setPack, c.key, val)}
+                      />
+                    </td>
+                  );
+                }
+                if (c.type === "select") {
+                  return (
+                    <td key={c.key} style={{ width: c.width }} className="px-1.5 py-1">
+                      <select
+                        className="h-7 w-full rounded-md border bg-background px-1 text-xs"
+                        value={value}
+                        onChange={(event) => setPackField(setPack, c.key, event.target.value)}
+                      >
+                        <option value="">-</option>
+                        {c.options?.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </td>
+                  );
+                }
+                return (
+                  <td key={c.key} style={{ width: c.width }} className="px-1.5 py-1">
+                    <Input
+                      className={`h-7 text-xs ${c.type === "number" ? "text-right font-semibold" : ""}`}
+                      type={c.type === "number" ? "number" : "text"}
+                      step={c.type === "number" ? "any" : undefined}
+                      readOnly={c.readOnly}
+                      value={value}
+                      onChange={(event) => setPackField(setPack, c.key, event.target.value)}
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -1836,7 +2095,6 @@ function CargoMeasureTable({
 
 function DimensionGrid({ rows, setRows, onSync }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>>; onSync?: (updated: DimensionLine[]) => void }) {
   const editable = useContext(PackEditContext);
-  const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
   const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
 
   const update = (rowIndex: number, column: keyof DimensionLine, val: string) => {
@@ -1896,45 +2154,254 @@ function DimensionGrid({ rows, setRows, onSync }: { rows: DimensionLine[]; setRo
   );
 
   return (
-    <div className="freight-dimension-grid overflow-hidden rounded-md border bg-background">
-      <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground">Air Cargo Dimensions Manifest (TF_PACKLIST_DIM)</span>
-        {editable && <Button type="button" size="sm" variant="outline" onClick={addDimension}><Plus size={14} />Dimension Line</Button>}
-      </div>
-      <div className="overflow-auto">
-        <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
-          {columns.map((column) => <span key={column}>{column.replace(/_/g, " ")}</span>)}<span />
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden mt-2">
+      {/* Finance Line Actions Header */}
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <PackageCheck size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Air Cargo Dimensions Manifest (TF_PACKLIST_DIM)
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {rows.length} {rows.length === 1 ? "line" : "lines"}
+          </span>
+
+          {/* Inline KPI Strip */}
+          {rows.length > 0 && (
+            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Qty:</span> {totals.qty}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+                <span className="text-emerald-700 font-bold">Gross Wt:</span> {totals.gross.toFixed(2)} kg
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-medium text-indigo-900">
+                <span className="text-indigo-700 font-bold">Chg Wt:</span> {totals.chargeable.toFixed(2)} kg
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 font-medium text-amber-900">
+                <span className="text-amber-700 font-bold">Volume:</span> {totals.volume.toFixed(3)} m³
+              </span>
+            </div>
+          )}
         </div>
-        {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b px-2 py-1">
-            {columns.map((column) => (
-              editable ? (
-                <Input
-                  key={column}
-                  className={`h-7 text-xs ${numeric.has(column) ? "text-right" : ""}`}
-                  type={numeric.has(column) ? "number" : "text"}
-                  value={row[column]}
-                  readOnly={column === "sr_no"}
-                  onChange={(event) => update(rowIndex, column, event.target.value)}
-                />
-              ) : (
-                <span key={column} className={`min-h-7 rounded-sm px-1 py-1 text-xs font-semibold text-foreground ${numeric.has(column) ? "text-right" : ""}`}>{row[column] || "-"}</span>
-              )
+
+        <div className="flex items-center gap-1.5">
+          {editable && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={addDimension}
+              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+            >
+              <Plus size={13} className="mr-1" /> Add Dimension Line
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Finance Table */}
+      <div className="commercial-lines-scroll overflow-auto max-h-[360px] min-h-[140px]">
+        <table className="finance-lines-table w-full text-xs min-w-[1240px] border-collapse">
+          <thead className="sticky top-0 bg-[#00378C] text-white text-[11px] font-bold uppercase tracking-wider shadow-xs z-10 whitespace-nowrap">
+            <tr>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-[#00378C] text-white">#</th>
+              <th className="px-2 py-2 text-right w-[85px] text-white">Length (cm)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-white">Breadth (cm)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-white">Height (cm)</th>
+              <th className="px-2 py-2 text-right w-[75px] text-white">Qty</th>
+              <th className="px-2 py-2 text-right w-[95px] text-white">Gross Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[100px] text-white">Chg Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[95px] text-white">Volume (m³)</th>
+              <th className="px-2 py-2 text-right w-[80px] text-white">Total Qty</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-white">Cargo Details</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-white">Prod Description</th>
+              <th className="px-2 py-2 text-center w-[50px] text-white">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map((row, rowIndex) => (
+              <tr
+                key={rowIndex}
+                className={`transition-colors ${
+                  rowIndex % 2 === 1 ? "bg-slate-50/40 hover:bg-blue-50/40" : "bg-white hover:bg-blue-50/40"
+                }`}
+              >
+                <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                  {rowIndex + 1}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      step="any"
+                      value={row.length}
+                      onChange={(e) => update(rowIndex, "length", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.length || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      step="any"
+                      value={row.breadth}
+                      onChange={(e) => update(rowIndex, "breadth", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.breadth || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      step="any"
+                      value={row.height}
+                      onChange={(e) => update(rowIndex, "height", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.height || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[75px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold"
+                      type="number"
+                      value={row.qty}
+                      onChange={(e) => update(rowIndex, "qty", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold">{row.qty || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[95px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold"
+                      type="number"
+                      step="0.01"
+                      value={row.gross_wt}
+                      onChange={(e) => update(rowIndex, "gross_wt", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold">{row.gross_wt || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[100px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold text-indigo-700 bg-indigo-50/40"
+                      type="number"
+                      step="0.01"
+                      value={row.chargeable_wt}
+                      onChange={(e) => update(rowIndex, "chargeable_wt", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold text-indigo-700">{row.chargeable_wt || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[95px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs text-amber-700 bg-amber-50/40"
+                      type="number"
+                      step="0.001"
+                      value={row.volume}
+                      onChange={(e) => update(rowIndex, "volume", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right text-amber-700">{row.volume || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[80px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      value={row.total_qty}
+                      onChange={(e) => update(rowIndex, "total_qty", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.total_qty || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 min-w-[180px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.cargo_details}
+                      onChange={(e) => update(rowIndex, "cargo_details", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block truncate">{row.cargo_details || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 min-w-[180px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.prod_description}
+                      onChange={(e) => update(rowIndex, "prod_description", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block truncate">{row.prod_description || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 text-center w-[50px]">
+                  {editable ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                      title="Remove dimension"
+                      onClick={() => removeDimension(rowIndex)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  ) : null}
+                </td>
+              </tr>
             ))}
-            {editable ? <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => removeDimension(rowIndex)}><Trash2 size={14} /></Button> : <span />}
-          </div>
-        ))}
-        {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No air dimension lines. Add length, breadth, height and weight details when needed.</div>}
-        {!!rows.length && (
-          <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 bg-muted/25 px-2 py-1.5 text-xs font-semibold">
-            <span className="col-span-4 text-right">Totals</span>
-            <span className="text-right">{totals.qty}</span>
-            <span className="text-right">{totals.gross.toFixed(2)}</span>
-            <span className="text-right">{totals.chargeable.toFixed(2)}</span>
-            <span className="text-right">{totals.volume.toFixed(3)}</span>
-            <span className="col-span-4" />
-          </div>
-        )}
+            {!rows.length && (
+              <tr>
+                <td colSpan={12} className="py-8 px-4 text-center text-xs text-muted-foreground">
+                  <p className="m-0 text-slate-500 font-medium">No air dimension lines recorded. Click 'Add Dimension Line' to enter cargo dimensions.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-slate-300 bg-slate-100 font-bold text-xs text-slate-900 sticky bottom-0 z-10">
+              <tr>
+                <td colSpan={4} className="px-2 py-1.5 text-right uppercase tracking-wider text-slate-600 font-bold text-[11px]">
+                  Totals:
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-slate-800">
+                  {totals.qty}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-emerald-800">
+                  {totals.gross.toFixed(2)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-indigo-800">
+                  {totals.chargeable.toFixed(2)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-amber-800">
+                  {totals.volume.toFixed(3)}
+                </td>
+                <td colSpan={4} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
     </div>
   );
