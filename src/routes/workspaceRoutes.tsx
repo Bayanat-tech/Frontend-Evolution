@@ -229,6 +229,7 @@ import HrDashboard from "../pages/hr/dashboard/HRDashboard";
 import HrDocumentReport from "../pages/hr/Reports/HrDocumentReport";
 import HrLabourCardExpiryReport from "../pages/hr/Reports/HrLabourCardExpiry";
 import HrEmployeeHeadCountList from "../pages/hr/Reports/HrEmployeeHeadCountList";
+import HrSalaryRegister from "../pages/hr/Reports/HrSalaryRegister";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -337,6 +338,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsDashboardRoute(pathname),
     element: () => <WmsDashboard />,
   },
+
+  {
+  name: "HR Salary Register Report",
+  match: ({ pathname }) => isHrSalaryRegisterRoute(pathname),
+  element: () => <HrSalaryRegister />,
+  },
+
   {
     name: 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
@@ -3126,5 +3134,17 @@ function isHrEmployeeHeadCountListRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/employee/employee_head_count") ||
     compact.includes("employeeheadcountlist") ||
     compact.includes("employeeheadcount")
+  );
+}
+
+
+function isHrSalaryRegisterRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/payroll/salary_register") ||
+    normalized.includes("/hcm/hcm/reports/payroll/salary%20register") ||
+    normalized.includes("/hcm/hcm/reports/payroll/salary-register") ||
+    compact.includes("reportspayrollsalaryregister")
   );
 }
