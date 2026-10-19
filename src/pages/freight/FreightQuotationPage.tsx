@@ -5,10 +5,12 @@ import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   Copy,
   Eye,
   FileText,
@@ -19,6 +21,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Search,
   ShieldCheck,
   ShipWheel,
   Sparkles,
@@ -241,8 +244,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
   const [uocOptions, setUocOptions] = useState<{ value: string; label: string }[]>([]);
-  
-    useEffect(() => {
+
+  useEffect(() => {
     let alive = true;
     loadUocLookup(initialHeader.company_code)
       .then((rows) => {
@@ -546,6 +549,44 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           },
           "quantity"
         );
+      })
+    );
+  };
+
+  const handleLineCurrencyChange = (
+    index: number,
+    kind: "cost" | "bill" | "partners",
+    newCurrCode: string,
+    row: LookupRow | null
+  ) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+
+    const exFromMaster = row ? (lookupText(row, "ex_rate") || "1") : (newCurrCode === "OMR" ? "1" : "1");
+
+    setDetails((current) =>
+      current.map((line, rowIndex) => {
+        if (rowIndex !== index) return line;
+        let updated = { ...line };
+        if (kind === "cost") {
+          updated.cost_curr_code = newCurrCode;
+          updated.cost_ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "cost_ex_rate");
+        } else if (kind === "bill") {
+          updated.curr_code = newCurrCode;
+          updated.ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "ex_rate");
+        } else if (kind === "partners") {
+          updated.partners_curr_code = newCurrCode;
+          updated.partners_ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "partners_ex_rate");
+        }
+        return updated;
       })
     );
   };
@@ -1471,7 +1512,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   </div>
 
                   <div className="commercial-lines-scroll overflow-auto max-h-[70vh] min-h-[300px]">
-                    <table className={`finance-lines-table border-collapse text-xs w-full ${showFcColumns ? "min-w-[2380px]" : "min-w-[1550px]"}`}>
+                    <table className={`finance-lines-table border-collapse text-xs w-full ${showFcColumns ? "min-w-[2500px]" : "min-w-[1660px]"}`}>
                       <thead className="sticky top-0 z-30 bg-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700 shadow-xs whitespace-nowrap border-b-2 border-slate-300">
                       <tr>
                         <th className="sticky left-0 z-30 bg-slate-100 px-2 py-2 text-center w-10 text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">#</th>
@@ -1486,7 +1527,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "80px" }}>UOM</th>
                         {showFcColumns && (
                           <>
-                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "75px" }}>Cost Curr</th>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Cost Curr</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Cost Ex</th>
                           </>
                         )}
@@ -1494,7 +1535,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Cost Amt</th>
                         {showFcColumns && (
                           <>
-                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "75px" }}>Bill Curr</th>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Bill Curr</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Bill Ex</th>
                           </>
                         )}
@@ -1502,10 +1543,12 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                         <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Bill Amt</th>
                         {showFcColumns && (
                           <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Agent Ex</th>
                             <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent FC</th>
-                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent Amt</th>
                           </>
                         )}
+                        <th className="px-2 py-2 text-right text-purple-900 font-bold border-r border-slate-200 bg-purple-50/50" style={{ width: "105px" }}>Agent Amt</th>
                         <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ minWidth: "200px" }}>Remarks</th>
                         <th className="sticky right-0 z-30 bg-slate-100 px-2 py-2 text-center w-12 text-slate-700 font-bold border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]">Action</th>
                       </tr>
@@ -1651,8 +1694,13 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           {/* FC Cost Curr & Ex */}
                           {showFcColumns && (
                             <>
-                              <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-full" maxLength={freightTextLimit("TF_QUOTATION_DET", "cost_curr_code")} disabled={isReadOnly} />
-                              <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right" disabled={isReadOnly} />
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.cost_curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "cost", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
                             </>
                           )}
 
@@ -1663,8 +1711,13 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           {/* FC Bill Curr & Ex */}
                           {showFcColumns && (
                             <>
-                              <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-[80px]" maxLength={freightTextLimit("TF_QUOTATION_DET", "curr_code")} disabled={isReadOnly} />
-                              <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right" disabled={isReadOnly} />
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "bill", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
                             </>
                           )}
 
@@ -1672,13 +1725,20 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
                           <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-full text-right font-bold text-blue-900" disabled={isReadOnly} />
 
-                          {/* FC Agent */}
+                          {/* Agent Share / Commission */}
                           {showFcColumns && (
                             <>
-                              <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-full text-right" disabled={isReadOnly} />
-                              <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-full text-right" disabled={isReadOnly} />
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.partners_curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "partners", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.partners_ex_rate || "1"} onChange={(value) => setDetailField(index, "partners_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                              <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
                             </>
                           )}
+                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-full text-right font-bold text-purple-900 bg-purple-50/30" disabled={isReadOnly} />
 
                           {/* Remarks */}
                           <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="w-full" maxLength={freightTextLimit("TF_QUOTATION_DET", "activity_remarks")} disabled={isReadOnly} />
@@ -1704,14 +1764,12 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                           <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
                             {formatAmount(totals.bill)}
                           </td>
-                          {showFcColumns ? (
-                            <>
-                              <td className="px-2 py-1.5 text-right">-</td>
-                              <td className="px-2 py-1.5 text-right font-mono font-semibold text-purple-900">
-                                {formatAmount(totals.partners)}
-                              </td>
-                            </>
-                          ) : null}
+                          {showFcColumns && (
+                            <td colSpan={3} className="px-2 py-1.5 text-right">-</td>
+                          )}
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold text-purple-900 bg-purple-50/50">
+                            {formatAmount(totals.partners)}
+                          </td>
                           <td colSpan={2} className="px-2 py-1.5 text-center text-slate-500 font-mono text-[10px]">
                             OMR
                           </td>
@@ -2159,9 +2217,41 @@ function recalcDetail(row: QuotationDetail, field: keyof QuotationDetail): Quota
     }
   }
 
-  const shouldCost = ["quantity", "fc_costrate", "cost_ex_rate"].includes(field);
-  const shouldBill = ["quantity", "fc_billrate", "ex_rate"].includes(field);
-  const shouldPartner = ["fc_partners", "partners_ex_rate"].includes(field);
+  if (field === "partners_price") {
+    const pPrice = Number(row.partners_price || 0);
+    const fc = partnerEx > 0 ? round3(pPrice / partnerEx) : String(pPrice);
+    return { ...row, fc_partners: fc, partners_price: String(pPrice) };
+  }
+
+  if (field === "cost_ex_rate") {
+    if (fcCostRate > 0) {
+      return { ...row, cost: round3(fcCostRate * costEx * qty) };
+    } else if (Number(row.cost) > 0 && qty > 0 && costEx > 0) {
+      const rate = round3(Number(row.cost) / (qty * costEx));
+      return { ...row, fc_costrate: rate, fc_cost: round3(Number(rate) * qty) };
+    }
+  }
+
+  if (field === "ex_rate") {
+    if (fcBillRate > 0) {
+      return { ...row, bill: round3(fcBillRate * billEx * qty) };
+    } else if (Number(row.bill) > 0 && qty > 0 && billEx > 0) {
+      const rate = round3(Number(row.bill) / (qty * billEx));
+      return { ...row, fc_billrate: rate, fc_bill: round3(Number(rate) * qty) };
+    }
+  }
+
+  if (field === "partners_ex_rate") {
+    if (fcPartners > 0) {
+      return { ...row, partners_price: round3(fcPartners * partnerEx) };
+    } else if (Number(row.partners_price) > 0 && partnerEx > 0) {
+      return { ...row, fc_partners: round3(Number(row.partners_price) / partnerEx) };
+    }
+  }
+
+  const shouldCost = ["quantity", "fc_costrate"].includes(field);
+  const shouldBill = ["quantity", "fc_billrate"].includes(field);
+  const shouldPartner = ["fc_partners"].includes(field);
   return {
     ...row,
     ...(shouldCost ? { fc_cost: round3(fcCostRate * qty), cost: round3(fcCostRate * costEx * qty) } : {}),
@@ -2226,10 +2316,10 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "", forceOpenDown = true }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
-  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string; forceOpenDown?: boolean;
   }) {
   const formattedDisplay = value && displayValue && !displayValue.startsWith(value)
     ? `${value} - ${displayValue}`
@@ -2252,6 +2342,7 @@ function FormLookup({ label, value, displayValue, valueField, displayFields, col
         disabled={disabled}
         enforceRequired={required}
         compact
+        forceOpenDown={forceOpenDown}
       />
     </label>
   );
@@ -2294,6 +2385,42 @@ function CellInput({ value, onChange, type = "text", className = "", maxLength, 
         value={value}
         onChange={(nextValue) => onChange(nextValue)} />) : (<Input maxLength={maxLength} className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)}  maxBytes={maxLength} disabled={disabled} />)}</td>;
 }
+
+function CurrencyLookup({
+  companyCode,
+  value,
+  onChange,
+  disabled,
+}: {
+  companyCode: string;
+  value: string;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <td className="px-1 py-0.5 border-r border-slate-200">
+      <LookupField
+        value={value}
+        compact
+        dense
+        forceOpenDown
+        placeholder="Curr"
+        valueField="curr_code"
+        displayFields={["curr_code", "curr_name"]}
+        columns={[
+          { field: "curr_code", header: "Currency", width: "90px" },
+          { field: "curr_name", header: "Name", width: "210px" },
+          { field: "ex_rate", header: "Ex. Rate", width: "90px" },
+        ]}
+        popoverWidth={420}
+        loadOptions={(query) => loadFreightLookup("freight_currency", companyCode, query)}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    </td>
+  );
+}
+
 
 // const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
 const fieldClassName = "h-6 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";

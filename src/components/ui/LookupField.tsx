@@ -33,6 +33,7 @@ type LookupFieldProps = {
   renderRowActions?: (row: LookupRow) => ReactNode;
   popoverWidth?: number;
   className?: string;
+  forceOpenDown?: boolean;
 };
 
 export function LookupField({
@@ -59,6 +60,7 @@ export function LookupField({
   renderRowActions,
   popoverWidth,
   className,
+  forceOpenDown = false,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -104,8 +106,8 @@ export function LookupField({
     const viewportMargin = 12;
     const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - viewportMargin);
     const spaceAbove = Math.max(0, rect.top - gap - viewportMargin);
-    const opensAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
-    const maxHeight = Math.min(520, opensAbove ? spaceAbove : spaceBelow);
+    const opensAbove = forceOpenDown ? false : (spaceBelow < 220 && spaceAbove > spaceBelow);
+    const maxHeight = Math.min(520, opensAbove ? spaceAbove : Math.max(160, spaceBelow));
 
     let left = rect.left;
     if (left + width > viewportWidth - 12) {
@@ -125,7 +127,7 @@ export function LookupField({
     };
 
     setPopoverStyle(nextStyle);
-  }, [columns.length, popoverWidth]);
+  }, [columns.length, popoverWidth, forceOpenDown]);
 
   useEffect(() => {
     if (!open) return;

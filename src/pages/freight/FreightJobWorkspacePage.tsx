@@ -252,7 +252,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
             {/* <div className="freight-workspace-title-block">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="m-0 text-[20px] font-bold leading-tight text-foreground">
-                  {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
+                  {selectedJob ? "Job" : "New Job"}
                 </h1>
                 {selectedJob && (
                   <>

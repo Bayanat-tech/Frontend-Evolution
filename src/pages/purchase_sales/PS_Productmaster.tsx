@@ -1,104 +1,23 @@
-import { Edit2, FileText, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { Edit2, FileText, List, Plus, RotateCcw, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { LookupField } from "../../components/ui/LookupField";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
+import { LookupField } from "../../components/ui/LookupField";
+import { Input } from "../../components/ui/Input";
+import type { LucideIcon } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types & field definitions                                          */
 /* ------------------------------------------------------------------ */
 
-type ProductRow = Record<string, unknown>;
-
-type LookupConfig = {
-  parameter: string;
-  valueField: string;
-  nameField: string;
-  valueHeader: string;
-  nameHeader: string;
-};
-
-type ProductField = {
-  name: string;
-  label: string;
-  section: string;
-  type?: "text" | "number" | "textarea";
-  lookup?: LookupConfig;
-  required?: boolean;
-  disabledOnEdit?: boolean;
-  fullRow?: boolean;
-};
-
-const lookup = (
-  parameter: string,
-  valueField: string,
-  nameField: string,
-  valueHeader: string,
-  nameHeader: string,
-): LookupConfig => ({ parameter, valueField, nameField, valueHeader, nameHeader });
-
-const FIELDS: ProductField[] = [
-  // Product Details
-  { name: "prod_code", label: "Product Code", section: "Product Details", required: true, disabledOnEdit: true },
-  { name: "prod_name", label: "Product Name", section: "Product Details", required: true },
-  { name: "model_number", label: "Model Number", section: "Product Details" },
-  { name: "group_code", label: "Group Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_GROUP", "group_code", "group_name", "Group Code", "Group Name") },
-  { name: "brand_code", label: "Brand Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_BRAND", "brand_code", "brand_name", "Brand Code", "Brand Name") },
-  { name: "category_code", label: "Category Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY", "category_code", "category_name", "Category Code", "Category Name") },
-  { name: "prodtype_code", label: "Product Type Code", section: "Product Details", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE", "prodtype_code", "prodtype_name", "Type Code", "Type Name") },
-  { name: "season_code", label: "Season Code", section: "Product Details" },
-
-  // Barcode and QR Code
-  { name: "barcode", label: "Barcode", section: "Barcode and QR Code" },
-  { name: "size_code", label: "Size Code", section: "Barcode and QR Code" },
-  { name: "active", label: "Active", section: "Barcode and QR Code" },
-  { name: "co_packing", label: "Co Packing", section: "Barcode and QR Code" },
-  { name: "product_stage", label: "Product Stage", section: "Barcode and QR Code" },
-
-  // Unit of Measurement
-  { name: "uom_count", label: "No. of UOMs", section: "Unit of Measurement", type: "number" },
-  { name: "p_uom", label: "Primary UOM", section: "Unit of Measurement", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_UOM", "uom_code", "uom_name", "UOM Code", "UOM Name") },
-  { name: "l_uom", label: "Lower UOM", section: "Unit of Measurement", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_UOM", "uom_code", "uom_name", "UOM Code", "UOM Name") },
-  { name: "uppp", label: "UPPP", section: "Unit of Measurement", type: "number" },
-
-  // Division
-  { name: "div_code", label: "Division Code", section: "Division", lookup: lookup("PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION", "div_code", "div_name", "Division Code", "Division Name") },
-  { name: "color_code", label: "Color Code", section: "Division" },
-
-  // Dimensions
-  { name: "length", label: "Length", section: "Dimensions", type: "number" },
-  { name: "breadth", label: "Breadth", section: "Dimensions", type: "number" },
-  { name: "height", label: "Height", section: "Dimensions", type: "number" },
-  { name: "volume", label: "Volume", section: "Dimensions", type: "number" },
-  { name: "net_wt", label: "Net Weight", section: "Dimensions", type: "number" },
-
-  // Remarks
-  { name: "remarks", label: "Remarks", section: "Remarks", type: "textarea", fullRow: true },
-
-  // Additional
-  { name: "manu_code", label: "Manufacturer Code", section: "Additional" },
-  { name: "origin_country", label: "Origin Country", section: "Additional" },
-  { name: "cost_rate", label: "Cost Rate Unit", section: "Additional", type: "number" },
-  { name: "retail_rate", label: "Retail Price", section: "Additional", type: "number" },
-  { name: "sales_rate", label: "Sales Rate", section: "Additional", type: "number" },
-  { name: "reorder_qty", label: "Reorder Qty", section: "Additional", type: "number" },
-  { name: "alt_prod_code", label: "Alternate Product", section: "Additional" },
-
-  // Tax Component
-  { name: "tx_compt_1", label: "Tax Component 1", section: "Tax Component" },
-  { name: "tx_compt_2", label: "Tax Component 2", section: "Tax Component" },
-  { name: "tx_compt_3", label: "Tax Component 3", section: "Tax Component" },
-  { name: "tx_compt_4", label: "Tax Component 4", section: "Tax Component" },
-];
-
-const SECTIONS = Array.from(new Set(FIELDS.map((field) => field.section)));
+type ProductRow = Record<string, any>;
 
 const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
   { key: "prod_code", label: "Product Code", width: 150 },
@@ -112,10 +31,108 @@ const LIST_COLUMNS: { key: string; label: string; width?: number }[] = [
   { key: "sales_rate", label: "Sales Rate", width: 120 },
 ];
 
-const inputClass =
-  "h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500";
-
 type Notice = { type: "success" | "error"; message: string } | null;
+
+const STEPS = ["Product Details", "UOM & Volume", "Manufacture & Validation", "Category & Product"];
+
+const makeEmpty = (): ProductRow => ({
+  prod_code: "", prod_name: "", prin_code: "", brand_code: "", group_code: "",
+  model_number: "", variant_code: "", p_uom: "", l_uom: "", uppp: 0, upp: 0,
+  uom_count: 0, length: 0, breadth: 0, height: 0, volume: 0, gross_wt: 0, net_wt: 0,
+  manu_code: "", alt_prod_code: "", site_ind: "", category_abc: "", prod_status: "O",
+  prod_type: 0, product_stage: "", base_price: 0, wave_code: 0, shelf_life: 0,
+  co_pack: "N", barcode: "", size_code: "", color_code: "", div_code: "",
+  active: "Y", remarks: "", cost_rate: 0, retail_rate: 0, sales_rate: 0,
+  reorder_qty: 0, tx_compt_1: "N", tx_compt_2: "N", tx_compt_3: "N", tx_compt_4: "N",
+});
+
+/* ─────────────────────────────────────────────────────────────
+   SectionPanel — Clean white box with blue icon
+   ───────────────────────────────────────────────────────────── */
+function SectionPanel({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm mb-4 w-full">
+      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex h-7 w-7 items-center justify-center rounded bg-[#00378C] text-white">
+          <Icon size={16} />
+        </div>
+        <h3 className="m-0 text-[13px] font-semibold text-slate-800">{title}</h3>
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Field — Uppercase bold label, spacing
+   ───────────────────────────────────────────────────────────── */
+function Field({
+  label,
+  required,
+  children,
+  className,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`group flex flex-col gap-1.5 ${className ?? ""}`}>
+      <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 transition-colors">
+        {label}
+        {required && <strong className="ml-0.5 font-bold" style={{ color: "#E24B4A" }}> *</strong>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Checkbox
+   ───────────────────────────────────────────────────────────── */
+function CheckboxField({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex h-10 items-center gap-2 select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: "#00378C", width: "16px", height: "16px" }}
+        className="shrink-0 cursor-pointer rounded border border-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00378C]/25 disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      {label && (
+        <span
+          onClick={() => !disabled && onChange(!checked)}
+          className={`text-[12px] font-medium text-slate-700 leading-none transition-colors ${
+            disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
+          }`}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -135,6 +152,7 @@ const ProductPurchaseSales = () => {
   const [original, setOriginal] = useState<ProductRow | null>(null);
   const [form, setForm] = useState<ProductRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState(0);
 
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
@@ -170,6 +188,7 @@ const ProductPurchaseSales = () => {
     setEditMode(false);
     setOriginal(null);
     setForm(makeEmpty());
+    setStep(0);
     setError("");
     setNotice(null);
     setFormOpen(true);
@@ -178,7 +197,8 @@ const ProductPurchaseSales = () => {
   const openEdit = (row: ProductRow) => {
     setEditMode(true);
     setOriginal(row);
-    setForm({ ...makeEmpty(), ...row, active: row.active ?? row.is_active ?? "" });
+    setForm({ ...makeEmpty(), ...row });
+    setStep(0);
     setError("");
     setNotice(null);
     setFormOpen(true);
@@ -189,32 +209,29 @@ const ProductPurchaseSales = () => {
     setError("");
   };
 
-
-  const resetForm = () => {
-    if (editMode && original) {
-   
-      setForm({ ...makeEmpty(), ...original, active: original.active ?? original.is_active ?? "" });
-    } else {
-     
-      setForm(makeEmpty());
-    }
-    setError("");
+  const setField = (key: string, value: any) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const setField = (name: string, value: unknown) => setForm((prev) => ({ ...prev, [name]: value }));
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (event?: FormEvent) => {
+    if (event) event.preventDefault();
     setError("");
-    const missing = FIELDS.find((field) => field.required && !String(form[field.name] ?? "").trim());
-    if (missing) {
-      setError(`${missing.label} is required.`);
+    
+    if (!form.prod_name?.trim()) {
+      setError("Product Name is required");
+      return;
+    }
+    if (!form.group_code) {
+      setError("Group Code is required");
+      return;
+    }
+    if (!form.brand_code) {
+      setError("Brand Code is required");
       return;
     }
 
     try {
       setSaving(true);
-      // On edit, keep values of columns that are not shown on this form (e.g. supplier, image path).
       const data: ProductRow = editMode ? { ...(original || {}), ...form } : form;
       await saveProduct(data, loginId, companyCode);
       setNotice({ type: "success", message: editMode ? "Successfully updated" : "Successfully created" });
@@ -298,131 +315,567 @@ const ProductPurchaseSales = () => {
   const pageTitle = formOpen ? (editMode ? "Edit Product" : "New Product") : "Product";
 
   return (
-    <section className="grid gap-2 p-1">
-      {/* ---------- Top Header (compact) ---------- */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00378C]/10 text-[#00378C]">
-            <FileText size={14} />
-          </div>
-          <h1 className="m-0 truncate text-[15px] font-semibold tracking-tight text-slate-900">{pageTitle}</h1>
-        </div>
-
-        {formOpen && (
-  <div className="flex items-center gap-1.5">
-        <Button
-      type="button"
-      variant="outline"
-      onClick={resetForm}
-      disabled={saving}
-      title="Reset form"
-      className="h-7 gap-1 px-3 text-xs font-semibold rounded-md"
-    >
-      <RotateCcw size={13} /> Reset
-    </Button>
-    <Button
-      type="submit"
-      form="product-form"
-      disabled={saving}
-      className="h-7 gap-1 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-3 rounded-md"
-    >
-      <Save size={13} /> {saving ? "Saving..." : editMode ? "Update" : "Save"}
-    </Button>
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      onClick={closeForm}
-      disabled={saving}
-      aria-label="Close"
-      title="Close"
-      className="h-7 w-7 rounded-md"
-    >
-      <X size={14} />
-    </Button>
-  </div>
-)}
-      </div>
-
-      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-
-      {/* ---------- EDITOR ---------- */}
+    // Added w-full max-w-full to force the container to take the whole screen
+    <div className="flex flex-col gap-4 p-4 bg-[#f8fafc] min-h-screen w-full max-w-full overflow-x-hidden">
+      
       {formOpen && (
-        <form id="product-form" className="flex flex-col gap-2" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-            {SECTIONS.map((section) => (
-              <div key={section} className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-2 rounded-t-lg border-b border-slate-100 bg-slate-50/70 px-3 py-1.5">
-                  <div className="flex h-5 w-5 items-center justify-center rounded bg-[#00378C]/10 text-[#00378C]">
-                    <FileText size={12} />
-                  </div>
-                  <h3 className="m-0 text-xs font-semibold text-slate-800">{section}</h3>
-                </div>
-                <div className="p-3">
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-                    {FIELDS.filter((field) => field.section === section).map((field) => (
-                      <ProductFieldInput
-                        key={field.name}
-                        field={field}
-                        value={form[field.name]}
-                        disabled={Boolean(editMode && field.disabledOnEdit)}
-                        loginId={loginId}
-                        companyCode={companyCode}
-                        onChange={(value) => setField(field.name, value)}
-                      />
-                    ))}
-                  </div>
-                </div>
+        <div className="relative flex flex-col w-full rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+          
+          {/* Header with Gradient Line */}
+          <div className="relative border-b border-slate-200">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-500" />
+            <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 pt-5">
+              <div className="flex items-center gap-3">
+                <FileText className="text-[#00378C]" size={20} />
+                <h1 className="m-0 text-xl font-semibold tracking-tight text-slate-900">{pageTitle}</h1>
+                {!editMode && (
+                  <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    Draft
+                  </span>
+                )}
               </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeForm}
+                  disabled={saving}
+                  className="h-8 gap-1.5 text-xs font-semibold px-3 rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  <ArrowLeft size={14} /> List
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeForm}
+                  disabled={saving}
+                  className="h-8 gap-1.5 text-xs font-semibold px-3 rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  <X size={14} /> Close
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleSubmit()}
+                  disabled={saving}
+                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-4 rounded-md"
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs - Full Width Gray Bar */}
+          <div className="flex w-full overflow-x-auto bg-slate-50 border-b border-slate-200">
+            {STEPS.map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setStep(index)}
+                aria-pressed={step === index}
+                className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-colors border-b-2 ${
+                  step === index 
+                    ? "border-[#00378C] text-[#00378C] bg-white shadow-[0_1px_0_0_#fff]" 
+                    : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                }`}
+              >
+                {label}
+              </button>
             ))}
           </div>
-        </form>
+
+          {/* Content Area - Gray background, full width */}
+          <div className="flex flex-col gap-4 p-5 bg-slate-50 w-full">
+            {error && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+            
+            {/* ══ STEP 0 — Product Details ══ */}
+            {step === 0 && (
+              <div className="w-full">
+                <SectionPanel title="Classification" icon={Building2}>
+                  <div className="grid gap-4 md:grid-cols-2 w-full">
+                    <Field label="Group Code" required>
+                      <LookupField
+                        label=""
+                        value={form.group_code ?? ""}
+                        valueField="group_code"
+                        displayFields={["group_code", "group_name"]}
+                        columns={[
+                          { field: "group_code", header: "Group Code" },
+                          { field: "group_name", header: "Group Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("group_code", value)}
+                        compact
+                      />
+                    </Field>
+
+                    <Field label="Brand Code" required>
+                      <LookupField
+                        label=""
+                        value={form.brand_code ?? ""}
+                        valueField="brand_code"
+                        displayFields={["brand_code", "brand_name"]}
+                        columns={[
+                          { field: "brand_code", header: "Brand Code" },
+                          { field: "brand_name", header: "Brand Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("brand_code", value)}
+                        compact
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Identification" icon={IdCard}>
+                  <div className="grid gap-4 md:grid-cols-2 w-full">
+                    <Field label="Product Code" required>
+                      <Input
+                        value={form.prod_code ?? ""}
+                        disabled={editMode}
+                        onChange={(e) => setField("prod_code", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Product Name" required>
+                      <Input 
+                        value={form.prod_name ?? ""} 
+                        onChange={(e) => setField("prod_name", e.target.value)} 
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Model #">
+                      <Input 
+                        value={form.model_number ?? ""} 
+                        onChange={(e) => setField("model_number", e.target.value)} 
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Variant / Season">
+                      <Input 
+                        value={form.season_code ?? form.variant_code ?? ""} 
+                        onChange={(e) => setField("season_code", e.target.value)} 
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+              </div>
+            )}
+
+            {/* ══ STEP 1 — UOM & Volume ══ */}
+            {step === 1 && (
+              <div className="w-full">
+                <SectionPanel title="Unit of Measure" icon={Box}>
+                  <div className="grid gap-4 md:grid-cols-3 w-full">
+                    <Field label="No. of UOMs">
+                      <Input disabled value={form.uom_count ?? 0} className="h-10 bg-slate-50/50 border-slate-200 w-full" />
+                    </Field>
+                    <Field label="Primary UOM" required>
+                      <LookupField
+                        label=""
+                        value={form.p_uom ?? ""}
+                        valueField="uom_code"
+                        displayFields={["uom_code", "uom_name"]}
+                        columns={[
+                          { field: "uom_code", header: "Code" },
+                          { field: "uom_name", header: "Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("p_uom", value)}
+                        compact
+                      />
+                    </Field>
+                    <Field label="Lower UOM" required>
+                      <LookupField
+                        label=""
+                        value={form.l_uom ?? ""}
+                        valueField="uom_code"
+                        displayFields={["uom_code", "uom_name"]}
+                        columns={[
+                          { field: "uom_code", header: "Code" },
+                          { field: "uom_name", header: "Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("l_uom", value)}
+                        compact
+                      />
+                    </Field>
+                    <Field label="UPPP" required>
+                      <Input
+                        type="number"
+                        value={form.uppp ?? 0}
+                        onChange={(e) => setField("uppp", Number(e.target.value))}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Dimensions" icon={Ruler}>
+                  <div className="grid gap-4 md:grid-cols-4 w-full">
+                    {[
+                      { label: "Length", key: "length" },
+                      { label: "Breadth", key: "breadth" },
+                      { label: "Height", key: "height" },
+                      { label: "Volume", key: "volume" },
+                      { label: "Gross Weight", key: "gross_wt" },
+                      { label: "Net Weight", key: "net_wt" },
+                    ].map(({ label, key }) => (
+                      <Field label={label} key={key}>
+                        <Input
+                          type="number"
+                          value={form[key] ?? 0}
+                          onChange={(e) => setField(key, Number(e.target.value))}
+                          className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                        />
+                      </Field>
+                    ))}
+                  </div>
+                </SectionPanel>
+              </div>
+            )}
+
+            {/* ══ STEP 2 — Manufacture & Validation ══ */}
+            {step === 2 && (
+              <div className="w-full">
+                <SectionPanel title="Manufacture Details" icon={Building2}>
+                  <div className="grid gap-4 md:grid-cols-3 w-full">
+                    <Field label="Manufacturer Code">
+                      <Input 
+                        value={form.manu_code ?? ""} 
+                        onChange={(e) => setField("manu_code", e.target.value)} 
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Origin Country">
+                      <Input 
+                        value={form.origin_country ?? ""} 
+                        onChange={(e) => setField("origin_country", e.target.value)} 
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Alternate Product">
+                      <Input
+                        value={form.alt_prod_code ?? ""}
+                        onChange={(e) => setField("alt_prod_code", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Pricing" icon={ShieldCheck}>
+                  <div className="grid gap-4 md:grid-cols-4 w-full">
+                    <Field label="Cost Rate Unit">
+                      <Input
+                        type="number"
+                        value={form.cost_rate ?? 0}
+                        onChange={(e) => setField("cost_rate", Number(e.target.value))}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Retail Price">
+                      <Input
+                        type="number"
+                        value={form.retail_rate ?? 0}
+                        onChange={(e) => setField("retail_rate", Number(e.target.value))}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Sales Rate">
+                      <Input
+                        type="number"
+                        value={form.sales_rate ?? 0}
+                        onChange={(e) => setField("sales_rate", Number(e.target.value))}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Reorder Qty">
+                      <Input
+                        type="number"
+                        value={form.reorder_qty ?? 0}
+                        onChange={(e) => setField("reorder_qty", Number(e.target.value))}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+                
+                <SectionPanel title="Tax Component" icon={ShieldCheck}>
+                  <div className="grid gap-4 md:grid-cols-4 w-full">
+                     {[1, 2, 3, 4].map((num) => (
+                      <Field label={`Tax Component ${num}`} key={`tx_${num}`}>
+                        <Input
+                          value={form[`tx_compt_${num}`] ?? ""}
+                          onChange={(e) => setField(`tx_compt_${num}`, e.target.value)}
+                          className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                        />
+                      </Field>
+                    ))}
+                  </div>
+                </SectionPanel>
+              </div>
+            )}
+
+            {/* ══ STEP 3 — Category & Product ══ */}
+            {step === 3 && (
+              <div className="w-full">
+                <SectionPanel title="Classification" icon={LayoutGrid}>
+                  <div className="grid gap-4 md:grid-cols-3 w-full">
+                    <Field label="Category Code">
+                      <LookupField
+                        label=""
+                        value={form.category_code ?? ""}
+                        valueField="category_code"
+                        displayFields={["category_code", "category_name"]}
+                        columns={[
+                          { field: "category_code", header: "Code" },
+                          { field: "category_name", header: "Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("category_code", value)}
+                        compact
+                      />
+                    </Field>
+                    
+                    <Field label="Product Type Code">
+                      <LookupField
+                        label=""
+                        value={form.prodtype_code ?? ""}
+                        valueField="prodtype_code"
+                        displayFields={["prodtype_code", "prodtype_name"]}
+                        columns={[
+                          { field: "prodtype_code", header: "Code" },
+                          { field: "prodtype_name", header: "Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("prodtype_code", value)}
+                        compact
+                      />
+                    </Field>
+
+                    <Field label="Division Code">
+                      <LookupField
+                        label=""
+                        value={form.div_code ?? ""}
+                        valueField="div_code"
+                        displayFields={["div_code", "div_name"]}
+                        columns={[
+                          { field: "div_code", header: "Code" },
+                          { field: "div_name", header: "Name" },
+                        ]}
+                        loadOptions={async () => {
+                          return await getDynamicLookup({
+                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION",
+                            loginid: loginId,
+                            code1: companyCode,
+                          }) || [];
+                        }}
+                        onChange={(value) => setField("div_code", value)}
+                        compact
+                      />
+                    </Field>
+                    
+                    <Field label="Color Code">
+                      <Input
+                        value={form.color_code ?? ""}
+                        onChange={(e) => setField("color_code", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Barcode and QR Code" icon={ShieldCheck}>
+                  <div className="grid gap-4 md:grid-cols-4 w-full">
+                    <Field label="Barcode">
+                      <Input
+                        value={form.barcode ?? ""}
+                        onChange={(e) => setField("barcode", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Size Code">
+                      <Input
+                        value={form.size_code ?? ""}
+                        onChange={(e) => setField("size_code", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Active">
+                      <CheckboxField
+                        checked={form.active === "Y" || form.active === true}
+                        onChange={(v) => setField("active", v ? "Y" : "N")}
+                        label="Yes/No"
+                      />
+                    </Field>
+                    <Field label="Co Packing">
+                      <Input
+                        value={form.co_packing ?? ""}
+                        onChange={(e) => setField("co_packing", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                    <Field label="Product Stage">
+                      <Input
+                        value={form.product_stage ?? ""}
+                        onChange={(e) => setField("product_stage", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Remarks" icon={StickyNote}>
+                  <div className="grid gap-4 md:grid-cols-1 w-full">
+                    <Field label="Remarks">
+                      <Input
+                        value={form.remarks ?? ""}
+                        onChange={(e) => setField("remarks", e.target.value)}
+                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                      />
+                    </Field>
+                  </div>
+                </SectionPanel>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-200 bg-white">
+            <button
+              type="button"
+              onClick={() => setStep((s) => s - 1)}
+              className={`inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition-colors ${
+                step === 0 ? "invisible" : ""
+              }`}
+            >
+              <ChevronLeft size={14} /> Back
+            </button>
+
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-slate-500 font-medium">
+                Step {step + 1} of {STEPS.length}
+              </span>
+
+              {step < STEPS.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => s + 1)}
+                  className="inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-xs font-semibold shadow-sm bg-[#00378C] hover:bg-[#002d72] text-white transition-all"
+                >
+                  Next <ChevronRight size={14} className="ml-1" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => handleSubmit()}
+                  className={`inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-xs font-semibold shadow-sm transition-all ${
+                    saving
+                      ? "bg-[#00378C]/60 text-white cursor-not-allowed"
+                      : "bg-[#00378C] hover:bg-[#002d72] text-white"
+                  }`}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin mr-1" /> Saving…
+                    </>
+                  ) : (
+                    <>
+                      Save <Save size={14} className="ml-1" />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ---------- LIST ---------- */}
       {!formOpen && (
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search product..."
-          loading={loading}
-          emptyText="No products found"
-          height="calc(100dvh - 150px)"
-          minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
-          density="grid"
-          enablePagination={false}
-          enableExport={false}
-          actionButton={
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                onClick={openAdd}
-                className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
-              >
-                <Plus size={14} strokeWidth={2.5} /> Add
-              </Button>
-              <FinanceListActionsMenu
-                fyPeriod=""
-                fyPeriods={[]}
-                onFyPeriodChange={() => {}}
-                onExport={() =>
-                  exportToCsv(filteredRows, columns, `product-${new Date().toISOString().slice(0, 10)}.csv`)
-                }
-                onRefresh={() => void loadRows(false)}
-              />
-            </div>
-          }
-          getRowId={(row, index) => `${String(row.prod_code ?? "")}_${index}`}
-        />
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm w-full">
+          <DataTable
+            columns={columns}
+            data={filteredRows}
+            title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
+            searchValue={query}
+            onSearchChange={setQuery}
+            searchPlaceholder="Search product..."
+            loading={loading}
+            emptyText="No products found"
+            height="calc(100dvh - 150px)"
+            minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
+            density="grid"
+            enablePagination={false}
+            enableExport={false}
+            actionButton={
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={openAdd}
+                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
+                >
+                  <Plus size={14} strokeWidth={2.5} /> Add
+                </Button>
+                <FinanceListActionsMenu
+                  fyPeriod=""
+                  fyPeriods={[]}
+                  onFyPeriodChange={() => {}}
+                  onExport={() =>
+                    exportToCsv(filteredRows, columns, `product-${new Date().toISOString().slice(0, 10)}.csv`)
+                  }
+                  onRefresh={() => void loadRows(false)}
+                />
+              </div>
+            }
+            getRowId={(row, index) => `${String(row.prod_code ?? "")}_${index}`}
+          />
+        </div>
       )}
 
       {/* ---------- DELETE CONFIRM ---------- */}
@@ -448,92 +901,11 @@ const ProductPurchaseSales = () => {
           Delete <strong>{String(deleteTarget?.prod_code ?? "")}</strong>?
         </p>
       </Dialog>
-    </section>
+    </div>
   );
 };
 
 export default ProductPurchaseSales;
-
-/* ------------------------------------------------------------------ */
-/*  Field input                                                        */
-/* ------------------------------------------------------------------ */
-
-function ProductFieldInput({
-  field,
-  value,
-  disabled,
-  loginId,
-  companyCode,
-  onChange,
-}: {
-  field: ProductField;
-  value: unknown;
-  disabled: boolean;
-  loginId: string;
-  companyCode: string;
-  onChange: (value: unknown) => void;
-}) {
-  const labelText = `${field.label}${field.required ? " *" : ""}`;
-  const wrapperClass = `flex flex-col ${field.fullRow ? "col-span-2" : ""}`;
-
-  if (field.lookup) {
-    const config = field.lookup;
-    return (
-      <div className={wrapperClass}>
-        <LookupField
-          label={labelText}
-          value={String(value ?? "")}
-          displayValue={String(value ?? "")}
-          columns={[
-            { field: config.valueField, header: config.valueHeader },
-            { field: config.nameField, header: config.nameHeader },
-          ]}
-          valueField={config.valueField}
-          displayFields={[config.valueField, config.nameField]}
-          disabled={disabled}
-          loadOptions={() =>
-            getDynamicLookup({ parameter: config.parameter, loginid: loginId, code1: companyCode })
-          }
-          onChange={(next) => onChange(next)}
-        />
-      </div>
-    );
-  }
-
-  const label = (
-    <label className="mb-0.5 block text-[11px] font-medium text-slate-600 text-left">
-      {field.label}
-      {field.required && <span className="ml-0.5 text-red-500">*</span>}
-    </label>
-  );
-
-  if (field.type === "textarea") {
-    return (
-      <div className={wrapperClass}>
-        {label}
-        <textarea
-          className="w-full h-[52px] rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#00378C] focus:outline-none focus:ring-1 focus:ring-[#00378C]/30 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
-          disabled={disabled}
-          value={String(value ?? "")}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className={wrapperClass}>
-      {label}
-      <input
-        type={field.type === "number" ? "number" : "text"}
-        disabled={disabled}
-        value={String(value ?? "")}
-        onChange={(event) => onChange(event.target.value)}
-        className={inputClass}
-      />
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /*  Save (insert / update)                                             */
@@ -551,61 +923,53 @@ async function saveProduct(form: ProductRow, loginid: string, companyCode: strin
     parameter: "purchase_sales_ins_upd_mse_product",
     loginid,
 
-    // keys
-    val1s1: companyCode, // COMPANY_CODE
-    val1s2: toStr(form.prod_code), // PROD_CODE
+    val1s1: companyCode,
+    val1s2: toStr(form.prod_code),
+    val1s3: toStr(form.prod_name),
+    val1s4: toStr(form.model_number),
+    val1s5: toStr(form.barcode ?? form.bar_code),
+    val1s6: toStr(form.group_code),
+    val1s7: toStr(form.brand_code),
+    val1s8: toStr(form.category_code),
+    val1s9: toStr(form.prodtype_code),
+    val1s10: toStr(form.manu_code),
+    val1s11: toStr(form.alt_prod_code),
+    val1s12: toStr(form.p_uom),
+    val1s13: toStr(form.l_uom),
+    val1s14: toStr(form.origin_country),
+    val1s15: toStr(form.co_packing ?? form.co_pack) ?? "N",
+    val1s16: toStr(form.product_stage),
+    val1s17: toStr(form.div_code),
+    val1s18: toStr(form.size_code),
+    val1s19: toStr(form.color_code),
+    val1s20: toStr(form.season_code),
+    val1s21: toStr(form.remarks),
+    val1s22: toStr(form.is_inventory) ?? "Y",
+    val1s23: toStr(form.active ?? form.is_active) ?? "Y",
+    val1s24: toStr(form.active_status) ?? "Y",
+    val1s25: toStr(form.supplier_code),
+    val1s26: toStr(form.prod_image_path),
+    val1s27: toStr(form.tx_compt_1) ?? "N",
+    val1s28: toStr(form.tx_compt_2) ?? "N",
+    val1s29: toStr(form.tx_compt_3) ?? "N",
+    val1s30: toStr(form.tx_compt_4) ?? "N",
 
-    // strings
-    val1s3: toStr(form.prod_name), // PROD_NAME
-    val1s4: toStr(form.model_number), // MODEL_NUMBER
-    val1s5: toStr(form.barcode ?? form.bar_code), // BAR_CODE
-    val1s6: toStr(form.group_code), // GROUP_CODE
-    val1s7: toStr(form.brand_code), // BRAND_CODE
-    val1s8: toStr(form.category_code), // CATEGORY_CODE
-    val1s9: toStr(form.prodtype_code), // PRODTYPE_CODE
-    val1s10: toStr(form.manu_code), // MANU_CODE
-    val1s11: toStr(form.alt_prod_code), // ALT_PROD_CODE
-    val1s12: toStr(form.p_uom), // P_UOM
-    val1s13: toStr(form.l_uom), // L_UOM
-    val1s14: toStr(form.origin_country), // ORIGIN_COUNTRY
-    val1s15: toStr(form.co_packing ?? form.co_pack) ?? "N", // CO_PACK
-    val1s16: toStr(form.product_stage), // PRODUCT_STAGE
-    val1s17: toStr(form.div_code), // DIV_CODE
-    val1s18: toStr(form.size_code), // SIZE_CODE
-    val1s19: toStr(form.color_code), // COLOR_CODE
-    val1s20: toStr(form.season_code), // SEASON_CODE
-    val1s21: toStr(form.remarks), // REMARKS
-    val1s22: toStr(form.is_inventory) ?? "Y", // IS_INVENTORY
-    val1s23: toStr(form.active ?? form.is_active) ?? "Y", // IS_ACTIVE
-    val1s24: toStr(form.active_status) ?? "Y", // ACTIVE_STATUS
-    val1s25: toStr(form.supplier_code), // SUPPLIER_CODE
-    val1s26: toStr(form.prod_image_path), // PROD_IMAGE_PATH
-    val1s27: toStr(form.tx_compt_1) ?? "N", // TX_COMPNT_1_EXPMT
-    val1s28: toStr(form.tx_compt_2) ?? "N", // TX_COMPNT_2_EXPMT
-    val1s29: toStr(form.tx_compt_3) ?? "N", // TX_COMPNT_3_EXPMT
-    val1s30: toStr(form.tx_compt_4) ?? "N", // TX_COMPNT_4_EXPMT
-
-    // numbers
-    val1n1: toNum(form.uom_count), // UOM_COUNT
-    val1n2: toNum(form.uppp), // UPPP
-    val1n3: toNum(form.length), // LENGTH
-    val1n4: toNum(form.breadth), // BREADTH
-    val1n5: toNum(form.height), // HEIGHT
-    val1n6: toNum(form.volume), // VOLUME
-    val1n7: toNum(form.gross_wt), // GROSS_WT
-    val1n8: toNum(form.net_wt), // NET_WT
-    val1n9: toNum(form.cost_rate), // COST_RATE
-    val1n10: toNum(form.sales_rate), // SALES_RATE
+    val1n1: toNum(form.uom_count),
+    val1n2: toNum(form.uppp),
+    val1n3: toNum(form.length),
+    val1n4: toNum(form.breadth),
+    val1n5: toNum(form.height),
+    val1n6: toNum(form.volume),
+    val1n7: toNum(form.gross_wt),
+    val1n8: toNum(form.net_wt),
+    val1n9: toNum(form.cost_rate),
+    val1n10: toNum(form.sales_rate),
   });
 }
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function makeEmpty(): ProductRow {
-  return Object.fromEntries(FIELDS.map((field) => [field.name, ""]));
-}
 
 function normalizeRow(row: Record<string, unknown>): ProductRow {
   const normalized: ProductRow = { ...row };
