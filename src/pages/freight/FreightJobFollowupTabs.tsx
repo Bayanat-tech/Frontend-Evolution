@@ -146,18 +146,48 @@ export function FreightJobFollowupTab({
   }
 
   async function deleteRow(row: LookupRow) {
-    if (!job) return;
     if (readOnly) {
       notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
       return;
     }
-    const key = kind === "documents" ? { doc_nr: text(row, "doc_nr") } : kind === "deposits" ? { sr_no: text(row, "sr_no") } : { op_code: text(row, "op_code") };
+
+    const docNr = text(row, "doc_nr");
+    const opCode = text(row, "op_code");
+    const srNo = text(row, "sr_no");
+    const identifier = kind === "documents" ? docNr : kind === "deposits" ? srNo : opCode;
+
+    // Optimistically remove from UI state immediately
+    const previousRows = rows;
+    setRows((current) => current.filter((item) => item !== row));
+
+    // If it is a new locally-added row that was never saved to DB, we're done
+    if (!identifier) {
+      notify({ type: "success", text: "Line removed." });
+      return;
+    }
+
+    const prinCode = text(row, "prin_code") || text(job || undefined, "prin_code");
+    const jobNo = text(row, "job_no") || text(job || undefined, "job_no");
+    const compCode = text(row, "company_code") || companyCode;
+
+    if (!jobNo || !prinCode) {
+      notify({ type: "success", text: "Line removed." });
+      return;
+    }
+
+    const key = kind === "documents" ? { doc_nr: docNr } : kind === "deposits" ? { sr_no: srNo } : { op_code: opCode };
     setSaving(true);
     try {
-      await api.post(`/api/freight/${cfg.endpoint}/delete`, { ...jobPayload(companyCode, job), ...key });
-      await loadRows(job);
-      notify({ type: "success", text: "Line deleted." });
+      await api.post(`/api/freight/${cfg.endpoint}/delete`, {
+        company_code: compCode,
+        prin_code: prinCode,
+        job_no: jobNo,
+        ...key,
+      });
+      notify({ type: "success", text: "Line deleted successfully." });
     } catch (error: any) {
+      // Restore row on failure
+      setRows(previousRows);
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete line." });
     } finally {
       setSaving(false);
@@ -188,26 +218,28 @@ export function FreightJobFollowupTab({
 
   return (
     <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-muted-foreground">Active Job:</span>
-          <strong className="text-primary font-bold">{text(job || undefined, "job_no") || "No Job Selected"}</strong>
-          <span className="text-slate-300">•</span>
-          <span className="font-semibold text-muted-foreground">Principal:</span>
-          <strong className="text-foreground font-semibold">{text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}</strong>
-          {text(job || undefined, "doc_ref") && (
-            <>
-              <span className="text-slate-300">•</span>
-              <span className="font-semibold text-muted-foreground">Ref:</span>
-              <strong className="text-foreground">{text(job || undefined, "doc_ref")}</strong>
-            </>
-          )}
+      {!embeddedInWorkspace && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-muted-foreground">Active Job:</span>
+            <strong className="text-primary font-bold">{text(job || undefined, "job_no") || "No Job Selected"}</strong>
+            <span className="text-slate-300">•</span>
+            <span className="font-semibold text-muted-foreground">Principal:</span>
+            <strong className="text-foreground font-semibold">{text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}</strong>
+            {text(job || undefined, "doc_ref") && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="font-semibold text-muted-foreground">Ref:</span>
+                <strong className="text-foreground">{text(job || undefined, "doc_ref")}</strong>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">{cfg.summary}:</span>
+            <strong className="font-bold text-primary">{stats}</strong>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">{cfg.summary}:</span>
-          <strong className="font-bold text-primary">{stats}</strong>
-        </div>
-      </div>
+      )}
 
       {!embeddedInWorkspace && <div className="freight-form-header">
         <div className="flex flex-wrap items-center justify-between gap-2 w-full">
@@ -275,8 +307,9 @@ export function FreightJobFollowupTab({
 
 const columnStyles: Record<string, { width: string; align?: "center" | "right" | "left"; isFlexible?: boolean }> = {
   "#": { width: "42px", align: "center" },
-  doc_nr: { width: "55px", align: "center" },
-  sr_no: { width: "55px", align: "center" },
+  doc_nr: { width: "90px", align: "center" },
+  doc_desc: { width: "240px", align: "left" },
+  sr_no: { width: "80px", align: "center" },
   op_code: { width: "130px", align: "left" },
   op_desc: { width: "230px", align: "left" },
   op_assigned: { width: "160px", align: "left" },
@@ -634,6 +667,16 @@ function Cell({ row, column, onChange, onInstructionChange, instructionLookup, r
   if (column === "op_yesno") {
     const yesNo = normalizeYesNo(value);
     return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={yesNo} disabled={readOnly} onChange={(event) => onChange(event.target.value)}><option value=""> </option><option value="Y">Yes</option><option value="N">No</option></select>;
+  }
+  if (normalizedColumn === "doc_nr" || normalizedColumn === "sr_no") {
+    return (
+      <Input
+        className="h-7 text-xs text-center font-mono font-medium px-1 bg-white"
+        value={value}
+        disabled={readOnly}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
   }
   return <Input className="h-7 text-xs" value={value} disabled={readOnly} onChange={(event) => onChange(event.target.value)} />;
 }
