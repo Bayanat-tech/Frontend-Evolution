@@ -17,6 +17,7 @@ import { LPO_CONFIG, PIN_CONFIG } from "./Purchaseordertypes";
 import { PurchaseInvoiceEditor } from "./PurchaseInvoiceEditor";
 import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -265,6 +266,14 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+    const openEditor = (row: PurchaseOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -277,11 +286,15 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
     { accessorKey: "amount", header: "Purchase Order Amount" },
-    {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
+     {
+          accessorKey: "cancelled",
+          header: () => <div className="text-center font-bold">Status</div>,
+          cell: ({ getValue }) => (
+            <div className="flex justify-center">
+              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+            </div>
+          ),
+        },
     {
       id: "reason",
       header: "Reason",
@@ -302,7 +315,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
           <Button
             size="icon"
             variant="ghost"
-            onClick={() => setEditor({ mode: "edit", row: row.original })}
+                 onClick={() => openEditor(row.original)}
             title={isViewOnlyTab ? "View" : "Edit"}
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
@@ -316,7 +329,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
         </div>
       ),
     },
-  ], [isViewOnlyTab]);
+  ], [isViewOnlyTab,tab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);

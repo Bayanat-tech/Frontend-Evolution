@@ -62,7 +62,9 @@ export function PamsBulkAppraisalPage() {
   ];
 
   const isKpiType = selectedType === "KPI";
-  const colCount = isKpiType ? 5 : 4;
+  // ✅ NEW: Weightage is shown/required for KPI and GOAL
+  const showWeightage = selectedType === "KPI" || selectedType === "GOAL";
+  const colCount = showWeightage ? 5 : 4;
 
   const typeLabel =
     selectedType === "SKILL" ? "Skill"
@@ -70,7 +72,8 @@ export function PamsBulkAppraisalPage() {
         : selectedType === "CHARACTERISTICS" ? "Characteristic"
           : "KPI";
 
-  const canEditRow = selectedType === "KPI" || selectedType === "CHARACTERISTICS";
+  // ✅ NEW: All item types now support Edit
+  const canEditRow = true;
 
   useEffect(() => {
     if (!selectedPeriod) {
@@ -126,7 +129,6 @@ export function PamsBulkAppraisalPage() {
 
     setLoading(true);
     try {
-      // 1. Populate / clone from prev period if employee has zero rows
       await pamsSelect({
         parameter: "populate_dept_kpi",
         loginid,
@@ -136,7 +138,6 @@ export function PamsBulkAppraisalPage() {
         code4: selectedPeriod,
       });
 
-      // 2. Sync newly added master KPIs for this employee's designation
       await pamsSelect({
         parameter: "populate_new_dept_kpi",
         loginid,
@@ -146,7 +147,6 @@ export function PamsBulkAppraisalPage() {
         code4: selectedPeriod,
       });
 
-      // 3. Load final rows
       const data = await pamsSelect({
         parameter: "kpi_assignment_page",
         loginid,
@@ -218,7 +218,7 @@ export function PamsBulkAppraisalPage() {
     if (!selectedPeriod) { toast.warning("Select a period first"); return; }
     if (!selectedEmployee) { toast.warning("Select an employee first"); return; }
 
-    if (isKpiType && totalWeightage !== 100) {
+    if (showWeightage && totalWeightage !== 100) {
       toast.error(
         `Total weightage is ${totalWeightage}%. It must be exactly 100% to process.`
       );
@@ -280,7 +280,7 @@ export function PamsBulkAppraisalPage() {
       return;
     }
 
-    if (isKpiType && totalWeightage !== 100) {
+    if (showWeightage && totalWeightage !== 100) {
       toast.error(
         `Total weightage is ${totalWeightage}%. It must be exactly 100% to process all.`
       );
@@ -321,9 +321,6 @@ export function PamsBulkAppraisalPage() {
     const failed: string[] = [];
 
     try {
-      // ══════════════════════════════════════════════════════════
-      // STEP 0: Source ke paas data hai ya nahi — verify karo
-      // ══════════════════════════════════════════════════════════
       const sourceRows = await pamsSelect({
         parameter: "kpi_assignment_page",
         loginid,
@@ -341,10 +338,6 @@ export function PamsBulkAppraisalPage() {
         return;
       }
 
-      // ══════════════════════════════════════════════════════════
-      // STEP 1: PEHLE SAARE TARGETS KO COPY KARO
-      //         (Ye critical hai — docs create karne se PEHLE)
-      // ══════════════════════════════════════════════════════════
       const copiedTargets: string[] = [];
 
       for (const target of processAllTargets) {
@@ -356,8 +349,8 @@ export function PamsBulkAppraisalPage() {
             parameter: "copy_kpi_to_employee",
             loginid,
             code1: companyCode,
-            code2: selectedEmployee,  // Source
-            code3: targetEmp,          // Target
+            code2: selectedEmployee,
+            code3: targetEmp,
             code4: selectedPeriod,
           });
 
@@ -369,7 +362,6 @@ export function PamsBulkAppraisalPage() {
             throw new Error(copyMsg.replace(/^ERROR:\s*/i, ""));
           }
 
-    
           const verify = await pamsSelect({
             parameter: "kpi_assignment_page",
             loginid,
@@ -390,11 +382,6 @@ export function PamsBulkAppraisalPage() {
         }
       }
 
-      // ══════════════════════════════════════════════════════════
-      // STEP 2: AB DOCS CREATE KARO — Source + Copied Targets
-      // ══════════════════════════════════════════════════════════
-
-      // 2a. Source ka doc
       try {
         await pamsCommonProcedure({
           parameter: "PROC_CREATE_APPRAISAL_DOC_BULK",
@@ -409,7 +396,6 @@ export function PamsBulkAppraisalPage() {
         failed.push(`Source (${selectedEmployee}): ${msg}`);
       }
 
-      // 2b. Copied targets ke docs
       for (const targetEmp of copiedTargets) {
         try {
           await pamsCommonProcedure({
@@ -429,9 +415,6 @@ export function PamsBulkAppraisalPage() {
         }
       }
 
-      // ══════════════════════════════════════════════════════════
-      // Refresh processed list
-      // ══════════════════════════════════════════════════════════
       try {
         const hdrData = await pamsSelect({
           parameter: "appraisal_hdr_employees",
@@ -445,7 +428,6 @@ export function PamsBulkAppraisalPage() {
         setProcessedEmployees(codes);
       } catch { /* silent */ }
 
-      // Result toast
       if (failed.length === 0) {
         toast.success(
           `Successfully processed ${okCount} employee(s) for period ${selectedPeriod}.`
@@ -458,7 +440,6 @@ export function PamsBulkAppraisalPage() {
         );
       }
 
-      // Reset
       setSelectedEmployee("");
       setSelectedEmployeeLabel("");
       setRows([]);
@@ -763,7 +744,7 @@ export function PamsBulkAppraisalPage() {
                   <th className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wider font-semibold text-slate-500">
                     {isKpiType ? "KPI Group · Activity" : typeLabel}
                   </th>
-                  {isKpiType && (
+                  {showWeightage && (
                     <th className="w-32 px-3 py-2.5 text-right text-[10px] uppercase tracking-wider font-semibold text-slate-500">
                       Weightage %
                     </th>
@@ -863,7 +844,7 @@ export function PamsBulkAppraisalPage() {
                           )}
                         </td>
 
-                        {isKpiType && (
+                        {showWeightage && (
                           <td className="px-3 py-3 text-right">
                             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
                               {formatValue(row.WEIGHTAGE || row.STANDARD_WEIGHTAGE) || "—"}
@@ -899,7 +880,7 @@ export function PamsBulkAppraisalPage() {
                 )}
               </tbody>
 
-              {isKpiType && (
+              {showWeightage && (
                 <tfoot className="sticky bottom-0 bg-slate-50 dark:bg-slate-900">
                   <tr className="border-t border-slate-200 dark:border-slate-800">
                     <td
@@ -1164,9 +1145,10 @@ function KpiEditorModal({
   const isEdit = !!existingRow;
 
   const isTask = itemType === "KPI";
-  const needsWeightage = isTask;
+  const isGoal = itemType === "GOAL";
+  const needsWeightage = isTask || isGoal;
   const needsActivities = isTask;
-  const isMulti = !isEdit && !isTask;
+  const isMulti = !isEdit && !needsWeightage;
 
   const label =
     itemType === "SKILL" ? "Skill"
@@ -1322,23 +1304,6 @@ function KpiEditorModal({
       : [];
 
     if (needsActivities) {
-      if (finalActivities.length < 3) {
-        toast.warning("Minimum 3 KPI items (activities) are required per designation/role.");
-        return;
-      }
-      if (finalActivities.length > 6) {
-        toast.warning("Maximum 6 KPI items (activities) are allowed per designation/role.");
-        return;
-      }
-
-      const invalidItem = finalActivities.find((a) => a.length < 5);
-      if (invalidItem) {
-        toast.warning(
-          `KPI item "${invalidItem}" is too short. Please make it measurable and descriptive (min 5 characters).`
-        );
-        return;
-      }
-
       const seen = new Set<string>();
       const duplicates: string[] = [];
       for (const act of finalActivities) {
@@ -1498,7 +1463,6 @@ function KpiEditorModal({
             <Input
               value={kpiDesc}
               onChange={(e) => setKpiDesc(e.target.value)}
-              disabled={isEdit && (itemType === "SKILL" || itemType === "GOAL")}
               placeholder={
                 isTask
                   ? "Enter KPI group name (e.g. General Accountabilities)"
@@ -1534,24 +1498,19 @@ function KpiEditorModal({
           <Field label="Activities" required>
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <span className={`text-xs ${activities.length < 3 || activities.length > 6 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                <span className="text-xs text-muted-foreground">
                   {activities.length === 0
                     ? "Add activities below"
-                    : ``}
+                    : `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={addActivityRow}
-                  disabled={activities.length >= 6}
-                >
+                <Button type="button" size="sm" onClick={addActivityRow}>
                   <Plus size={13} /> Add Activity
                 </Button>
               </div>
 
               {activities.length === 0 ? (
                 <p className="rounded border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                  Click "Add Activity" to add one. Minimum 3, Maximum 6 required.
+                  Click "Add Activity" to add one.
                 </p>
               ) : (
                 <div className="grid gap-1.5">

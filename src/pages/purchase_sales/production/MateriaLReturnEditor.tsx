@@ -226,6 +226,7 @@ export function MateriaLReturnEditor({
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
+           job_card_no:text(headerRaw.job_card_no  || current.job_card_no),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"

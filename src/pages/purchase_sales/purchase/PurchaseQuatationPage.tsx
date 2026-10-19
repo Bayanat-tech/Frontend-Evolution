@@ -17,6 +17,7 @@ import { PQO_CONFIG } from "./Purchaseordertypes";
 import { PurchaseQuotationPrintDialog } from "./PurchaseQuotationPrintDialog";
 import { Dialog } from "../../../components/mms_ui";
 import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -244,6 +245,16 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+  // Open the editor and make sure a cancelled document carries canceled = "Y"
+  // (list flag, Canceled tab, or last_action) so the editor can show the watermark.
+  const openEditor = (row: PurchaseOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -255,11 +266,20 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
+    // {
+    //   accessorKey: "canceled",
+    //   header: "Status",
+    //   cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
+    // },
+     {
+          accessorKey: "cancelled",
+          header: () => <div className="text-center font-bold">Status</div>,
+          cell: ({ getValue }) => (
+            <div className="flex justify-center">
+              <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+            </div>
+          ),
+        },
     {
       id: "reason",
       header: "Reason",
@@ -280,7 +300,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           <Button
             size="icon"
             variant="ghost"
-            onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+            onClick={() => openEditor(row.original)}
             title={isViewOnlyTab ? "View" : "Edit"}
           >
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
@@ -294,7 +314,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       ),
     },
-  ], [isViewOnlyTab]);
+  ], [isViewOnlyTab, tab]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -330,25 +350,25 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
             if (approvalLevel === 0) {
               return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
             }
-      <TabStrip
-        value={tab}
-        onChange={(value) => setTab(value as RequestTab)}
-        tabs={
-          approvalLevel === 0
-            ? [
-              { label: "Pending", value: "PENDING", icon: "pending" },
-              { label: "Closed", value: "CLOSED", icon: "closed" },
-              { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-            ]
-            : [
-              { label: "Pending", value: "PENDING", icon: "pending" },
-              { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-              { label: "Closed", value: "CLOSED", icon: "closed" },
-              ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-              { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-            ]
-        }
-      />
+            <TabStrip
+              value={tab}
+              onChange={(value) => setTab(value as RequestTab)}
+              tabs={
+                approvalLevel === 0
+                  ? [
+                    { label: "Pending", value: "PENDING", icon: "pending" },
+                    { label: "Closed", value: "CLOSED", icon: "closed" },
+                    { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+                  ]
+                  : [
+                    { label: "Pending", value: "PENDING", icon: "pending" },
+                    { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+                    { label: "Closed", value: "CLOSED", icon: "closed" },
+                    ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+                    { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+                  ]
+              }
+            />
 
             if (item.value === "CANCELED" && !canViewCanceledTab) {
               return false;
@@ -368,16 +388,16 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
                   setPageIndex(0);
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
-                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
-                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
                   }`}
               >
                 <span>{item.label}</span>
 
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
-                      ? "bg-white/20 text-white"
-                      : "bg-muted text-muted-foreground"
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
                     }`}
                 >
                   {getTabCount(item.value)}
@@ -452,7 +472,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         </div>
       )}
 
-    <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
+      {/* <Dialog open={divisionPicker} onClose={() => setDivisionPicker(false)}>
   <div className="grid max-h-[420px] gap-2 overflow-auto">
     {divisions.map((division) => (
       <button
@@ -469,7 +489,14 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   <div className="mt-4 flex justify-end">
     <Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>
   </div>
-</Dialog>
+</Dialog> */}
+      <DivisionPickerDialog
+        open={divisionPicker}
+        divisions={divisions}
+        description="Choose the division before opening the Purchase Grn form."
+        onSelect={(division) => openCreateForDivision(division)}
+        onClose={() => setDivisionPicker(false)}
+      />
       {printTarget && (
         <PurchaseQuotationPrintDialog
           open={!!printTarget}

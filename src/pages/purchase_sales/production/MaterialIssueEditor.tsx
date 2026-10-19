@@ -48,6 +48,7 @@ import { createPortal } from "react-dom";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { MaterialHeaderForm } from "./MaterialHeader";
+import { MaterialDetailsTable } from "./MaterialDetailsTable";
 
 
 export type { PurchaseOrderEditorState };
@@ -198,6 +199,7 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          job_card_no:text(headerRaw.job_card_no  || current.job_card_no),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
@@ -743,7 +745,7 @@ if (rect) {
                   </div>
                 )}
 
-                <PurchaseOrderLinesTable
+                <MaterialDetailsTable
                   rows={rows}
                   form={form}
                   setdetails={setRows}

@@ -128,7 +128,7 @@ export function SalesInvoiceEditor({
   // ]);
 
 
-    useEffect(() => {
+  useEffect(() => {
     const taxPerc =
       form.tx_compnt_1_expmt === "S" ? 5 : 0;
 
@@ -243,7 +243,7 @@ export function SalesInvoiceEditor({
           fetchSalesOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
           fetchSalesOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
-         let acRow: Record<string, unknown> | undefined;
+        let acRow: Record<string, unknown> | undefined;
         const savedAcCode = text(headerRaw.ac_code);
         if (savedAcCode) {
           try {
@@ -274,10 +274,10 @@ export function SalesInvoiceEditor({
           ac_name: text(headerRaw.ac_name || current.ac_name),
           party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-         
+
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),
-           address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
+          address1: text(headerRaw.address1 || acRow?.address1 || current.address1),
           address2: text(headerRaw.address2 || acRow?.address2 || current.address2),
           address3: text(headerRaw.address3 || acRow?.address3 || current.address3),
           e_mail: text(headerRaw.e_mail || acRow?.e_mail || current.e_mail),
@@ -405,9 +405,9 @@ export function SalesInvoiceEditor({
 
 
   const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-      const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
-    const finalTotal = grandTotal + totalTaxAmount;
+  const finalTotal = grandTotal + totalTaxAmount;
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -457,6 +457,23 @@ export function SalesInvoiceEditor({
     if (!form.curr_code) return setError("Currency is required");
     if (!form.inv_no) return setError("Invoice Number is required");
     if (!form.inv_date) return setError("Invoice Date is required");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
+    }
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
     return runAction(
       "draft",
@@ -497,22 +514,32 @@ export function SalesInvoiceEditor({
       return !(total > 0);
     });
     if (invalidRow) {
-      return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
+      return setError("Please enter a valid quantity and unit price for all line items — total amount must be greater than 0");
     }
-    const rect = submitBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setSubmitConfirmPos({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNo = i + 1;
+
+      if (!text(row.prod_code).trim()) {
+        return setError(`Line ${lineNo}: Product should not be empty`);
+      }
+
+      const netQty = numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom);
+      if (!(netQty > 0)) {
+        return setError(`Line ${lineNo}: Net Quantity should not be 0`);
+      }
+
+      if (!(numberOrZero(row.unit_price) > 0)) {
+        return setError(`Line ${lineNo}: Rate should not be 0`);
+      }
     }
-    setShowSubmitConfirm(true);
-    setShowSubmitConfirm(true);
+
+    return confirmSubmit();
   };
 
+
   const confirmSubmit = () => {
-    setShowSubmitConfirm(false);
-    if (lineAmount(rows[0]) < lineDiscPrice(rows[0])) {
+    if (rows.some((row) => lineAmount(row) < lineDiscPrice(row))) {
       return setError("Line item discount cannot exceed line item amount");
     }
     return runAction("submit", async () => {
@@ -679,7 +706,7 @@ export function SalesInvoiceEditor({
                     Cancelled
                   </Badge>
                 )}
-             
+
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
@@ -733,31 +760,31 @@ export function SalesInvoiceEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab && (
+                  {isPendingTab  && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
                   )}
-                     {form.doc_no ? (
-                  <>
-                    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
-                      <Printer size={15} /> Print
-                    </Button>
-                   <Button
-  type="button"
-  variant="secondary"
-  onClick={() => void handleExcel()}
->
-  <Download size={15} />
-  Excel
-</Button>
+                  {form.doc_no ? (
+                    <>
+                      <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+                        <Printer size={15} /> Print
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleExcel()}
+                      >
+                        <Download size={15} />
+                        Excel
+                      </Button>
 
-                    
-                  </>
-                ) : null}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+
+                    </>
+                  ) : null}
+                  <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
 
                 </div>
                 <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
@@ -779,7 +806,7 @@ export function SalesInvoiceEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Invoice...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

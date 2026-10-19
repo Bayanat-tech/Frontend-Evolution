@@ -20,6 +20,7 @@ import { NewReportDialog } from "../../../components/new_report_format";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { formatDate } from "../../../utils/date";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -98,7 +99,7 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
   const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED";
-  
+
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
@@ -115,57 +116,57 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
 
   // Track which row's excel export is in flight, so only that row's button spins.
   const [exportingRowDocNo, setExportingRowDocNo] = useState<string | null>(null);
-    const [tabCounts, setTabCounts] = useState<Record<string, number>>({
-  PENDING: 0,
-  INPROGRESS: 0,
-  CLOSED: 0,
-  CANCELED: 0,
-  REJECTED: 0,
-  SENDBACK: 0,
-});
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({
+    PENDING: 0,
+    INPROGRESS: 0,
+    CLOSED: 0,
+    CANCELED: 0,
+    REJECTED: 0,
+    SENDBACK: 0,
+  });
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
     setDivisions(divisionData);
   };
 
-   const purchaseOrderTabs = [
-  { value: "PENDING", label: "Pending" },
-  { value: "INPROGRESS", label: "In Progress" },
-  { value: "CLOSED", label: "Closed" },
-  { value: "CANCELED", label: "Canceled" },
-  { value: "REJECTED", label: "Rejected" },
-];
-const getTabCount = (tabValue: string) => {
-  return tabCounts[tabValue] ?? 0;
-};
-const loadRows = async (clearNotice = true) => {
-  setLoading(true);
+  const purchaseOrderTabs = [
+    { value: "PENDING", label: "Pending" },
+    { value: "INPROGRESS", label: "In Progress" },
+    { value: "CLOSED", label: "Closed" },
+    { value: "CANCELED", label: "Canceled" },
+    { value: "REJECTED", label: "Rejected" },
+  ];
+  const getTabCount = (tabValue: string) => {
+    return tabCounts[tabValue] ?? 0;
+  };
+  const loadRows = async (clearNotice = true) => {
+    setLoading(true);
 
-  if (clearNotice) setNotice(null);
+    if (clearNotice) setNotice(null);
 
-  try {
-    const response = await fetchPurchaseOrders();
+    try {
+      const response = await fetchPurchaseOrders();
 
-    setRows(response);
-    setTotalRows(response.length);
+      setRows(response);
+      setTotalRows(response.length);
 
-    setTabCounts((prev) => ({
-      ...prev,
-      [tab]: response.length,
-    }));
-  } catch (error) {
-    setNotice({
-      type: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to load purchase orders",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+      setTabCounts((prev) => ({
+        ...prev,
+        [tab]: response.length,
+      }));
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load purchase orders",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
@@ -179,10 +180,10 @@ const loadRows = async (clearNotice = true) => {
     return response as unknown as PurchaseOrderRow[];
   };
   const loadTabCounts = async () => {
-  const visibleTabs: RequestTab[] =
-    approvalLevel === 0
-      ? ["PENDING", "CLOSED", "CANCELED"]
-      : [
+    const visibleTabs: RequestTab[] =
+      approvalLevel === 0
+        ? ["PENDING", "CLOSED", "CANCELED"]
+        : [
           "PENDING",
           "INPROGRESS",
           "CLOSED",
@@ -190,44 +191,44 @@ const loadRows = async (clearNotice = true) => {
           "REJECTED",
         ];
 
-  const results = await Promise.all(
-    visibleTabs.map(async (tabValue) => {
-      const response = await getDynamicLookup({
-        parameter: "PS_GRN_ENTRY_TAB_List",
-        code1: user?.company_code,
-        code2: user?.loginid || user?.username || "ADMIN",
-        code3: tabValue,
+    const results = await Promise.all(
+      visibleTabs.map(async (tabValue) => {
+        const response = await getDynamicLookup({
+          parameter: "PS_GRN_ENTRY_TAB_List",
+          code1: user?.company_code,
+          code2: user?.loginid || user?.username || "ADMIN",
+          code3: tabValue,
+        });
+
+        return {
+          tab: tabValue,
+          count: response.length,
+        };
+      })
+    );
+
+    setTabCounts((prev) => {
+      const next = { ...prev };
+
+      results.forEach(({ tab, count }) => {
+        next[tab] = count;
       });
 
-      return {
-        tab: tabValue,
-        count: response.length,
-      };
-    })
-  );
-
-  setTabCounts((prev) => {
-    const next = { ...prev };
-
-    results.forEach(({ tab, count }) => {
-      next[tab] = count;
+      return next;
     });
+  };
 
-    return next;
-  });
-};
+  useEffect(() => {
+    if (!user?.company_code || approvalLevel === undefined) return;
 
-useEffect(() => {
-  if (!user?.company_code || approvalLevel === undefined) return;
-
-  void loadTabCounts();
-}, [
-  user?.company_code,
-  user?.loginid,
-  user?.username,
-  approvalLevel,
-  canViewCanceledTab,
-]);
+    void loadTabCounts();
+  }, [
+    user?.company_code,
+    user?.loginid,
+    user?.username,
+    approvalLevel,
+    canViewCanceledTab,
+  ]);
   useEffect(() => {
     if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
       setTab("PENDING");
@@ -287,36 +288,43 @@ useEffect(() => {
   };
 
   // ── Row-level print handler → opens NewReportDialog ───────────────────────
- const handlePrintRow = async (row: PurchaseOrderRow) => {
-  if (!row.doc_no) return;
+  const handlePrintRow = async (row: PurchaseOrderRow) => {
+    if (!row.doc_no) return;
 
-  const params = {
-    parameter: "GRN_Print",
-    loginid: user?.loginid || user?.username || "ADMIN",
-    company_code: user?.company_code,
-    doc_type: PO_DOC_TYPE.GRN,
-    doc_no: row.doc_no,
-  } as any;
+    const params = {
+      parameter: "GRN_Print",
+      loginid: user?.loginid || user?.username || "ADMIN",
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.GRN,
+      doc_no: row.doc_no,
+    } as any;
 
-  const preview = openPurchaseReport(`Purchase GRN ${row.doc_no}`.trim());
+    const preview = openPurchaseReport(`Purchase GRN ${row.doc_no}`.trim());
 
-  try {
-    const url = await getGrnPrintReportPreviewUrl(params);
-    const html = await fetchHtmlFromPreviewUrl(url);
-    preview.ready({
-      html,
-      filename: `purchase_grn_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await exportGrnPrintReportExcel(params);
-      },
-    });
-  } catch (printError) {
-    preview.fail(printError instanceof Error ? printError : new Error("Error while generating report"));
-  }
-};
+    try {
+      const url = await getGrnPrintReportPreviewUrl(params);
+      const html = await fetchHtmlFromPreviewUrl(url);
+      preview.ready({
+        html,
+        filename: `purchase_grn_${row.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await exportGrnPrintReportExcel(params);
+        },
+      });
+    } catch (printError) {
+      preview.fail(printError instanceof Error ? printError : new Error("Error while generating report"));
+    }
+  };
 
- 
+  const openEditor = (row: PurchaseOrderRow) => {
+    const cancelledRow =
+      String(row.canceled || "N").toUpperCase() === "Y" ||
+      tab === "CANCELED" ||
+      String(row.last_action || "").toUpperCase() === "CANCELED";
+    setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+  };
+
 
   const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
@@ -328,11 +336,14 @@ useEffect(() => {
     { accessorKey: "div_code", header: "Div" },
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
-    { accessorKey: "curr_code", header: "Currency" },
     {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
+      accessorKey: "cancelled",
+      header: () => <div className="text-center font-bold">Status</div>,
+      cell: ({ getValue }) => (
+        <div className="flex justify-center">
+          <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+        </div>
+      ),
     },
     {
       id: "reason",
@@ -352,13 +363,13 @@ useEffect(() => {
           </Button> */}
 
           <Button
-  size="icon"
-  variant="ghost"
-  onClick={() => setEditor({ mode: "edit", row: row.original as any })}
-  title={isViewOnlyTab ? "View" : "Edit"}
->
-  {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
-</Button>
+            size="icon"
+            variant="ghost"
+            onClick={() => openEditor(row.original)}
+            title={isViewOnlyTab ? "View" : "Edit"}
+          >
+            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+          </Button>
           <Button size="icon" variant="ghost" onClick={() => void handlePrintRow(row.original)} title="Print / PDF">
             <Printer size={15} />
           </Button>
@@ -374,7 +385,7 @@ useEffect(() => {
         </div>
       ),
     },
-  ],  [isViewOnlyTab, exportingRowDocNo]);
+  ], [isViewOnlyTab, exportingRowDocNo]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -399,9 +410,9 @@ useEffect(() => {
           )}
         </div>
       </div> */}
-            <div className="finance-list-title">
-          <h6 className="m-0 text-xl font-semibold tracking-tight">Purchase GRN</h6>
-        </div>
+      <div className="finance-list-title">
+        <h6 className="m-0 text-xl font-semibold tracking-tight">Goods Receipt Note</h6>
+      </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
@@ -426,56 +437,54 @@ useEffect(() => {
       /> */}
 
       <div className="flex flex-wrap items-center gap-1.5 pb-1">
-  {purchaseOrderTabs
-    .filter((item) => {
-      if (approvalLevel === 0) {
-        return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
-      }
+        {purchaseOrderTabs
+          .filter((item) => {
+            if (approvalLevel === 0) {
+              return ["PENDING", "CLOSED", "CANCELED"].includes(item.value);
+            }
 
-      if (item.value === "CANCELED" && !canViewCanceledTab) {
-        return false;
-      }
+            if (item.value === "CANCELED" && !canViewCanceledTab) {
+              return false;
+            }
 
-      return true;
-    })
-    .map((item) => {
-      const active = tab === item.value;
+            return true;
+          })
+          .map((item) => {
+            const active = tab === item.value;
 
-      return (
-        <button
-          key={item.value}
-          type="button"
-          onClick={() => {
-            setTab(item.value as RequestTab);
-            setPageIndex(0);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-            active
-              ? "bg-[#00378C] text-white shadow-sm font-semibold"
-              : "border border-border bg-card text-foreground hover:bg-secondary"
-          }`}
-        >
-          <span>{item.label}</span>
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setTab(item.value as RequestTab);
+                  setPageIndex(0);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${active
+                  ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                  : "border border-border bg-card text-foreground hover:bg-secondary"
+                  }`}
+              >
+                <span>{item.label}</span>
 
-          <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-              active
-                ? "bg-white/20 text-white"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {getTabCount(item.value)}
-          </span>
-        </button>
-      );
-    })}
-</div>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active
+                    ? "bg-white/20 text-white"
+                    : "bg-muted text-muted-foreground"
+                    }`}
+                >
+                  {getTabCount(item.value)}
+                </span>
+              </button>
+            );
+          })}
+      </div>
 
       <div className="min-h-[650px]">
         <DataTable
           columns={columns}
           data={rows}
-               toolbar={
+          toolbar={
             tab === "PENDING" && (
               <button
                 title="Add Purchase GRN"

@@ -23,6 +23,9 @@ import {
   ReceiptText,
   ChartNoAxesCombined,
   SlidersHorizontal,
+  FileWarning,
+  Shield,
+  AlertTriangle,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -38,6 +41,7 @@ import { getDynamicLookup, getLookupText, getMasterLookup } from "../../api/look
 import { Badge } from "../../components/ui/Badge";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
+import { isValidEmail, isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
@@ -245,6 +249,7 @@ export function AccountTreePage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "UNAPPROVED" | "ACTIVE" | "INACTIVE">("ALL");
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<AccountTreeNode | null>(null);
@@ -280,8 +285,19 @@ export function AccountTreePage() {
   }, []);
 
   const allNodes = useMemo(() => flattenTree(tree), [tree]);
+  const l5Nodes = useMemo(() => allNodes.filter((node) => node.level === 5), [allNodes]);
+  const unapprovedCount = useMemo(
+    () => l5Nodes.filter((node) => String(node.ac_active || "").toUpperCase() !== "Y" && node.ac_status !== "C").length,
+    [l5Nodes],
+  );
+  const activeCount = useMemo(
+    () => l5Nodes.filter((node) => String(node.ac_active || "").toUpperCase() === "Y" && node.ac_status !== "C").length,
+    [l5Nodes],
+  );
+  const inactiveCount = useMemo(() => l5Nodes.filter((node) => node.ac_status === "C").length, [l5Nodes]);
+
   const selectedNode = allNodes.find((node) => node.id === selectedId) || allNodes[0];
-  const filteredTree = useMemo(() => filterTree(tree, query), [tree, query]);
+  const filteredTree = useMemo(() => filterTree(tree, query, statusFilter), [tree, query, statusFilter]);
   const selectedPath = useMemo(
     () => (selectedNode ? findNodePath(tree, selectedNode.id) : []),
     [tree, selectedNode?.id],
@@ -352,21 +368,86 @@ export function AccountTreePage() {
             <Badge variant="secondary">{loading ? "Loading" : `${allNodes.length} Nodes`}</Badge>
           </CardHeader>
 
-          <label className="tree-search mx-3 my-3 flex h-10 items-center gap-2 rounded-md border bg-background px-3 text-muted-foreground">
-            <Search size={15} />
-            <Input
-              className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search account code or name"
-            />
-          </label>
+          <div className="p-3 border-b space-y-2.5">
+            <label className="tree-search flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-muted-foreground">
+              <Search size={15} />
+              <Input
+                className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search account code or name"
+              />
+            </label>
 
-          <div className="tree-scroll min-h-0 flex-1 overflow-auto px-2 pb-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ALL")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full border transition-colors font-medium text-[11px]",
+                  statusFilter === "ALL"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground hover:bg-muted border-border",
+                )}
+              >
+                All ({allNodes.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("UNAPPROVED")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full border transition-colors font-medium text-[11px] flex items-center gap-1",
+                  statusFilter === "UNAPPROVED"
+                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                    : unapprovedCount > 0
+                    ? "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200"
+                    : "bg-background text-muted-foreground hover:bg-muted border-border",
+                )}
+              >
+                <span>Unapproved</span>
+                {unapprovedCount > 0 && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0 text-[10px] font-bold",
+                      statusFilter === "UNAPPROVED" ? "bg-white/20 text-white" : "bg-amber-200 text-amber-900",
+                    )}
+                  >
+                    {unapprovedCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ACTIVE")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full border transition-colors font-medium text-[11px]",
+                  statusFilter === "ACTIVE"
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                    : "bg-background text-muted-foreground hover:bg-muted border-border",
+                )}
+              >
+                Active ({activeCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("INACTIVE")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full border transition-colors font-medium text-[11px]",
+                  statusFilter === "INACTIVE"
+                    ? "bg-slate-700 text-white border-slate-700 shadow-sm"
+                    : "bg-background text-muted-foreground hover:bg-muted border-border",
+                )}
+              >
+                Inactive ({inactiveCount})
+              </button>
+            </div>
+          </div>
+
+          <div className="tree-scroll min-h-0 flex-1 overflow-auto px-2 pb-3 pt-2">
             {loading ? (
               <TreeSkeleton />
             ) : filteredTree.length === 0 ? (
-              <div className="tree-empty">{query ? "No accounts found" : "No accounts returned from backend"}</div>
+              <div className="tree-empty">{query || statusFilter !== "ALL" ? "No accounts matching criteria" : "No accounts returned from backend"}</div>
             ) : (
               filteredTree.map((node) => (
                 <TreeNodeView
@@ -376,7 +457,7 @@ export function AccountTreePage() {
                   expanded={expanded}
                   setExpanded={setExpanded}
                   onSelect={handleNodeSelect}
-                  forceExpanded={Boolean(query.trim())}
+                  forceExpanded={Boolean(query.trim()) || statusFilter !== "ALL"}
                 />
               ))
             )}
@@ -391,15 +472,34 @@ export function AccountTreePage() {
              }}/>
           ) : selectedNode ? (
             <>
-              <CardHeader className="detail-head flex-row items-center gap-4 space-y-0 border-b">
-                <div className={`level-icon level-${selectedNode.level}`}>
-                  {selectedNode.children.length > 0 ? <FolderOpen size={22} /> : <FileText size={22} />}
+              <CardHeader className="detail-head flex-row items-center justify-between gap-4 space-y-0 border-b">
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className={`level-icon level-${selectedNode.level}`}>
+                    {selectedNode.children.length > 0 ? <FolderOpen size={22} /> : <FileText size={22} />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="eyebrow">Level {selectedNode.level}</p>
+                    <h2 className="m-0 truncate text-xl font-semibold tracking-tight">{selectedNode.label}</h2>
+                    <span className="font-mono text-xs text-muted-foreground">{selectedNode.id}</span>
+                  </div>
                 </div>
-                <div>
-                  <p className="eyebrow">Level {selectedNode.level}</p>
-                  <h2 className="m-0 text-xl font-semibold tracking-tight">{selectedNode.label}</h2>
-                  <span className="font-mono text-xs text-muted-foreground">{selectedNode.id}</span>
-                </div>
+                {selectedNode.level === 5 && (
+                  <div className="shrink-0">
+                    {selectedNode.ac_status === "C" ? (
+                      <Badge variant="outline" className="text-xs text-slate-500 bg-slate-100 border-slate-300">
+                        Inactive
+                      </Badge>
+                    ) : String(selectedNode.ac_active || "").toUpperCase() !== "Y" ? (
+                      <Badge variant="outline" className="text-xs font-semibold text-amber-800 bg-amber-100 border-amber-400">
+                        Pending Approval
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-emerald-700 bg-emerald-50 border-emerald-300">
+                        Active & Approved
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </CardHeader>
 
               <div className="account-path" aria-label="Selected account path">
@@ -412,22 +512,74 @@ export function AccountTreePage() {
                 ))}
               </div>
 
+              {selectedNode.level === 5 && String(selectedNode.ac_active || "").toUpperCase() !== "Y" && selectedNode.ac_status !== "C" && (
+                <div className="mx-6 mt-4 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/90 p-3.5 text-sm text-amber-900 shadow-sm dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div>
+                      <div className="font-semibold text-xs tracking-wide uppercase text-amber-800 dark:text-amber-300">
+                        Unapproved Account
+                      </div>
+                      <div className="text-xs text-amber-700/90 dark:text-amber-400">
+                        This account is pending approval and cannot be used in Document Setup or transaction screens until approved.
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 border-amber-300 bg-white hover:bg-amber-100 text-amber-900 text-xs font-medium shadow-none h-8"
+                    onClick={() => {
+                      setDetailsNode(selectedNode);
+                      setDetailsOpen(true);
+                    }}
+                  >
+                    <Shield className="mr-1 h-3.5 w-3.5 text-amber-600" />
+                    Review & Approve
+                  </Button>
+                </div>
+              )}
+
               <CardContent>
                 <div className="detail-grid grid grid-cols-2 gap-3 max-md:grid-cols-1">
                   <InfoTile label="Account Code" value={selectedNode.id} />
                   <InfoTile label="Description" value={selectedNode.label} />
                   <InfoTile label="Parent Code" value={selectedNode.parent_code || "Root"} />
                   <InfoTile label="Children" value={String(selectedNode.children.length)} />
+                  {selectedNode.level === 5 && (
+                    <>
+                      <InfoTile
+                        label="Approval Status"
+                        value={
+                          String(selectedNode.ac_active || "").toUpperCase() === "Y"
+                            ? selectedNode.approved_by
+                              ? `Approved (${selectedNode.approved_by})`
+                              : "Approved"
+                            : "Pending Approval (Unapproved)"
+                        }
+                      />
+                      <InfoTile
+                        label="Account Status"
+                        value={selectedNode.ac_status === "C" ? "Inactive / Closed" : "Active"}
+                      />
+                    </>
+                  )}
                 </div>
               </CardContent>
 
               <div className="detail-actions flex flex-wrap items-center justify-end gap-2 px-4 pb-4">
-                {/* Detail */}
-                 {/* {selectedNode.level === 5 && (
-                    <Button variant="outline" onClick={() => setDetailsOpen(true)}>
-                      <Info size={15} /> Details
-                    </Button>
-                 )} */}
+                {selectedNode.level === 5 && (
+                  <Button
+                    variant={String(selectedNode.ac_active || "").toUpperCase() !== "Y" ? "default" : "outline"}
+                    className={String(selectedNode.ac_active || "").toUpperCase() !== "Y" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
+                    onClick={() => {
+                      setDetailsNode(selectedNode);
+                      setDetailsOpen(true);
+                    }}
+                  >
+                    <Shield size={15} /> Approval & Details
+                  </Button>
+                )}
 
                 {selectedNode.level === 5 && (
                   <Button variant="outline" onClick={() => setAttachmentOpen(true)}>
@@ -469,12 +621,16 @@ export function AccountTreePage() {
         flowLevel={selectedNode?.level || 0}
       />
       {detailsOpen && detailsNode && (
-  <AccountDetails
-    acCode={detailsNode.id}
-    acName={detailsNode.label}
-    onClose={() => { setDetailsOpen(false); setDetailsNode(null); }}
-  />
-    )}
+        <AccountDetails
+          acCode={detailsNode.id}
+          acName={detailsNode.label}
+          onClose={() => {
+            setDetailsOpen(false);
+            setDetailsNode(null);
+            void loadTree(false);
+          }}
+        />
+      )}
 
 
       {deleteTarget && (
@@ -521,15 +677,20 @@ function TreeNodeView({
   const hasChildren = node.children.length > 0;
   const isExpanded = forceExpanded || (expanded[node.id] ?? node.level <= 2);
   const selected = selectedId === node.id;
+  const isLevel5 = node.level === 5;
+  const isInactive = isLevel5 && node.ac_status === "C";
+  const isApproved = isLevel5 && String(node.ac_active || "").toUpperCase() === "Y";
+  const isUnapproved = isLevel5 && !isApproved && !isInactive;
 
   return (
     <div className="tree-node" data-depth={depth} data-selected={selected ? "true" : undefined}>
       <div
         className={cn(
-          "tree-row flex min-h-8 items-center gap-1 rounded-md pr-2 text-sm hover:bg-accent",
-          selected && "selected bg-primary/10 text-primary",
+          "tree-row flex min-h-8 items-center gap-1 rounded-md pr-2 text-sm hover:bg-accent transition-colors",
+          selected && "selected bg-primary/10 text-primary font-medium",
+          isUnapproved && !selected && "bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500",
         )}
-        style={{ paddingLeft: 8 }}
+        style={{ paddingLeft: isUnapproved && !selected ? 6 : 8 }}
       >
         <button
           className="tree-caret grid h-7 w-6 place-items-center rounded border-0 bg-transparent text-muted-foreground disabled:cursor-default"
@@ -543,12 +704,29 @@ function TreeNodeView({
         <button
           className="tree-label flex h-8 min-w-0 flex-1 items-center gap-2 border-0 bg-transparent text-left text-foreground"
           onClick={() => onSelect(node)}
-          title={`${node.label} (${node.id})`}
+          title={`${node.label} (${node.id})${isUnapproved ? " - Pending Approval (Unapproved)" : isInactive ? " - Inactive" : ""}`}
           aria-current={selected ? "true" : undefined}
         >
           <AccountTreeIcon node={node} />
           <span className={`tree-level-badge level-${node.level}`}>L{node.level}</span>
-          <span className="min-w-0 flex-1 truncate">{node.label}</span>
+          <span className={cn("min-w-0 flex-1 truncate", isUnapproved && "text-amber-950 dark:text-amber-200 font-semibold")}>
+            {node.label}
+          </span>
+          {isLevel5 && (
+            isInactive ? (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal text-slate-500 bg-slate-100 border-slate-300 dark:bg-slate-800 dark:text-slate-400">
+                Inactive
+              </Badge>
+            ) : isUnapproved ? (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-semibold text-amber-800 bg-amber-100 border-amber-400 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-700">
+                Unapproved
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal text-emerald-700 bg-emerald-50 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700">
+                Active
+              </Badge>
+            )
+          )}
           {node.level >= 3 && <code className="ml-auto rounded border bg-card px-1.5 py-0.5 text-[11px] text-primary">{node.id}</code>}
         </button>
       </div>
@@ -691,8 +869,28 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails, onDirtyChange 
     }
 
     if (level === 5) {
+      if (!accountForm.ac_name.trim()) {
+        setError("Account Name is required.");
+        return;
+      }
       if (accountForm.ac_name.trim().length > 100) {
         setError("Account Name cannot exceed 100 characters.");
+        return;
+      }
+      if (!isValidEmail(accountForm.e_mail)) {
+        setError("Please enter a valid email address (e.g. name@example.com).");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.phone)) {
+        setError("Phone must contain numbers only.");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.mobile_no)) {
+        setError("Mobile No must contain numbers only.");
+        return;
+      }
+      if (!isValidPhoneNumber(accountForm.fax)) {
+        setError("Fax must contain numbers only.");
         return;
       }
       for (const section of ACCOUNT_FORM_SECTIONS) {
@@ -1007,16 +1205,33 @@ function AccountLevelFiveForm({
                         value={value[field.name]}
                         onChange={(nextValue) => setField(field.name, nextValue)}
                       />
-                    ) : (
-                      <Input
-                        type={field.type || "text"}
-                        maxLength={field.maxLength}
-                        value={value[field.name]}
-                        className={value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength ? "!border-rose-500 !ring-rose-400" : ""}
-                        onChange={(event) => setField(field.name, event.target.value)}
-                        disabled={field.name === "l4_code"}
-                      />
-                    )}
+                    ) : (() => {
+                      const isEmail = field.type === "email" || field.name === "e_mail";
+                      const isPhone = field.name === "phone" || field.name === "mobile_no" || field.name === "fax";
+                      const isInvalidEmail = isEmail && !isValidEmail(value[field.name]);
+                      const isInvalidPhone = isPhone && !isValidPhoneNumber(value[field.name]);
+                      const isTooLong = Boolean(value[field.name] && field.maxLength && String(value[field.name]).length > field.maxLength);
+                      const hasError = isInvalidEmail || isInvalidPhone || isTooLong;
+
+                      return (
+                        <>
+                          <Input
+                            type={isEmail ? "email" : isPhone ? "tel" : (field.type || "text")}
+                            maxLength={field.maxLength}
+                            value={value[field.name]}
+                            className={hasError ? "!border-rose-500 !ring-rose-400" : ""}
+                            onChange={(event) => setField(field.name, isPhone ? sanitizePhoneNumber(event.target.value) : event.target.value)}
+                            disabled={field.name === "l4_code"}
+                          />
+                          {isInvalidEmail && (
+                            <span className="text-[10px] text-destructive mt-0.5">Invalid email address (e.g. name@domain.com)</span>
+                          )}
+                          {isInvalidPhone && (
+                            <span className="text-[10px] text-destructive mt-0.5">{field.label} must contain numbers only</span>
+                          )}
+                        </>
+                      );
+                    })()}
                 </label>
               )
             ))}
@@ -1219,7 +1434,13 @@ function AccountTreeIcon({ node, size = 15, fallbackLevel }: { node: AccountTree
     if (label.includes("income")) return <TrendingUp size={size} />;
     if (label.includes("expense")) return <TrendingDown size={size} />;
   }
-  if (level === 5) return <FileText size={size} />;
+  if (level === 5) {
+    const isInactive = node?.ac_status === "C";
+    const isApproved = String(node?.ac_active || "").toUpperCase() === "Y";
+    if (isInactive) return <FileText size={size} className="text-slate-400 shrink-0" />;
+    if (!isApproved) return <FileWarning size={size} className="text-amber-600 dark:text-amber-400 shrink-0" />;
+    return <FileText size={size} className="text-emerald-600 dark:text-emerald-400 shrink-0" />;
+  }
   return node?.children?.length ? <Folder size={size} /> : <FolderOpen size={size} />;
 }
 
@@ -1267,15 +1488,43 @@ function mergeExpansionState(previous: Record<string, boolean>, nodes: AccountTr
   return next;
 }
 
-function filterTree(nodes: AccountTreeNode[], query: string): AccountTreeNode[] {
+function filterTree(
+  nodes: AccountTreeNode[],
+  query: string,
+  statusFilter: "ALL" | "UNAPPROVED" | "ACTIVE" | "INACTIVE" = "ALL",
+): AccountTreeNode[] {
   const q = query.trim().toLowerCase();
-  if (!q) return nodes;
 
   return nodes
     .map((node) => {
-      const children = filterTree(node.children || [], q);
-      const match = node.id.toLowerCase().includes(q) || node.label.toLowerCase().includes(q);
-      if (!match && children.length === 0) return null;
+      const children = filterTree(node.children || [], q, statusFilter);
+      const queryMatch = !q || node.id.toLowerCase().includes(q) || node.label.toLowerCase().includes(q);
+
+      let statusMatch = true;
+      if (node.level === 5) {
+        const isInactive = node.ac_status === "C";
+        const isApproved = String(node.ac_active || "").toUpperCase() === "Y";
+        if (statusFilter === "UNAPPROVED") {
+          statusMatch = !isApproved && !isInactive;
+        } else if (statusFilter === "ACTIVE") {
+          statusMatch = isApproved && !isInactive;
+        } else if (statusFilter === "INACTIVE") {
+          statusMatch = isInactive;
+        }
+      } else if (statusFilter !== "ALL") {
+        statusMatch = children.length > 0;
+      }
+
+      if (statusFilter !== "ALL") {
+        if (node.level === 5) {
+          if (!queryMatch || !statusMatch) return null;
+        } else {
+          if (children.length === 0) return null;
+        }
+      } else {
+        if (!queryMatch && children.length === 0) return null;
+      }
+
       return { ...node, children };
     })
     .filter(Boolean) as AccountTreeNode[];

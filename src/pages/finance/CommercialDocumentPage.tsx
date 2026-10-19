@@ -23,7 +23,9 @@ import {
   getPurchaseHeader,
   downloadDocumentReportExcel,
   upsertBulkAccountEntryApi,
-  openDocumentReportv1
+  openDocumentReportv1,
+  cancelLpoDocument,
+  getFinanceOutstanding
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -36,6 +38,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { NewReportDialog } from "../../components/new_report_format";
 import { FinanceDocumentIdentity } from "../../components/finance/FinanceDocumentIdentity";
 import { ExchangeRateInput } from "../../components/finance/ExchangeRateInput";
@@ -272,7 +275,9 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     try {
-      await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type || docType);
+      const cancelType = cancelTarget.doc_type || docType;
+       if (docType === "PO") await cancelLpoDocument(cancelTarget.doc_no, cancelType);
+        else await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
       await loadRows();
@@ -416,7 +421,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
             />
           </div>
         }
-        initialSorting={[{ id: "doc_date", desc: true }]}
+        initialSorting={[{ id: "doc_no", desc: true }]}
         initialColumnFilters={[{ id: "canceled", value: "N" }]}
         pageIndex={pageIndex}
         pageSize={pageSize}
@@ -575,6 +580,7 @@ function CommercialEditor({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [settledPaidAmount, setSettledPaidAmount] = useState<number>(0);
 
   const [taxRateMap, setTaxRateMap] = useState<Record<string, number>>({});
 
@@ -646,7 +652,8 @@ function CommercialEditor({
     setSaving(true);
     setError("");
     try {
-      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      if (form.doc_type === "PO") await cancelLpoDocument(form.doc_no, form.doc_type);
+       else await cancelTransactionDocument(form.doc_no, form.doc_type);
       setCancelConfirmOpen(false);
       await onSaved("Document cancelled successfully");
     } catch (cancelError) {
@@ -753,6 +760,26 @@ function CommercialEditor({
             return row;
           });
           setForm(mapForm(docType, header, enrichedDetail));
+
+          // Check settled payments against this invoice
+          if (editor.mode === "edit" && editor.row.doc_no) {
+            try {
+              const resp = await getFinanceOutstanding(
+                editor.row.div_code,
+                [editor.row.doc_no, (editor.row as any).ref_no].filter(Boolean),
+                undefined,
+                docType
+              );
+              const bal = resp?.balances?.[0];
+              if (bal && Number(bal.paid_amount || 0) > 0.0001) {
+                setSettledPaidAmount(Number(bal.paid_amount));
+              } else {
+                setSettledPaidAmount(0);
+              }
+            } catch {
+              setSettledPaidAmount(0);
+            }
+          }
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
@@ -807,6 +834,7 @@ const limitProps = (f: keyof FormState) => ({
   
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [remarksFocus, setRemarksFocus] = useState(false);
 
   const filteredLines = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
@@ -929,6 +957,9 @@ const limitProps = (f: keyof FormState) => ({
   if (form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim())) {
     hErr.dlvr_email = "Invalid email format";
   }
+  if (form.dlvr_mobile && form.dlvr_mobile.trim() && !isValidPhoneNumber(form.dlvr_mobile)) {
+    hErr.dlvr_mobile = "Mobile must contain numbers only";
+  }
 
   // Character limit validations
   // if (form.ref_no && form.ref_no.length > 30) {
@@ -986,6 +1017,12 @@ const limitProps = (f: keyof FormState) => ({
     return;
   }
 
+  const netTotal = total + taxTotal;
+  if (settledPaidAmount > 0 && netTotal < settledPaidAmount - 0.001) {
+    setError(`Invoice net total (${formatAmount(netTotal)}) cannot be less than already settled payments (${formatAmount(settledPaidAmount)}). Please adjust the payment vouchers or issue a debit/credit note first.`);
+    return;
+  }
+
   setSaving(true);
   setError("");
   try {
@@ -1016,6 +1053,19 @@ const limitProps = (f: keyof FormState) => ({
   return (
     <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen w-full min-w-0 ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-slate-100 px-4 py-1.5 text-foreground shadow-2xs">
+        {settledPaidAmount > 0 && (
+          <div className="mb-1 flex items-center justify-between gap-2 rounded border border-amber-200/90 bg-amber-50/90 px-2.5 py-0.5 text-[11px] text-amber-900 shadow-2xs leading-tight">
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <AlertCircle size={13} className="text-amber-600 shrink-0" />
+              <span className="truncate">
+                <strong>Active Payments ({formatAmount(settledPaidAmount)}):</strong> Settled against this invoice. Party, currency & rate locked. Cannot cancel until payments unallocated.
+              </span>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-100/80 border border-amber-300/80 rounded px-1.5 py-0.2">
+              Locked
+            </span>
+          </div>
+        )}
         <div className="flex min-h-10 items-center justify-between gap-3">
           <FinanceDocumentIdentity
             title={docType === "PI" ? "Purchase Invoice" : META[docType]?.title || "Commercial"}
@@ -1048,10 +1098,16 @@ const limitProps = (f: keyof FormState) => ({
             </Button>
             <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
             {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCancelConfirmOpen(true)}
+                disabled={saving || Boolean(settledPaidAmount > 0)}
+                title={settledPaidAmount > 0 ? `Cannot cancel invoice: active payments of ${formatAmount(settledPaidAmount)} exist` : "Cancel Document"}
+              >
+                <Ban size={15} /> Cancel
+              </Button>
+            )}
             <Button
               disabled={saving}
               aria-label="Close"
@@ -1148,7 +1204,7 @@ const limitProps = (f: keyof FormState) => ({
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
                         loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         onChange={(value, row) => {
                           const r = row || {} as Record<string, unknown>;
                           const get = (k: string) => text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
@@ -1207,8 +1263,8 @@ const limitProps = (f: keyof FormState) => ({
                       <Input {...limitProps("dlvr_contact")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
                     </CField>
 
-                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile")}>
-                      <Input {...limitProps("dlvr_mobile")} className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
+                    <CField label="Mobile" className="col-span-1" error={limitErr("dlvr_mobile") || fieldErrors.dlvr_mobile}>
+                      <Input {...limitProps("dlvr_mobile")} type="tel" className="h-7 text-xs" disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", sanitizePhoneNumber(e.target.value))} />
                     </CField>
 
                     <CField label="E-mail" className="col-span-1" error={(form.dlvr_email && form.dlvr_email.trim() && !EMAIL_RE.test(form.dlvr_email.trim()) ? "Invalid email format" : limitErr("dlvr_email")) || fieldErrors.dlvr_email}>
@@ -1250,13 +1306,20 @@ const limitProps = (f: keyof FormState) => ({
                           ]}
                           valueField="DOC_NO"
                           displayFields={["DOC_NO"]}
-                          loadOptions={() =>
-                            getDynamicFinanceLookup({
-                              parameter: "Account_LPO_REF_DOC",
-                              code1: user?.company_code || "",
-                              number1: form.div_code ? Number(form.div_code) : undefined,
-                            })
-                          }
+                          loadOptions={async () => {
+                            const rows = await getDynamicFinanceLookup({
+                             parameter: "Account_LPO_REF_DOC",
+                             code1: user?.company_code || "",
+                             number1: form.div_code ? Number(form.div_code) : undefined,
+                            });
+                            return [...rows].sort((a, b) =>
+                             String(b["DOC_NO"] ?? b["doc_no"] ?? "").localeCompare(
+                             String(a["DOC_NO"] ?? a["doc_no"] ?? ""),
+                             undefined,
+                             { numeric: true }
+                            )
+                           );
+                          }}
                           onChange={async (value, row) => {
                             if (!value || !row) {
                               setForm((c) => ({ ...c, ref_doc_no: "" }));
@@ -1371,19 +1434,25 @@ const limitProps = (f: keyof FormState) => ({
                     )}
 
                     {/* Remarks: Wide textarea across entire bottom of Document Details */}
-                    <CField
-                      label="Remarks"
-                      className="col-span-2"
-                      error={form.remarks && form.remarks.length > 250 ? `Exceeded limit (${form.remarks.length}/250)` : undefined}
-                    >
-                      <textarea
-                        className={`h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs ${form.remarks && form.remarks.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}`}
-                        disabled={isCancelled}
-                        value={form.remarks || ""}
-                        maxLength={250}
-                        placeholder="Remarks / Notes"
-                        onChange={(e) => update("remarks", e.target.value)}
-                      />
+                   
+                    <CField label="Remarks" className="col-span-2">
+                      <div className="relative">
+                        <textarea
+                          className="h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                          disabled={isCancelled}
+                          value={form.remarks || ""}
+                          maxLength={250}
+                          placeholder="Remarks / Notes"
+                          onFocus={() => setRemarksFocus(true)}
+                          onBlur={() => setRemarksFocus(false)}
+                          onChange={(e) => update("remarks", e.target.value)}
+                        />
+                        {remarksFocus && !isCancelled && (
+                          <div className="mt-1 w-fit min-w-[200px] rounded-lg bg-[#00378C] px-3 py-1.5 font-mono text-[11px] text-white shadow-lg">
+                            {(form.remarks || "").length} / 250 characters ( {250 - (form.remarks || "").length} left)
+                          </div>
+                        )}
+                      </div>
                     </CField>
                   </HeaderBlock>
                 </div>
@@ -1397,7 +1466,7 @@ const limitProps = (f: keyof FormState) => ({
                         label="Currency *"
                         required
                         enforceRequired
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         value={form.curr_code ?? ""}
                         displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
@@ -1429,7 +1498,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     <CField label="Ex Rate" required error={fieldErrors.ex_rate}>
                       <ExchangeRateInput
-                        disabled={isCancelled}
+                        disabled={isCancelled || Boolean(settledPaidAmount > 0)}
                         required
                         value={form.ex_rate}
                         onChange={(rate) => update("ex_rate", rate)}
@@ -1660,13 +1729,13 @@ const limitProps = (f: keyof FormState) => ({
                     type="button"
                     onClick={addLine}
                     className="commercial-add-line-btn"
-                    title="Add detail line"
+                    title="Add detail line (Alt + A)"
                   >
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
@@ -1681,17 +1750,17 @@ const limitProps = (f: keyof FormState) => ({
                       <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Amount</th>
                       {/* {isPO && <th className="finance-amount-cell px-2 py-2 text-left">Amt Rcv</th>} */}
                       {/* <th className="px-2 py-2 text-left">Cr/Dr</th> */}
-                      <th className="w-[60px] min-w-[60px] px-2 py-2 text-center">Cr/Dr</th>
+                      <th className="w-24 min-w-[90px] px-2 py-2 text-center">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="w-[100px] min-w-[100px] px-2 py-2 text-left">Tax Type</th>}
-                      <th className="w-16 min-w-[55px] px-2 py-2 text-right">Tax %</th>
-                      <th className="finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
+                      <th className="finance-th-tax w-16 min-w-[55px] px-2 py-2 text-right">Tax %</th>
+                      <th className="finance-th-tax finance-amount-cell w-24 min-w-[100px] px-2 py-2 text-right">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       <th className="w-28 min-w-[110px] px-2 py-2 text-left">Job</th>
                       {isPO && <th className="w-28 min-w-[110px] px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="w-56 min-w-[300px] px-2 py-2 text-left">Remarks</th>}
-                      <th className="finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
+                      <th className="finance-th-base-amt finance-amount-cell w-28 min-w-[110px] px-2 py-2 text-right">Base Amount</th>
                       {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="finance-sticky-col-right px-2 py-2 text-center">Action</th>
                     </tr>
@@ -1767,7 +1836,7 @@ const limitProps = (f: keyof FormState) => ({
                         <td className="w-18 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         {/* {isPO && <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.0001" placeholder="0" value={line.qty_rcv ?? ""} onChange={(event) => updateLine(line.id, { qty_rcv: Number(event.target.value || 0) })} /></td>} */}
                         <td className="w-24 min-w-[95px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right font-medium" type="number" step="0.001" placeholder="0.000" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" step="0.001" min="0.001" required
+                        <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs" type="number" step="0.001" min="0.001" required
                            onInvalid={(e) => e.currentTarget.setCustomValidity("Amount is required")}
                             onInput={(e) => e.currentTarget.setCustomValidity("")}
                             value={line.amount}
@@ -1777,11 +1846,35 @@ const limitProps = (f: keyof FormState) => ({
                             updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
                           }} /></td>
                         {/* {isPO && <td className="finance-amount-cell w-20 px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" placeholder="0.000" value={line.amount_rcv ?? ""} onChange={(event) => updateLine(line.id, { amount_rcv: Number(event.target.value || 0) })} /></td>} */}
-                        <td className="w-[60px] min-w-[60px] px-1 py-1">
-                          <Select disabled={isCancelled} className="h-7 text-xs text-center" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                            <option value={-1}>Cr</option>
-                            <option value={1}>Dr</option>
-                          </Select>
+                        <td className="w-24 min-w-[90px] px-1 py-1 text-center">
+                          <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                            <button
+                              type="button"
+                              disabled={isCancelled}
+                              onClick={() => updateLine(line.id, { sign_ind: 1 })}
+                              className={`px-2 py-0.5 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                Number(line.sign_ind) === 1
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                              }`}
+                              title="Debit (Dr)"
+                            >
+                              Dr
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isCancelled}
+                              onClick={() => updateLine(line.id, { sign_ind: -1 })}
+                              className={`px-2 py-0.5 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                Number(line.sign_ind) === -1
+                                  ? "bg-[#00378C] text-white shadow-xs"
+                                  : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                              }`}
+                              title="Credit (Cr)"
+                            >
+                              Cr
+                            </button>
+                          </div>
                         </td>
                         {showAllColumns && (
                           <td className="w-20 max-w-[80px] px-1 py-1"><Input disabled={isCancelled} value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
@@ -1805,13 +1898,13 @@ const limitProps = (f: keyof FormState) => ({
 </Select>
                         </td>
                       )}
-                        <td className="w-16 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input text-right" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
+                        <td className="w-16 min-w-[55px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold" type="number" step="0.001" value={line.tx_compnt_perc_1 ?? 0} 
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-emerald-800 !bg-emerald-50/70 border-emerald-300 focus:!border-emerald-600 focus:!ring-emerald-400 !text-xs md:!text-[13px] text-right" type="number" 
+                        <td className="finance-amount-cell w-24 min-w-[100px] px-1 py-1"><Input disabled={isCancelled} className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold text-right" type="number" 
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                        {showAllColumns && (
                         <td className="w-28 max-w-[115px] px-1 py-1">
@@ -1865,7 +1958,7 @@ const limitProps = (f: keyof FormState) => ({
                         )}
                         <td className="finance-amount-cell w-28 min-w-[110px] px-1 py-1">
                           <Input
-                            className="commercial-number-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]"
+                            className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/50 border-blue-200 !text-xs md:!text-[13px]"
                             disabled
                             value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(line.ex_rate ?? form.ex_rate ?? 1))}
                           />
@@ -1879,17 +1972,19 @@ const limitProps = (f: keyof FormState) => ({
               
               <div className="commercial-lines-footer flex flex-wrap items-center justify-end border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2.5 gap-3.5">
                 <div className="commercial-line-totals flex items-center gap-3.5">
-                  <div className="flex items-center gap-2.5 bg-emerald-50/90 px-3.5 py-1.5 rounded-md border border-emerald-300 shadow-2xs">
-                    <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Total Amount</span>
-                    <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(total)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3.5 py-1.5 shadow-2xs">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Total Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-emerald-50/90 px-3.5 py-1.5 rounded-md border border-emerald-300 shadow-2xs">
-                    <span className="text-emerald-800 font-bold text-xs uppercase tracking-wider">Tax Amount</span>
-                    <strong className="text-emerald-700 font-mono text-sm md:text-base font-bold">{formatAmount(taxTotal)}</strong>
+                  <div className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-md border shadow-2xs ${
+                    taxTotal > 0 ? "bg-amber-50/90 border-amber-300 text-amber-900" : "bg-slate-50 border-slate-200 text-slate-700"
+                  }`}>
+                    <span className={`font-bold text-xs uppercase tracking-wider ${taxTotal > 0 ? "text-amber-800" : "text-slate-600"}`}>Tax Amount</span>
+                    <strong className={`font-mono text-sm md:text-base font-bold ${taxTotal > 0 ? "text-amber-700" : "text-slate-700"}`}>{formatAmount(taxTotal)}</strong>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-blue-50 px-4 py-1.5 rounded-md border-2 border-[#00378c]/50 shadow-xs">
-                    <span className="font-extrabold text-[#00378c] text-xs uppercase tracking-wider">Net Total</span>
-                    <strong className="text-[#00378c] font-mono text-base md:text-lg font-black">{formatAmount(total + taxTotal)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+                    <span className="text-xs font-bold text-[#00378c] uppercase tracking-wider">Net Total</span>
+                    <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(total + taxTotal)}</strong>
                   </div>
                 </div>
               </div>
@@ -2234,6 +2329,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
   return {
     header,
     details,
+    invoiceDetails: buildCommercialInvoiceDetails(form, companyCode, docNo),
     expenseDetails: [],
     jobDetails: buildCommercialJobDetails(form, companyCode, docNo),
     loginid,
@@ -2242,7 +2338,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
 
 function buildCommercialInvoiceDetails(form: FormState, companyCode: string, docNo: string) {
   if (form.doc_type === "PO") return [];
-  const invNo = form.inv_no || form.ref_no;
+  const invNo = form.doc_no || form.inv_no || form.ref_no;
   if (!invNo) return [];
   return form.detail
     .filter((line) => Number(line.amount || 0) !== 0)
@@ -2253,7 +2349,7 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       serial_no: line.serial_no || index + 1,
       dtl_sr_no: 1,
       doc_date: form.doc_date,
-      ac_code: line.ac_code,
+      ac_code: form.ac_code || line.ac_code,
       inv_no: invNo,
       inv_date: form.inv_date || form.ref_date || form.doc_date,
       amount: Math.abs(Number(line.amount || 0)),
@@ -2263,6 +2359,8 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       curr_code: form.curr_code,
       ex_rate: Number(form.ex_rate || 1),
       div_code: form.div_code,
+      indicator_origin: "Y",
+      amount_origin: Math.abs(Number(line.amount || 0)),
     }));
 }
 

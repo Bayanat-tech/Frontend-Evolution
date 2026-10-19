@@ -1,8 +1,3 @@
-// Employee form — new UI
-//  • forwardRef + useImperativeHandle → page header "Save" button calls save()
-//  • SectionPanel / Field from shared Formblocks, toast for all feedback
-//  • Single form state (no formik, no wizard)
-
 import {
   forwardRef, useImperativeHandle, useState, type ChangeEvent,
 } from "react";
@@ -179,119 +174,123 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
 
     /* ── UI ── */
     return (
-      <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-        {/* ── Personal ── */}
-        <SectionPanel title="Personal Information" icon={User}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="md:row-span-2 flex flex-col items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPhotoDialog(true)}
-                title={form.emp_photo ? "Change Picture" : "Upload Profile Picture"}
-                className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border hover:border-primary"
-              >
-                {form.emp_photo ? (
-                  <img src={form.emp_photo} alt="Profile" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="text-xs text-muted-foreground">Upload</span>
-                )}
-              </button>
-              <span className="text-xs text-muted-foreground">Profile Picture</span>
+      // 2 sections per row on xl+; stacks to 1 column on smaller screens.
+      // `items-start` keeps each panel at its natural height instead of stretching.
+      <div className="freight-workspace-ui freight-dense-form freight-ui-standard grid items-start gap-2 xl:grid-cols-2">
+        {/* ── Personal (full width) ── */}
+        <div className="xl:col-span-2">
+          <SectionPanel title="Personal Information" icon={User}>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="md:row-span-2 flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPhotoDialog(true)}
+                  title={form.emp_photo ? "Change Picture" : "Upload Profile Picture"}
+                  className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border hover:border-primary"
+                >
+                  {form.emp_photo ? (
+                    <img src={form.emp_photo} alt="Profile" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Upload</span>
+                  )}
+                </button>
+                <span className="text-xs text-muted-foreground">Profile Picture</span>
+              </div>
+
+              <Field label="Name" required error={errors.rpt_name} className="md:col-span-2">
+                <Input {...text("rpt_name")} />
+              </Field>
+              <Field label="Date Of Birth" required error={errors.birth_date}>
+                <Input {...date("birth_date")} />
+              </Field>
+
+              {isEditMode && (
+                <Field label="Employee Code">
+                  <Input value={form.employee_code} disabled readOnly />
+                </Field>
+              )}
+              <Field label="Alternate Id" required error={errors.alternate_id}>
+                <Input {...text("alternate_id")} disabled={isEditMode} />
+              </Field>
             </div>
 
-            <Field label="Name" required error={errors.rpt_name} className="md:col-span-2">
-              <Input {...text("rpt_name")} />
-            </Field>
-            <Field label="Date Of Birth" required error={errors.birth_date}>
-              <Input {...date("birth_date")} />
-            </Field>
-
-            {isEditMode && (
-              <Field label="Employee Code">
-                <Input value={form.employee_code} disabled readOnly />
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <Field label="Division" required error={errors.div_code}>
+                <ParamLookup
+                  parameter="MS_EMP_HR_EMPLOYEE_DIVISION" valueField="div_code" descField="div_name" descHeader="Division"
+                  value={form.div_code}
+                  onChange={(v) => patch({ div_code: v, dept_code: "", section_code: "" })}
+                />
               </Field>
-            )}
-            <Field label="Alternate Id" required error={errors.alternate_id}>
-              <Input {...text("alternate_id")} disabled={isEditMode} />
-            </Field>
-          </div>
+              <Field label="Department" required error={errors.dept_code}>
+                <ParamLookup
+                  key={form.div_code} // reload options when the parent changes
+                  parameter="MS_EMP_HR_EMPLOYEE_DEPARTMENT" code2={form.div_code ?? ""}
+                  valueField="dept_code" descField="dept_name" descHeader="Department"
+                  value={form.dept_code} disabled={!form.div_code}
+                  onChange={(v) => patch({ dept_code: v, section_code: "" })}
+                />
+              </Field>
+              <Field label="Section" required error={errors.section_code}>
+                <ParamLookup
+                  key={form.dept_code}
+                  parameter="MS_EMP_HR_EMPLOYEE_SECTION" code2={form.dept_code ?? ""}
+                  valueField="section_code" descField="section_name" descHeader="Section"
+                  value={form.section_code} disabled={!form.dept_code}
+                  onChange={pick("section_code")}
+                />
+              </Field>
+              <Field label="Category" required error={errors.category_code}>
+                <ParamLookup
+                  parameter="MS_EMP_HR_EMPLOYEE_CATEGORY" valueField="category_code" descField="category_name" descHeader="Category"
+                  value={form.category_code} onChange={pick("category_code")}
+                />
+              </Field>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-4">
-            <Field label="Division" required error={errors.div_code}>
-              <ParamLookup
-                parameter="MS_EMP_HR_EMPLOYEE_DIVISION" valueField="div_code" descField="div_name" descHeader="Division"
-                value={form.div_code}
-                onChange={(v) => patch({ div_code: v, dept_code: "", section_code: "" })}
-              />
-            </Field>
-            <Field label="Department" required error={errors.dept_code}>
-              <ParamLookup
-                key={form.div_code} // reload options when the parent changes
-                parameter="MS_EMP_HR_EMPLOYEE_DEPARTMENT" code2={form.div_code ?? ""}
-                valueField="dept_code" descField="dept_name" descHeader="Department"
-                value={form.dept_code} disabled={!form.div_code}
-                onChange={(v) => patch({ dept_code: v, section_code: "" })}
-              />
-            </Field>
-            <Field label="Section" required error={errors.section_code}>
-              <ParamLookup
-                key={form.dept_code}
-                parameter="MS_EMP_HR_EMPLOYEE_SECTION" code2={form.dept_code ?? ""}
-                valueField="section_code" descField="section_name" descHeader="Section"
-                value={form.section_code} disabled={!form.dept_code}
-                onChange={pick("section_code")}
-              />
-            </Field>
-            <Field label="Category" required error={errors.category_code}>
-              <ParamLookup
-                parameter="MS_EMP_HR_EMPLOYEE_CATEGORY" valueField="category_code" descField="category_name" descHeader="Category"
-                value={form.category_code} onChange={pick("category_code")}
-              />
-            </Field>
+              <Field label="Grade" required error={errors.grade_code}>
+                <ParamLookup
+                  parameter="MS_EMP_HR_EMPLOYEE_GRADE" valueField="grade_code" descField="grade_name" descHeader="Grade"
+                  value={form.grade_code} onChange={pick("grade_code")}
+                />
+              </Field>
+              <Field label="Designation" required error={errors.desg_code}>
+                <ParamLookup
+                  parameter="MS_EMP_HR_EMPLOYEE_DESIGNATION" valueField="desg_code" descField="desg_name" descHeader="Designation"
+                  value={form.desg_code} onChange={pick("desg_code")}
+                />
+              </Field>
+              <Field label="Formal Designation" required error={errors.labour_desg_code}>
+                <ParamLookup
+                  parameter="MS_EMP_HR_EMPLOYEE_LABOUR_DESG" valueField="labour_desg_code" descField="labour_desg_name" descHeader="Formal Designation"
+                  value={form.labour_desg_code} onChange={pick("labour_desg_code")}
+                />
+              </Field>
+              <Field label="Employment Status" required error={errors.emp_status}>
+                <ParamLookup
+                  parameter="MS_EMP_HR_EMPLOYEE_STATUS" valueField="empstatus_code" descField="empstatus_name" descHeader="Status"
+                  value={form.emp_status} onChange={pick("emp_status")}
+                />
+              </Field>
 
-            <Field label="Grade" required error={errors.grade_code}>
-              <ParamLookup
-                parameter="MS_EMP_HR_EMPLOYEE_GRADE" valueField="grade_code" descField="grade_name" descHeader="Grade"
-                value={form.grade_code} onChange={pick("grade_code")}
-              />
-            </Field>
-            <Field label="Designation" required error={errors.desg_code}>
-              <ParamLookup
-                parameter="MS_EMP_HR_EMPLOYEE_DESIGNATION" valueField="desg_code" descField="desg_name" descHeader="Designation"
-                value={form.desg_code} onChange={pick("desg_code")}
-              />
-            </Field>
-            <Field label="Formal Designation" required error={errors.labour_desg_code}>
-              <ParamLookup
-                parameter="MS_EMP_HR_EMPLOYEE_LABOUR_DESG" valueField="labour_desg_code" descField="labour_desg_name" descHeader="Formal Designation"
-                value={form.labour_desg_code} onChange={pick("labour_desg_code")}
-              />
-            </Field>
-            <Field label="Employment Status" required error={errors.emp_status}>
-              <ParamLookup
-                parameter="MS_EMP_HR_EMPLOYEE_STATUS" valueField="empstatus_code" descField="empstatus_name" descHeader="Status"
-                value={form.emp_status} onChange={pick("emp_status")}
-              />
-            </Field>
+              <Field label="Country" required error={errors.country_code}>
+                <MasterLookup master="country" value={form.country_code} onChange={pick("country_code")} />
+              </Field>
+              <Field label="Date Of Joining" required error={errors.join_date}>
+                <Input {...date("join_date")} max={toInputDatenull(form.probation_end_date)} />
+              </Field>
+              <Field label="Probation End Date" required error={errors.probation_end_date}>
+                <Input {...date("probation_end_date")} min={toInputDatenull(form.join_date)} />
+              </Field>
+              <Field label="Confirmation Date" required error={errors.probation_confirm_date}>
+                <Input {...date("probation_confirm_date")} />
+              </Field>
+            </div>
+          </SectionPanel>
+        </div>
 
-            <Field label="Country" required error={errors.country_code}>
-              <MasterLookup master="country" value={form.country_code} onChange={pick("country_code")} />
-            </Field>
-            <Field label="Date Of Joining" required error={errors.join_date}>
-              <Input {...date("join_date")} max={toInputDatenull(form.probation_end_date)} />
-            </Field>
-            <Field label="Probation End Date" required error={errors.probation_end_date}>
-              <Input {...date("probation_end_date")} min={toInputDatenull(form.join_date)} />
-            </Field>
-            <Field label="Confirmation Date" required error={errors.probation_confirm_date}>
-              <Input {...date("probation_confirm_date")} />
-            </Field>
-          </div>
-        </SectionPanel>
-
-        {/* ── Payroll ── */}
+        {/* ── Row: Payroll | Passport ── */}
         <SectionPanel title="Payroll Information" icon={Wallet}>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Include In Payment" required error={errors.include_in_payroll}>
               <ParamLookup
                 parameter="MS_EMP_HR_INCLUDE_PAYROLL" valueField="value_code" descField="value_desc"
@@ -337,9 +336,8 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           </div>
         </SectionPanel>
 
-        {/* ── Passport ── */}
         <SectionPanel title="Passport Information" icon={BookOpen}>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Passport No."><Input {...text("ppt_no")} /></Field>
             <Field label="Passport Name"><Input {...text("ppt_name")} /></Field>
             <Field label="Issued Country">
@@ -364,9 +362,9 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           </div>
         </SectionPanel>
 
-        {/* ── Contract ── */}
+        {/* ── Row: Contract | Sponsor ── */}
         <SectionPanel title="Contract Information" icon={FileText}>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Contract Type" required error={errors.contract_type}>
               <ParamLookup
                 parameter="MS_EMP_HR_EMPLOYEE_CONTRACT" valueField="contract_type" descField="contract_type_desc"
@@ -388,9 +386,8 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           </div>
         </SectionPanel>
 
-        {/* ── Sponsor ── */}
         <SectionPanel title="Sponsor Information" icon={Building2}>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Sponsor Name" required error={errors.sponsor_id}>
               <ParamLookup
                 parameter="MS_EMP_HR_EMPLOYEE_SPONSOR" valueField="sponsor_code" descField="sponsor_name" descHeader="Sponsor"
@@ -412,9 +409,9 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           </div>
         </SectionPanel>
 
-        {/* ── Insurance ── */}
+        {/* ── Row: Insurance | Id / Labour card ── */}
         <SectionPanel title="Insurance Information" icon={ShieldCheck}>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Card No.">
               <Input
                 value={form.ins_card_no ?? ""}
@@ -429,9 +426,8 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           </div>
         </SectionPanel>
 
-        {/* ── ID / Labour card ── */}
         <SectionPanel title="Id / Labour Card / PASI No." icon={IdCard}>
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="ID/Labourcard No." required error={errors.labourcard_no}>
               <Input {...text("labourcard_no")} />
             </Field>
@@ -451,28 +447,30 @@ export const AddEmployeeHrForm = forwardRef<EmployeeFormHandle, Props>(
           </div>
         </SectionPanel>
 
-        {/* ── Airfare ── */}
-        <SectionPanel title="Airfare Information" icon={Plane}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Fare Code">
-              <ParamLookup
-                parameter="MS_EMP_HR_AIRPORT" valueField="airport_code" descField="airport_name" descHeader="Airport"
-                value={form.airport_code} onChange={pick("airport_code")}
-              />
-            </Field>
-            <Field label="Eligibility">
-              <ParamLookup
-                parameter="MS_EMP_HR_TICKET_ELIGIBILITY" valueField="value_code" descField="value_desc"
-                value={form.ticket_eligibility} onChange={pick("ticket_eligibility")}
-              />
-            </Field>
-            <Field label="No. of Adult Depended"><Input {...num("ticket_dpend_adult")} /></Field>
-            <Field label="Ticket Once in Months"><Input {...num("ticket_eligible_period")} /></Field>
-            <Field label="Total No. of Adults"><Input {...num("ta_no")} /></Field>
-            <Field label="No. of Childrens"><Input {...num("tc_no")} /></Field>
-            <Field label="No. of Infants"><Input {...num("ti_no")} /></Field>
-          </div>
-        </SectionPanel>
+        {/* ── Airfare (full width) ── */}
+        <div className="xl:col-span-2">
+          <SectionPanel title="Airfare Information" icon={Plane}>
+            <div className="grid gap-3 md:grid-cols-4">
+              <Field label="Fare Code">
+                <ParamLookup
+                  parameter="MS_EMP_HR_AIRPORT" valueField="airport_code" descField="airport_name" descHeader="Airport"
+                  value={form.airport_code} onChange={pick("airport_code")}
+                />
+              </Field>
+              <Field label="Eligibility">
+                <ParamLookup
+                  parameter="MS_EMP_HR_TICKET_ELIGIBILITY" valueField="value_code" descField="value_desc"
+                  value={form.ticket_eligibility} onChange={pick("ticket_eligibility")}
+                />
+              </Field>
+              <Field label="No. of Adult Depended"><Input {...num("ticket_dpend_adult")} /></Field>
+              <Field label="Ticket Once in Months"><Input {...num("ticket_eligible_period")} /></Field>
+              <Field label="Total No. of Adults"><Input {...num("ta_no")} /></Field>
+              <Field label="No. of Childrens"><Input {...num("tc_no")} /></Field>
+              <Field label="No. of Infants"><Input {...num("ti_no")} /></Field>
+            </div>
+          </SectionPanel>
+        </div>
 
         {photoDialog && (
           <ImageCrop

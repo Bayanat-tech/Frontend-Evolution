@@ -33,6 +33,7 @@ import {
   openDocumentReportv1,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  FinanceOutstandingBalance,
 } from "../../api/transactions";
 import { getDynamicLookup, getDynamicFinanceLookup, getFinanceTaxList, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -49,6 +50,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
+import { isValidPhoneNumber, sanitizePhoneNumber } from "../../utils/inputValidation";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { NewReportDialog } from "../../components/new_report_format";
@@ -153,12 +155,23 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const activeFilters = nextColumnFilters
+        .map((filter) => {
+          const val = filter.value;
+          if (val && typeof val === "object") {
+            const range = val as { from?: string; to?: string };
+            if (range.from || range.to) {
+              return { field: filter.id, values: JSON.stringify(range) };
+            }
+            return null;
+          }
+          const strVal = String(val ?? "").trim();
+          return strVal ? { field: filter.id, values: strVal } : null;
+        })
+        .filter((f): f is { field: string; values: string } => Boolean(f));
+      const hasSearch = Boolean(query.trim() || activeFilters.length > 0);
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
       const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = nextColumnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
       const params: Record<string, any> = {};
       if (query.trim()) params.search = query.trim();
       if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
@@ -344,7 +357,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
               />
             </div>
           }
-          initialSorting={[{ id: "doc_date", desc: true }]}
+          initialSorting={[{ id: "doc_no", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
@@ -503,30 +516,41 @@ function PaymentDocumentEditor({
           if (!mounted) return;
           // map existing document first
           const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
-          setForm(mapped);
-          // for invoice children, fetch outstanding balances and update child rows
+          // for invoice children, fetch outstanding balances and update child rows before setting state
           try {
-            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
             await Promise.all(
-              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
-                // find corresponding detail to know child_table
+              Object.entries(mapped.children || {}).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table and party account
                 const detail = mapped.detail.find((d) => d.id === detailId);
                 if (!detail || detail.child_table !== "invoice") return;
+                const targetRows = (childRows || []) as TransactionChildRow[];
                 await Promise.all(
-                  childRows.map(async (child, idx) => {
+                  targetRows.map(async (child, idx) => {
                     const invNo = text((child as Record<string, unknown>).inv_no);
                     if (!invNo) return;
                     try {
-                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo, detail.ac_code, docType, editor.row.doc_no);
                       const balance = resp?.balances?.[0];
-                      if (balance && !balance.error && balance.original_amount > 0) {
-                        childRows[idx] = {
-                          ...childRows[idx],
-                          ref_no: childRows[idx].ref_no || (balance as any).ref_no || "",
-                          inv_amt: balance.original_amount,
-                          c_bal_amt_org: balance.outstanding_amount,
-                          paid_amt: balance.paid_amount,
-                        } as TransactionChildRow;
+                      if (balance) {
+                        if (balance.error || (balance as any).is_cancelled) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: 0,
+                            c_bal_amt_org: 0,
+                            paid_amt: 0,
+                          } as TransactionChildRow;
+                        } else if (balance.original_amount > 0) {
+                          targetRows[idx] = {
+                            ...child,
+                            inv_no: balance.inv_no || child.inv_no,
+                            ref_no: balance.doc_no || (balance as any).ref_no || child.ref_no || "",
+                            inv_amt: balance.original_amount,
+                            c_bal_amt_org: balance.outstanding_amount,
+                            paid_amt: balance.paid_amount,
+                          } as TransactionChildRow;
+                        }
                       }
                     } catch {
                       // ignore individual failures
@@ -535,11 +559,11 @@ function PaymentDocumentEditor({
                 );
               }),
             );
-            // apply updated children to form
-            setForm((current) => ({ ...current, children: updatedChildren }));
           } catch {
             // ignore overall errors
           }
+          if (!mounted) return;
+          setForm(mapped);
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -764,6 +788,8 @@ function PaymentDocumentEditor({
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
+  const totalDr = form.detail.filter((d) => Number(d.sign_ind) === 1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const totalCr = form.detail.filter((d) => Number(d.sign_ind) === -1).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
   const isCancelled = form.canceled === "Y";
 
   const filteredDetail = useMemo(() => {
@@ -1040,30 +1066,33 @@ function PaymentDocumentEditor({
             try {
               const invNo = text((m as Record<string, unknown>).inv_no);
               if (!invNo) return m;
-              const resp = await getFinanceOutstanding(divCode, invNo);
+              const resp = await getFinanceOutstanding(divCode, invNo, detail.ac_code, docType, editMode ? form.doc_no : undefined);
               const balance = resp?.balances?.[0];
-              if (balance && !balance.error && balance.original_amount > 0) {
+              if (balance && !balance.error && !(balance as any).is_cancelled && balance.original_amount > 0) {
                 return {
                   ...m,
-                  ref_no: (m as Record<string, unknown>).ref_no || (balance as any).ref_no || "",
+                  inv_no: balance.inv_no || (m as Record<string, unknown>).inv_no,
+                  ref_no: balance.doc_no || (balance as any).ref_no || (m as Record<string, unknown>).ref_no || "",
                   inv_amt: balance.original_amount,
                   c_bal_amt_org: balance.outstanding_amount,
                 } as TransactionChildRow;
               }
-              return m;
+              return {
+                ...m,
+                inv_amt: 0,
+                c_bal_amt_org: 0,
+              } as TransactionChildRow;
             } catch {
               return m;
             }
           }),
         );
 
-        // Filter out fully paid invoices (outstanding <= 0) when creating a new transaction
-        if (!editMode) {
-          mapped = mapped.filter((m) => {
-            const bal = Number(m.c_bal_amt_org ?? m.inv_amt ?? 0);
-            return bal > 0.001;
-          });
-        }
+        // Filter out fully paid or cancelled invoices (outstanding <= 0 and not allocated)
+        mapped = mapped.filter((m) => {
+          const bal = Number(m.c_bal_amt_org != null ? m.c_bal_amt_org : m.inv_amt ?? 0);
+          return bal > 0.001 || (editMode && Number(m.amount || 0) > 0.001);
+        });
 
         // Auto-allocate if detail line already has an amount
         const parentAmt = Number(detail.amount || 0);
@@ -1071,8 +1100,9 @@ function PaymentDocumentEditor({
           let remaining = parentAmt;
           mapped = mapped.map((row) => {
             if (remaining <= 0) return { ...row, amount: 0 };
-            const maxAllowed = Number(row.c_bal_amt_org || row.inv_amt || 0);
-            const allocated = Math.min(remaining, maxAllowed > 0 ? maxAllowed : remaining);
+            const maxAllowed = Number(row.c_bal_amt_org != null ? row.c_bal_amt_org : row.inv_amt || 0);
+            if (maxAllowed <= 0.001) return { ...row, amount: 0 };
+            const allocated = Math.min(remaining, maxAllowed);
             remaining -= allocated;
             return { ...row, amount: allocated };
           });
@@ -1206,8 +1236,14 @@ function PaymentDocumentEditor({
     if (form.party_phone && form.party_phone.length > 30) {
       return setError("You have exceeded the character limit for Party Phone (max 30 characters).");
     }
+    if (form.party_phone && form.party_phone.trim() && !isValidPhoneNumber(form.party_phone)) {
+      return setError("Party Phone must contain numbers only.");
+    }
     if (form.party_fax && form.party_fax.length > 30) {
       return setError("You have exceeded the character limit for Party Fax (max 30 characters).");
+    }
+    if (form.party_fax && form.party_fax.trim() && !isValidPhoneNumber(form.party_fax)) {
+      return setError("Party Fax must contain numbers only.");
     }
     if (form.remarks && form.remarks.length > 250) {
       return setError("You have exceeded the character limit for Remarks.");
@@ -1257,7 +1293,19 @@ function PaymentDocumentEditor({
             if (amt < 0) {
               missingFields.push("Valid Allocated Amount");
             } else if (amt > 0) {
-              if (!c.inv_no?.trim()) missingFields.push("Invoice No");
+              if (!c.inv_no?.trim()) {
+                missingFields.push("Invoice No");
+              } else if (c.inv_amt == null) {
+                missingFields.push(`Invoice "${c.inv_no}" not found or invalid for this account`);
+              } else {
+                const outstanding = Number(c.c_bal_amt_org != null ? c.c_bal_amt_org : c.inv_amt || 0);
+                const maxAllowed = editMode ? Math.max(outstanding, Number(c.amount || 0)) : outstanding;
+                if (maxAllowed <= 0.001) {
+                  missingFields.push(`Invoice "${c.inv_no}" is already fully settled (0.000 outstanding)`);
+                } else if (amt > maxAllowed + 0.001) {
+                  missingFields.push(`Allocated Amount cannot exceed Outstanding Balance of ${maxAllowed.toFixed(3)}`);
+                }
+              }
             }
           }
 
@@ -1267,7 +1315,7 @@ function PaymentDocumentEditor({
             setInvalidChildRowIds(new Set([c.id]));
             setInvalidChildFields({ [c.id]: missingFields });
             return setError(
-              `Kindly fill in the missing fields: ${missingFields.join(" and ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
+              `Kindly check allocation fields: ${missingFields.join("; ")} in Allocation row #${rowNum} on Line #${d.serial_no || 1}.`
             );
           }
         }
@@ -1298,11 +1346,11 @@ function PaymentDocumentEditor({
     }
   };
 
-  const fetchOutstanding = async (invNo: string) => {
+  const fetchOutstanding = async (invNo: string, acCode?: string) => {
     try {
-      console.log("fetchOutstanding called", { div: form.div_code, invNo });
-      const response = await getFinanceOutstanding(form.div_code, invNo);
-      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+      console.log("fetchOutstanding called", { div: form.div_code, invNo, acCode, docType });
+      const response = await getFinanceOutstanding(form.div_code, invNo, acCode, docType, editMode ? form.doc_no : undefined);
+      return response as { balances: FinanceOutstandingBalance[] };
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
       return { balances: [] };
@@ -1318,15 +1366,53 @@ function PaymentDocumentEditor({
       console.log("handleInvNoBlur: parent detail not found for child", childId);
       return;
     }
-    void fetchOutstanding(invNo).then((data) => {
+    const parentDetail = form.detail.find((d) => d.id === parentDetailId);
+    void fetchOutstanding(invNo, parentDetail?.ac_code).then((data) => {
       const balance = data?.balances?.[0];
-      if (!balance || balance.error || !(balance.original_amount > 0)) return;
+      if (!balance || balance.error || (balance as any).is_cancelled || !(balance.original_amount > 0)) {
+        // If invoice is not found, cancelled, or does not belong to this account, clear invalid invoice amount and notify
+        const errMsg = balance?.error || (balance as any)?.is_cancelled
+          ? (balance?.error || `Invoice "${invNo}" is CANCELLED and has no payable balance.`)
+          : `Invoice "${invNo}" not found for account ${parentDetail?.ac_code || ""}.`;
+        setError(errMsg);
+        setForm((current) => {
+          const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+            row.id === childId
+              ? {
+                  ...row,
+                  inv_amt: null,
+                  c_bal_amt_org: null,
+                  ref_no: "",
+                }
+              : row,
+          );
+          return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+        });
+        return;
+      }
+      setError("");
       setForm((current) => {
-        const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
-          row.id === childId
-            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
-            : row,
-        );
+        const parentLine = current.detail.find((d) => d.id === parentDetailId);
+        const lineTotal = Number(parentLine?.amount || 0);
+        const currentChildren = (current.children[parentDetailId] || []) as TransactionChildRow[];
+        const allocatedByOthers = currentChildren
+          .filter((r) => r.id !== childId)
+          .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        const remainingOnLine = Math.max(0, lineTotal - allocatedByOthers);
+
+        const rows = currentChildren.map((row) => {
+          if (row.id !== childId) return row;
+          const currentAmt = Number(row.amount || 0);
+          const autoAmt = currentAmt > 0 ? currentAmt : (remainingOnLine > 0 ? Math.min(balance.outstanding_amount, remainingOnLine) : balance.outstanding_amount);
+          return {
+            ...row,
+            inv_no: balance.inv_no || row.inv_no,
+            ref_no: balance.doc_no || (balance as any).ref_no || row.ref_no || "",
+            inv_amt: balance.original_amount,
+            c_bal_amt_org: balance.outstanding_amount,
+            amount: autoAmt,
+          };
+        });
         return { ...current, children: { ...current.children, [parentDetailId]: rows } };
       });
     });
@@ -1337,16 +1423,24 @@ function PaymentDocumentEditor({
     const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
     if (childRows.length === 0) return false;
 
-    // In edit mode: outstanding may be 0 because THIS doc already holds the allocation.
-    // Use max(c_bal_amt_org, child.amount) per row as the effective ceiling.
+    // Check individual row ceilings: if any row exceeds its invoice ceiling, flag error
+    const anyRowExceeds = childRows.some((r) => {
+      const allocated = Number(r.amount || 0);
+      if (allocated <= 0) return false;
+      const outstanding = Number(r.c_bal_amt_org != null ? r.c_bal_amt_org : r.inv_amt || 0);
+      const ceiling = editMode ? Math.max(outstanding, allocated) : outstanding;
+      return allocated > ceiling + 0.001;
+    });
+    if (anyRowExceeds) return true;
+
+    // Check total line ceiling vs detail amount
     const effectiveCeiling = childRows.reduce((sum, r) => {
       const outstanding = Number(r.c_bal_amt_org) || 0;
       const allocated = Number(r.amount) || 0;
-      // effective ceiling = outstanding + what this doc already allocated to it
       return sum + Math.max(outstanding, allocated);
     }, 0);
 
-    return Number(detail.amount || 0) > effectiveCeiling + 0.001; // small epsilon for float
+    return Number(detail.amount || 0) > effectiveCeiling + 0.001;
   });
 
   return (
@@ -1687,27 +1781,29 @@ function PaymentDocumentEditor({
                       </Field>
                       <Field
                         label="Party Phone"
-                        error={form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined}
+                        error={(form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined) || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           disabled={disabled}
                           value={form.party_phone || ""}
-                          className={form.party_phone && form.party_phone.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_phone", e.target.value)}
+                          className={((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_phone", sanitizePhoneNumber(e.target.value))}
                           placeholder="Phone"
                         />
                       </Field>
                       <Field
                         label="Party Fax"
-                        error={form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined}
+                        error={(form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined) || (form.party_fax && !isValidPhoneNumber(form.party_fax) ? "Must contain numbers only" : undefined)}
                       >
                         <Input
+                          type="tel"
                           maxLength={30}
                           disabled={disabled}
                           value={form.party_fax || ""}
-                          className={form.party_fax && form.party_fax.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_fax", e.target.value)}
+                          className={((form.party_fax && form.party_fax.length > 30) || (form.party_fax && !isValidPhoneNumber(form.party_fax))) ? "!border-rose-500 !ring-rose-400" : ""}
+                          onChange={(e) => updateField("party_fax", sanitizePhoneNumber(e.target.value))}
                           placeholder="Fax"
                         />
                       </Field>
@@ -1748,6 +1844,13 @@ function PaymentDocumentEditor({
                       Filtered ({filteredDetail.length})
                     </span>
                   )}
+                  {form.detail.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[11px] font-bold text-slate-700 shadow-2xs">
+                      <span className="text-emerald-700">Dr: {formatAmount(totalDr)}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-[#00378c]">Cr: {formatAmount(totalCr)}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1779,12 +1882,12 @@ function PaymentDocumentEditor({
                       </button>
                     )}
                   </div>
-                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line">
+                  <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" onClick={addDetailRow} className="commercial-add-line-btn" title="Add detail line (Alt + A)">
                     <Plus size={14} /> Add Line
                   </Button>
                 </div>
               </div>
-              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[1980px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
                     <tr>
@@ -1794,14 +1897,14 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-left">Description</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Currency</th>}
                       <th className="finance-amount-cell px-2 py-2 text-right">Amount</th>
-                      <th className="px-2 py-2 text-center w-14">Cr/Dr</th>
+                      <th className="px-2 py-2 text-center w-24">Cr/Dr</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Code</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
-                      <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-right">Tax Amt</th>
+                      <th className="finance-th-tax px-2 py-2 text-right text-amber-800 bg-amber-50/70 border-b-2 border-amber-300">Tax %</th>
+                      <th className="finance-th-tax finance-amount-cell px-2 py-2 text-right text-amber-800 bg-amber-100/70 border-b-2 border-amber-400 font-bold">Tax Amt</th>
                       {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
-                      {showAllColumns && <th className="finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
+                      {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
                       <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
                     </tr>
                   </thead>
@@ -1927,7 +2030,7 @@ function PaymentDocumentEditor({
                               <Input
                                 disabled={disabled}
                                 type="number"
-                                className={`commercial-number-input finance-money-input w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
+                                className={`commercial-number-input commercial-amount-input finance-money-input font-bold !text-slate-900 !bg-white border-slate-300 focus:!border-[#00378C] focus:!ring-1 focus:!ring-[#00378C]/20 !text-xs md:!text-[13px] text-right shadow-xs w-24 ${invalidLineIds.has(detail.id) && (!detail.amount || Number(detail.amount) <= 0) ? "!border-rose-500 !ring-1 !ring-rose-400 bg-rose-50/30" : ""}`}
                                 step="0.001"
                                 value={Number(detail.amount || 0)}
                                 onChange={(event) => {
@@ -1956,11 +2059,35 @@ function PaymentDocumentEditor({
                             </div>
                           </td>
 
-                          <td className="w-14 max-w-[60px] px-1 py-1">
-                            <Select className="h-7 text-xs font-bold text-[#00378c]" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                              <option value={1}>Dr</option>
-                              <option value={-1}>Cr</option>
-                            </Select>
+                          <td className="w-24 px-1 py-1 text-center">
+                            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: 1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === 1
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Debit (Dr)"
+                              >
+                                Dr
+                              </button>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateDetail(detail.id, { sign_ind: -1 })}
+                                className={`px-2.5 py-1 text-[11px] font-extrabold rounded transition-all cursor-pointer ${
+                                  Number(detail.sign_ind) === -1
+                                    ? "bg-[#00378C] text-white shadow-xs"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
+                                }`}
+                                title="Credit (Cr)"
+                              >
+                                Cr
+                              </button>
+                            </div>
                           </td>
 
                           {showAllColumns && (
@@ -2064,7 +2191,7 @@ function PaymentDocumentEditor({
 
                           <td className="w-16 min-w-[62px] px-1 py-1">
                             <Input
-                              className="commercial-number-input finance-money-input"
+                              className="commercial-number-input commercial-tax-perc-input finance-money-input text-right font-semibold !bg-amber-50/50 !text-amber-800 !border-amber-200"
                               disabled={disabled}
                               type="number"
                               step="0.001"
@@ -2083,7 +2210,7 @@ function PaymentDocumentEditor({
                           </td>
                           <td className="finance-amount-cell w-24 min-w-[80px] px-1 py-1">
                             <Input
-                              className="commercial-number-input finance-money-input"
+                              className="commercial-number-input commercial-tax-amt-input finance-money-input font-bold !text-amber-900 !bg-amber-50/80 !border-amber-300 focus:!border-amber-500 focus:!ring-1 focus:!ring-amber-400/40 !text-xs md:!text-[13px] text-right shadow-xs"
                               disabled={disabled}
                               type="number"
                               step="0.001"
@@ -2120,7 +2247,7 @@ function PaymentDocumentEditor({
 
                           {showAllColumns && (
                             <td className="finance-amount-cell w-24 px-1 py-1">
-                              <Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} />
+                              <Input className="commercial-number-input commercial-base-amount-input finance-money-input font-bold !text-[#00378c] !bg-blue-50/60 !border-blue-200 text-right" disabled value={formatAmount(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} />
                             </td>
                           )}
 
@@ -2168,17 +2295,17 @@ function PaymentDocumentEditor({
               </div>
               <div className="commercial-lines-footer flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/80 px-3 py-2.5">
                 <div className="commercial-line-totals flex items-center gap-3">
-                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
-                    <span className="text-xs font-semibold text-slate-600">Total Amount</span>
-                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">Total Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-slate-900">{formatAmount(total)}</strong>
                   </div>
-                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
-                    <span className="text-xs font-semibold text-slate-600">Tax Amount</span>
-                    <strong className="font-mono text-sm font-bold tabular-nums text-slate-900">{formatAmount(totalTax)}</strong>
+                  <div className="flex min-h-9 items-center gap-2.5 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Tax Amount</span>
+                    <strong className="font-mono text-sm md:text-base font-bold tabular-nums text-amber-700">{formatAmount(totalTax)}</strong>
                   </div>
-                  <div className="flex min-h-10 items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-1.5 shadow-2xs">
-                    <span className="text-xs font-bold text-[#00378c]">Net Total</span>
-                    <strong className="font-mono text-base font-extrabold tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
+                  <div className="flex min-h-10 items-center gap-3 rounded-md border-2 border-[#00378c]/60 bg-blue-50 px-4 py-1.5 shadow-xs">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Net Total</span>
+                    <strong className="font-mono text-base md:text-lg font-black tabular-nums text-[#00378c]">{formatAmount(total + totalTax)}</strong>
                   </div>
                 </div>
               </div>
@@ -2773,6 +2900,9 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
     doc_type: docType,
     ex_rate: Number(form.ex_rate || 1),
     detail: form.detail.map((row, index) => {
+      const rowCurr = row.curr_code || form.curr_code;
+      const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
+      const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || form.ex_rate || 1);
       const detail = {
         company_code: row.company_code || companyCode,
         doc_type: docType,
@@ -2781,8 +2911,8 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         doc_date: form.doc_date,
         ac_code: row.ac_code,
         remarks: row.remarks || "",
-        curr_code: form.curr_code,
-        ex_rate: Number(row.ex_rate || form.ex_rate || 1),
+        curr_code: rowCurr,
+        ex_rate: effectiveExRate,
         amount: Math.abs(Number(row.amount || 0)),
         sign_ind: row.sign_ind,
         tx_compntcat_code_1: row.tx_compntcat_code_1 || "N/A",
@@ -2794,7 +2924,7 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         job_no: row.job_no || "",
         dept_code: row.dept_code || "",
         div_code: form.div_code,
-        lcur_amount: Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || form.ex_rate || 1) * Number(row.sign_ind || 1),
+        lcur_amount: Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1),
       };
       return detail as TransactionDetail;
     }),
@@ -2839,19 +2969,25 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
   delete (header as Record<string, unknown>).detail;
   delete (header as Record<string, unknown>).children;
 
-  const details = originalForm.detail.map((row, index) => ({
-    ...row,
-    company_code: row.company_code || companyCode,
-    doc_type: docType,
-    doc_no: docNo,
-    serial_no: row.serial_no || index + 1,
-    doc_date: originalForm.doc_date,
-    header_ac_code: originalForm.ac_code,
-    curr_code: row.curr_code || originalForm.curr_code,
-    ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
-    div_code: row.div_code || originalForm.div_code,
-  }));
+  const details = originalForm.detail.map((row, index) => {
+    const rowCurr = row.curr_code || originalForm.curr_code;
+    const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(originalForm.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(originalForm.curr_code).trim().toUpperCase());
+    const effectiveExRate = isBaseCurr ? 1 : Number(row.ex_rate || originalForm.ex_rate || 1);
+    const effectiveLcurAmt = Math.abs(Number(row.amount || 0)) * effectiveExRate * Number(row.sign_ind || 1);
+    return {
+      ...row,
+      company_code: row.company_code || companyCode,
+      doc_type: docType,
+      doc_no: docNo,
+      serial_no: row.serial_no || index + 1,
+      doc_date: originalForm.doc_date,
+      header_ac_code: originalForm.ac_code,
+      curr_code: rowCurr,
+      ex_rate: effectiveExRate,
+      lcur_amount: effectiveLcurAmt,
+      div_code: row.div_code || originalForm.div_code,
+    };
+  });
 
   const seenDetailSerials = new Set<number>();
   const uniqueDetails = details.map((row, index) => {
@@ -2908,10 +3044,23 @@ function groupChildren(form: TransactionHeader) {
       cleaned.div_code = form.div_code;
       cleaned.ac_code = detail.ac_code;
       cleaned.sign_ind = detail.sign_ind;
-      cleaned.curr_code = cleaned.curr_code || form.curr_code;
-      cleaned.ex_rate = Number(cleaned.ex_rate || form.ex_rate || 1);
-      cleaned.amount = Number(cleaned.amount || 0);
-      cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+
+      if (table === "invoice") {
+        cleaned.indicator_origin = "N";
+        cleaned.curr_code = form.curr_code;
+        const isBaseCurr = String(form.curr_code).trim().toUpperCase() === "INR" || Number(form.ex_rate || 1) === 1;
+        cleaned.ex_rate = isBaseCurr ? 1 : Number(form.ex_rate || 1);
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * Number(cleaned.ex_rate || 1) * Number(detail.sign_ind || 1);
+      } else {
+        const rowCurr = cleaned.curr_code || form.curr_code;
+        const isBaseCurr = String(rowCurr).trim().toUpperCase() === "INR" || (Number(form.ex_rate || 1) === 1 && String(rowCurr).trim().toUpperCase() === String(form.curr_code).trim().toUpperCase());
+        const effectiveExRate = isBaseCurr ? 1 : Number(cleaned.ex_rate || form.ex_rate || 1);
+        cleaned.curr_code = rowCurr;
+        cleaned.ex_rate = effectiveExRate;
+        cleaned.amount = Number(cleaned.amount || 0);
+        cleaned.lcur_amount = Math.abs(Number(cleaned.amount || 0)) * effectiveExRate * Number(detail.sign_ind || 1);
+      }
       grouped[table].push(cleaned);
     });
   });
@@ -2964,17 +3113,17 @@ function dateInput(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatAmount(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+function formatAmount(value: number, decimals = 2) {
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return value < 0 ? `(${amount})` : amount;
 }
 
 function formatExRate(value: number) {
-  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+  const amount = Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   return value < 0 ? `(${amount})` : amount;
 }
 
-function formatNumber(value: number) {
-  if (!Number.isFinite(value)) return "0.000";
-  return value.toFixed(3);
+function formatNumber(value: number, decimals = 2) {
+  if (!Number.isFinite(value)) return (0).toFixed(decimals);
+  return value.toFixed(decimals);
 }

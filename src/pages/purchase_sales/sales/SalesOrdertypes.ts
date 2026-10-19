@@ -99,6 +99,7 @@ export interface SalesOrderLineRow {
 
 export interface PurchaseOrderForm {
   doc_no: string;
+  job_card_no?:string;
     // doc_no: string;
   doc_type?: string;
   doc_date: string;
@@ -336,6 +337,12 @@ export const SDN_CONFIG: SalesConfig = {
   docType: SO_DOC_TYPE.SDN,
   headerParameter: "PS_SDN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_SDN_ENTRY_DETAIL_PAGE",
+};
+
+export const MIS_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.MIS,
+  headerParameter: "PS_SDN_ENTRY_MATERIAL_HEADER_PAGE",
+  detailParameter: "PS_SDN_ENTRY_MATERIAL_DETAIL_PAGE",
 };
 
 export const STR_CONFIG: SalesConfig = {
