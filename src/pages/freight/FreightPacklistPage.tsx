@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Edit2,
   Eye,
@@ -15,7 +16,9 @@ import {
   Plus,
   RefreshCw,
   Save,
+  ShieldCheck,
   Ship,
+  Sparkles,
   Trash2,
   Truck,
   UserRound,
@@ -35,6 +38,7 @@ import { freightSelect } from "../../api/freight";
 
 type ViewMode = "list" | "editor";
 type Notice = { type: "success" | "error"; text: string } | null;
+type SmartCheck = { tone: "ok" | "warn" | "danger"; title: string; detail: string };
 const PackEditContext = createContext(true);
 
 type PackForm = {
@@ -214,6 +218,7 @@ export function FreightPacklistPage({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
+  const [assistOpen, setAssistOpen] = useState(true);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -230,6 +235,56 @@ export function FreightPacklistPage({
   const isAir = mode.code === "A";
   const isSea = mode.code === "S";
   const isRoad = mode.code === "R";
+
+  const syncContainersToPack = useCallback((updatedContainers: ContainerLine[]) => {
+    const totalVol = updatedContainers.reduce((sum, r) => sum + (Number(r.volume) || 0), 0);
+    const totalGross = updatedContainers.reduce((sum, r) => sum + (Number(r.gross_weight) || 0), 0);
+    const totalPkgs = updatedContainers.reduce((sum, r) => sum + (Number(r.no_of_pkgs) || 0), 0);
+    const teuCount = updatedContainers.filter((r) => r.t_f === "T").length;
+    const feuCount = updatedContainers.filter((r) => r.t_f === "F").length;
+    const containerSummary = updatedContainers.map((r) => r.container_no.trim()).filter(Boolean).join(",\r\n");
+
+    setPack((curr) => ({
+      ...curr,
+      volume: totalVol > 0 ? totalVol.toFixed(3) : curr.volume,
+      gross_wt: totalGross > 0 ? totalGross.toFixed(2) : curr.gross_wt,
+      no_of_packings: totalPkgs > 0 ? String(totalPkgs) : curr.no_of_packings,
+      quantity: totalPkgs > 0 ? String(totalPkgs) : curr.quantity,
+      teus: String(teuCount),
+      feus: String(feuCount),
+      container_no: containerSummary || curr.container_no,
+    }));
+  }, []);
+
+  const syncDimensionsToPack = useCallback((updatedDims: DimensionLine[]) => {
+    const totalVol = updatedDims.reduce((sum, r) => sum + (Number(r.volume) || 0), 0);
+    const totalQty = updatedDims.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+    const totalGross = updatedDims.reduce((sum, r) => sum + (Number(r.gross_wt) || 0), 0);
+    const totalCwt = updatedDims.reduce((sum, r) => sum + (Number(r.chargeable_wt) || 0), 0);
+
+    let finalCwt = Math.max(totalGross, totalCwt);
+    if (finalCwt > 0 && finalCwt < 45) finalCwt = 45;
+
+    setPack((curr) => {
+      const nextAmount = (finalCwt > 0 && Number(curr.rate) > 0)
+        ? (finalCwt * Number(curr.rate)).toFixed(3)
+        : curr.amount;
+
+      return {
+        ...curr,
+        volume: totalVol > 0 ? totalVol.toFixed(3) : curr.volume,
+        no_of_packings: totalQty > 0 ? String(totalQty) : curr.no_of_packings,
+        quantity: totalQty > 0 ? String(totalQty) : curr.quantity,
+        gross_wt: totalGross > 0 ? totalGross.toFixed(2) : curr.gross_wt,
+        charge_wt: finalCwt > 0 ? String(Math.round(finalCwt * 100) / 100) : curr.charge_wt,
+        amount: nextAmount,
+      };
+    });
+  }, []);
+
+  const smartChecks = useMemo(() => buildPacklistSmartChecks(pack, containers, dimensions, mode.code), [pack, containers, dimensions, mode.code]);
+  const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
+  const warningChecks = smartChecks.filter((item) => item.tone === "warn").length;
 
   const airCargoColumns: CargoColumn[] = [
   { key: "no_of_packings", label: "No. of Pcs", width: "90px", type: "number" },
@@ -518,6 +573,16 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
         {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={() => setView("list")} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={urgentChecks + warningChecks > 0 ? "border-amber-300 text-amber-700 bg-amber-50" : ""}
+          onClick={() => setAssistOpen((prev) => !prev)}
+        >
+          <Sparkles size={14} />
+          Assist {urgentChecks + warningChecks > 0 ? `(${urgentChecks + warningChecks})` : ""}
+        </Button>
         {pack.job_no && !readOnly && (
           <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}>
             <Plus size={14} /> New {screenTitle}
@@ -532,7 +597,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     );
 
     return () => onEmbeddedActionsChange(null);
-  }, [embeddedFormId, embeddedInWorkspace, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, view]);
+  }, [assistOpen, embeddedFormId, embeddedInWorkspace, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, urgentChecks, view, warningChecks]);
 
   if (view === "list") {
     return (
@@ -572,6 +637,16 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
           <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.packlist_no ? `Pack ${pack.packlist_no}` : `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
             {notice && <NoticeChip notice={notice} />}
             <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={urgentChecks + warningChecks > 0 ? "border-amber-300 text-amber-700 bg-amber-50" : ""}
+              onClick={() => setAssistOpen((prev) => !prev)}
+            >
+              <Sparkles size={14} />
+              Smart Assist {urgentChecks + warningChecks > 0 ? `(${urgentChecks + warningChecks})` : ""}
+            </Button>
             {!editing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
             {pack.job_no && !readOnly && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
             {editing && !readOnly && <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly}><Save size={14} />Save</Button>}
@@ -590,6 +665,8 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
           </div>
         </>
       )}
+
+      {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
       <fieldset disabled={readOnly || !editing} className={`freight-ui-standard freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <PackEditContext.Provider value={editing && !readOnly}>
@@ -797,7 +874,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
 
         {mode.code === "S" && (
           <Panel className="lg:col-span-12" icon={Ship} title="Container Details" meta={`${containers.length} container${containers.length === 1 ? "" : "s"}`}>
-            <ContainerGrid rows={containers} setRows={setContainers} />
+            <ContainerGrid rows={containers} setRows={setContainers} onSync={syncContainersToPack} />
           </Panel>
         )}
 
@@ -884,7 +961,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
 
         {isAir && (
           <Panel className="lg:col-span-12" icon={PackageCheck} title="Dimension Details" meta={`${dimensions.length} cargo dimension lines`}>
-            <DimensionGrid rows={dimensions} setRows={setDimensions} />
+            <DimensionGrid rows={dimensions} setRows={setDimensions} onSync={syncDimensionsToPack} />
           </Panel>
         )}
 
@@ -967,6 +1044,322 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       </fieldset>
     </form>
   );
+}
+
+function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
+  const ready = checks.every((item) => item.tone === "ok");
+  const reviewCount = checks.filter((item) => item.tone !== "ok").length;
+
+  return (
+    <section className="grid gap-2 rounded-md border bg-card p-2.5 shadow-sm mb-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className={`grid h-8 w-8 place-items-center rounded-md ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+            {ready ? <ShieldCheck size={16} /> : <Sparkles size={16} />}
+          </span>
+          <div>
+            <h2 className="m-0 text-sm font-semibold text-foreground">Pack List Assist &amp; Validation</h2>
+            <p className="m-0 text-xs text-muted-foreground">PowerBuilder manifest compliance, party checks, container/dimension calculations.</p>
+          </div>
+        </div>
+        <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+          {ready ? "Ready to Save" : `${reviewCount} to review`}
+        </span>
+      </div>
+      <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-4">
+        {checks.map((check) => (
+          <div
+            key={check.title}
+            className={`rounded-md border px-2.5 py-2 ${
+              check.tone === "danger"
+                ? "border-red-200 bg-red-50 text-red-800"
+                : check.tone === "warn"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              {check.tone === "ok" ? <ShieldCheck size={13} /> : <AlertTriangle size={13} />}
+              {check.title}
+            </div>
+            <p className="m-0 mt-1 text-[11px] leading-snug opacity-85">{check.detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function buildPacklistSmartChecks(
+  pack: PackForm,
+  containers: ContainerLine[],
+  dimensions: DimensionLine[],
+  modeCode: string
+): SmartCheck[] {
+  const isAir = modeCode === "A";
+  const isSea = modeCode === "S";
+  const isRoad = modeCode === "R";
+
+  const checks: SmartCheck[] = [];
+
+  // 1. Job Reference & Status
+  if (pack.job_no.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "Job Reference",
+      detail: `Job ${pack.job_no} linked (${pack.job_type || "IMP"}).`,
+    });
+  } else {
+    checks.push({
+      tone: "danger",
+      title: "Job Reference",
+      detail: "Pack list must be associated with an active Job.",
+    });
+  }
+
+  // 2. Shipper Details (Mandatory in PowerBuilder: gf_checknull('STR', ls_shipper_name, 'Shipper Name/Address'))
+  if (pack.shipper_name.trim() && pack.shipper_address.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "Shipper Profile",
+      detail: `${pack.shipper_name.slice(0, 30)}... verified with address.`,
+    });
+  } else if (pack.shipper_name.trim()) {
+    checks.push({
+      tone: "warn",
+      title: "Shipper Profile",
+      detail: "Shipper address is missing (required in PowerBuilder).",
+    });
+  } else {
+    checks.push({
+      tone: "danger",
+      title: "Shipper Profile",
+      detail: "Shipper Name & Address are mandatory per PB validation.",
+    });
+  }
+
+  // 3. Consignee Details
+  if (pack.consignee_name.trim() && pack.consignee_address.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "Consignee Profile",
+      detail: `${pack.consignee_name.slice(0, 30)}... verified with address.`,
+    });
+  } else if (pack.consignee_name.trim()) {
+    checks.push({
+      tone: "warn",
+      title: "Consignee Profile",
+      detail: "Consignee address should be provided for delivery.",
+    });
+  } else {
+    checks.push({
+      tone: "warn",
+      title: "Consignee Profile",
+      detail: "Consignee details are pending.",
+    });
+  }
+
+  // 4. P.O. Number (Mandatory in PowerBuilder & checked against duplicates)
+  if (pack.po_no.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "P.O. Number",
+      detail: `PO No: ${pack.po_no} recorded.`,
+    });
+  } else {
+    checks.push({
+      tone: "danger",
+      title: "P.O. Number",
+      detail: "Purchase Order (P.O.) number is mandatory in PB.",
+    });
+  }
+
+  // 5. Cargo Measures & UOM
+  const qty = Number(pack.quantity) || 0;
+  const gross = Number(pack.gross_wt) || 0;
+  if (qty > 0 && pack.puom.trim() && gross > 0) {
+    checks.push({
+      tone: "ok",
+      title: "Cargo Manifest",
+      detail: `${qty} ${pack.puom}, Gross: ${gross.toFixed(2)} kg, Vol: ${Number(pack.volume || 0).toFixed(3)} cbm.`,
+    });
+  } else if (!pack.puom.trim()) {
+    checks.push({
+      tone: "danger",
+      title: "Cargo Manifest",
+      detail: "Packaging UOM is required.",
+    });
+  } else if (qty <= 0) {
+    checks.push({
+      tone: "danger",
+      title: "Cargo Manifest",
+      detail: "Cargo quantity / piece count must be greater than 0.",
+    });
+  } else {
+    checks.push({
+      tone: "warn",
+      title: "Cargo Manifest",
+      detail: "Gross weight should be greater than 0.",
+    });
+  }
+
+  // 6. Mode-specific checks
+  if (isSea) {
+    // Vessel & Routing
+    if (pack.vessel_name.trim() && (pack.port_code.trim() || pack.destination_port.trim())) {
+      checks.push({
+        tone: "ok",
+        title: "Sea Carrier & Route",
+        detail: `Vessel: ${pack.vessel_name} (${pack.port_code || "Origin"} -> ${pack.destination_port || "Dest"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Sea Carrier & Route",
+        detail: "Specify Vessel Name and Loading/Discharge ports.",
+      });
+    }
+
+    // Containers (TF_CONTAINER_DET)
+    if (containers.length > 0) {
+      const emptyCont = containers.some((c) => !c.container_no.trim());
+      if (emptyCont) {
+        checks.push({
+          tone: "danger",
+          title: "Container Details",
+          detail: "All container detail rows must have a valid Container Number.",
+        });
+      } else {
+        const teuCount = containers.filter((c) => c.t_f === "T").length;
+        const feuCount = containers.filter((c) => c.t_f === "F").length;
+        checks.push({
+          tone: "ok",
+          title: "Container Details",
+          detail: `${containers.length} container(s) verified: ${teuCount} TEU, ${feuCount} FEU.`,
+        });
+      }
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Container Details",
+        detail: "No containers added. Add container records in Container Details.",
+      });
+    }
+
+    // Bill of Lading
+    if (pack.bl_no.trim() || pack.doc_ref.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "B/L Documentation",
+        detail: `B/L No: ${pack.bl_no || pack.doc_ref} (${pack.bl_date ? formatDate(pack.bl_date) : "Date pending"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "B/L Documentation",
+        detail: "Master/House B/L number is recommended before finalizing.",
+      });
+    }
+  } else if (isAir) {
+    // Air Route & Flight
+    if (pack.port_code.trim() && pack.destination_port.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Air Route",
+        detail: `${pack.port_code} -> ${pack.destination_port} ${pack.flight_info ? `(Flt: ${pack.flight_info})` : ""}.`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Air Route",
+        detail: "Airport of Origin and Destination should be specified.",
+      });
+    }
+
+    // AWB Ref
+    if (pack.bl_no.trim() || pack.doc_ref.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Air Waybill (AWB)",
+        detail: `AWB: ${pack.bl_no || pack.doc_ref} (${pack.bl_date ? formatDate(pack.bl_date) : "Date pending"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "danger",
+        title: "Air Waybill (AWB)",
+        detail: "MAWB or HAWB number is required for air documentation.",
+      });
+    }
+
+    // Dimensions & Chargeable Wt (TF_PACKLIST_DIM)
+    const chgWt = Number(pack.charge_wt) || 0;
+    if (dimensions.length > 0) {
+      checks.push({
+        tone: "ok",
+        title: "Cargo Dimensions",
+        detail: `${dimensions.length} dimension line(s) synced. Chargeable Wt: ${chgWt.toFixed(2)} kg.`,
+      });
+    } else if (chgWt > 0) {
+      checks.push({
+        tone: "ok",
+        title: "Cargo Dimensions",
+        detail: `Chargeable weight set to ${chgWt.toFixed(2)} kg. Dimensions optional.`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Cargo Dimensions",
+        detail: "Add dimension lines or specify Chargeable Weight.",
+      });
+    }
+  } else if (isRoad) {
+    // Road Truck & Vehicle Type
+    if (pack.container_no.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Truck / Vehicle",
+        detail: `Vehicle No: ${pack.container_no} (${pack.container_type || "Standard"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "danger",
+        title: "Truck / Vehicle",
+        detail: "Truck No is mandatory for road freight dispatch.",
+      });
+    }
+
+    // Waybill
+    if (pack.bl_no.trim() || pack.doc_ref.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Waybill Ref",
+        detail: `HBWL No: ${pack.bl_no || pack.doc_ref} (${pack.bl_date ? formatDate(pack.bl_date) : "Date pending"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Waybill Ref",
+        detail: "Waybill / Doc reference is recommended.",
+      });
+    }
+
+    // Value of Goods
+    if (pack.dec_val_carr.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Value of Goods",
+        detail: `Declared value: ${pack.dec_val_carr}.`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Value of Goods",
+        detail: "Declared value of goods should be entered for insurance/customs.",
+      });
+    }
+  }
+
+  return checks;
 }
 
 function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: ReactNode; screenTitle?: string }) {
@@ -1263,10 +1656,40 @@ function toContainerLine(row: LookupRow, index: number): ContainerLine {
 
 const containerTypes = ["STANDARD", "HIGHCUBE", "REFER", "HIGH CUBE REFER", "OPEN TOP", "FLAT RACK", "MAIN DECK PALLET", "LOWER DECK PALLET", "LD-2", "LD-3", "LD-4", "LD-7", "LD-11", "TANK", "BULK", "OPEN SIDE", "PLAT FORM", "VENTILATED"];
 
-function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Dispatch<SetStateAction<ContainerLine[]>> }) {
+function ContainerGrid({ rows, setRows, onSync }: { rows: ContainerLine[]; setRows: Dispatch<SetStateAction<ContainerLine[]>>; onSync?: (updated: ContainerLine[]) => void }) {
   const editable = useContext(PackEditContext);
   const update = (rowIndex: number, field: keyof ContainerLine, value: string) => {
-    setRows((current) => current.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row));
+    setRows((current) => {
+      const next = current.map((row, index) => {
+        if (index !== rowIndex) return row;
+        const updated = { ...row, [field]: value };
+        if (field === "container_type") {
+          const upper = value.toUpperCase();
+          if (upper.includes("40") || upper.includes("FEU") || upper.includes("45")) {
+            updated.t_f = "F";
+          } else if (upper.includes("20") || upper.includes("TEU")) {
+            updated.t_f = "T";
+          }
+        }
+        return updated;
+      });
+      onSync?.(next);
+      return next;
+    });
+  };
+  const addContainer = () => {
+    setRows((current) => {
+      const next = [...current, emptyContainer(current.length + 1)];
+      onSync?.(next);
+      return next;
+    });
+  };
+  const removeContainer = (rowIndex: number) => {
+    setRows((current) => {
+      const next = current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, srno: String(index + 1) }));
+      onSync?.(next);
+      return next;
+    });
   };
   const totals = rows.reduce((result, row) => ({
     volume: result.volume + (Number(row.volume) || 0),
@@ -1277,8 +1700,8 @@ function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Disp
   return (
     <div className="freight-container-grid overflow-hidden rounded-md border bg-background">
       <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground"></span>
-        {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyContainer(current.length + 1)])}><Plus size={14} />Container</Button>}
+        <span className="text-xs font-semibold text-foreground">Sea Container Manifest (TF_CONTAINER_DET)</span>
+        {editable && <Button type="button" size="sm" variant="outline" onClick={addContainer}><Plus size={14} />Container</Button>}
       </div>
       <div className="overflow-auto">
         <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
@@ -1301,7 +1724,7 @@ function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Disp
         value={row.contn_pick_date}
         onChange={(nextValue) => update(rowIndex, "contn_pick_date", nextValue)} />
               <Input className="h-7 text-xs" value={row.bl_no} onChange={(event) => update(rowIndex, "bl_no", event.target.value)} />
-              <Button type="button" size="icon" variant="ghost" title="Remove container" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, srno: String(index + 1) })))}><Trash2 size={14} /></Button>
+              <Button type="button" size="icon" variant="ghost" title="Remove container" onClick={() => removeContainer(rowIndex)}><Trash2 size={14} /></Button>
             </> : <>
               {[row.srno, row.container_no, row.container_type, row.t_f, row.seal_no, row.volume, row.gross_weight, row.no_of_pkgs, row.puom, row.contn_desc, formatDate(row.contn_pick_date), row.bl_no].map((value, index) => <span key={index} title={value} className="min-h-7 truncate px-1 py-1 text-xs font-semibold text-foreground">{value || "-"}</span>)}<span />
             </>}
@@ -1411,15 +1834,72 @@ function CargoMeasureTable({
   );
 }
 
-function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>> }) {
+function DimensionGrid({ rows, setRows, onSync }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>>; onSync?: (updated: DimensionLine[]) => void }) {
   const editable = useContext(PackEditContext);
   const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
   const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
+
+  const update = (rowIndex: number, column: keyof DimensionLine, val: string) => {
+    setRows((current) => {
+      const next = current.map((item, index) => {
+        if (index !== rowIndex) return item;
+        const row = { ...item, [column]: val };
+        // PowerBuilder formula: volume = (L * B * H * Q) / 1000000; cwt = (L * B * H * Q) / 6000
+        const l = Number(column === "length" ? val : row.length) || 0;
+        const b = Number(column === "breadth" ? val : row.breadth) || 0;
+        const h = Number(column === "height" ? val : row.height) || 0;
+        const q = Number(column === "qty" ? val : row.qty) || 0;
+        const gross = Number(column === "gross_wt" ? val : row.gross_wt) || 0;
+
+        if (l > 0 && b > 0 && h > 0 && q > 0) {
+          row.volume = ((l * b * h * q) / 1000000).toFixed(3);
+          const volWt = (l * b * h * q) / 6000;
+          row.chargeable_wt = (gross > 0 ? Math.max(gross, volWt) : volWt).toFixed(2);
+        } else if (gross > 0 && !row.chargeable_wt) {
+          row.chargeable_wt = gross.toFixed(2);
+        }
+
+        if (column === "qty" && (!row.total_qty || row.total_qty === "0")) {
+          row.total_qty = val;
+        }
+        return row;
+      });
+      onSync?.(next);
+      return next;
+    });
+  };
+
+  const addDimension = () => {
+    setRows((current) => {
+      const next = [...current, emptyDimension(current.length + 1)];
+      onSync?.(next);
+      return next;
+    });
+  };
+
+  const removeDimension = (rowIndex: number) => {
+    setRows((current) => {
+      const next = current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) }));
+      onSync?.(next);
+      return next;
+    });
+  };
+
+  const totals = rows.reduce(
+    (acc, row) => ({
+      qty: acc.qty + (Number(row.qty) || 0),
+      gross: acc.gross + (Number(row.gross_wt) || 0),
+      chargeable: acc.chargeable + (Number(row.chargeable_wt) || 0),
+      volume: acc.volume + (Number(row.volume) || 0),
+    }),
+    { qty: 0, gross: 0, chargeable: 0, volume: 0 }
+  );
+
   return (
     <div className="freight-dimension-grid overflow-hidden rounded-md border bg-background">
       <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground">Air cargo dimensions</span>
-        {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>}
+        <span className="text-xs font-semibold text-foreground">Air Cargo Dimensions Manifest (TF_PACKLIST_DIM)</span>
+        {editable && <Button type="button" size="sm" variant="outline" onClick={addDimension}><Plus size={14} />Dimension Line</Button>}
       </div>
       <div className="overflow-auto">
         <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
@@ -1435,16 +1915,26 @@ function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Disp
                   type={numeric.has(column) ? "number" : "text"}
                   value={row[column]}
                   readOnly={column === "sr_no"}
-                  onChange={(event) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column]: event.target.value } : item))}
+                  onChange={(event) => update(rowIndex, column, event.target.value)}
                 />
               ) : (
                 <span key={column} className={`min-h-7 rounded-sm px-1 py-1 text-xs font-semibold text-foreground ${numeric.has(column) ? "text-right" : ""}`}>{row[column] || "-"}</span>
               )
             ))}
-            {editable ? <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) })))}><Trash2 size={14} /></Button> : <span />}
+            {editable ? <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => removeDimension(rowIndex)}><Trash2 size={14} /></Button> : <span />}
           </div>
         ))}
         {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No air dimension lines. Add length, breadth, height and weight details when needed.</div>}
+        {!!rows.length && (
+          <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 bg-muted/25 px-2 py-1.5 text-xs font-semibold">
+            <span className="col-span-4 text-right">Totals</span>
+            <span className="text-right">{totals.qty}</span>
+            <span className="text-right">{totals.gross.toFixed(2)}</span>
+            <span className="text-right">{totals.chargeable.toFixed(2)}</span>
+            <span className="text-right">{totals.volume.toFixed(3)}</span>
+            <span className="col-span-4" />
+          </div>
+        )}
       </div>
     </div>
   );
