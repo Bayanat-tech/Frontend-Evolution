@@ -200,6 +200,14 @@ const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }
   { key: "activities", label: "Activities", icon: Activity },
 ];
 
+const containerTypes = [
+  "STANDARD", "HIGHCUBE", "REFER", "HIGH CUBE REFER", "OPEN TOP", "FLAT RACK",
+  "MAIN DECK PALLET", "LOWER DECK PALLET", "LD-2", "LD-3", "LD-4", "LD-7",
+  "LD-11", "TANK", "BULK", "OPEN SIDE", "PLATFORM", "VENTILATED",
+];
+const loadContainerTypeLookup = async () =>
+  containerTypes.map((value) => ({ container_type: value }) as LookupRow);
+
 type FreightEnquiryMainPageProps = {
   target?: FreightWorkspaceTarget;
   screenType?: "enquiry" | "rfq";
@@ -1593,7 +1601,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     value={header.commodity}
     valueField="prodtype_desc"
     displayFields={["prodtype_desc", "prodtype_code"]}
-    columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]}
+    columns={[{ field: "prodtype_code", header: "Code" } , { field: "prodtype_desc", header: "Commodity" }]}
     loadOptions={() => loadCommodityLookup(header.company_code)}
     onChange={(value, row) => applyHeaderLookup("commodity", value, row)}
     className="sm:col-span-2 lg:col-span-1"
@@ -1609,24 +1617,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   {header.transport_mode === "S" && (
     <>
-      <FormSelect
-        label="Container Type"
-        value={header.container_type}
-        onChange={(value) => setHeaderField("container_type", value)}
-        options={["", ...containerTypeOptions].map((val) => ({ value: val, label: val || "Select Container Type" }))}
-      />
-      <FormSelect
-        label="T/F"
-        value={header.t_f}
-        onChange={(value) => setHeaderField("t_f", value)}
-        options={[{ value: "", label: "Select T/F" }, ...tfOptions]}
-      />
-      <FormSelect
-        label="Shipment Status"
-        value={header.shipment_status}
-        onChange={(value) => setHeaderField("shipment_status", value)}
-        options={["", ...shipmentStatusOptions].map((val) => ({ value: val, label: val || "Select Shipment Status" }))}
-      />
+      {/* <FormDropdown label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} options={containerTypes} /> */}
+      <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+        <span>Container Type</span>
+        <CellDropdown value={header.container_type} options={containerTypes.map((v) => ({ value: v, label: v }))} onChange={(value) => setHeaderField("container_type", value)} />
+     </div>
       <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
     </>
   )}
@@ -1991,7 +1986,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* UOC */}
-                <td className="px-1.5 py-1">
+                {/* <td className="px-1.5 py-1">
                   <select
                     className={fieldClassName}
                     value={row.uoc}
@@ -2005,7 +2000,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                       </option>
                     ))}
                   </select>
-                </td>
+                </td> */}
+
+                <CellDropdown value={row.uoc} options={uocOptions} disabled={isReadOnly} onChange={(value) => setDetailField(index, "uoc", value)} />
 
                 {/* MOC */}
                 <td className="px-1.5 py-1">
@@ -2799,6 +2796,49 @@ function FormSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function CellDropdown({ value, onChange, options, disabled }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  useEffect(() => {
+    if (!pos) return;
+    const close = (e: Event) => { if (listRef.current?.contains(e.target as Node)) return; setPos(null); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [pos]);
+  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (pos) { setPos(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const up = window.innerHeight - rect.bottom < 220 && rect.top > 220;
+    setPos({ left: rect.left, width: Math.max(rect.width, 200), ...(up ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }) });
+  };
+  const selected = options.find((o) => o.value === value)?.label ?? value;
+  return (
+    <>
+      <button type="button" disabled={disabled} className={`${fieldClassName} items-center justify-between text-left`} onClick={toggle}>
+        <span className="truncate">{selected}</span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {pos && (
+        <>
+          <div className="fixed inset-0 z-40" onMouseDown={() => setPos(null)} />
+          <ul ref={listRef} className="fixed z-50 m-0 max-h-48 list-none overflow-y-auto rounded-md border border-slate-300 bg-white p-0 shadow-lg" style={pos}>
+            {[{ value: "", label: "\u00A0" }, ...options].map((opt) => (
+              <li
+                key={opt.value || "blank"}
+                className={`cursor-pointer px-2 py-1.5 text-[11px] font-medium hover:bg-blue-50 ${opt.value === value ? "bg-blue-100 text-[#00378C]" : "text-slate-800"}`}
+                onClick={() => { onChange(opt.value); setPos(null); }}
+              >
+                {opt.label}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
   );
 }
 
