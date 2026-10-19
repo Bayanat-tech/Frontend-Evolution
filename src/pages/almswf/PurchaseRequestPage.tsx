@@ -182,67 +182,97 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   }, [isError, error]);
 
   const openAddPopup = async () => {
-    setFlowFetching(true);
-    setNotice(null);
-    try {
-      const rawRows = (await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
-      })) as unknown as Record<string, unknown>[];
+  setFlowFetching(true);
+  setNotice(null);
+  try {
+    const rawRows = (await almsCommonSelect<Record<string, unknown>>({
+      parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+      loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
+    })) as unknown as Record<string, unknown>[];
 
-      const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_DIVISION",
-        loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
-      })) as unknown as Record<string, unknown>[];
+    const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
+      parameter: "PS_PREQUEST_ENTRY_DIVISION",
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
+    })) as unknown as Record<string, unknown>[];
 
-      const flowRows: FlowRow[] = (rawRows || [])
-        .map((row) => {
-          const flowCode = pick(row, "FLOW_CODE", "flow_code");
-          const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
-          const inlineDivName = pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name");
-          const div = (divisionsRaw || []).find((d) => {
-            const dCode = pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
-            return dCode && dCode.toUpperCase() === flowDivCode.toUpperCase();
-          });
-          const divName =
-            (div && pick(div, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name")) ||
-            inlineDivName || flowDivCode;
-          return {
-            flowCode,
-            flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
-            divCode: flowDivCode,
-            divName,
-          };
-        })
-        .filter((r) => r.flowCode);
+    const flowRows: FlowRow[] = (rawRows || [])
+      .map((row) => {
+        const flowCode = pick(row, "FLOW_CODE", "flow_code");
+        const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
+        const inlineDivName = pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name");
+        const div = (divisionsRaw || []).find((d) => {
+          const dCode = pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
+          return dCode && dCode.toUpperCase() === flowDivCode.toUpperCase();
+        });
+        const divName =
+          (div && pick(div, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name")) ||
+          inlineDivName || flowDivCode;
+        return {
+          flowCode,
+          flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
+          divCode: flowDivCode,
+          divName,
+        };
+      })
+      .filter((r) => r.flowCode);
 
-      if (flowRows.length === 0) {
-        setNotice({ type: "error", message: "No approval flow found for this user." });
-        return;
-      }
-
-      const divMap = new Map<string, Division>();
-      for (const row of flowRows) {
-        const code = (row.divCode || "__NO_DIV__").toUpperCase();
-        if (!divMap.has(code)) {
-          divMap.set(code, {
-            div_code: row.divCode || "—",
-            div_name: row.divName || row.divCode || "—",
-          } as unknown as Division);
-        }
-      }
-      const uniqueDivisions = Array.from(divMap.values());
-
-      setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
-    } catch (err) {
-      setNotice({
-        type: "error",
-        message: err instanceof Error ? err.message : "Unable to determine approval flow",
-      });
-    } finally {
-      setFlowFetching(false);
+    if (flowRows.length === 0) {
+      setNotice({ type: "error", message: "No approval flow found for this user." });
+      return;
     }
-  };
+
+    // ✅ Case A: only ONE flow → open PR page directly, no popup
+    if (flowRows.length === 1) {
+      const only = flowRows[0];
+      setTaskPopup({
+        open: true,
+        title: "Add PR",
+        data: {
+          existingData: null,
+          isEditMode: false,
+          isViewMode: false,
+          flowCode: only.flowCode,
+          flowDescription: only.flowDescription,
+        },
+      });
+      return;
+    }
+
+    // Build unique divisions
+    const divMap = new Map<string, Division>();
+    for (const row of flowRows) {
+      const code = (row.divCode || "__NO_DIV__").toUpperCase();
+      if (!divMap.has(code)) {
+        divMap.set(code, {
+          div_code: row.divCode || "—",
+          div_name: row.divName || row.divCode || "—",
+        } as unknown as Division);
+      }
+    }
+    const uniqueDivisions = Array.from(divMap.values());
+
+    // ✅ Case B: only ONE division but multiple flows → open flow confirm directly
+    if (uniqueDivisions.length === 1) {
+      setFlowConfirm({
+        open: true,
+        loading: false,
+        rows: flowRows,
+        selectedFlowCode: "",
+      });
+      return;
+    }
+
+    // ✅ Case C: multiple divisions → show division picker
+    setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
+  } catch (err) {
+    setNotice({
+      type: "error",
+      message: err instanceof Error ? err.message : "Unable to determine approval flow",
+    });
+  } finally {
+    setFlowFetching(false);
+  }
+};
 
   const handleDivisionSelect = (division: Division) => {
     const selectedCode = String(
