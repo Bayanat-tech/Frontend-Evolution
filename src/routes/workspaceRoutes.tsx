@@ -213,6 +213,7 @@ import PurchaseSalesDashboard from "../pages/purchase_sales/dashboard/Purchasesa
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import PostDateCheque from "../pages/finance/PostDateCheque";
 import { AirTicketRequestReportPage, AttendanceRegisterReportPage, EmployeeAccrualBalanceReportPage, EmployeeAirfareReportPage, EmployeeJoinerReportPage, EmployeeLeaversReportPage, EmployeeListingReportPage, EmployeePayUnitReportPage, EmployeeRegisterReportPage, EmployeeTenureReportPage, PassportExpiryReportPage } from "../pages/hr/Reports/EmployeeReportsPage";
+import HrAbsenceReport from "../pages/hr/Reports/HrAbsenceReport";
 import HREmployeeLeaveEntitlement from "../pages/hr/HREmployeeLeaveEntitlement";
 import { SalesReturnPage } from "../pages/purchase_sales/sales/SalesReturnPage";
 import { MateriaLReturnPage } from "../pages/purchase_sales/production/MateriaLReturnPage";
@@ -220,6 +221,9 @@ import { PurchaseReturnPage } from "../pages/purchase_sales/purchase/PurchaseRet
 import { MaterialIssuesPage } from "../pages/purchase_sales/production/MateriallssuePage";
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
+import HrRetirementReport from "../pages/hr/Reports/HrRetirementReport";
+
+
 import EmployeeAssessmentReportPage from "../pages/hr/Reports/Employeeassessmentreportpage";
 import HrDashboard from "../pages/hr/dashboard/HRDashboard";
 import EmployeeTicketEligibilityPage from "../pages/hr/Reports/Employeeticketeligibilitypage";
@@ -231,6 +235,10 @@ import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypa
 import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
 import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
 
+import HrDocumentReport from "../pages/hr/Reports/HrDocumentReport";
+import HrLabourCardExpiryReport from "../pages/hr/Reports/HrLabourCardExpiry";
+import HrEmployeeHeadCountList from "../pages/hr/Reports/HrEmployeeHeadCountList";
+import HrSalaryRegister from "../pages/hr/Reports/HrSalaryRegister";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -306,11 +314,23 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/joining_report"),
     element : () => <EmployeeJoinerReportPage />
   },
+
+  {
+  name: "HR Absence Report",
+  match: ({ pathname }) => isHrAbsenceReportRoute(pathname),
+  element: () => <HrAbsenceReport />,
+},
     {
     name : 'Hr Leave Entitlement Master',
     match : ({pathname}) => pathname.toLowerCase().includes("/hr/reports/leave_entitlement"),
     element : () => <HREmployeeLeaveEntitlement />
   },
+
+  {
+  name: "HR Document Report",
+  match: ({ pathname }) => isHrDocumentReportRoute(pathname),
+  element: () => <HrDocumentReport />,
+},
   {
     name : 'Hr Employee Register Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/register_report"),
@@ -321,6 +341,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/leaver_report"),
     element : () => <EmployeeLeaversReportPage />
   },
+
+  {
+  name: "HR Labour Card Expiry Listing Report",
+  match: ({ pathname }) => isHrLabourCardExpiryRoute(pathname),
+  element: () => <HrLabourCardExpiryReport />,
+  },
+
+    {
+    name : 'Attendance Register Report',
+    match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/attendance_register"),
+    element : () => <AttendanceRegisterReportPage />
+   },
+
   {
     name : 'Hr Employee Tenure Report',
     match : ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/reports/employee/tenure_report"),
@@ -343,6 +376,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsDashboardRoute(pathname),
     element: () => <WmsDashboard />,
   },
+
+  {
+  name: "HR Salary Register Report",
+  match: ({ pathname }) => isHrSalaryRegisterRoute(pathname),
+  element: () => <HrSalaryRegister />,
+  },
+
   {
     name: 'HR Consolidate Pay Unit',
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
@@ -352,6 +392,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Salary Advance Recovery",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/advance/deduction_letter"),
     element: () => <SalaryAdvanceRecoveryPage />,
+  },
+
+  {
+  name: "HR Retirement Report",
+  match: ({ pathname }) => isHrRetirementReportRoute(pathname),
+  element: () => <HrRetirementReport />,
+  },
+
+  {
+  name: "HR Employee Head Count List Report",
+  match: ({ pathname }) => isHrEmployeeHeadCountListRoute(pathname),
+  element: () => <HrEmployeeHeadCountList />,
+  },
+
+  {
+    name: 'HR Leave Slap Page',
+    match: (context) => isHrRoute(context) && isHrLeaveSlapRoute(context),
+    element: () => <LeaveSlapPage />,
   },
 
  
@@ -3158,6 +3216,19 @@ function isProductCategoryRoute(pathname: string) {
   );
 }
 
+function isHrRetirementReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/retirement report") ||
+    normalized.includes("/hcm/hcm/reports/employee/retirement%20report") ||
+    normalized.includes("/hcm/hcm/reports/employee/retirement_report") ||
+    normalized.includes("/hcm/hcm/reports/employee/retirement-report") ||
+    compact.includes("employeeretirementreport")
+  );
+}
+
+
 function isZoneMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
 
@@ -3206,4 +3277,65 @@ function isPendingPurchaseOrderRoute(pathname: string) {
   );
 }
 
+function isHrAbsenceReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/absence report") ||
+    normalized.includes("/hcm/hcm/reports/employee/absence%20report") ||
+    normalized.includes("/hcm/hcm/reports/employee/absence_report") ||
+    normalized.includes("/hcm/hcm/reports/employee/absence-report") ||
+    compact.includes("employeeabsencereport")
+  );
+}
 
+function isHrDocumentReportRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/document report") ||
+    normalized.includes("/hcm/hcm/reports/employee/document%20report") ||
+    normalized.includes("/hcm/hcm/reports/employee/document_report") ||
+    normalized.includes("/hcm/hcm/reports/employee/document-report") ||
+    compact.includes("employeedocumentreport")
+  );
+}
+
+
+function isHrLabourCardExpiryRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/labour_card_expiry_listing") ||
+    normalized.includes("/hcm/hcm/reports/employee/labour%20card%20expiry%20listing") ||
+    normalized.includes("/hcm/hcm/reports/employee/labour-card-expiry-listing") ||
+    normalized.includes("/hcm/hcm/reports/employee/labour_card_expiry") ||
+    compact.includes("labourcardexpirylisting") ||
+    compact.includes("labourcardexpiry")
+  );
+}
+
+function isHrEmployeeHeadCountListRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/employee/employee_head_count_list") ||
+    normalized.includes("/hcm/hcm/reports/employee/employee%20head%20count%20list") ||
+    normalized.includes("/hcm/hcm/reports/employee/employee-head-count-list") ||
+    normalized.includes("/hcm/hcm/reports/employee/employee_head_count") ||
+    compact.includes("employeeheadcountlist") ||
+    compact.includes("employeeheadcount")
+  );
+}
+
+
+function isHrSalaryRegisterRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/reports/payroll/salary_register") ||
+    normalized.includes("/hcm/hcm/reports/payroll/salary%20register") ||
+    normalized.includes("/hcm/hcm/reports/payroll/salary-register") ||
+    compact.includes("reportspayrollsalaryregister")
+  );
+}
