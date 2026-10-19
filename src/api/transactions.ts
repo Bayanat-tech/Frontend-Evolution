@@ -1855,6 +1855,12 @@ export async function getMonthlySalarySummaryReportExcelDownload(params: ReportP
     params,
     { responseType: "blob" }
   );
+
+  const raw = response.data as Blob;
+  if (raw.type.includes("json")) {
+    const msg = JSON.parse(await raw.text())?.message;
+    throw new Error(msg || "No data found for the selected criteria.");
+  }
   const blob = new Blob([response.data], { type: "application/vnd.ms-excel" });
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
