@@ -375,7 +375,7 @@ function InstructionGrid({ rows, setRows, deleteRow, onInit, saving, readOnly, c
       saving={saving}
       addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })}
       readOnly={readOnly}
-      labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: "Instruction Assigned To", op_date: "Instruction Date", op_remarks: "Remarks" }}
+      labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: "Instruction Assigned", op_date: "Instruction Date", op_remarks: "Remarks" }}
       instructionLookup={{
         load: async () => {
           const response = await api.post<{ data?: LookupRow[] }>("/api/freight/job-instructions/codes", {
@@ -493,7 +493,7 @@ function EditableGrid({
       </div>
 
       {/* Finance Styled Scrollable Table */}
-      <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-310px)] min-h-[220px]">
+      <div className="commercial-lines-scroll overflow-auto min-h-[220px]" style={{ maxHeight: "calc(100dvh - 210px)" }}>
         <table className="finance-lines-table w-full text-xs min-w-[1000px] border-collapse">
           <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
             <tr>
