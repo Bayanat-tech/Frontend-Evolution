@@ -171,7 +171,6 @@ export function BankReconciliationPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Bank Reconciliation</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Retrieve cheque transactions and update reconciliation status.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void retrieve()}><RefreshCw size={15} /> Retrieve</Button>
