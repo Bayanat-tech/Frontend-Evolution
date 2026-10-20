@@ -722,12 +722,12 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
 
         <Panel className="pack-parties-panel lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
           <div className="freight-job-field-grid pack-parties-grid">
-            <Textarea rows={2} label="Shipper Name" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "shipper_name")} />
-            <Textarea rows={3} label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "shipper_address")} />
-            <Textarea rows={2} label="Consignee Name" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "consignee_name")} />
-            <Textarea rows={3} label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "consignee_address")} />
-            <Textarea rows={2} label="Notify Name" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "notify_name")} />
-            <Textarea rows={3} label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "notify_address")} />
+            <Field label="Shipper Name" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "shipper_name")} />
+            <Field label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "shipper_address")} />
+            <Field label="Consignee Name" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "consignee_name")} />
+            <Field label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "consignee_address")} />
+            <Field label="Notify Name" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "notify_name")} />
+            <Field label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "notify_address")} />
             {isAir && (
               <>
                 <Field label="Airline Name" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} className="lg:col-span-1" maxLength={freightTextLimit("TF_PACKLIST", "airline")} />
@@ -2071,19 +2071,22 @@ function CargoMeasureTable({
   const editable = useContext(PackEditContext);
 
   return (
-    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
-      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
-        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
-          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
-            <PackageCheck size={14} />
-          </span>
-          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
-            Cargo Summary & Measurements
-          </span>
-        </div>
-      </div>
+    // <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
+    //   <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+    //     <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+    //       <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+    //         <PackageCheck size={14} />
+    //       </span>
+    //       <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+    //         Cargo Summary & Measurements
+    //       </span>
+    //     </div>
+    //   </div>
 
-      <div className="commercial-lines-scroll overflow-auto">
+    //   <div className="commercial-lines-scroll overflow-auto">
+        <div className="rounded-md border bg-card shadow-xs overflow-hidden" style={{ minHeight: 0, height: "auto" }}>
+        <div className="overflow-auto" style={{ minHeight: 0, height: "auto" }}>
+
         <table className="finance-lines-table w-full text-xs border-collapse">
           <thead className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-wider shadow-xs whitespace-nowrap border-b-2 border-slate-300">
             <tr>
