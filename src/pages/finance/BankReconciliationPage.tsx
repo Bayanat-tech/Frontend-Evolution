@@ -65,6 +65,10 @@ export function BankReconciliationPage() {
 
   const retrieve = async (event?: FormEvent) => {
     event?.preventDefault();
+    if (!filters.division) {
+      setNotice({ type: "error", message: "Please select a Division first" });
+      return;
+    }
     setLoading(true);
     setNotice(null);
     try {
@@ -72,13 +76,13 @@ export function BankReconciliationPage() {
         parameter: "BANK_RECONCILIATION_GET_DETAIL_DATA",
         loginid: user?.loginid || "",
         code1: user?.company_code || "",
-        code2: filters.docType,
-        code3: filters.bankAccount,
+        code2: filters.docType || "All",
+        code3: filters.bankAccount || "All",
         code4: filters.division,
-        code5: filters.docDateFrom,
-        code6: filters.docDateTo,
-        code7: filters.chequeDateFrom,
-        code8: filters.chequeDateTo,
+        code5: filters.docDateFrom || "1900-01-01",
+        code6: filters.docDateTo || "2099-12-31",
+        code7: filters.chequeDateFrom || "1900-01-01",
+        code8: filters.chequeDateTo || "2099-12-31",
       });
       setRows(data.map(mapRecon));
     } catch (error) {
@@ -110,6 +114,20 @@ export function BankReconciliationPage() {
       });
       if (!response.data?.success) throw new Error(response.data?.message || "Unable to update reconciliation");
       setNotice({ type: "success", message: response.data.message || "Reconciliation updated successfully" });
+      // Re-retrieve to automatically remove newly reconciled items from the grid
+      const remainingData = await getDynamicLookupaccount({
+        parameter: "BANK_RECONCILIATION_GET_DETAIL_DATA",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+        code2: filters.docType || "All",
+        code3: filters.bankAccount || "All",
+        code4: filters.division,
+        code5: filters.docDateFrom || "1900-01-01",
+        code6: filters.docDateTo || "2099-12-31",
+        code7: filters.chequeDateFrom || "1900-01-01",
+        code8: filters.chequeDateTo || "2099-12-31",
+      });
+      setRows(remainingData.map(mapRecon));
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save reconciliation" });
     } finally {
