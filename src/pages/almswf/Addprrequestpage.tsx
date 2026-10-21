@@ -18,9 +18,11 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsCommonSelect, almsSavePrequestBulk } from "../../api/alms";
-import { openPRPurchaseReport } from "../../api/transactions";
+import { getPrRegisterFormReportExcel, getPrRegisterFormReportHtml, openPRPurchaseReport } from "../../api/transactions";
 import { useToast } from "../../components/ui/AlertToast";
 import { PurchaseDocumentIdentity } from "./PurchaseDocumentIdentity";
+import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
 import ImportPrItems, { PrImportRow } from "./Importpritems";
 
 
@@ -955,10 +957,28 @@ const AddPRRequestPage = ({
     });
   };
 
-  const handlePrint = () => {
-    if (!requestNumber) { toast.warning("Please save the request before printing.", 4000); return; }
-    openPRPurchaseReport({ parameter: "PS_PREQUEST_ENTRY_PRReport", loginid, code1: companyCode, code2: requestNumber });
-  };
+  const handlePrint = async () => {
+  if (!requestNumber) { toast.warning("Please save the request before printing.", 4000); return; }
+
+  const params = { loginid, company_code: companyCode, request_number: requestNumber };
+  const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
+
+  try {
+    const html = await getPrRegisterFormReportHtml(params);
+    preview.ready({
+      html,
+      filename: `purchase_request_${requestNumber}`,
+      orientation: "landscape",
+      onExcel: async () => {
+        await getPrRegisterFormReportExcel(params);
+      },
+    });
+  } catch (err: any) {
+    const msg = err?.message ?? "Failed to load report. Please try again.";
+    preview.fail(new Error(msg));
+    toast.error(msg, 5000);
+  }
+};
 
   const handleApprove = async () => {
     if (!requestNumber) { toast.error("No PR to approve", 5000); return; }
@@ -2262,6 +2282,8 @@ const AddPRRequestPage = ({
           </div>
         </div>
       </Dialog>
+
+       <PurchaseReportPreview />
     </>
   );
 };
