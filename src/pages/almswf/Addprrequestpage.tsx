@@ -4,7 +4,7 @@ import {
   Plus, Save, Send, X, CheckCircle,
   ArrowLeft, ChevronLeft, Paperclip, FileText, Printer,
   Receipt, Percent, Columns3, Search, List, ChevronUp, ChevronDown, Trash2,
-  Loader2, Download, MessageSquare, Clock
+  Loader2, Download, MessageSquare, Clock, FileSpreadsheet
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -21,9 +21,15 @@ import { almsCommonSelect, almsSavePrequestBulk } from "../../api/alms";
 import { openPRPurchaseReport } from "../../api/transactions";
 import { useToast } from "../../components/ui/AlertToast";
 import { PurchaseDocumentIdentity } from "./PurchaseDocumentIdentity";
+import ImportPrItems, { PrImportRow } from "./Importpritems";
+
 
 const PO_BLUE = "#00378C";
 const BTN_BLUE = "rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md disabled:opacity-60";
+
+// Employees who get the Supplier column + Terms & Conditions tab.
+// 2019070493 = ESHRAQ, 2010080035 = SHAHAB
+const SUPPLIER_USER_CODES: string[] = ["2019070493", "2010080035"];
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -247,7 +253,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
   } as TPRItem;
 }
 
-function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number) {
+function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number, isSupplierUser: boolean) {
   const errors: string[] = [];
   if (!String(header.DESCRIPTION ?? "").trim()) errors.push("Description / Reason is required");
   if (!String(header.REMARKS ?? "").trim()) errors.push("Remarks is required");
@@ -259,14 +265,14 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
     items.forEach((item, index) => {
       if (!item.ITEM_CODE) errors.push(`Item ${index + 1}: Product Code is required`);
       if (!item.ITEM_DESP) errors.push(`Item ${index + 1}: Product Description is required`);
-      if (userLevel >= 6 && !item.SUPPLIER) errors.push(`Item ${index + 1}: Supplier is required`);
+      if (isSupplierUser && !item.SUPPLIER) errors.push(`Item ${index + 1}: Supplier is required`);
       if (userLevel === 1 && computeQuantity(item) <= 0) errors.push(`Item ${index + 1}: Quantity must be greater than 0`);
       if (num(item.ITEM_RATE) <= 0) errors.push(`Item ${index + 1}: Rate must be greater than 0`);
       if (!item.CAPEX_OPEX_NON_OPEX) errors.push(`Item ${index + 1}: CAPEX is required`);
     });
   }
 
-  if (userLevel >= 6 && terms.length > 0) {
+  if (isSupplierUser && terms.length > 0) {
     terms.forEach((term, index) => {
       if (!String(term.DLVR_TERM ?? "").trim()) errors.push(`Term ${index + 1}: Delivery Term is required`);
       if (!String(term.PAYMENT_TERMS ?? "").trim()) errors.push(`Term ${index + 1}: Payment Terms is required`);
@@ -284,6 +290,7 @@ const AddPRRequestPage = ({
   const { user } = useAuth();
   const companyCode = String(user?.company_code ?? "").trim();
   const loginid = String(user?.loginid ?? "").trim();
+  const isSupplierUser = SUPPLIER_USER_CODES.includes(loginid);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -300,6 +307,7 @@ const AddPRRequestPage = ({
 
   const [items, setItems] = useState<TPRItem[]>([]);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
@@ -314,6 +322,7 @@ const AddPRRequestPage = ({
   const [headerOpen, setHeaderOpen] = useState(true);
 
   const [userApprovalLevel, setUserApprovalLevel] = useState<number>(0);
+  const [lastApprovalLevel, setLastApprovalLevel] = useState<number>(7);
   const [displayDate, setDisplayDate] = useState("");
   const isInitialized = useRef(false);
   const itemsLoadedRef = useRef(false);
@@ -370,6 +379,8 @@ const AddPRRequestPage = ({
     String(header.LAST_ACTION || "").toUpperCase() === "CANCELLED";
   const isSentBack = String(header.LAST_ACTION || "").toUpperCase() === "SENDBACK";
 
+  const isLastLevel = userApprovalLevel >= 2 && userApprovalLevel === lastApprovalLevel;
+
   const effectiveViewMode = isFinalApproved || isCancelled || (isViewMode && !isEditMode);
   const disabled = saving || effectiveViewMode;
 
@@ -415,7 +426,11 @@ const AddPRRequestPage = ({
           loginid, code1: companyCode, code2: header.FLOW_CODE || "",
           code3: user?.loginid || "", code4: "",
         });
-        if (result && result.length > 0) setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
+        if (result && result.length > 0) {
+          setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
+          const ll = Number(result[0].LAST_LEVEL) || 0;
+          if (ll > 0) setLastApprovalLevel(ll);
+        }
         else setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
       } catch {
         setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
@@ -424,8 +439,10 @@ const AddPRRequestPage = ({
     fetchUserLevel();
   }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, isEditMode, isViewMode]);
 
-  const shouldShowSupplier = () => userApprovalLevel >= 6;
-  const shouldShowTermsTab = () => userApprovalLevel >= 6 || (header as any).FINAL_APPROVED === "Y";
+  // Supplier column + Terms tab are driven by the logged-in employee code (SUPPLIER_USER_CODES),
+  // not by approval level.
+  const shouldShowSupplier = () => isSupplierUser;
+  const shouldShowTermsTab = () => isSupplierUser || (header as any).FINAL_APPROVED === "Y";
 
   const { data: productCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-product-lookup", companyCode],
@@ -646,7 +663,7 @@ const AddPRRequestPage = ({
   // - Supplier changed on an item  -> same row is re-used (typed term text is kept)
   // - Different suppliers          -> one row each (e.g. Tata + Bajaj = 2 rows)
   useEffect(() => {
-    if (userApprovalLevel < 6) return;
+    if (!isSupplierUser) return;
 
     const used: string[] = [];
     const nameMap = new Map<string, string>();
@@ -704,7 +721,7 @@ const AddPRRequestPage = ({
       }
       return next;
     });
-  }, [items, userApprovalLevel, supplierList, companyCode, termsLoadTick]);
+  }, [items, isSupplierUser, supplierList, companyCode, termsLoadTick]);
 
   const setHdr = (field: keyof TPRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
@@ -765,7 +782,7 @@ const AddPRRequestPage = ({
   const colWidths = useMemo(() => {
     const qtyGroup = [60, 50, 60, 65]; // PQTY, LUOM, LQTY, REQQTY
     const w: number[] = [30, 240, 55, ...qtyGroup, ...qtyGroup];
-    if (userApprovalLevel >= 6) w.push(380); // Supplier: full text visible
+    if (isSupplierUser) w.push(380); // Supplier: full text visible
     w.push(80, 105, 65, 70, 108, 60, 70, 108);
     if (showAllColumns) {
       // LCURR before tax, Tax type, Tax cat, Tax code, Tax LCURR, LCURR after tax
@@ -774,14 +791,14 @@ const AddPRRequestPage = ({
     w.push(90); // CAPEX
     w.push(70); // Action
     return w;
-  }, [showAllColumns, userApprovalLevel]);
+  }, [showAllColumns, isSupplierUser]);
 
   const tableMinWidth = colWidths.reduce((a, b) => a + b, 0);
   const itemsColSpan = colWidths.length;
   const qtyColSpan = 4;
 
   const validateAndShowErrors = (): boolean => {
-    const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel);
+    const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel, isSupplierUser);
     if (!valid) {
       setNotice({ type: "error", message: errors.join(". ") });
       return false;
@@ -823,7 +840,7 @@ const AddPRRequestPage = ({
       SECTOR_CODE: "", CITY_NAME: "", EXP_TYPE_CODE: "", PL_BL_CODE: "", DEPT_CODE: "",
       AC_STATUS: "", AC_INFZE: "", BI_MAIN_GROUP: "", BI_SUB_GROUP: "", BI_EXP_TYPE: "",
       BI_PL_BS_IND: "", BI_DEPT: "", CREATED_BY: "", UPDATED_BY: "",
-      NEXT_ACTION_BY: overrides.NEXT_ACTION_BY ?? "",
+      NEXT_ACTION_BY: overrides.NEXT_ACTION_BY ?? header.NEXT_ACTION_BY ?? "",
       SENTBACK_REASON: status === "SENDBACK" ? remark : "",
       REJECT_REASON: status === "REJECTED" ? remark : "",
       DOC_NO: (header as any).DOC_NO ?? null,
@@ -946,7 +963,7 @@ const AddPRRequestPage = ({
   const handleApprove = async () => {
     if (!requestNumber) { toast.error("No PR to approve", 5000); return; }
     if (!validateAndShowErrors()) return;
-    setSaving(true); setNotice(null);
+    setSaving(true); setSavingAction("APPROVED"); setNotice(null);
     try {
       const cur = Number(header.FLOW_LEVEL_RUNNING) || 1;
       const fin = Number(header.FLOW_LEVEL_FINAL) || 1;
@@ -960,7 +977,7 @@ const AddPRRequestPage = ({
       onClose(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve", 5000);
-    } finally { setSaving(false); }
+    } finally { setSaving(false); setSavingAction(null); }
   };
 
   const { data: sendBackTargets = [] } = useQuery<LookupItem[]>({
@@ -1012,21 +1029,24 @@ const AddPRRequestPage = ({
     const text = newComment.trim();
     if (!text) return;
     const localId = newId();
+    const knownName = historyList.find((h) => String(h.ACTION_BY || "").trim() === loginid)?.ACTION_BY_NAME;
     setLocalComments((prev) => [...prev, {
       _lid: localId,
       LAST_ACTION: "COMMENTED",
       COMMENTS: text,
       ACTION_BY: loginid,
-      ACTION_BY_NAME: String((user as any)?.emp_name || (user as any)?.name || loginid),
+      ACTION_BY_NAME: String(knownName || (user as any)?.emp_name || (user as any)?.name || loginid),
       ACTION_DATE: new Date().toISOString(),
     }]);
     setNewComment("");
     const ok = await runAction("COMMENTED", "Comment added successfully!", text, {
+      REMARKS: text,
       REMARKS_HISTORY: text,
       NEXT_ACTION_BY: header.NEXT_ACTION_BY || "",
     });
     if (ok) {
       await refetchHistory();
+      setLocalComments([]);
     } else {
       setLocalComments((prev) => prev.filter((c) => c._lid !== localId));
       setNewComment(text);
@@ -1066,6 +1086,57 @@ const AddPRRequestPage = ({
     blank.CAPEX_OPEX_NON_OPEX = "";
     (blank as any).id = newId();
     setItems([...items, blank]);
+  };
+
+  // Bulk-add item lines coming from the Excel import (already validated in ImportPrItems)
+  const handleImportItems = (rows: PrImportRow[]) => {
+    if (effectiveViewMode || rows.length === 0) return;
+    const exRate = num(header.CURRENCY_RATE) || 1;
+
+    setItems((prev) => {
+      const start = prev.length;
+      const added = rows.map((r, i) => {
+        const prod = productCodes.find(
+          (p) => String(p.PROD_CODE).trim().toUpperCase() === r.prodCode.trim().toUpperCase()
+        );
+        const sup = r.supplierCode
+          ? supplierList.find(
+              (s) => String(s.SUPPLIER_CODE).trim().toUpperCase() === r.supplierCode.trim().toUpperCase()
+            )
+          : undefined;
+
+        const blank = blankItem(start + i + 1, requestNumber ?? "", companyCode, header);
+        blank.CURR_CODE = header.CURR_CODE || "";
+        blank.CURR_NAME = header.CURR_NAME || "";
+        blank.CURRENCY_RATE = header.CURRENCY_RATE || 1;
+        blank.TX_CAT_CODE = header.TX_CAT_CODE || "";
+        blank.TX_CAT_NAME = header.TX_CAT_NAME || "";
+        blank.TX_COMPNTCAT_CODE_1 = header.TX_COMPNTCAT_CODE_1 || "";
+        blank.TX_COMPNT_PERC_1 = (header as any).TX_COMPNT_PERC_1 || 0;
+        blank.CASH_IND = "N";
+        (blank as any).id = newId();
+
+        blank.ITEM_CODE = String(prod?.PROD_CODE ?? r.prodCode);
+        blank.ITEM_DESP = String(prod?.PROD_NAME ?? "");
+        blank.P_UOM = String(prod?.P_UOM ?? "");
+        blank.L_UOM = String(prod?.L_UOM ?? "");
+        blank.UPPP = Number(prod?.UPPP) || 0;
+        blank.ITEM_RATE = r.rate;
+        blank.QTY_PUOM = r.qtyPuom;
+        blank.QTY_LUOM = r.qtyLuom;
+        blank.CAPEX_OPEX_NON_OPEX = r.capex;
+        if (sup) {
+          blank.SUPPLIER = String(sup.SUPPLIER_CODE);
+          (blank as any).SUPPLIER_NAME = String(sup.SUPPLIER_NAME ?? "");
+        }
+        blank.REQUEST_QUANTITY = computeQuantity(blank);
+        return recalcItem(blank, exRate);
+      });
+      return [...prev, ...added];
+    });
+
+    setActiveTab("items");
+    toast.success(`${rows.length} item line${rows.length === 1 ? "" : "s"} imported from Excel`, 4000);
   };
 
   const removeItem = (id: string) => {
@@ -1219,7 +1290,7 @@ const AddPRRequestPage = ({
         <form
           data-header-expanded={headerOpen}
           className={`finance-document-ui payment-workbench commercial-editor grid h-full ${(isCancelled || isSentBack) ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-          onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+          onSubmit={(event) => { event.preventDefault(); if (!isLastLevel) void handleSubmit(); }}
         >
           <CardHeader className="commercial-command-header border-b bg-primary px-4 text-primary-foreground shadow-sm" style={{ paddingTop: "10px", paddingBottom: "10px", minHeight: "52px" }}>
             <div className="flex items-center justify-between gap-3" style={{ minHeight: "44px" }}>
@@ -1258,13 +1329,13 @@ const AddPRRequestPage = ({
                       {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}
                     </Button>
                   )}
-                  {!effectiveViewMode && docType === "PR" && (
+                  {!effectiveViewMode && docType === "PR" && !isLastLevel && (
                     <Button type="button" onClick={handleSubmit} disabled={disabled || saving} className={BTN_BLUE}>
                       {savingAction === "SUBMITTED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}
                     </Button>
                   )}
-                  {!effectiveViewMode && userApprovalLevel === 7 && (
+                  {!effectiveViewMode && isLastLevel && (
                     <Button
                       type="button"
                       onClick={async (e) => {
@@ -1275,7 +1346,7 @@ const AddPRRequestPage = ({
                       disabled={disabled || saving}
                       className={BTN_BLUE}
                     >
-                      {savingAction === "APPROVED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle size={15} />}
+                      {savingAction === "APPROVED" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                       {savingAction === "APPROVED" ? "Approving..." : "Approve"}
                     </Button>
                   )}
@@ -1341,7 +1412,7 @@ const AddPRRequestPage = ({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground"></div>
             ) : (
               <div className={`commercial-editor-sections grid gap-3 min-w-0 ${isCancelled ? "cancelled-content-wrapper" : ""}`}>
                 {isCancelled && (
@@ -1611,7 +1682,7 @@ const AddPRRequestPage = ({
                         <List size={14} />
                       </span>
                       <button type="button" onClick={() => setActiveTab("items")} className={tabBtn(activeTab === "items")}>
-                        <span>{userApprovalLevel >= 6 ? "Item Details" : "Details Items"}</span>
+                        <span>{isSupplierUser ? "Item Details" : "Details Items"}</span>
                         <span className={tabCount}>{items.length} {items.length === 1 ? "line" : "lines"}</span>
                       </button>
                       {shouldShowTermsTab() && (
@@ -1647,7 +1718,10 @@ const AddPRRequestPage = ({
                         </>
                       )}
                       {!effectiveViewMode && activeTab === "items" && userApprovalLevel < 2 && (
-                        <Button disabled={disabled} type="button" onClick={addItemLine} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><Plus size={14} /> Add Line</Button>
+                        <>
+                          <Button disabled={disabled} type="button" onClick={() => setImportOpen(true)} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><FileSpreadsheet size={14} /> Import Excel</Button>
+                          <Button disabled={disabled} type="button" onClick={addItemLine} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><Plus size={14} /> Add Line</Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1998,6 +2072,26 @@ const AddPRRequestPage = ({
         flowLevel={Number(header.FLOW_LEVEL_RUNNING) || 1}
       />
 
+      <Dialog
+        open={importOpen}
+        wide
+        title="Import Items from Excel"
+        description="Upload an Excel file, review the validation status, then add the valid lines."
+        onClose={() => setImportOpen(false)}
+      >
+        {importOpen && (
+          <ImportPrItems
+            productCodes={productCodes}
+            supplierList={supplierList}
+            existingCodes={items.map((i) => String(i.ITEM_CODE || ""))}
+            requireSupplier={isSupplierUser}
+            requireQty={userApprovalLevel === 1}
+            onImport={handleImportItems}
+            onClose={() => setImportOpen(false)}
+          />
+        )}
+      </Dialog>
+
       <Dialog open={rejectOpen} title="Reject Request" description="Enter the reason for rejection." onClose={() => setRejectOpen(false)}
         footer={<>
           <Button type="button" onClick={() => setRejectOpen(false)} className={BTN_BLUE}>Cancel</Button>
@@ -2075,7 +2169,7 @@ const AddPRRequestPage = ({
 
               let mainActionText = "";
               if (actionType === "SUBMITTED" || actionType === "SUBMIT") {
-                mainActionText = isFirstAction ? "DOCUMENT CREATED BY USER." : "DOCUMENT SUBMITTED.";
+                mainActionText = isFirstAction ? "DOCUMENT CREATED BY USER." : "DOCUMENT SUBMITTED BY USER.";
                 if (h.COMMENTS && h.COMMENTS.toUpperCase() !== "DOCUMENT SUBMITTED." && h.COMMENTS.toUpperCase() !== "DOCUMENT CREATED BY USER." && h.COMMENTS.toUpperCase() !== "DOCUMENT SUBMITTED BY USER.") {
                   mainActionText += ` REMARKS: ${String(h.COMMENTS).toUpperCase()}`;
                 }

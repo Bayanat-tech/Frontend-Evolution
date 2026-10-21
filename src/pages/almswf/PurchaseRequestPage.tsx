@@ -455,27 +455,44 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           );
         },
       },
-      {
+            {
         accessorKey: "sentback_reason",
         header: "Reason",
         cell: ({ row }) => {
           const r = row.original as any;
-          return (
+          const action = String(r.LAST_ACTION || r.last_action || "").toUpperCase();
+          const reason =
             r.SENTBACK_REASON || r.sentback_reason ||
             r.REJECT_REASON || r.reject_reason ||
             r.CANCEL_REMARK || r.cancel_remark ||
-            r.REASON || "—"
+            r.REASON ||
+            // Submitted / Approved: latest remarks dikhao
+            (action === "SUBMITTED" || action === "APPROVED"
+              ? (r.REMARKS || r.remarks || "")
+              : "");
+          const text = String(reason || "").trim();
+          if (!text) return "—";
+          return (
+            <span className="block max-w-[260px] truncate" title={text}>
+              {text}
+            </span>
           );
         },
       },
-      {
+            {
         accessorKey: "next_action_by",
         header: "Next Action By",
         cell: ({ row }) => {
           const r = row.original as any;
-          const code = r.NEXT_ACTION_BY || r.next_action_by || "";
+          const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
+          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+          const code = isDraft
+            ? (r.USER_ID || r.user_id || "")
+            : (r.NEXT_ACTION_BY || r.next_action_by || "");
           if (!code) return "—";
-          const name = r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "";
+          const name = isDraft
+            ? (r.DRAFT_USER_NAME || r.draft_user_name || "")
+            : (r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "");
           return name ? `${code} - ${name}` : code;
         },
       },
