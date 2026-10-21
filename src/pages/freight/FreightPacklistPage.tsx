@@ -2242,7 +2242,7 @@ function DimensionGrid({ rows, setRows, onSync }: { rows: DimensionLine[]; setRo
             <PackageCheck size={14} />
           </span>
           <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
-            Air Cargo Dimensions Manifest (TF_PACKLIST_DIM)
+            Air Cargo Dimensions
           </span>
           <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
             {rows.length} {rows.length === 1 ? "line" : "lines"}

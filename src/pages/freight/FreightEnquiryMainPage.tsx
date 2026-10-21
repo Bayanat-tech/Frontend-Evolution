@@ -2045,7 +2045,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                   </select>
                 </td> */}
 
-                <CellDropdown value={row.uoc} options={uocOptions} disabled={isReadOnly} onChange={(value) => setDetailField(index, "uoc", value)} />
+                <td className="px-1.5 py-1 border-l-2 !border-l-slate-400 border-r border-slate-200">
+                  <CellDropdown value={row.uoc} options={uocOptions} disabled={isReadOnly} onChange={(value) => setDetailField(index, "uoc", value)} />
+                </td>
 
                 {/* MOC */}
                 <td className="px-1.5 py-1 border-r border-slate-200">
@@ -2852,9 +2854,93 @@ function FormSelect({
   );
 }
 
+// function CellDropdown({ value, onChange, options, disabled }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
+//   const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+//   const listRef = useRef<HTMLUListElement | null>(null);
+//   const [activeIdx, setActiveIdx] = useState(-1);
+//   const btnRef = useRef<HTMLButtonElement | null>(null);
+//   useEffect(() => {
+//     if (!pos) return;
+//     const close = (e: Event) => { if (listRef.current?.contains(e.target as Node)) return; setPos(null); };
+//     window.addEventListener("scroll", close, true);
+//     window.addEventListener("resize", close);
+//     return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+//   }, [pos]);
+//   const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+//     if (pos) { setPos(null); return; }
+//     const rect = e.currentTarget.getBoundingClientRect();
+//     const up = window.innerHeight - rect.bottom < 220 && rect.top > 220;
+//     setPos({ left: rect.left, width: Math.max(rect.width, 200), ...(up ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }) });
+//   };
+//   const allOptions = [{ value: "", label: "\u00A0" }, ...options];
+
+// const openAt = () => {
+//   const rect = btnRef.current?.getBoundingClientRect();
+//   if (!rect) return;
+//   const up = window.innerHeight - rect.bottom < 220 && rect.top > 220;
+//   setPos({ left: rect.left, width: Math.max(rect.width, 200), ...(up ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }) });
+//   const cur = allOptions.findIndex((o) => o.value === value);
+//   setActiveIdx(cur >= 0 ? cur : 0);
+// };
+
+// const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+//   if (disabled) return;
+//   if (!pos) {
+//     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+//       e.preventDefault();
+//       openAt();
+//     }
+//     return;
+//   }
+//   if (e.key === "ArrowDown") {
+//     e.preventDefault();
+//     setActiveIdx((i) => Math.min(i + 1, allOptions.length - 1));
+//   } else if (e.key === "ArrowUp") {
+//     e.preventDefault();
+//     setActiveIdx((i) => Math.max(i - 1, 0));
+//   } else if (e.key === "Enter") {
+//     e.preventDefault();
+//     const opt = allOptions[activeIdx];
+//     if (opt) onChange(opt.value);
+//     setPos(null);
+//   } else if (e.key === "Escape" || e.key === "Tab") {
+//     setPos(null);
+//   }
+// };
+
+//   const selected = options.find((o) => o.value === value)?.label ?? value;
+//   return (
+//     <>
+//       <button type="button" disabled={disabled} className={`${fieldClassName} items-center justify-between text-left`} onClick={toggle}>
+//         <span className="truncate">{selected}</span>
+//         <span className="text-slate-400">▾</span>
+//       </button>
+//       {pos && (
+//         <>
+//           <div className="fixed inset-0 z-40" onMouseDown={() => setPos(null)} />
+//           <ul ref={listRef} className="fixed z-50 m-0 max-h-48 list-none overflow-y-auto rounded-md border border-slate-300 bg-white p-0 shadow-lg" style={pos}>
+//             {[{ value: "", label: "\u00A0" }, ...options].map((opt) => (
+//               <li
+//                 key={opt.value || "blank"}
+//                 className={`cursor-pointer px-2 py-1.5 text-[11px] font-medium hover:bg-blue-50 ${opt.value === value ? "bg-blue-100 text-[#00378C]" : "text-slate-800"}`}
+//                 onClick={() => { onChange(opt.value); setPos(null); }}
+//               >
+//                 {opt.label}
+//               </li>
+//             ))}
+//           </ul>
+//         </>
+//       )}
+//     </>
+//   );
+// }
+
 function CellDropdown({ value, onChange, options, disabled }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
   const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+
   useEffect(() => {
     if (!pos) return;
     const close = (e: Event) => { if (listRef.current?.contains(e.target as Node)) return; setPos(null); };
@@ -2862,16 +2948,58 @@ function CellDropdown({ value, onChange, options, disabled }: { value: string; o
     window.addEventListener("resize", close);
     return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
   }, [pos]);
-  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (pos) { setPos(null); return; }
-    const rect = e.currentTarget.getBoundingClientRect();
+
+  useEffect(() => {
+    if (!pos) return;
+    listRef.current?.children[activeIdx]?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx, pos]);
+
+  const allOptions = [{ value: "", label: "\u00A0" }, ...options];
+
+  const openAt = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return;
     const up = window.innerHeight - rect.bottom < 220 && rect.top > 220;
     setPos({ left: rect.left, width: Math.max(rect.width, 200), ...(up ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }) });
+    const cur = allOptions.findIndex((o) => o.value === value);
+    setActiveIdx(cur >= 0 ? cur : 0);
   };
+
+  const toggle = () => {
+    if (pos) { setPos(null); return; }
+    openAt();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (!pos) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        openAt();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, allOptions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = allOptions[activeIdx];
+      if (opt) onChange(opt.value);
+      setPos(null);
+    } else if (e.key === "Escape" || e.key === "Tab") {
+      setPos(null);
+    }
+  };
+
   const selected = options.find((o) => o.value === value)?.label ?? value;
+
   return (
     <>
-      <button type="button" disabled={disabled} className={`${fieldClassName} items-center justify-between text-left`} onClick={toggle}>
+      <button ref={btnRef} type="button" disabled={disabled} className={`${fieldClassName} items-center justify-between text-left`} onClick={toggle} onKeyDown={onKeyDown}>
         <span className="truncate">{selected}</span>
         <span className="text-slate-400">▾</span>
       </button>
@@ -2879,10 +3007,13 @@ function CellDropdown({ value, onChange, options, disabled }: { value: string; o
         <>
           <div className="fixed inset-0 z-40" onMouseDown={() => setPos(null)} />
           <ul ref={listRef} className="fixed z-50 m-0 max-h-48 list-none overflow-y-auto rounded-md border border-slate-300 bg-white p-0 shadow-lg" style={pos}>
-            {[{ value: "", label: "\u00A0" }, ...options].map((opt) => (
+            {allOptions.map((opt, i) => (
               <li
                 key={opt.value || "blank"}
-                className={`cursor-pointer px-2 py-1.5 text-[11px] font-medium hover:bg-blue-50 ${opt.value === value ? "bg-blue-100 text-[#00378C]" : "text-slate-800"}`}
+                className={`cursor-pointer px-2 py-1.5 text-[11px] font-medium hover:bg-blue-50 ${
+                  i === activeIdx ? "bg-blue-100 text-[#00378C]" : opt.value === value ? "bg-blue-50 text-[#00378C]" : "text-slate-800"
+                }`}
+                onMouseEnter={() => setActiveIdx(i)}
                 onClick={() => { onChange(opt.value); setPos(null); }}
               >
                 {opt.label}
