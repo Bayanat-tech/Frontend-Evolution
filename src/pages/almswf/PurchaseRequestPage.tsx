@@ -454,27 +454,33 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           );
         },
       },
-            {
+                 {
         accessorKey: "sentback_reason",
         header: "Reason",
         cell: ({ row }) => {
           const r = row.original as any;
-          const action = String(r.LAST_ACTION || r.last_action || "").toUpperCase();
-          const reason =
-            r.SENTBACK_REASON || r.sentback_reason ||
+          const sbReason = String(
+            r.SENTBACK_REASON || r.sentback_reason || r.LAST_SB_REASON || ""
+          ).trim();
+          const sbBy = String(r.LAST_SB_BY_NAME || "").trim();
+          const otherReason = String(
             r.REJECT_REASON || r.reject_reason ||
             r.CANCEL_REMARK || r.cancel_remark ||
-            r.REASON ||
-            // Submitted / Approved: latest remarks dikhao
-            (action === "SUBMITTED" || action === "APPROVED"
-              ? (r.REMARKS || r.remarks || "")
-              : "");
-          const text = String(reason || "").trim();
+            r.REASON || ""
+          ).trim();
+
+          const text = sbReason || otherReason;
           if (!text) return "—";
+          const showBy = !!sbReason && !!sbBy;
           return (
-            <span className="block max-w-[260px] truncate" title={text}>
-              {text}
-            </span>
+            <div className="flex max-w-[280px] flex-col leading-tight" title={showBy ? `${text} (Sent back by ${sbBy})` : text}>
+              <span className="truncate">{text}</span>
+              {showBy && (
+                <span className="truncate text-[10px] font-semibold text-purple-700">
+                  Sent back by: {sbBy}
+                </span>
+              )}
+            </div>
           );
         },
       },
