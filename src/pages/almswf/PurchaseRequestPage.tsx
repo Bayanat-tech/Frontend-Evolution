@@ -490,27 +490,50 @@ const handlePrint = async (requestNumber: string) => {
           );
         },
       },
-      {
+                 {
         accessorKey: "sentback_reason",
         header: "Reason",
         cell: ({ row }) => {
           const r = row.original as any;
-          return (
-            r.SENTBACK_REASON || r.sentback_reason ||
+          const sbReason = String(
+            r.SENTBACK_REASON || r.sentback_reason || r.LAST_SB_REASON || ""
+          ).trim();
+          const sbBy = String(r.LAST_SB_BY_NAME || "").trim();
+          const otherReason = String(
             r.REJECT_REASON || r.reject_reason ||
             r.CANCEL_REMARK || r.cancel_remark ||
-            r.REASON || "—"
+            r.REASON || ""
+          ).trim();
+
+          const text = sbReason || otherReason;
+          if (!text) return "—";
+          const showBy = !!sbReason && !!sbBy;
+          return (
+            <div className="flex max-w-[280px] flex-col leading-tight" title={showBy ? `${text} (Sent back by ${sbBy})` : text}>
+              <span className="truncate">{text}</span>
+              {showBy && (
+                <span className="truncate text-[10px] font-semibold text-purple-700">
+                  Sent back by: {sbBy}
+                </span>
+              )}
+            </div>
           );
         },
       },
-      {
+            {
         accessorKey: "next_action_by",
         header: "Next Action By",
         cell: ({ row }) => {
           const r = row.original as any;
-          const code = r.NEXT_ACTION_BY || r.next_action_by || "";
+          const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
+          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+          const code = isDraft
+            ? (r.USER_ID || r.user_id || "")
+            : (r.NEXT_ACTION_BY || r.next_action_by || "");
           if (!code) return "—";
-          const name = r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "";
+          const name = isDraft
+            ? (r.DRAFT_USER_NAME || r.draft_user_name || "")
+            : (r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "");
           return name ? `${code} - ${name}` : code;
         },
       },
