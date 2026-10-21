@@ -13,7 +13,7 @@ import { almsCommonSelect } from "../../api/alms";
 import type { Division } from "../../api/transactions";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
 
-// ✅ Added "CANCELLED" tab
+
 const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated", "Cancelled"];
 
@@ -25,7 +25,7 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// ✅ Cancelled check takes precedence
+
 function statusOf(row: TPurchaseSummaryTxn): string {
   const cancelFlag = String((row as any).CANCEL_FLAG ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
@@ -45,7 +45,6 @@ function getStatusBadgeStyle(status: string) {
   else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
   else if (val === "SENDBACK" || val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
   else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
-  // ✅ Cancelled badge — red
   else if (val === "CANCELLED" || val === "CANCELED") { bg = "#fee2e2"; color = "#991b1b"; border = "#fca5a5"; }
   return { bg, color, border };
 }
@@ -182,67 +181,97 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   }, [isError, error]);
 
   const openAddPopup = async () => {
-    setFlowFetching(true);
-    setNotice(null);
-    try {
-      const rawRows = (await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
-      })) as unknown as Record<string, unknown>[];
+  setFlowFetching(true);
+  setNotice(null);
+  try {
+    const rawRows = (await almsCommonSelect<Record<string, unknown>>({
+      parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+      loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
+    })) as unknown as Record<string, unknown>[];
 
-      const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_DIVISION",
-        loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
-      })) as unknown as Record<string, unknown>[];
+    const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
+      parameter: "PS_PREQUEST_ENTRY_DIVISION",
+      loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
+    })) as unknown as Record<string, unknown>[];
 
-      const flowRows: FlowRow[] = (rawRows || [])
-        .map((row) => {
-          const flowCode = pick(row, "FLOW_CODE", "flow_code");
-          const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
-          const inlineDivName = pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name");
-          const div = (divisionsRaw || []).find((d) => {
-            const dCode = pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
-            return dCode && dCode.toUpperCase() === flowDivCode.toUpperCase();
-          });
-          const divName =
-            (div && pick(div, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name")) ||
-            inlineDivName || flowDivCode;
-          return {
-            flowCode,
-            flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
-            divCode: flowDivCode,
-            divName,
-          };
-        })
-        .filter((r) => r.flowCode);
+    const flowRows: FlowRow[] = (rawRows || [])
+      .map((row) => {
+        const flowCode = pick(row, "FLOW_CODE", "flow_code");
+        const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
+        const inlineDivName = pick(row, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name");
+        const div = (divisionsRaw || []).find((d) => {
+          const dCode = pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
+          return dCode && dCode.toUpperCase() === flowDivCode.toUpperCase();
+        });
+        const divName =
+          (div && pick(div, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name")) ||
+          inlineDivName || flowDivCode;
+        return {
+          flowCode,
+          flowDescription: pick(row, "FLOW_DESCRIPTION", "flow_description"),
+          divCode: flowDivCode,
+          divName,
+        };
+      })
+      .filter((r) => r.flowCode);
 
-      if (flowRows.length === 0) {
-        setNotice({ type: "error", message: "No approval flow found for this user." });
-        return;
-      }
-
-      const divMap = new Map<string, Division>();
-      for (const row of flowRows) {
-        const code = (row.divCode || "__NO_DIV__").toUpperCase();
-        if (!divMap.has(code)) {
-          divMap.set(code, {
-            div_code: row.divCode || "—",
-            div_name: row.divName || row.divCode || "—",
-          } as unknown as Division);
-        }
-      }
-      const uniqueDivisions = Array.from(divMap.values());
-
-      setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
-    } catch (err) {
-      setNotice({
-        type: "error",
-        message: err instanceof Error ? err.message : "Unable to determine approval flow",
-      });
-    } finally {
-      setFlowFetching(false);
+    if (flowRows.length === 0) {
+      setNotice({ type: "error", message: "No approval flow found for this user." });
+      return;
     }
-  };
+
+    // ✅ Case A: only ONE flow → open PR page directly, no popup
+    if (flowRows.length === 1) {
+      const only = flowRows[0];
+      setTaskPopup({
+        open: true,
+        title: "Add PR",
+        data: {
+          existingData: null,
+          isEditMode: false,
+          isViewMode: false,
+          flowCode: only.flowCode,
+          flowDescription: only.flowDescription,
+        },
+      });
+      return;
+    }
+
+    // Build unique divisions
+    const divMap = new Map<string, Division>();
+    for (const row of flowRows) {
+      const code = (row.divCode || "__NO_DIV__").toUpperCase();
+      if (!divMap.has(code)) {
+        divMap.set(code, {
+          div_code: row.divCode || "—",
+          div_name: row.divName || row.divCode || "—",
+        } as unknown as Division);
+      }
+    }
+    const uniqueDivisions = Array.from(divMap.values());
+
+    // ✅ Case B: only ONE division but multiple flows → open flow confirm directly
+    if (uniqueDivisions.length === 1) {
+      setFlowConfirm({
+        open: true,
+        loading: false,
+        rows: flowRows,
+        selectedFlowCode: "",
+      });
+      return;
+    }
+
+    // ✅ Case C: multiple divisions → show division picker
+    setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
+  } catch (err) {
+    setNotice({
+      type: "error",
+      message: err instanceof Error ? err.message : "Unable to determine approval flow",
+    });
+  } finally {
+    setFlowFetching(false);
+  }
+};
 
   const handleDivisionSelect = (division: Division) => {
     const selectedCode = String(
@@ -425,27 +454,50 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           );
         },
       },
-      {
+                 {
         accessorKey: "sentback_reason",
         header: "Reason",
         cell: ({ row }) => {
           const r = row.original as any;
-          return (
-            r.SENTBACK_REASON || r.sentback_reason ||
+          const sbReason = String(
+            r.SENTBACK_REASON || r.sentback_reason || r.LAST_SB_REASON || ""
+          ).trim();
+          const sbBy = String(r.LAST_SB_BY_NAME || "").trim();
+          const otherReason = String(
             r.REJECT_REASON || r.reject_reason ||
             r.CANCEL_REMARK || r.cancel_remark ||
-            r.REASON || "—"
+            r.REASON || ""
+          ).trim();
+
+          const text = sbReason || otherReason;
+          if (!text) return "—";
+          const showBy = !!sbReason && !!sbBy;
+          return (
+            <div className="flex max-w-[280px] flex-col leading-tight" title={showBy ? `${text} (Sent back by ${sbBy})` : text}>
+              <span className="truncate">{text}</span>
+              {showBy && (
+                <span className="truncate text-[10px] font-semibold text-purple-700">
+                  Sent back by: {sbBy}
+                </span>
+              )}
+            </div>
           );
         },
       },
-      {
+            {
         accessorKey: "next_action_by",
         header: "Next Action By",
         cell: ({ row }) => {
           const r = row.original as any;
-          const code = r.NEXT_ACTION_BY || r.next_action_by || "";
+          const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
+          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+          const code = isDraft
+            ? (r.USER_ID || r.user_id || "")
+            : (r.NEXT_ACTION_BY || r.next_action_by || "");
           if (!code) return "—";
-          const name = r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "";
+          const name = isDraft
+            ? (r.DRAFT_USER_NAME || r.draft_user_name || "")
+            : (r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "");
           return name ? `${code} - ${name}` : code;
         },
       },

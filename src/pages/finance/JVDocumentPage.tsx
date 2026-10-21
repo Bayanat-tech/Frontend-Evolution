@@ -55,6 +55,7 @@ import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { formatDate } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
+import { getJournalLineError } from "../../utils/journalValidation";
 
 type EditorState =
   | { mode: "create"; divCode?: string; divName?: string }
@@ -730,6 +731,7 @@ function JVDocument({
   };
   const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? Number(row.amount) || 0 : 0), 0);
   const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? Number(row.amount) || 0 : 0), 0);
+  const journalLineError = getJournalLineError(form.detail);
 
   const [lineSearch, setLineSearch] = useState("");
   const filteredDetail = useMemo(() => {
@@ -1043,6 +1045,7 @@ function JVDocument({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (journalLineError) return setError(journalLineError);
     if (!form.doc_date) return setError("Doc Date is required");
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
@@ -1082,7 +1085,7 @@ function JVDocument({
     if (divMismatch) return setError(`Division mismatch on line #${divMismatch.serial_no}: detail division (${divMismatch.div_code}) must match header division (${form.div_code})`);
 
     const diff = Math.abs(Number(debitTotal.toFixed(currencyDecimals)) - Number(creditTotal.toFixed(currencyDecimals)));
-    if (diff > (currencyDecimals === 3 ? 0.001 : 0.01)) {
+    if (!isBalanced) {
       return setError(`Journal Voucher must balance to zero! Debit: ${formatAmount(debitTotal, currencyDecimals)}, Credit: ${formatAmount(creditTotal, currencyDecimals)} (Difference: ${formatAmount(diff, currencyDecimals)})`);
     }
 
@@ -1212,13 +1215,10 @@ function JVDocument({
   const isBalanced =
     Number(creditTotal.toFixed(currencyDecimals)) ===
     Number(debitTotal.toFixed(currencyDecimals));
-  console.log({
-    disabled,
-    loading,
-    detailLength: form.detail.length,
-    creditTotal,
-    debitTotal,
-  });
+  const journalValidationMessages = [
+    journalLineError,
+    !isBalanced ? `Debit and Credit totals must match before saving. Debit: ${formatAmount(debitTotal, currencyDecimals)}; Credit: ${formatAmount(creditTotal, currencyDecimals)}; Difference: ${formatAmount(Math.abs(debitTotal - creditTotal), currencyDecimals)}.` : null,
+  ].filter((message): message is string => Boolean(message));
 
   return (
  <form data-header-expanded={showHeaderDetails} className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)]"}`} onSubmit={submit}>
@@ -1255,7 +1255,7 @@ function JVDocument({
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
+            <Button disabled={disabled || loading || Boolean(journalLineError) || !isBalanced} type="submit" aria-describedby={!disabled && !loading ? "jv-entry-guidance" : undefined}>
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
             <Button
@@ -1513,6 +1513,20 @@ function JVDocument({
                   </Button>
                 </div>
               </div>
+              {!disabled && (
+                <div id="jv-entry-guidance" role="status" aria-live="polite" aria-atomic="true" className={`border-b px-3 py-2 text-xs ${journalValidationMessages.length ? "border-amber-200 bg-amber-50 text-amber-950" : "border-blue-100 bg-blue-50 text-slate-700"}`}>
+                  {journalValidationMessages.length > 0 && (
+                    <div className="mb-1 flex items-start gap-2">
+                      <AlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+                      <div>
+                        <strong>Before you can save:</strong>
+                        {journalValidationMessages.map((message) => <p key={message} className="m-0 mt-1">{message}</p>)}
+                      </div>
+                    </div>
+                  )}
+                  <p className="m-0">Each line accepts one amount and either Debit (Dr) or Credit (Cr). Changing Dr/Cr replaces the previous choice; use another ledger line for the opposite entry.</p>
+                </div>
+              )}
               <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
                 <table className={`finance-lines-table w-full text-xs ${showAllColumns ? "min-w-[2140px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 border-b-2 border-slate-400">
@@ -1677,6 +1691,7 @@ function JVDocument({
                                     : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
                                 }`}
                                 title="Debit (Dr)"
+                                aria-pressed={Number(detail.sign_ind) === 1}
                               >
                                 Dr
                               </button>
@@ -1690,6 +1705,7 @@ function JVDocument({
                                     : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
                                 }`}
                                 title="Credit (Cr)"
+                                aria-pressed={Number(detail.sign_ind) === -1}
                               >
                                 Cr
                               </button>
@@ -1753,7 +1769,32 @@ function JVDocument({
                                 onChange={(childId, patch) => updateChildRow(childId, patch, detail.id)}
                                 onRemove={(childId) => removeChildRow(childId, detail.id)}
                                 onAdd={() => addChildRow(detail)}
-                                onSetChildTable={(table) => updateDetail(detail.id, { child_table: table })}
+                                onSetChildTable={(table) => {
+                                    updateDetail(detail.id, { child_table: table });
+                                    if (table === 'job') {
+                                      setForm((current) => {
+                                        const currentRows = current.children[detail.id] || [];
+                                        if (currentRows.length === 0) {
+                                          const newRow = emptyChildRow(
+                                            { ...detail, child_table: 'job' },
+                                            current,
+                                            docType,
+                                            user?.company_code || '',
+                                            1
+                                          );
+                                          newRow.amount = Number(detail.amount) || 0;
+                                          newRow.lcur_amount = Number(detail.lcur_amount) || Number(detail.amount) || 0;
+                                          return {
+                                            ...current,
+                                            children: { ...current.children, [detail.id]: [newRow] }
+                                          };
+                                        }
+                                        return current;
+                                      });
+                                    } else if (table === 'invoice') {
+                                      void loadChildrenForDetail({ ...detail, child_table: 'invoice' });
+                                    }
+                                  }}
                                 onRefreshInvoices={() => void loadChildrenForDetail(detail)}
                                 onInvNoBlur={handleInvNoBlur}
                                 onClose={() => toggleRowExpanded(detail.id)}
@@ -1992,13 +2033,13 @@ function ChildAllocationTable({
                       placeholder="Job No"
                       value={text(row.job_no)}
                       displayValue={text(row.job_no)}
-                      columns={[{ field: "job_no", header: "Job No" }, { field: "job_date", header: "Job Date" }, { field: "confrim_date", header: "Confirm Date" }, { field: "prin_code", header: "Principal Code" }]}
+                      columns={[{ field: "job_no", header: "Job No" }, { field: "job_date", header: "Job Date" }, { field: "confirm_date", header: "Confirm Date" }, { field: "prin_code", header: "Principal Code" }]}
                       valueField="job_no"
-                      displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
+                      displayFields={["job_no", "job_date", "confirm_date", "prin_code"]}
                       loadOptions={() => getDynamicLookup({
                         parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
-                        loginid: user?.user?.loginid ?? "",
-                        code1: user?.user?.company_code ?? "",
+                        loginid: (user as any)?.loginid ?? (user as any)?.user?.loginid ?? "",
+                        code1: (user as any)?.company_code ?? (user as any)?.user?.company_code ?? "",
                       })}
                       disabled={disabled}
                       onChange={(value) => onChange(row.id, { job_no: value })}

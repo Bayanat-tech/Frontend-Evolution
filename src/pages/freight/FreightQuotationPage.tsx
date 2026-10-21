@@ -5,10 +5,12 @@ import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   Copy,
   Eye,
   FileText,
@@ -19,13 +21,16 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Search,
   ShieldCheck,
   ShipWheel,
   Sparkles,
   Trash2,
   CreditCard,
   X,
-  Printer
+  Printer,
+  List,
+  Coins
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -226,6 +231,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [notice, setNotice] = useState<Notice>(null);
   const [cancelling, setCancelling] = useState(false);
   const cancelRowRef = useRef<LookupRow | null>(null);
+  const [showFcColumns, setShowFcColumns] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -238,8 +244,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
   const [uocOptions, setUocOptions] = useState<{ value: string; label: string }[]>([]);
-  
-    useEffect(() => {
+
+  useEffect(() => {
     let alive = true;
     loadUocLookup(initialHeader.company_code)
       .then((rows) => {
@@ -543,6 +549,44 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           },
           "quantity"
         );
+      })
+    );
+  };
+
+  const handleLineCurrencyChange = (
+    index: number,
+    kind: "cost" | "bill" | "partners",
+    newCurrCode: string,
+    row: LookupRow | null
+  ) => {
+    if (invalidLineIndices.has(index)) {
+      setInvalidLineIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+
+    const exFromMaster = row ? (lookupText(row, "ex_rate") || "1") : (newCurrCode === "OMR" ? "1" : "1");
+
+    setDetails((current) =>
+      current.map((line, rowIndex) => {
+        if (rowIndex !== index) return line;
+        let updated = { ...line };
+        if (kind === "cost") {
+          updated.cost_curr_code = newCurrCode;
+          updated.cost_ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "cost_ex_rate");
+        } else if (kind === "bill") {
+          updated.curr_code = newCurrCode;
+          updated.ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "ex_rate");
+        } else if (kind === "partners") {
+          updated.partners_curr_code = newCurrCode;
+          updated.partners_ex_rate = exFromMaster;
+          updated = recalcDetail(updated, "partners_ex_rate");
+        }
+        return updated;
       })
     );
   };
@@ -947,6 +991,23 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const addDetail = () => setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
+  const syncJourneyPorts = () => {
+    if (!header.origin_port && !header.destination_port) {
+      setNotice({ type: "error", text: "Journey origin and destination ports are not set in the Journey tab." });
+      return;
+    }
+    setDetails((current) =>
+      current.map((row) => ({
+        ...row,
+        origin_port: header.origin_port || row.origin_port,
+        destination_port: header.destination_port || row.destination_port,
+      }))
+    );
+    setNotice({
+      type: "success",
+      text: `Journey ports synced to ${details.length} quotation line(s): ${header.origin_port || "-"} → ${header.destination_port || "-"}`,
+    });
+  };
   const removeDetail = (index: number) => {
     setInvalidLineIndices((prev) => {
       const next = new Set<number>();
@@ -1371,50 +1432,131 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                                       )}
 
             {activeTab === "charges" && (
-              <section>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="grid gap-1">
-                    {/* <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Quotation Rates</h2> */}
-                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                      <HeaderChip label="Cost" value={formatAmount(totals.cost)} />
-                      <HeaderChip label="Bill" value={formatAmount(totals.bill)} />
-                      <HeaderChip label="Agent" value={formatAmount(totals.partners)} />
-                      <HeaderChip label="Profit" value={formatAmount(totals.profit)} />
+              <section className="finance-document-ui">
+                <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
+                  <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+                    <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+                      <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+                        <List size={14} />
+                      </span>
+                      <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+                        Quotation Charges & Rates
+                      </span>
+                      <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                        {details.length} {details.length === 1 ? "line" : "lines"}
+                      </span>
+
+                      <div className="hidden sm:flex items-center gap-2 ml-2 text-[11px]">
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
+                          <span className="text-slate-600 font-bold">Cost:</span> {formatAmount(totals.cost)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                          <span className="text-blue-700 font-bold">Bill:</span> {formatAmount(totals.bill)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded bg-purple-50 border border-purple-200 px-2 py-0.5 font-medium text-purple-900">
+                          <span className="text-purple-700 font-bold">Agent:</span> {formatAmount(totals.partners)}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
+                            totals.profit >= 0
+                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                              : "bg-rose-50 border-rose-300 text-rose-800"
+                          }`}
+                        >
+                          <span>Profit:</span> {formatAmount(totals.profit)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={syncJourneyPorts}
+                        disabled={isReadOnly || details.length === 0}
+                        className="h-7 text-xs font-medium text-slate-700 hover:text-[#00378C] hover:bg-blue-50 border-slate-300 shadow-xs cursor-pointer"
+                        title="Copy Journey Origin & Destination ports from header to all quotation lines"
+                      >
+                        <MapPinned size={13} className="mr-1 text-[#00378C]" />
+                        Sync Journey Ports
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={showFcColumns ? "default" : "outline"}
+                        onClick={() => setShowFcColumns((prev) => !prev)}
+                        className={`h-7 text-xs font-medium shadow-xs cursor-pointer ${
+                          showFcColumns
+                            ? "!bg-[#00378C] !text-white !border-[#002d72]"
+                            : "text-slate-700 hover:text-[#00378C] hover:bg-blue-50 border-slate-300"
+                        }`}
+                        title="Toggle Multi-Currency & Foreign Currency Exchange rate columns"
+                      >
+                        <Coins size={13} className="mr-1" />
+                        {showFcColumns ? "Hide Multi-Currency" : "Multi-Currency"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={addDetail}
+                        disabled={isReadOnly}
+                        className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+                      >
+                        <Plus size={13} className="mr-1" />
+                        Add Line
+                      </Button>
                     </div>
                   </div>
-                  <Button type="button" size="sm" onClick={addDetail} className="cursor-pointer font-semibold shadow-xs"><Plus size={14} />Add Line</Button>
-                </div>
 
-                <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner max-h-[80vh]" style={{ maxWidth: "100%" }}>
-                  <table className="border-collapse text-xs w-full min-w-[2410px]">
-                    <thead className="sticky top-0 z-10 bg-[#00378C] text-left text-xs font-semibold text-white shadow-xs whitespace-nowrap">
+                  <div className="commercial-lines-scroll overflow-auto max-h-[70vh] min-h-[300px]">
+                    <table className={`finance-lines-table border-collapse text-xs w-full ${showFcColumns ? "min-w-[2500px]" : "min-w-[1660px]"}`}>
+                      <thead className="sticky top-0 z-30 bg-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700 shadow-xs whitespace-nowrap border-b-2 border-slate-300">
                       <tr>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Activity Code</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "230px" }}>Activity</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "120px" }}>UOC</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>MOC</th>
-                        <th className="px-2 py-2 text-center text-white font-semibold" style={{ width: "75px" }}>Mode</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Origin</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "110px" }}>Dest</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "50px" }}>Qty</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "90px" }}>UOM</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "70px" }}>Cost Curr</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "70px" }}>Cost Ex</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Rate</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Cost Amt</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "80px" }}>Bill Curr</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "60px" }}>Bill Ex</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Rate</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Bill Amt</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent FC</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "100px" }}>Agent Amt</th>
-                        <th className="px-2 py-2 text-white font-semibold" style={{ width: "250px" }}>Remarks</th>
-                        <th className="px-2 py-2 text-right text-white font-semibold" style={{ width: "45px" }}/>
+                        <th className="sticky left-0 z-30 bg-slate-100 px-2 py-2 text-center w-10 text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">#</th>
+                        <th className="sticky left-10 z-30 bg-slate-100 px-2 py-2 w-[110px] text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">Activity Code</th>
+                        <th className="sticky left-[150px] z-30 bg-slate-100 px-2 py-2 w-[220px] text-slate-700 font-bold border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]">Activity Name</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-l-2 !border-l-slate-400 border-r border-slate-200" style={{ width: "110px" }}>UOC</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>MOC</th>
+                        <th className="px-2 py-2 text-center text-slate-700 font-bold border-r border-slate-200" style={{ width: "75px" }}>Mode</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "140px" }}>Origin Port</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "140px" }}>Dest Port</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "65px" }}>Qty</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "80px" }}>UOM</th>
+                        {showFcColumns && (
+                          <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Cost Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Cost Ex</th>
+                          </>
+                        )}
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Cost Rate</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Cost Amt</th>
+                        {showFcColumns && (
+                          <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Bill Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Bill Ex</th>
+                          </>
+                        )}
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "100px" }}>Bill Rate</th>
+                        <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "105px" }}>Bill Amt</th>
+                        {showFcColumns && (
+                          <>
+                            <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent Curr</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "70px" }}>Agent Ex</th>
+                            <th className="px-2 py-2 text-right text-slate-700 font-bold border-r border-slate-200" style={{ width: "95px" }}>Agent FC</th>
+                          </>
+                        )}
+                        <th className="px-2 py-2 text-right text-purple-900 font-bold border-r border-slate-200 bg-purple-50/50" style={{ width: "105px" }}>Agent Amt</th>
+                        <th className="px-2 py-2 text-slate-700 font-bold border-r border-slate-200" style={{ minWidth: "200px" }}>Remarks</th>
+                        <th className="sticky right-0 z-30 bg-slate-100 px-2 py-2 text-center w-12 text-slate-700 font-bold border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {details.map((row, index) => {
                         const isInvalid = invalidLineIndices.has(index);
+                        const rowBg = isInvalid ? "bg-rose-50" : index % 2 === 1 ? "bg-slate-50" : "bg-white";
                         return (
                         <tr
                           key={`${row.srno}-main`}
@@ -1426,12 +1568,17 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                               : "bg-white"
                           }`}
                         >
-                          <td className="px-1.5 py-1.5 align-middle">
+                          {/* # */}
+                          <td className={`sticky left-0 z-10 ${rowBg} px-2 py-1.5 text-center text-slate-500 font-mono text-[11px] font-semibold border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
+                            {index + 1}
+                          </td>
+
+                          {/* Activity Code */}
+                          <td className={`sticky left-10 z-10 ${rowBg} px-1.5 py-1.5 border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
                            <LookupField
                               compact
                               label="Activity"
                               value={row.act_code}
-                              // displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
                               displayValue={row.act_code}
                               valueField="activity_code"
                               displayFields={["activity_code", "activity"]}
@@ -1444,13 +1591,25 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                              placeholder="Activity"
                              disabled={isReadOnly}
                              />
-                            </td>
-                          <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="w-full" />
-                          <td className="px-1.5 py-1.5 align-middle">
+                          </td>
+
+                          {/* Activity Name */}
+                          <td className={`sticky left-[150px] z-10 ${rowBg} px-1.5 py-1.5 border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]`}>
+                            <div
+                              className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50/80 px-2 text-[11px] font-medium text-slate-700 truncate"
+                              title={row.activity}
+                            >
+                              {row.activity || "-"}
+                            </div>
+                          </td>
+
+                          {/* UOC */}
+                          <td className="px-1.5 py-1.5 align-middle border-l-2 !border-l-slate-400 border-r border-slate-200">
                             <select
                               className={fieldClassName}
                               value={row.uoc}
                               onChange={(e) => setDetailField(index, "uoc", e.target.value)}
+                              disabled={isReadOnly}
                             >
                               <option value=""> </option>
                               {uocOptions.map((option) => (
@@ -1460,7 +1619,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                               ))}
                             </select>
                           </td>
-                          <td className="px-1.5 py-1.5 align-middle">
+
+                          {/* MOC */}
+                          <td className="px-1.5 py-1.5 align-middle border-r border-slate-200">
                             <LookupField
                               compact
                               label="MOC 1"
@@ -1474,36 +1635,152 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                               ]}
                               loadOptions={() => loadMocLookup(header.company_code)}
                               onChange={(value) => setDetailField(index, "moc1", value)}
+                              disabled={isReadOnly}
                             />
                           </td>
-                          {/* <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7`} value={row.transport_mode} */}
-                          <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7 w-full`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
-                          <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "origin_port")} />
-                          <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "destination_port")} />
-                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-full text-right" />
-                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "uom")} />
-                          <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "cost_curr_code")} />
-                          <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right" />
-                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-full text-right" />
-                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-full text-right" />
-                          <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-[80px]"  maxLength={freightTextLimit("TF_QUOTATION_DET", "curr_code")} />
-                          <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right" />
-                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-full text-right" />
-                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-full text-right" />
-                          <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-full text-right" />
-                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-full text-right" />
-                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="w-full"  maxLength={freightTextLimit("TF_QUOTATION_DET", "activity_remarks")} />
-                          <td className="px-1 py-1.5 text-right align-middle">
-                            <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}><Trash2 size={12} /></Button>
+
+                          {/* Mode */}
+                          <td className="px-1 py-1.5 align-middle border-r border-slate-200">
+                            <select
+                              className={`${fieldClassName} h-7 w-full`}
+                              value={row.transport_mode}
+                              onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}
+                              disabled={isReadOnly}
+                            >
+                              {transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                          </td>
+
+                          {/* Origin Port */}
+                          <td className="px-1.5 py-1.5 align-middle border-r border-slate-200">
+                            <LookupField
+                              compact
+                              label="Origin Port"
+                              value={row.origin_port}
+                              displayValue={row.origin_port}
+                              valueField="port_code"
+                              displayFields={["port_code", "port_name"]}
+                              columns={portColumns}
+                              loadOptions={() => loadPortLookup(header.company_code)}
+                              onChange={(value) => setDetailField(index, "origin_port", value)}
+                              placeholder="Origin"
+                              disabled={isReadOnly}
+                            />
+                          </td>
+
+                          {/* Dest Port */}
+                          <td className="px-1.5 py-1.5 align-middle border-r border-slate-200">
+                            <LookupField
+                              compact
+                              label="Dest Port"
+                              value={row.destination_port}
+                              displayValue={row.destination_port}
+                              valueField="port_code"
+                              displayFields={["port_code", "port_name"]}
+                              columns={portColumns}
+                              loadOptions={() => loadPortLookup(header.company_code)}
+                              onChange={(value) => setDetailField(index, "destination_port", value)}
+                              placeholder="Dest"
+                              disabled={isReadOnly}
+                            />
+                          </td>
+
+                          {/* Qty */}
+                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-full text-right" disabled={isReadOnly} />
+
+                          {/* UOM */}
+                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-full" maxLength={freightTextLimit("TF_QUOTATION_DET", "uom")} disabled={isReadOnly} />
+
+                          {/* FC Cost Curr & Ex */}
+                          {showFcColumns && (
+                            <>
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.cost_curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "cost", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                            </>
+                          )}
+
+                          {/* Cost Rate & Cost Amt */}
+                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-full text-right" disabled={isReadOnly} />
+                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
+
+                          {/* FC Bill Curr & Ex */}
+                          {showFcColumns && (
+                            <>
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "bill", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                            </>
+                          )}
+
+                          {/* Bill Rate & Bill Amt */}
+                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
+                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-full text-right font-bold text-blue-900" disabled={isReadOnly} />
+
+                          {/* Agent Share / Commission */}
+                          {showFcColumns && (
+                            <>
+                              <CurrencyLookup
+                                companyCode={header.company_code}
+                                value={row.partners_curr_code || header.curr_code || "OMR"}
+                                onChange={(value, lRow) => handleLineCurrencyChange(index, "partners", value, lRow)}
+                                disabled={isReadOnly}
+                              />
+                              <CellInput type="number" value={row.partners_ex_rate || "1"} onChange={(value) => setDetailField(index, "partners_ex_rate", value)} className="w-full text-right font-mono" disabled={isReadOnly} />
+                              <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-full text-right font-medium" disabled={isReadOnly} />
+                            </>
+                          )}
+                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-full text-right font-bold text-purple-900 bg-purple-50/30" disabled={isReadOnly} />
+
+                          {/* Remarks */}
+                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="w-full" maxLength={freightTextLimit("TF_QUOTATION_DET", "activity_remarks")} disabled={isReadOnly} />
+
+                          {/* Action */}
+                          <td className={`sticky right-0 z-10 ${rowBg} px-1.5 py-1.5 text-center border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]`}>
+                            <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isReadOnly || details.length === 1} onClick={() => removeDetail(index)} className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"><Trash2 size={13} /></Button>
                           </td>
                         </tr>
                       );
                     })}
                     </tbody>
+                    {details.length > 0 && (
+                      <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-30 whitespace-nowrap">
+                        <tr>
+                          <td colSpan={showFcColumns ? 13 : 11} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
+                            Totals ({details.length} lines):
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                            {formatAmount(totals.cost)}
+                          </td>
+                          <td colSpan={showFcColumns ? 3 : 1} className="px-2 py-1.5 text-right">-</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
+                            {formatAmount(totals.bill)}
+                          </td>
+                          {showFcColumns && (
+                            <td colSpan={3} className="px-2 py-1.5 text-right">-</td>
+                          )}
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold text-purple-900 bg-purple-50/50">
+                            {formatAmount(totals.partners)}
+                          </td>
+                          <td colSpan={2} className="px-2 py-1.5 text-center text-slate-500 font-mono text-[10px]">
+                            OMR
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
-              </section>
-            )}
+              </div>
+            </section>
+          )}
 
             {/* {activeTab === "terms" && (
               <section>
@@ -1917,15 +2194,64 @@ function toTermFromRow(row: LookupRow, index: number): QuotationTerm {
 
 function recalcDetail(row: QuotationDetail, field: keyof QuotationDetail): QuotationDetail {
   const qty = Number(row.quantity || 0);
-  const costEx = Number(row.cost_ex_rate || 0);
-  const billEx = Number(row.ex_rate || 0);
-  const partnerEx = Number(row.partners_ex_rate || 0);
+  const costEx = Number(row.cost_ex_rate || 1) || 1;
+  const billEx = Number(row.ex_rate || 1) || 1;
+  const partnerEx = Number(row.partners_ex_rate || 1) || 1;
   const fcCostRate = Number(row.fc_costrate || 0);
   const fcBillRate = Number(row.fc_billrate || 0);
   const fcPartners = Number(row.fc_partners || 0);
-  const shouldCost = ["quantity", "fc_costrate", "cost_ex_rate"].includes(field);
-  const shouldBill = ["quantity", "fc_billrate", "ex_rate"].includes(field);
-  const shouldPartner = ["fc_partners", "partners_ex_rate"].includes(field);
+
+  if (field === "cost") {
+    const cost = Number(row.cost || 0);
+    if (qty > 0 && costEx > 0) {
+      const rate = round3(cost / (qty * costEx));
+      return { ...row, fc_costrate: rate, fc_cost: round3(Number(rate) * qty), cost: String(cost) };
+    }
+  }
+
+  if (field === "bill") {
+    const bill = Number(row.bill || 0);
+    if (qty > 0 && billEx > 0) {
+      const rate = round3(bill / (qty * billEx));
+      return { ...row, fc_billrate: rate, fc_bill: round3(Number(rate) * qty), bill: String(bill) };
+    }
+  }
+
+  if (field === "partners_price") {
+    const pPrice = Number(row.partners_price || 0);
+    const fc = partnerEx > 0 ? round3(pPrice / partnerEx) : String(pPrice);
+    return { ...row, fc_partners: fc, partners_price: String(pPrice) };
+  }
+
+  if (field === "cost_ex_rate") {
+    if (fcCostRate > 0) {
+      return { ...row, cost: round3(fcCostRate * costEx * qty) };
+    } else if (Number(row.cost) > 0 && qty > 0 && costEx > 0) {
+      const rate = round3(Number(row.cost) / (qty * costEx));
+      return { ...row, fc_costrate: rate, fc_cost: round3(Number(rate) * qty) };
+    }
+  }
+
+  if (field === "ex_rate") {
+    if (fcBillRate > 0) {
+      return { ...row, bill: round3(fcBillRate * billEx * qty) };
+    } else if (Number(row.bill) > 0 && qty > 0 && billEx > 0) {
+      const rate = round3(Number(row.bill) / (qty * billEx));
+      return { ...row, fc_billrate: rate, fc_bill: round3(Number(rate) * qty) };
+    }
+  }
+
+  if (field === "partners_ex_rate") {
+    if (fcPartners > 0) {
+      return { ...row, partners_price: round3(fcPartners * partnerEx) };
+    } else if (Number(row.partners_price) > 0 && partnerEx > 0) {
+      return { ...row, fc_partners: round3(Number(row.partners_price) / partnerEx) };
+    }
+  }
+
+  const shouldCost = ["quantity", "fc_costrate"].includes(field);
+  const shouldBill = ["quantity", "fc_billrate"].includes(field);
+  const shouldPartner = ["fc_partners"].includes(field);
   return {
     ...row,
     ...(shouldCost ? { fc_cost: round3(fcCostRate * qty), cost: round3(fcCostRate * costEx * qty) } : {}),
@@ -1990,10 +2316,10 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "", forceOpenDown = true }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
-  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string; forceOpenDown?: boolean;
   }) {
   const formattedDisplay = value && displayValue && !displayValue.startsWith(value)
     ? `${value} - ${displayValue}`
@@ -2016,6 +2342,7 @@ function FormLookup({ label, value, displayValue, valueField, displayFields, col
         disabled={disabled}
         enforceRequired={required}
         compact
+        forceOpenDown={forceOpenDown}
       />
     </label>
   );
@@ -2051,13 +2378,49 @@ function FormTextarea({ label, value, onChange, compact, className = "", maxLeng
   );
 }
 
-function CellInput({ value, onChange, type = "text", className = "", maxLength }: { value: string; onChange: (value: string) => void; type?: string; className?: string; maxLength?: number }) {
-  return <td className="px-1 py-0.5">{type === "date" ? (<FreightDatePicker className="freight-calendar-field"
+function CellInput({ value, onChange, type = "text", className = "", maxLength, disabled }: { value: string; onChange: (value: string) => void; type?: string; className?: string; maxLength?: number; disabled?: boolean }) {
+  return <td className="px-1 py-0.5 border-r border-slate-200">{type === "date" ? (<FreightDatePicker className="freight-calendar-field"
         value={value}
         onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
         value={value}
-        onChange={(nextValue) => onChange(nextValue)} />) : (<Input maxLength={maxLength} className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)}  maxBytes={maxLength} />)}</td>;
+        onChange={(nextValue) => onChange(nextValue)} />) : (<Input maxLength={maxLength} className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)}  maxBytes={maxLength} disabled={disabled} />)}</td>;
 }
+
+function CurrencyLookup({
+  companyCode,
+  value,
+  onChange,
+  disabled,
+}: {
+  companyCode: string;
+  value: string;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <td className="px-1 py-0.5 border-r border-slate-200">
+      <LookupField
+        value={value}
+        compact
+        dense
+        forceOpenDown
+        placeholder="Curr"
+        valueField="curr_code"
+        displayFields={["curr_code", "curr_name"]}
+        columns={[
+          { field: "curr_code", header: "Currency", width: "90px" },
+          { field: "curr_name", header: "Name", width: "210px" },
+          { field: "ex_rate", header: "Ex. Rate", width: "90px" },
+        ]}
+        popoverWidth={420}
+        loadOptions={(query) => loadFreightLookup("freight_currency", companyCode, query)}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    </td>
+  );
+}
+
 
 // const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
 const fieldClassName = "h-6 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";

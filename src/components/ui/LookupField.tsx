@@ -6,12 +6,16 @@ import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } fr
 type LookupColumn = {
   field: string;
   header: string;
+  width?: string | number;
 };
 
 type LookupFieldProps = {
   label?: string;
   value: string;
   displayValue?: string;
+  subText?: string;
+  subTextClassName?: string;
+  triggerClassName?: string;
   columns: LookupColumn[];
   valueField: string;
   displayFields: string[];
@@ -29,12 +33,16 @@ type LookupFieldProps = {
   renderRowActions?: (row: LookupRow) => ReactNode;
   popoverWidth?: number;
   className?: string;
+  forceOpenDown?: boolean;
 };
 
 export function LookupField({
   label,
   value,
   displayValue,
+  subText,
+  subTextClassName,
+  triggerClassName,
   columns,
   valueField,
   displayFields,
@@ -52,6 +60,7 @@ export function LookupField({
   renderRowActions,
   popoverWidth,
   className,
+  forceOpenDown = false,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -97,8 +106,8 @@ export function LookupField({
     const viewportMargin = 12;
     const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - viewportMargin);
     const spaceAbove = Math.max(0, rect.top - gap - viewportMargin);
-    const opensAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
-    const maxHeight = Math.min(520, opensAbove ? spaceAbove : spaceBelow);
+    const opensAbove = forceOpenDown ? false : (spaceBelow < 220 && spaceAbove > spaceBelow);
+    const maxHeight = Math.min(520, opensAbove ? spaceAbove : Math.max(160, spaceBelow));
 
     let left = rect.left;
     if (left + width > viewportWidth - 12) {
@@ -118,7 +127,7 @@ export function LookupField({
     };
 
     setPopoverStyle(nextStyle);
-  }, [columns.length, popoverWidth]);
+  }, [columns.length, popoverWidth, forceOpenDown]);
 
   useEffect(() => {
     if (!open) return;
@@ -252,20 +261,21 @@ export function LookupField({
   };
 
   const currentText =
-    displayValue ||
-    (multiSelect
-      ? rows
-        .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
-        .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
-        .join(", ") || value || ""
-      : value
-        ? getLookupText(
-          rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
-            [valueField]: value,
-          },
-          displayFields.length ? displayFields : [valueField],
-        ) || String(value)
-        : "");
+    displayValue !== undefined
+      ? displayValue
+      : (multiSelect
+        ? rows
+          .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
+          .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
+          .join(", ") || value || ""
+        : value
+          ? getLookupText(
+            rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
+              [valueField]: value,
+            },
+            displayFields.length ? displayFields : [valueField],
+          ) || (displayFields.length === 0 || displayFields.includes(valueField) ? String(value) : "")
+          : "");
 
   const totalCols = columns.length + (renderRowActions ? 1 : 0);
   const hasAsterisk = Boolean(label && /\*\s*$/.test(label));
@@ -289,8 +299,8 @@ export function LookupField({
           className={`lookup-field-trigger relative flex w-full min-w-0 items-center overflow-hidden rounded-md border transition-all ${
             disabled
               ? "bg-slate-100/90 border-slate-200 cursor-not-allowed"
-              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20"
-          } ${dense ? "h-7" : compact ? "h-7" : "h-8"}`}
+              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20 shadow-2xs"
+          } ${dense ? "h-7" : subText ? "h-[34px] min-h-[32px]" : compact ? "h-7" : "h-8"} ${triggerClassName || ""}`}
         >
           {enforceRequired && !disabled && (
             <input
@@ -306,25 +316,35 @@ export function LookupField({
             />
           )}
           <button
-            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate ${
+            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate flex flex-col justify-center ${
               disabled ? "cursor-not-allowed text-slate-700 font-medium" : "cursor-pointer"
-            } ${
-              dense || compact ? "px-2" : "px-2.5"
-            } ${!disabled && currentText ? "text-slate-800 font-medium text-[11px]" : !disabled ? "text-slate-400 text-[10px]" : "text-[11px]"}`}
+            } px-1.5 ${subText ? "py-0" : ""}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
+            title={subText ? `${currentText} - ${subText}` : currentText}
           >
-            <span className={`block truncate ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
+            <span className={`block truncate ${!disabled && currentText ? "text-inherit font-semibold text-[11px] leading-tight" : !disabled ? "text-slate-400 text-[10.5px] leading-tight" : "text-[10.5px] leading-tight"} ${!currentText ? "italic font-light" : ""} ${!currentText && placeholderClassName ? placeholderClassName : ""}`}>
               {currentText ||
                 (placeholder
                   ? `${placeholder.replace(/\.*$/, "")}...`
                   : `${cleanLabel || label || ""}...`)}
             </span>
+            {subText && (
+              <div className="flex items-center min-w-0 leading-none">
+                <span
+                  className={`truncate leading-tight ${
+                    subTextClassName || "block text-[9px] font-medium text-slate-500"
+                  }`}
+                >
+                  {subText}
+                </span>
+              </div>
+            )}
           </button>
           {value && !disabled && (
             <button
-              className={`${dense || compact ? "w-6" : "w-6.5"} shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer`}
+              className="w-4.5 shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer self-stretch"
               type="button"
               aria-label="Clear lookup"
               onClick={(e) => {
@@ -332,19 +352,19 @@ export function LookupField({
                 onChange("", null);
               }}
             >
-              <X size={dense ? 11 : 13} />
+              <X size={10} />
             </button>
           )}
           <button
-            className={`${dense || compact ? "w-6" : "w-7"} shrink-0 grid place-items-center ${
+            className={`w-4.5 shrink-0 grid place-items-center ${
               disabled ? "text-slate-300 pointer-events-none" : "text-slate-400 hover:bg-slate-100 cursor-pointer"
-            }`}
+            } self-stretch`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
             aria-label="Open lookup"
           >
-            <ChevronDown size={dense ? 13 : 15} />
+            <ChevronDown size={11} />
           </button>
         </div>
       </label>
@@ -392,8 +412,9 @@ export function LookupField({
                     {columns.map((column, columnIndex) => (
                       <th
                         className={`px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap ${
-                          columnIndex === 0 ? "w-[130px] min-w-[110px]" : "w-auto"
+                          column.width ? "" : columnIndex === 0 ? "min-w-[130px]" : "w-auto min-w-[160px]"
                         }`}
+                        style={column.width ? { width: column.width, minWidth: column.width } : undefined}
                         key={column.field}
                         title={column.header}
                       >
@@ -455,9 +476,10 @@ export function LookupField({
                               <td
                                 className={`px-3 py-1.5 text-xs ${
                                   columnIndex === 0
-                                    ? "font-mono font-semibold text-[#00378C] text-[11.5px] whitespace-nowrap w-[130px] min-w-[110px]"
+                                    ? "font-semibold text-[#00378C] text-[11.5px] whitespace-normal break-words"
                                     : "text-slate-800 font-medium text-[11.5px] whitespace-normal break-words leading-snug"
                                 }`}
+                                style={column.width ? { width: column.width, minWidth: column.width } : undefined}
                                 key={column.field}
                                 title={cellText}
                               >

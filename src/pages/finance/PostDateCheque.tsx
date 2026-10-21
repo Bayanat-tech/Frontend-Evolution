@@ -6,6 +6,8 @@ import { useAuth } from "../../state/AuthContext";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { LookupField } from "../../components/ui/LookupField";
 import { DataTable } from "../../components/ui/DataTable";
+import { api } from "../../api/client";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 
 
 // const PROC_NAME = "PROC_BUILD_DYNAMIC_POST_DATED_CHEQUE";
@@ -26,10 +28,15 @@ type PdcRow = {
 };
 
 // The procedure filters with "date < P_DATE2 / P_DATE4", so add 1 day to make the "to" date inclusive.
-const addOneDay = (value: string) => {
-  const [y, m, d] = value.split("-").map(Number);
+const addOneDay = (value?: string): string | undefined => {
+  if (!value || typeof value !== 'string' || !value.includes('-')) return undefined;
+  const parts = value.split('-').map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return undefined;
+  const [y, m, d] = parts;
+  if (!y || !m || !d) return undefined;
   const next = new Date(y, m - 1, d + 1);
-  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  if (isNaN(next.getTime())) return undefined;
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
 };
 
 // Builds the payload using the fixed DynamicQueryParams type.
@@ -67,6 +74,8 @@ export default function PostDatedCheque() {
   const [rows, setRows] = useState<PdcRow[]>([]);
   const [original, setOriginal] = useState<Record<string, string>>({}); // rowId -> original clear date
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [error, setError] = useState("");
 
   // ---- lookups ----
@@ -113,9 +122,9 @@ export default function PostDatedCheque() {
           code2: docType || "All",
           code3: bankAc || "All",
           code4: divCode || "All",
-          code5: docFrom,
+          code5: docFrom && docFrom.trim() ? docFrom.trim() : undefined,
           code6: addOneDay(docTo),
-          code7: chqFrom,
+          code7: chqFrom && chqFrom.trim() ? chqFrom.trim() : undefined,
           code8: addOneDay(chqTo),
         }),
       );
@@ -157,11 +166,51 @@ export default function PostDatedCheque() {
   );
 
   // ---- save ----
-  const handleSave = () => {
-    const allRows = rows.map((r) => ({ ...r, changed: isChanged(r) }));
-    const changedRows = allRows.filter((r) => r.changed);
-    console.log("PDC - all rows:", allRows);
-    console.log("PDC - changed rows:", changedRows);
+  const handleSave = async () => {
+    const changedRows = rows.filter(isChanged);
+    if (changedRows.length === 0) {
+      setNotice({ type: 'error', message: 'No changed rows found. Please modify at least one Clear Date.' });
+      return;
+    }
+    setSaving(true);
+    setNotice(null);
+    try {
+      const response = await api.post('/api/finance/updPdcClearDateBulk', {
+        loginid: loginId,
+        details: changedRows.map((r) => ({
+          company_code: r.COMPANY_CODE || companyCode,
+          doc_type: r.DOC_TYPE,
+          doc_no: r.DOC_NO,
+          cheque_no: r.CHEQUE_NO ? r.CHEQUE_NO.trim() : null,
+          clear_date: r.CLEAR_DATE || null,
+        })),
+      });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Failed to update PDC clear dates');
+      }
+
+      setNotice({
+        type: 'success',
+        message: response.data.message || `Updated ${changedRows.length} Post Dated Cheque record(s) successfully`,
+      });
+
+      setOriginal((prev) => {
+        const next = { ...prev };
+        changedRows.forEach((r) => {
+          next[r.rowId] = r.CLEAR_DATE;
+        });
+        return next;
+      });
+    } catch (err: any) {
+      console.error('Save error:', err);
+      setNotice({
+        type: 'error',
+        message: err.response?.data?.details || err.message || 'Failed to save clear dates',
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ---- columns ----
@@ -214,13 +263,15 @@ export default function PostDatedCheque() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={!rows.length}
+          disabled={!rows.length || saving}
           className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md bg-[#00378C] px-3.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Save size={14} />
-          Save
+          {saving ? 'Saving...' : 'Save'}
         </button>
       </div>
+
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       {/* Top: filters */}
       <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">

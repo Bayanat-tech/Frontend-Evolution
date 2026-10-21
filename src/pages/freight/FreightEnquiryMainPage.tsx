@@ -4,7 +4,7 @@ import { openFreightReport } from "../../components/freight/reportPreviewStore";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { Activity, AlertTriangle, ArrowLeft, Ban, Briefcase, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, Printer, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Ban, Briefcase, CreditCard, Eye, List, MapPinned, PackageCheck, Paperclip, Plus, Printer, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
@@ -165,6 +165,32 @@ const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
 const shipmentStatusOptions = ["FCL/FCL", "FCL/LCL", "LCL/LCL", "LCL/FCL"];
+const containerTypeOptions = [
+  "STANDARD",
+  "HIGHCUBE",
+  "REFER",
+  "HIGH CUBE REFER",
+  "OPEN TOP",
+  "FLAT RACK",
+  "MAIN DECK PALLET",
+  "LOWER DECK PALLET",
+  "LD-2",
+  "LD-3",
+  "LD-4",
+  "LD-7",
+  "LD-11",
+  "TANK",
+  "BULK",
+  "OPEN SIDE",
+  "PLAT FORM",
+  "VENTILATED",
+];
+const tfOptions = [
+  { value: "T", label: "TEU" },
+  { value: "F", label: "FEU" },
+  { value: "V", label: "45FT" },
+  { value: "E", label: "48FT" },
+];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: PackageCheck },
@@ -173,6 +199,14 @@ const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }
   { key: "payment", label: "Payment", icon: CreditCard },
   { key: "activities", label: "Activities", icon: Activity },
 ];
+
+const containerTypes = [
+  "STANDARD", "HIGHCUBE", "REFER", "HIGH CUBE REFER", "OPEN TOP", "FLAT RACK",
+  "MAIN DECK PALLET", "LOWER DECK PALLET", "LD-2", "LD-3", "LD-4", "LD-7",
+  "LD-11", "TANK", "BULK", "OPEN SIDE", "PLATFORM", "VENTILATED",
+];
+const loadContainerTypeLookup = async () =>
+  containerTypes.map((value) => ({ container_type: value }) as LookupRow);
 
 type FreightEnquiryMainPageProps = {
   target?: FreightWorkspaceTarget;
@@ -619,6 +653,18 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
         }
         if (field === "quantity" || field === "cost_rate") {
           next.cost = multiplyText(next.quantity, next.cost_rate);
+        }
+        if (field === "bill") {
+          const qty = Number(next.quantity) || 0;
+          if (qty > 0) {
+            next.bill_rate = (Number(value || 0) / qty).toFixed(3);
+          }
+        }
+        if (field === "cost") {
+          const qty = Number(next.quantity) || 0;
+          if (qty > 0) {
+            next.cost_rate = (Number(value || 0) / qty).toFixed(3);
+          }
         }
         return next;
       }),
@@ -1083,6 +1129,24 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   const addDetail = () => {
     setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
+  };
+
+  const syncJourneyPorts = () => {
+    if (!header.origin_port && !header.destination_port) {
+      setNotice({ type: "error", text: "Journey origin and destination ports are not set in the Journey tab." });
+      return;
+    }
+    setDetails((current) =>
+      current.map((row) => ({
+        ...row,
+        origin_port: header.origin_port || row.origin_port,
+        destination_port: header.destination_port || row.destination_port,
+      }))
+    );
+    setNotice({
+      type: "success",
+      text: `Journey ports synced to ${details.length} activity line(s): ${header.origin_port || "-"} → ${header.destination_port || "-"}`,
+    });
   };
 
   const removeDetail = (index: number) => {
@@ -1567,7 +1631,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     value={header.commodity}
     valueField="prodtype_desc"
     displayFields={["prodtype_desc", "prodtype_code"]}
-    columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]}
+    columns={[{ field: "prodtype_code", header: "Code" } , { field: "prodtype_desc", header: "Commodity" }]}
     loadOptions={() => loadCommodityLookup(header.company_code)}
     onChange={(value, row) => applyHeaderLookup("commodity", value, row)}
     className="sm:col-span-2 lg:col-span-1"
@@ -1583,9 +1647,12 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   {header.transport_mode === "S" && (
     <>
-      <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "container_type")} />
+      {/* <FormDropdown label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} options={containerTypes} /> */}
+      <div className="grid gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+        <span>Container Type</span>
+        <CellDropdown value={header.container_type} options={containerTypes.map((v) => ({ value: v, label: v }))} onChange={(value) => setHeaderField("container_type", value)} />
+     </div>
       <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-      <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)}  maxLength={freightTextLimit("TF_ENQUIRY", "t_f")} />
     </>
   )}
   {header.transport_mode === "R" && (
@@ -1617,11 +1684,112 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties">     
-                  <div className="grid gap-1 sm:grid-cols-1">
-                    <FormInput label="Shipper Name" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} inputClassName="truncate" maxLength={freightTextLimit("TF_ENQUIRY", "shipper_name")} />
-                    <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "shipper_address")} />
-                    <FormInput label="Consignee Name" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} inputClassName="truncate" maxLength={freightTextLimit("TF_ENQUIRY", "consignee_name")} />
-                    <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact maxLength={freightTextLimit("TF_ENQUIRY", "consignee_address")} />
+                  <div className="grid gap-2 sm:grid-cols-1">
+                    <div className="grid gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+                          Shipper Name
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            className={`${fieldClassName} truncate`}
+                            value={header.shipper_name}
+                            onChange={(e) => setHeaderField("shipper_name", e.target.value)}
+                            placeholder="Enter or search Shipper Name"
+                            maxLength={freightTextLimit("TF_ENQUIRY", "shipper_name")}
+                            maxBytes={freightTextLimit("TF_ENQUIRY", "shipper_name")}
+                          />
+                        </div>
+                        <div className="w-[110px] shrink-0">
+                          <LookupField
+                            compact
+                            label="Shipper"
+                            value={header.shipper_name}
+                            displayValue={header.shipper_name ? "Change" : "Lookup"}
+                            popoverWidth={420}
+                            columns={[
+                              { field: "shipper_name", header: "Shipper Name" },
+                            ]}
+                            valueField="shipper_name"
+                            displayFields={["shipper_name"]}
+                            loadOptions={() => loadShipperLookup(header.company_code)}
+                            onChange={(val, row) => {
+                              if (row) {
+                                setHeaderField("shipper_name", lookupText(row, "shipper_name") || val);
+                                const addr = lookupText(row, "shipper_address");
+                                if (addr) setHeaderField("shipper_address", addr);
+                              } else if (val) {
+                                setHeaderField("shipper_name", val);
+                              }
+                            }}
+                            placeholder="Lookup"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <FormTextarea
+                      label="Shipper Address"
+                      value={header.shipper_address}
+                      onChange={(value) => setHeaderField("shipper_address", value)}
+                      compact
+                      maxLength={freightTextLimit("TF_ENQUIRY", "shipper_address")}
+                    />
+
+                    <div className="grid gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 freight-field-label">
+                          Consignee Name
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            className={`${fieldClassName} truncate`}
+                            value={header.consignee_name}
+                            onChange={(e) => setHeaderField("consignee_name", e.target.value)}
+                            placeholder="Enter or search Consignee Name"
+                            maxLength={freightTextLimit("TF_ENQUIRY", "consignee_name")}
+                            maxBytes={freightTextLimit("TF_ENQUIRY", "consignee_name")}
+                          />
+                        </div>
+                        <div className="w-[110px] shrink-0">
+                          <LookupField
+                            compact
+                            label="Consignee"
+                            value={header.consignee_name}
+                            displayValue={header.consignee_name ? "Change" : "Lookup"}
+                            popoverWidth={420}
+                            columns={[
+                              { field: "consignee_name", header: "Consignee Name" },
+                            ]}
+                            valueField="consignee_name"
+                            displayFields={["consignee_name"]}
+                            loadOptions={() => loadConsigneeLookup(header.company_code)}
+                            onChange={(val, row) => {
+                              if (row) {
+                                setHeaderField("consignee_name", lookupText(row, "consignee_name") || val);
+                                const addr = lookupText(row, "consignee_address");
+                                if (addr) setHeaderField("consignee_address", addr);
+                              } else if (val) {
+                                setHeaderField("consignee_name", val);
+                              }
+                            }}
+                            placeholder="Lookup"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <FormTextarea
+                      label="Consignee Address"
+                      value={header.consignee_address}
+                      onChange={(value) => setHeaderField("consignee_address", value)}
+                      compact
+                      maxLength={freightTextLimit("TF_ENQUIRY", "consignee_address")}
+                    />
                   </div>
                 </SectionPanel>
 
@@ -1738,50 +1906,82 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           )}
 
 {activeTab === "activities" && (
-  <section>
-    <div className="mb-2 flex items-center justify-between gap-2">
-      <div className="grid gap-0.5">
-        <h2 className="m-0 text-xs font-bold uppercase tracking-wide text-slate-800">Activity Lines</h2>
-       </div>
-      <Button
-        type="button"
-        size="sm"
-        onClick={addDetail}
-        disabled={isReadOnly}
-        className="cursor-pointer font-semibold shadow-xs"
-      >
-        <Plus size={14} />
-        Add Line
-      </Button>
-    </div>
+  <section className="finance-document-ui">
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <List size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Activity Lines
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {details.length} {details.length === 1 ? "line" : "lines"}
+          </span>
 
-    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-xs max-h-[50vh]">
-      <table className="w-full min-w-[1450px] text-xs text-left border-collapse">
-        {/* <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10"> */}
-        <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-xs z-10 whitespace-nowrap">
+          <div className="hidden sm:flex items-center gap-2 ml-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+              <span className="text-blue-700 font-bold">Total Bill:</span> {details.reduce((sum, d) => sum + (Number(d.bill) || 0), 0).toFixed(2)}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
+              <span className="text-slate-600 font-bold">Total Cost:</span> {details.reduce((sum, d) => sum + (Number(d.cost) || 0), 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={syncJourneyPorts}
+            disabled={isReadOnly || details.length === 0}
+            className="h-7 text-xs font-medium text-slate-700 hover:text-[#00378C] hover:bg-blue-50 border-slate-300 shadow-xs cursor-pointer"
+            title="Copy Journey Origin & Destination ports from header to all activity lines"
+          >
+            <MapPinned size={13} className="mr-1 text-[#00378C]" />
+            Sync Journey Ports
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={addDetail}
+            disabled={isReadOnly}
+            className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+          >
+            <Plus size={13} className="mr-1" />
+            Add Line
+          </Button>
+        </div>
+      </div>
+
+      <div className="commercial-lines-scroll overflow-auto max-h-[50vh] min-h-[280px]">
+        <table className="finance-lines-table w-full min-w-[1580px] text-xs text-left border-collapse">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-30 whitespace-nowrap border-b-2 border-slate-300">
           <tr>
-            <th className="px-2 py-2 text-center w-10 text-white font-semibold">#</th>
-            <th className="px-2 py-2 w-[85px] text-white font-semibold">Activity Code</th>
-            <th className="px-2 py-2 w-[220px] text-white font-semibold">Activity Name</th>
-            <th className="px-2 py-2 w-[100px] text-white font-semibold">UOC</th>
-            <th className="px-2 py-2 w-[100px] text-white font-semibold">MOC</th>
-            <th className="px-2 py-2 text-center w-[75px] text-white font-semibold">Mode</th>
-            <th className="px-2 py-2 w-[120px] text-white font-semibold">Origin</th>
-            <th className="px-2 py-2 w-[120px] text-white font-semibold">Destination</th>
-            <th className="px-2 py-2 text-right w-[80px] text-white font-semibold">Qty</th>
-            <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Bill Rate</th>
-            {/* <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Bill Rate</th> */}
-            <th className="px-2 py-2 text-right w-[140px] text-white font-semibold">Bill</th>
-            <th className="px-2 py-2 text-right w-[100px] text-white font-semibold">Cost Rate</th>
-            {/* <th className="px-2 py-2 text-right w-[95px] text-white font-semibold">Cost Rate</th> */}
-            <th className="px-2 py-2 text-right w-[120px] text-white font-semibold">Cost</th>
-            <th className="px-2 py-2 min-w-[250px] text-white font-semibold">Remarks</th>
-            <th className="px-2 py-2 text-center w-12 text-white font-semibold">Action</th>
+            <th className="sticky left-0 z-30 bg-slate-100 px-2 py-2 text-center w-10 text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">#</th>
+            <th className="sticky left-10 z-30 bg-slate-100 px-2 py-2 w-[110px] text-slate-700 font-bold border-r border-slate-200 shadow-[1px_0_0_0_#cbd5e1]">Activity Code</th>
+            <th className="sticky left-[150px] z-30 bg-slate-100 px-2 py-2 w-[220px] text-slate-700 font-bold border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]">Activity Name</th>
+            <th className="px-2 py-2 w-[100px] text-slate-700 font-bold border-l-2 !border-l-slate-400 border-r border-slate-200">UOC</th>
+            <th className="px-2 py-2 w-[100px] text-slate-700 font-bold border-r border-slate-200">MOC</th>
+            <th className="px-2 py-2 text-center w-[75px] text-slate-700 font-bold border-r border-slate-200">Mode</th>
+            <th className="px-2 py-2 w-[140px] text-slate-700 font-bold border-r border-slate-200">Origin Port</th>
+            <th className="px-2 py-2 w-[140px] text-slate-700 font-bold border-r border-slate-200">Dest Port</th>
+            <th className="px-2 py-2 text-right w-[80px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
+            <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Bill Rate</th>
+            <th className="px-2 py-2 text-right w-[120px] text-slate-700 font-bold border-r border-slate-200">Bill</th>
+            <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Cost Rate</th>
+            <th className="px-2 py-2 text-right w-[120px] text-slate-700 font-bold border-r border-slate-200">Cost</th>
+            <th className="px-2 py-2 min-w-[220px] text-slate-700 font-bold border-r border-slate-200">Remarks</th>
+            <th className="sticky right-0 z-30 bg-slate-100 px-2 py-2 text-center w-12 text-slate-700 font-bold border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200">
           {details.map((row, index) => {
             const isInvalid = invalidLineIndices.has(index);
+            const rowBg = isInvalid ? "bg-rose-50" : index % 2 === 1 ? "bg-slate-50" : "bg-white";
             return (
               <tr
                 key={`${row.srno}-${index}`}
@@ -1794,17 +1994,16 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 }`}
               >
                 {/* # */}
-                <td className="px-2 py-1.5 text-center text-slate-500 font-mono text-[11px] font-semibold">
+                <td className={`sticky left-0 z-10 ${rowBg} px-2 py-1.5 text-center text-slate-500 font-mono text-[11px] font-semibold border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
                   {index + 1}
                 </td>
 
                 {/* Activity Code */}
-                <td className="px-1.5 py-1">
+                <td className={`sticky left-10 z-10 ${rowBg} px-1.5 py-1 border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]`}>
                   <LookupField
                     compact
                     label="Activity Code"
                     value={row.act_code}
-                    // displayValue={row.act_code ? (row.activity ? `${row.act_code} - ${row.activity}` : row.act_code) : ""}
                     displayValue={row.act_code}
                     valueField="activity_code"
                     displayFields={["activity_code", "activity"]}
@@ -1820,9 +2019,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Activity Name */}
-                <td className="px-1.5 py-1">
+                <td className={`sticky left-[150px] z-10 ${rowBg} px-1.5 py-1 border-r-2 !border-r-slate-400 shadow-[inset_-2px_0_0_#94a3b8,3px_0_5px_-2px_rgba(0,0,0,0.15)]`}>
                   <div
-                    className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700 truncate"
+                    className="flex h-7 items-center rounded-md border border-slate-200 bg-slate-50/80 px-2 text-[11px] font-medium text-slate-700 truncate"
                     title={row.activity}
                   >
                     {row.activity || "-"}
@@ -1830,7 +2029,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* UOC */}
-                <td className="px-1.5 py-1">
+                {/* <td className="px-1.5 py-1">
                   <select
                     className={fieldClassName}
                     value={row.uoc}
@@ -1844,10 +2043,14 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                       </option>
                     ))}
                   </select>
+                </td> */}
+
+                <td className="px-1.5 py-1 border-l-2 !border-l-slate-400 border-r border-slate-200">
+                  <CellDropdown value={row.uoc} options={uocOptions} disabled={isReadOnly} onChange={(value) => setDetailField(index, "uoc", value)} />
                 </td>
 
                 {/* MOC */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <LookupField
                     compact
                     label="MOC"
@@ -1867,38 +2070,48 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Mode */}
-                <td className="px-1.5 py-1 text-center">
+                <td className="px-1.5 py-1 text-center border-r border-slate-200">
                   <span className="inline-flex items-center justify-center rounded px-2 py-0.5 text-[10px] font-bold bg-[#00378C]/10 text-[#00378C]">
                     {modeLabel(header.transport_mode || row.transport_mode)}
                   </span>
                 </td>
 
                 {/* Origin */}
-                <td className="px-1.5 py-1">
-                  <Input
-                    type="text"
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <LookupField
+                    compact
+                    label="Origin Port"
                     value={row.origin_port}
-                    onChange={(e) => setDetailField(index, "origin_port", e.target.value)}
-                    className={fieldClassName}
+                    displayValue={row.origin_port}
+                    valueField="port_code"
+                    displayFields={["port_code", "port_name"]}
+                    columns={portColumns}
+                    loadOptions={() => loadPortLookup(header.company_code)}
+                    onChange={(value) => setDetailField(index, "origin_port", value)}
                     placeholder="Origin"
                     disabled={isReadOnly}
-                   maxLength={freightTextLimit("TF_ENQUIRY_DET", "origin_port")}  maxBytes={freightTextLimit("TF_ENQUIRY_DET", "origin_port")} />
+                  />
                 </td>
 
                 {/* Destination */}
-                <td className="px-1.5 py-1">
-                  <Input
-                    type="text"
+                <td className="px-1.5 py-1 border-r border-slate-200">
+                  <LookupField
+                    compact
+                    label="Dest Port"
                     value={row.destination_port}
-                    onChange={(e) => setDetailField(index, "destination_port", e.target.value)}
-                    className={fieldClassName}
+                    displayValue={row.destination_port}
+                    valueField="port_code"
+                    displayFields={["port_code", "port_name"]}
+                    columns={portColumns}
+                    loadOptions={() => loadPortLookup(header.company_code)}
+                    onChange={(value) => setDetailField(index, "destination_port", value)}
                     placeholder="Dest"
                     disabled={isReadOnly}
-                   maxLength={freightTextLimit("TF_ENQUIRY_DET", "destination_port")}  maxBytes={freightTextLimit("TF_ENQUIRY_DET", "destination_port")} />
+                  />
                 </td>
 
                 {/* Qty */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <Input
                     type="number"
                     value={row.quantity}
@@ -1909,7 +2122,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Bill Rate */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <Input
                     type="number"
                     value={row.bill_rate}
@@ -1920,7 +2133,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Bill */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <Input
                     type="number"
                     value={row.bill}
@@ -1931,7 +2144,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Cost Rate */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <Input
                     type="number"
                     value={row.cost_rate}
@@ -1942,7 +2155,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Cost */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <Input
                     type="number"
                     value={row.cost}
@@ -1953,7 +2166,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Remarks */}
-                <td className="px-1.5 py-1">
+                <td className="px-1.5 py-1 border-r border-slate-200">
                   <Input
                     type="text"
                     value={row.remarks}
@@ -1966,7 +2179,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </td>
 
                 {/* Actions */}
-                <td className="px-1.5 py-1 text-center">
+                <td className={`sticky right-0 z-10 ${rowBg} px-1.5 py-1 text-center border-l-2 border-slate-300 shadow-[-3px_0_5px_-2px_rgba(0,0,0,0.12)]`}>
                   <Button
                     type="button"
                     size="icon"
@@ -1983,18 +2196,29 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             );
           })}
         </tbody>
+        {details.length > 0 && (
+          <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
+            <tr>
+              <td colSpan={10} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
+                Totals ({details.length} lines):
+              </td>
+              <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
+                {details.reduce((sum, d) => sum + (Number(d.bill) || 0), 0).toFixed(2)}
+              </td>
+              <td className="px-2 py-1.5 text-right">-</td>
+              <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
+                {details.reduce((sum, d) => sum + (Number(d.cost) || 0), 0).toFixed(2)}
+              </td>
+              <td colSpan={2} className="px-2 py-1.5 text-center text-slate-500 font-mono text-[10px]">
+                OMR
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
-
-    {/* Summary Footer */}
-    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 rounded-b-md">
-      <span>Showing {details.length} activity line{details.length === 1 ? "" : "s"}</span>
-      <div className="flex items-center gap-4 font-mono font-semibold">
-        <span>Total Bill: <strong className="text-slate-900">{details.reduce((sum, d) => sum + (Number(d.bill) || 0), 0).toFixed(2)}</strong></span>
-        <span>Total Cost: <strong className="text-slate-900">{details.reduce((sum, d) => sum + (Number(d.cost) || 0), 0).toFixed(2)}</strong></span>
-      </div>
-    </div>
-  </section>
+  </div>
+</section>
 )}
         </div>
         </fieldset>
@@ -2630,6 +2854,97 @@ function FormSelect({
   );
 }
 
+function CellDropdown({ value, onChange, options, disabled }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  useEffect(() => {
+    if (!pos) return;
+    const close = (e: Event) => { if (listRef.current?.contains(e.target as Node)) return; setPos(null); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [pos]);
+
+  useEffect(() => {
+    if (!pos) return;
+    listRef.current?.children[activeIdx]?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx, pos]);
+
+  const allOptions = [{ value: "", label: "\u00A0" }, ...options];
+
+  const openAt = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const up = window.innerHeight - rect.bottom < 220 && rect.top > 220;
+    setPos({ left: rect.left, width: Math.max(rect.width, 200), ...(up ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }) });
+    const cur = allOptions.findIndex((o) => o.value === value);
+    setActiveIdx(cur >= 0 ? cur : 0);
+  };
+
+  const toggle = () => {
+    if (pos) { setPos(null); return; }
+    openAt();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (!pos) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        openAt();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, allOptions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = allOptions[activeIdx];
+      if (opt) onChange(opt.value);
+      setPos(null);
+    } else if (e.key === "Escape" || e.key === "Tab") {
+      setPos(null);
+    }
+  };
+
+  const selected = options.find((o) => o.value === value)?.label ?? value;
+
+  return (
+    <>
+      <button ref={btnRef} type="button" disabled={disabled} className={`${fieldClassName} items-center justify-between text-left`} onClick={toggle} onKeyDown={onKeyDown}>
+        <span className="truncate">{selected}</span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {pos && (
+        <>
+          <div className="fixed inset-0 z-40" onMouseDown={() => setPos(null)} />
+          <ul ref={listRef} className="fixed z-50 m-0 max-h-48 list-none overflow-y-auto rounded-md border border-slate-300 bg-white p-0 shadow-lg" style={pos}>
+            {allOptions.map((opt, i) => (
+              <li
+                key={opt.value || "blank"}
+                className={`cursor-pointer px-2 py-1.5 text-[11px] font-medium hover:bg-blue-50 ${
+                  i === activeIdx ? "bg-blue-100 text-[#00378C]" : opt.value === value ? "bg-blue-50 text-[#00378C]" : "text-slate-800"
+                }`}
+                onMouseEnter={() => setActiveIdx(i)}
+                onClick={() => { onChange(opt.value); setPos(null); }}
+              >
+                {opt.label}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+}
+
 function FormTextarea({
   label,
   value,
@@ -2739,6 +3054,14 @@ function carrierLookupProps(mode: string, companyCode: string) {
 
 async function loadPrincipalLookup(companyCode: string) {
   return loadFreightLookup("freight_principal", companyCode);
+}
+
+async function loadShipperLookup(companyCode: string) {
+  return loadFreightLookup("freight_shipper", companyCode);
+}
+
+async function loadConsigneeLookup(companyCode: string) {
+  return loadFreightLookup("freight_consignee", companyCode);
 }
 
 async function loadWalkinPrincipalLookup(companyCode: string) {
