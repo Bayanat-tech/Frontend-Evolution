@@ -1627,6 +1627,34 @@ export async function getStockSummaryReportExcel(params: Record<string, any>): P
 }
 
 
+export async function getPrRegisterFormReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    // `/api/alms/reports/PR_Register_Details/html`,
+     `/api/finance/transactions/reports/PR_FormReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPrRegisterFormReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    // `/api/alms/reports/PR_Register_Details/excel`,
+        `/api/finance/transactions//reports/PR_FormReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "PR_Register_Form_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 
 export async function getStockTransactionReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(

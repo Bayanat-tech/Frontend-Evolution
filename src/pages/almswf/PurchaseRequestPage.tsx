@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
-import { Plus, Eye, Edit2 } from "lucide-react";
+import { Plus, Eye, Edit2, Printer } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTableAlms";
 import { Dialog } from "../../components/ui/Dialog";
@@ -10,8 +10,11 @@ import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import type { TPPOGenerated, TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddPRRequestPage from "./Addprrequestpage";
 import { almsCommonSelect } from "../../api/alms";
-import type { Division } from "../../api/transactions";
+import { getPrRegisterFormReportExcel, getPrRegisterFormReportHtml, type Division } from "../../api/transactions";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
+import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
+import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
+import { useToast } from "../../components/ui/AlertToast";
 
 
 const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
@@ -80,6 +83,39 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   const { user } = useAuth();
   const loginid = (user?.loginid || user?.username || "").trim();
   const companyCode = (user?.company_code || "").trim();
+
+  const { toast } = useToast();
+
+const handlePrint = async (requestNumber: string) => {
+  if (!requestNumber) {
+    toast.warning("Request number not found.", 4000);
+    return;
+  }
+
+  const params = {
+    loginid,
+    company_code: companyCode,
+    request_number: requestNumber,
+  };
+
+  const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
+
+  try {
+    const html = await getPrRegisterFormReportHtml(params);
+    preview.ready({
+      html,
+      filename: `purchase_request_${requestNumber}`,
+      orientation: "landscape",
+      onExcel: async () => {
+        await getPrRegisterFormReportExcel(params);
+      },
+    });
+  } catch (err: any) {
+    const msg = err?.message ?? "Failed to load report. Please try again.";
+    preview.fail(new Error(msg));
+    toast.error(msg, 5000);
+  }
+};
 
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -454,27 +490,50 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           );
         },
       },
-      {
+                 {
         accessorKey: "sentback_reason",
         header: "Reason",
         cell: ({ row }) => {
           const r = row.original as any;
-          return (
-            r.SENTBACK_REASON || r.sentback_reason ||
+          const sbReason = String(
+            r.SENTBACK_REASON || r.sentback_reason || r.LAST_SB_REASON || ""
+          ).trim();
+          const sbBy = String(r.LAST_SB_BY_NAME || "").trim();
+          const otherReason = String(
             r.REJECT_REASON || r.reject_reason ||
             r.CANCEL_REMARK || r.cancel_remark ||
-            r.REASON || "—"
+            r.REASON || ""
+          ).trim();
+
+          const text = sbReason || otherReason;
+          if (!text) return "—";
+          const showBy = !!sbReason && !!sbBy;
+          return (
+            <div className="flex max-w-[280px] flex-col leading-tight" title={showBy ? `${text} (Sent back by ${sbBy})` : text}>
+              <span className="truncate">{text}</span>
+              {showBy && (
+                <span className="truncate text-[10px] font-semibold text-purple-700">
+                  Sent back by: {sbBy}
+                </span>
+              )}
+            </div>
           );
         },
       },
-      {
+            {
         accessorKey: "next_action_by",
         header: "Next Action By",
         cell: ({ row }) => {
           const r = row.original as any;
-          const code = r.NEXT_ACTION_BY || r.next_action_by || "";
+          const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
+          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+          const code = isDraft
+            ? (r.USER_ID || r.user_id || "")
+            : (r.NEXT_ACTION_BY || r.next_action_by || "");
           if (!code) return "—";
-          const name = r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "";
+          const name = isDraft
+            ? (r.DRAFT_USER_NAME || r.draft_user_name || "")
+            : (r.NEXT_ACTION_BY_NAME || r.next_action_by_name || "");
           return name ? `${code} - ${name}` : code;
         },
       },
@@ -483,29 +542,46 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         header: "Actions",
         enableSorting: false,
         cell: ({ row }) => {
-          const r = row.original as any;
-          const isFinalApproved = String(r.FINAL_APPROVED || "").toUpperCase() === "Y";
-          const isCancelled = String(r.CANCEL_FLAG || "").toUpperCase() === "Y"
-            || String(r.LAST_ACTION || "").toUpperCase() === "CANCELED"
-            || String(r.LAST_ACTION || "").toUpperCase() === "CANCELLED";
-          return (
-            <div className="flex items-center gap-1">
-              <Button size="icon" variant="ghost" title="View" onClick={() => handleActions("view", row.original)}>
-                <Eye size={15} />
-              </Button>
-              {isPendingTab && (
-                <Button
-                  size="icon" variant="ghost"
-                  title={isFinalApproved ? "Approved — cannot edit" : isCancelled ? "Cancelled — cannot edit" : "Edit"}
-                  onClick={() => handleActions("edit", row.original)}
-                  disabled={isFinalApproved || isCancelled}
-                >
-                  <Edit2 size={15} />
-                </Button>
-              )}
-            </div>
-          );
-        },
+  const r = row.original as any;
+  const isFinalApproved = String(r.FINAL_APPROVED || "").toUpperCase() === "Y";
+  const isCancelled = String(r.CANCEL_FLAG || "").toUpperCase() === "Y"
+    || String(r.LAST_ACTION || "").toUpperCase() === "CANCELED"
+    || String(r.LAST_ACTION || "").toUpperCase() === "CANCELLED";
+  const requestNo = r.REQUEST_NUMBER;
+
+  return (
+    <div className="flex items-center gap-1">
+     
+      <Button size="icon" variant="ghost" title="View" onClick={() => handleActions("view", row.original)}>
+        <Eye size={15} />
+      </Button>
+
+     
+      <Button
+        size="icon"
+        variant="ghost"
+        title="Print"
+        onClick={() => handlePrint(requestNo)}
+        disabled={!requestNo}
+      >
+        <Printer size={15} />
+      </Button>
+
+    
+      {isPendingTab && (
+        <Button
+          size="icon"
+          variant="ghost"
+          title={isFinalApproved ? "Approved — cannot edit" : isCancelled ? "Cancelled — cannot edit" : "Edit"}
+          onClick={() => handleActions("edit", row.original)}
+          disabled={isFinalApproved || isCancelled}
+        >
+          <Edit2 size={15} />
+        </Button>
+      )}
+    </div>
+  );
+},
       },
     ],
     [isPendingTab]
@@ -730,6 +806,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
           </table>
         </div>
       </Dialog>
+
+      <PurchaseReportPreview />
     </section>
   );
 };

@@ -895,7 +895,7 @@ footer={
           <Field label="Department Head">
             <Input value={deptHeadName} disabled />
           </Field>
-          <Field label="HOD">
+          <Field label="HR. Head Of Department">
             <Input value={hodName} disabled />
           </Field>
 
