@@ -249,10 +249,10 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
             <div className={`freight-workspace-mode-mark mode-${modeCode[targetMode].toLowerCase()}`} aria-hidden="true">
               <WorkspaceModeIcon size={30} strokeWidth={1.5} />
             </div>
-            <div className="freight-workspace-title-block">
+            {/* <div className="freight-workspace-title-block">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="m-0 text-[20px] font-bold leading-tight text-foreground">
-                  {selectedJob ? `Job ${text(selectedJob, "job_no")}` : "New Job"}
+                  {selectedJob ? "Job" : "New Job"}
                 </h1>
                 {selectedJob && (
                   <>
@@ -263,12 +263,23 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                       {formatDate(text(selectedJob, "job_date"))}
                     </span>
                   </>
-                )}
+                )}  
               </div>
               <p className="m-0 text-xs font-semibold text-slate-600 freight-workspace-mode-subtitle">
                 {modeLabel[targetMode]} Freight &bull; {directionLabel[targetDirection]}
               </p>
-            </div>
+            </div> */}
+            <div className="flex flex-wrap items-center gap-2">
+  <h1 className="m-0 text-[16px] font-bold leading-tight text-foreground">
+  {modeLabel[targetMode]} {directionLabel[targetDirection]} Job
+</h1>
+  <span className="freight-doc-pill">
+    JOB NO - <b>{selectedJob ? text(selectedJob, "job_no") : "NEW"}</b>
+  </span>
+  <span className="freight-doc-pill">
+    DATE - <b>{formatDate(text(selectedJob, "job_date")) || new Date().toLocaleDateString("en-GB")}</b>
+  </span>
+</div>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">

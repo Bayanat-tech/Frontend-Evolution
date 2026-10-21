@@ -337,6 +337,12 @@ export function FreightJobPage({
       notify({ type: "error", text: "Kindly fill in the missing fields." });
       return;
     }
+    if (job.job_flag === "H") {
+      if (!job.combined_jobno?.trim() || job.combined_jobno.trim() === job.job_no?.trim()) {
+        notify({ type: "error", text: "Please select Master Job for House Job." });
+        return;
+      }
+    }
     const schemaError = freightValidationError("TI_JOB", job);
     if (schemaError) { notify({ type: "error", text: schemaError }); return; }
     setSaving(true);
@@ -745,7 +751,7 @@ export function FreightJobPage({
             >
               <div className="grid gap-2 sm:grid-cols-2">
                 <Lookup
-                  label={direction.code === "EXP" ? "Port of Loading" : "Origin Port"}
+                  label={mode.code === "A" ? "Airport of Departure" : direction.code === "EXP" ? "Port of Loading" : "Origin Port"}
                   value={job.port_code}
                   displayValue={job.port_code_name}
                   valueField="PORT_CODE"
@@ -763,7 +769,7 @@ export function FreightJobPage({
                 />
                <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)}  maxLength={freightTextLimit("TI_JOB", "place_receipt")} />
                 <Lookup
-                  label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"}
+                  label={mode.code === "A" ? "Airport of Destination" : direction.code === "EXP" ? "Port of Destination" : "Destination Port"}
                   value={job.destination_port}
                   displayValue={job.destination_port_name}
                   valueField="PORT_CODE"
@@ -787,12 +793,12 @@ export function FreightJobPage({
             <SectionPanel
               className="lg:col-span-6"
               icon={Icon}
-              title={mode.code === "R" ? "Truck & Driver Details" : mode.code === "A" ? "Air Transport & MAWB" : "Vessel & Bill of Lading"}
+              title={mode.code === "R" ? "TRUCK DETAILS" : mode.code === "A" ? "AWB DETAILS" : "BILL OF LADING DETAILS"}
               meta={job.vessel_name || job.driver_ref || "Transport details"}
             >
               <div className="grid gap-2 sm:grid-cols-2">
                 <ModeCarrierLookup
-                  className={mode.code === "S" ? "sm:col-span-1" : "sm:col-span-2"}
+                  className="sm:col-span-1"
                   mode={mode.code}
                   companyCode={companyCode}
                   value={job.vessel_name}
@@ -803,7 +809,7 @@ export function FreightJobPage({
                   <Field label="Feeder Vessel" value={job.feeder_vessel_name} onChange={(value) => setJobField(setJob, "feeder_vessel_name", value)}  maxLength={freightTextLimit("TI_JOB", "feeder_vessel_name")} />
                 )}
                 <Field
-                  label={mode.code === "R" ? "Trip / Route No" : mode.code === "A" ? "Flight No" : "Voyage No"}
+                  label={mode.code === "R" ? "Truck No." : mode.code === "A" ? "Flight No" : "Voyage No"}
                   value={job.voyage_no}
                   onChange={(value) => setJobField(setJob, "voyage_no", value)}
                  maxLength={freightTextLimit("TI_JOB", "voyage_no")} />
@@ -817,10 +823,10 @@ export function FreightJobPage({
                 )}
                 {mode.code === "R" ? (
                   <>
-                    <Field label="Driver Name / Ref" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)}  maxLength={freightTextLimit("TI_JOB", "driver_ref")} />
-                    <Field label="Doc Ref" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)}  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
-                    <Field label="House Ref" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)}  maxLength={freightTextLimit("TI_JOB", "hawb")} />
-                    <Textarea className="sm:col-span-2" label="Driver Remarks / Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)}  maxLength={freightTextLimit("TI_JOB", "driver_remarks")} />
+                    <Field label="Driver Name" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)}  maxLength={freightTextLimit("TI_JOB", "driver_ref")} />
+                    <Field label="Contact No." value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)}  maxLength={freightTextLimit("TI_JOB", "driver_remarks")} />
+                    <Field label="Doc Ref #" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} required  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
+                    <Field label="House Ref#" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} required  maxLength={freightTextLimit("TI_JOB", "hawb")} />
                   </>
                 ) : (
                   <>
@@ -919,8 +925,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-                <Field label="Exchange Rate" type="number" value={job.ex_rate} onChange={(value) => setJobField(setJob, "ex_rate", value)} required />
-                <Lookup
+                 <Lookup
                   label="Freight Payable At"
                   value={job.payableat}
                   valueField="PAYABLEAT"
@@ -929,6 +934,7 @@ export function FreightJobPage({
                   loadOptions={(search) => lookup("freight_payable_at", companyCode, "NULL", "NULL", search)}
                   onChange={(value) => setJobField(setJob, "payableat", value)}
                 />
+                <Field label="Exchange Rate" type="number" value={job.ex_rate} onChange={(value) => setJobField(setJob, "ex_rate", value)} required />
                 <Field label="No of Orig Docs" type="number" value={job.no_of_original_bl} onChange={(value) => setJobField(setJob, "no_of_original_bl", value)} />
                 {mode.code === "S" && !isExportLike && (
                   <>

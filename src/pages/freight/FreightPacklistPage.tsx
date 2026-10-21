@@ -1,9 +1,11 @@
 import { Textarea as TextAreaControl } from "../../components/ui/Textarea";
 import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
+import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Edit2,
   Eye,
@@ -15,7 +17,9 @@ import {
   Plus,
   RefreshCw,
   Save,
+  ShieldCheck,
   Ship,
+  Sparkles,
   Trash2,
   Truck,
   UserRound,
@@ -35,9 +39,11 @@ import { freightSelect } from "../../api/freight";
 
 type ViewMode = "list" | "editor";
 type Notice = { type: "success" | "error"; text: string } | null;
+type SmartCheck = { tone: "ok" | "warn" | "danger"; title: string; detail: string };
 const PackEditContext = createContext(true);
 
 type PackForm = {
+  no_of_original_bl: string;
   company_code: string;
   prin_code: string;
   job_no: string;
@@ -115,6 +121,7 @@ type PackForm = {
   item_no: string;
   routing: string;
   terms_of_delivery: string;
+  payableat: string;
   curr_code: string;
   ex_rate: string;
   rate: string;
@@ -212,6 +219,7 @@ export function FreightPacklistPage({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
+  const [assistOpen, setAssistOpen] = useState(false);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -228,6 +236,56 @@ export function FreightPacklistPage({
   const isAir = mode.code === "A";
   const isSea = mode.code === "S";
   const isRoad = mode.code === "R";
+
+  const syncContainersToPack = useCallback((updatedContainers: ContainerLine[]) => {
+    const totalVol = updatedContainers.reduce((sum, r) => sum + (Number(r.volume) || 0), 0);
+    const totalGross = updatedContainers.reduce((sum, r) => sum + (Number(r.gross_weight) || 0), 0);
+    const totalPkgs = updatedContainers.reduce((sum, r) => sum + (Number(r.no_of_pkgs) || 0), 0);
+    const teuCount = updatedContainers.filter((r) => r.t_f === "T").length;
+    const feuCount = updatedContainers.filter((r) => r.t_f === "F").length;
+    const containerSummary = updatedContainers.map((r) => r.container_no.trim()).filter(Boolean).join(",\r\n");
+
+    setPack((curr) => ({
+      ...curr,
+      volume: totalVol > 0 ? totalVol.toFixed(3) : curr.volume,
+      gross_wt: totalGross > 0 ? totalGross.toFixed(2) : curr.gross_wt,
+      no_of_packings: totalPkgs > 0 ? String(totalPkgs) : curr.no_of_packings,
+      quantity: totalPkgs > 0 ? String(totalPkgs) : curr.quantity,
+      teus: String(teuCount),
+      feus: String(feuCount),
+      container_no: containerSummary || curr.container_no,
+    }));
+  }, []);
+
+  const syncDimensionsToPack = useCallback((updatedDims: DimensionLine[]) => {
+    const totalVol = updatedDims.reduce((sum, r) => sum + (Number(r.volume) || 0), 0);
+    const totalQty = updatedDims.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+    const totalGross = updatedDims.reduce((sum, r) => sum + (Number(r.gross_wt) || 0), 0);
+    const totalCwt = updatedDims.reduce((sum, r) => sum + (Number(r.chargeable_wt) || 0), 0);
+
+    let finalCwt = Math.max(totalGross, totalCwt);
+    if (finalCwt > 0 && finalCwt < 45) finalCwt = 45;
+
+    setPack((curr) => {
+      const nextAmount = (finalCwt > 0 && Number(curr.rate) > 0)
+        ? (finalCwt * Number(curr.rate)).toFixed(3)
+        : curr.amount;
+
+      return {
+        ...curr,
+        volume: totalVol > 0 ? totalVol.toFixed(3) : curr.volume,
+        no_of_packings: totalQty > 0 ? String(totalQty) : curr.no_of_packings,
+        quantity: totalQty > 0 ? String(totalQty) : curr.quantity,
+        gross_wt: totalGross > 0 ? totalGross.toFixed(2) : curr.gross_wt,
+        charge_wt: finalCwt > 0 ? String(Math.round(finalCwt * 100) / 100) : curr.charge_wt,
+        amount: nextAmount,
+      };
+    });
+  }, []);
+
+  const smartChecks = useMemo(() => buildPacklistSmartChecks(pack, containers, dimensions, mode.code), [pack, containers, dimensions, mode.code]);
+  const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
+  const warningChecks = smartChecks.filter((item) => item.tone === "warn").length;
 
   const airCargoColumns: CargoColumn[] = [
   { key: "no_of_packings", label: "No. of Pcs", width: "90px", type: "number" },
@@ -247,23 +305,25 @@ export function FreightPacklistPage({
 ];
 
 const seaCargoColumns: CargoColumn[] = [
-  { key: "no_of_packings", label: "No. of Pkgs", width: "110px", type: "number" },
-  { key: "gross_wt", label: "Gross Wt", width: "120px", type: "number" },
-  { key: "net_wt", label: "Net Wt", width: "120px", type: "number" },
-  { key: "volume", label: "Cube (m3)", width: "120px", type: "number" },
-  // { key: "container_type", label: "Container Type", width: "120px" },
-  { key: "cargo_details", label: "Container Details", width: "850px" },
+  { key: "no_of_packings", label: "No. of Pkgs", width: "100px", type: "number" },
+  { key: "quantity", label: "Quantity", width: "95px", type: "number" },
+  { key: "puom", label: "Kind of Pkgs / UOM", width: "150px", lookupUom: true },
+  { key: "gross_wt", label: "Gross Wt (kg)", width: "110px", type: "number" },
+  { key: "net_wt", label: "Net Wt (kg)", width: "110px", type: "number" },
+  { key: "volume", label: "Cube (m3)", width: "105px", type: "number" },
+  { key: "cargo_details", label: "Container Details", width: "650px" },
 ];
 
 const roadCargoColumns: CargoColumn[] = [
   { key: "no_of_packings", label: "No. of Pcs", width: "90px", type: "number" },
   { key: "quantity", label: "Quantity", width: "90px", type: "number" },
-  { key: "net_wt", label: "Net Wt", width: "100px", type: "number" },
   { key: "puom", label: "UOM", width: "130px", lookupUom: true },
-  { key: "gross_wt", label: "Gross Wt", width: "100px", type: "number" },
-  { key: "volume", label: "Volume", width: "100px", type: "number" },
-  { key: "charge_wt", label: "Chg Wt", width: "100px", type: "number" },
-  { key: "cargo_details", label: "Container Details", width: "600px" },
+  { key: "net_wt", label: "Net Wt (kg)", width: "100px", type: "number" },
+  { key: "gross_wt", label: "Gross Wt (kg)", width: "100px", type: "number" },
+  { key: "volume", label: "Volume (cbm)", width: "100px", type: "number" },
+  { key: "charge_wt", label: "Chg Wt (kg)", width: "100px", type: "number" },
+  { key: "dec_val_carr", label: "Value of Goods", width: "120px", type: "number" },
+  { key: "cargo_details", label: "Cargo Details", width: "500px" },
 ];
 const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCargoColumns;
 
@@ -306,7 +366,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "PACKLIST_NO", header: "Pack No", size: 110, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "packlist_no") || "Auto"}</button> },
     { accessorKey: "SEQ_NUMBER", header: "Seq", size: 70 },
-    { accessorKey: "JOB_NO", header: "Job No", size: 120 },
+    // { accessorKey: "JOB_NO", header: "Job No", size: 120 },
     { accessorKey: "JOB_DATE", header: "Job Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
     { accessorKey: "PRIN_CODE", header: "Principal", size: 90 },
     { accessorKey: "PRIN_NAME", header: "Principal Name", size: 220 },
@@ -382,15 +442,29 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     setLoading(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
+      const jobTransportMode = lookupText(normalized, "transport_mode") || mode.code;
+      const jobJobType = lookupText(normalized, "job_type") || direction.code;
+
+      let response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
         company_code: companyCode,
-        transport_mode: mode.code,
-        job_type: direction.code,
+        transport_mode: jobTransportMode,
+        job_type: jobJobType,
         search: jobNo,
       });
-      const match = (response.data.data || [])
+      let match = (response.data.data || [])
         .map(normalizeLookupRow)
         .find((item) => lookupText(item, "job_no") === jobNo && (!prinCode || lookupText(item, "prin_code") === prinCode));
+
+      if (!match) {
+        // Fallback search without transport_mode and job_type restrictions to catch cross-mode or newly converted jobs
+        const fallbackRes = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
+          company_code: companyCode,
+          search: jobNo,
+        });
+        match = (fallbackRes.data.data || [])
+          .map(normalizeLookupRow)
+          .find((item) => lookupText(item, "job_no") === jobNo && (!prinCode || lookupText(item, "prin_code") === prinCode));
+      }
 
       if (match && lookupText(match, "packlist_no")) {
         await openPack(match);
@@ -473,6 +547,14 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     setSaving(true);
     setNotice(null);
     try {
+      const packErr = freightValidationError("TF_PACKLIST", pack);
+      if (packErr) throw new Error(packErr);
+      if (mode.code === "S" && containers.length > 0) {
+        assertFreightRecords("TF_CONTAINER_DET", containers, "Container line");
+      }
+      if (isAir && dimensions.length > 0) {
+        assertFreightRecords("TF_PACKLIST_DIM", dimensions, "Dimension line");
+      }
       const containerSummary = containers.map((row) => row.container_no.trim()).filter(Boolean).join(",\r\n");
       const payload = {
         ...pack,
@@ -514,6 +596,16 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar flex flex-wrap items-center gap-1.5">
         {notice && <NoticeChip notice={notice} />}
         {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={() => setView("list")} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className={urgentChecks + warningChecks > 0 ? "border-amber-300 text-amber-700 bg-amber-50" : ""}
+          onClick={() => setAssistOpen((prev) => !prev)}
+        >
+          <Sparkles size={14} />
+          Assist {urgentChecks + warningChecks > 0 ? `(${urgentChecks + warningChecks})` : ""}
+        </Button>
         {pack.job_no && !readOnly && (
           <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}>
             <Plus size={14} /> New {screenTitle}
@@ -528,7 +620,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
     );
 
     return () => onEmbeddedActionsChange(null);
-  }, [embeddedFormId, embeddedInWorkspace, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, view]);
+  }, [assistOpen, embeddedFormId, embeddedInWorkspace, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, urgentChecks, view, warningChecks]);
 
   if (view === "list") {
     return (
@@ -568,6 +660,16 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
           <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.packlist_no ? `Pack ${pack.packlist_no}` : `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
             {notice && <NoticeChip notice={notice} />}
             <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={urgentChecks + warningChecks > 0 ? "border-amber-300 text-amber-700 bg-amber-50" : ""}
+              onClick={() => setAssistOpen((prev) => !prev)}
+            >
+              <Sparkles size={14} />
+              Smart Assist {urgentChecks + warningChecks > 0 ? `(${urgentChecks + warningChecks})` : ""}
+            </Button>
             {!editing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
             {pack.job_no && !readOnly && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
             {editing && !readOnly && <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly}><Save size={14} />Save</Button>}
@@ -587,46 +689,49 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
         </>
       )}
 
+      {assistOpen && <FreightAssistPanel checks={smartChecks} />}
+
       <fieldset disabled={readOnly || !editing} className={`freight-ui-standard freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <PackEditContext.Provider value={editing && !readOnly}>
         <div className="freight-job-section-grid">
-        {/* <Panel className="pack-document-panel lg:col-span-12" icon={FileSignature} title="Document & Booking Reference" meta={`Pack ${pack.packlist_no || "Auto"} / Job ${pack.job_no || "Pending"}`}>
-          <div className="freight-job-field-grid freight-job-field-grid-6">
-            <ReadOnlyField label="Job No" value={pack.job_no || "-"} />
+        <Panel className="pack-document-panel lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / Job ${pack.job_no || "Pending"}`}>
+          <div className="freight-job-field-grid grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+            {/* <ReadOnlyField label="Job No" value={pack.job_no || "-"} /> */}
             <ReadOnlyField label="Pack List No" value={pack.packlist_no || "Auto"} />
-            <ReadOnlyField label="Sequence No" value={pack.seq_number || "Auto"} />
-            <ReadOnlyField label="Job Date" value={formatDate(pack.job_date) || "-"} />
-            <ReadOnlyField label="Principal" value={pack.prin_code || "-"} /> */}
-            <Field label="P.O. No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required className="lg:col-span-4 max-w-xs" />
-          {/* </div>
-        </Panel> */}
-        {/* <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>
-          <div className="freight-job-field-grid freight-job-field-grid-8">
-            <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => { selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code); setContainers([]); }} />
-            <ReadOnlyField label="Pack No" value={pack.packlist_no || "Auto"} />
-            <ReadOnlyField label="Seq No" value={pack.seq_number || "Auto"} />
-            <ReadOnlyField label="Principal" value={pack.prin_code || "-"} />
-            <ReadOnlyField label="Principal Name" value={pack.prin_name || "-"} />
-            <Field label="Customer" value={pack.cust_code} onChange={(value) => setPackField(setPack, "cust_code", value)} /> */}
-            {/* <Field label="Broker" value={pack.broker_code} onChange={(value) => setPackField(setPack, "broker_code", value)} /> */}
-            {/* <Field label={isAir ? "AWB No" : "HBL Number"} value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
-            <Field label={isAir ? "AWB Date" : "WBL Date"} type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
-            <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} />
+            <Field label="P.O. No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required maxLength={freightTextLimit("TF_PACKLIST", "po_no")} />
+            <Field
+              label={isAir ? "MAWB" : isSea ? "MSWB / Master BL" : "Doc Ref #"}
+              value={pack.doc_ref}
+              onChange={(value) => setPackField(setPack, "doc_ref", value)}
+              maxLength={freightTextLimit("TF_PACKLIST", "import_blno") || 25}
+            />
+            <Field
+              label={isAir ? "HAWB" : isSea ? "HBL Number" : "HBWL No"}
+              value={pack.bl_no}
+              onChange={(value) => setPackField(setPack, "bl_no", value)}
+              maxLength={freightTextLimit("TF_PACKLIST", "bl_no")}
+            />
+            <Field
+              label={isAir ? "AWB Date" : isSea ? "WBL Date" : "WB Date"}
+              type="date"
+              value={pack.bl_date}
+              onChange={(value) => setPackField(setPack, "bl_date", value)}
+            />
           </div>
-        </Panel> */}
+        </Panel>
 
         <Panel className="pack-parties-panel lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
           <div className="freight-job-field-grid pack-parties-grid">
-            <Textarea rows={2} label="Shipper Name" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
-            <Textarea rows={3} label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} />
-            <Textarea rows={2} label="Consignee Name" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
-            <Textarea rows={3} label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} />
-            <Textarea rows={2} label="Notify Name" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
-            <Textarea rows={3} label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} />
+            <Field label="Shipper Name" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "shipper_name")} />
+            <Field label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "shipper_address")} />
+            <Field label="Consignee Name" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "consignee_name")} />
+            <Field label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "consignee_address")} />
+            <Field label="Notify Name" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "notify_name")} />
+            <Field label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "notify_address")} />
             {isAir && (
               <>
-                <Field label="Airline Name" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} className="lg:col-span-1" />
-                <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} />
+                <Field label="Airline Name" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} className="lg:col-span-1" maxLength={freightTextLimit("TF_PACKLIST", "airline")} />
+                <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "airline_address")} />
               </>
             )}
           </div>
@@ -722,23 +827,23 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
 
   {isAir ? (
   <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-    <Textarea label="Nature And Quantity Of Goods" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} required />
+    <Textarea label="Nature And Quantity Of Goods" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} required maxLength={freightTextLimit("TF_PACKLIST", "prod_description")} />
     {/* <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} /> */}
-    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} 
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} maxLength={freightTextLimit("TF_PACKLIST", "remarks")} 
     // className="col-span-2" 
     />
   </div>
 ) : (
   <div className="freight-job-field-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-    <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
+    <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} maxLength={freightTextLimit("TF_PACKLIST", "marksnos")} />
     {isRoad ? (
     <>
       {/* <Textarea label="Cargo Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} /> */}
-      <Textarea label="Cargo Desc" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
-      <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
+      <Textarea label="Cargo Desc" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} maxLength={freightTextLimit("TF_PACKLIST", "prod_description")} />
+      <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "handling_info")} />
     </>
     ) : null}
-    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
+    <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} maxLength={freightTextLimit("TF_PACKLIST", "remarks")} />
   </div>
 )}
 </Panel>
@@ -746,10 +851,10 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
    {isAir && (
           <Panel className="lg:col-span-12" icon={MapPinned} title="Air Routing" meta={pack.routing || `${pack.port_code || "Origin"} -> ${pack.destination_port || "Destination"}`}>
             <div className="freight-job-field-grid freight-job-field-grid-4">
-              <Field label="Airport of Origin" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} />
-              <Field label="Routing Of Destination" value={pack.routing} onChange={(value) => setPackField(setPack, "routing", value)}/>
-              <Field label="Airport of Destination" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
-              <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)} />
+              <Field label="Airport of Origin" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} maxLength={55} />
+              <Field label="Routing Of Destination" value={pack.routing} onChange={(value) => setPackField(setPack, "routing", value)} maxLength={freightTextLimit("TF_PACKLIST", "routing")} />
+              <Field label="Airport of Destination" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} maxLength={55} />
+              <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "flight_info")} />
             </div>
           </Panel>
         )} 
@@ -760,19 +865,19 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
           <div className="freight-job-field-grid freight-job-field-grid-4">
   {isSea ? (
   <>
-    <Field label="Vessel Name" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
+    <Field label="Vessel Name" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "vessel_name")} />
     {/* <Textarea rows={2} label="Container Summary" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} /> */}
     <Field label="Shipped On Board" type="date" value={pack.shipon_board} onChange={(value) => setPackField(setPack, "shipon_board", value)} />
     {/* <Field label="Shipment Status" value={pack.shipment_status} onChange={(value) => setPackField(setPack, "shipment_status", value)} /> */}
     <SelectField label="Shipment Status" value={pack.shipment_status} options={["LCL/FCL", "FCL/FCL", "FCL/LCL", "LCL/LCL"]} onChange={(value) => setPackField(setPack, "shipment_status", value)} />
-    <Field label="Freight Chgs (Master)" value={pack.frt_chgs_master} onChange={(value) => setPackField(setPack, "frt_chgs_master", value)} />
-    <Field label="Freight Chgs (House)" value={pack.frt_chgs_house} onChange={(value) => setPackField(setPack, "frt_chgs_house", value)} />
+    <Field label="Freight Chgs (Master)" value={pack.frt_chgs_master} onChange={(value) => setPackField(setPack, "frt_chgs_master", value)} maxLength={freightTextLimit("TF_PACKLIST", "frt_chgs_master")} />
+    <Field label="Freight Chgs (House)" value={pack.frt_chgs_house} onChange={(value) => setPackField(setPack, "frt_chgs_house", value)} maxLength={freightTextLimit("TF_PACKLIST", "frt_chgs_house")} />
   </>
 ) : (
   <>
-   <Field label="HBWL No" value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
+   <Field label="HBWL No" value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} maxLength={freightTextLimit("TF_PACKLIST", "bl_no")} />
     <Field label="WB Date" type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
-    <Field label="Truck No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} required/>
+    <Field label="Truck No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} required maxLength={freightTextLimit("TF_PACKLIST", "container_no")} />
     <Lookup
   label="Vehicle Type"
   value={pack.container_type}
@@ -782,7 +887,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
   loadOptions={(search) => lookup("freight_vehicle_type", companyCode, "NULL", "NULL", search)}
   onChange={(value) => setPackField(setPack, "container_type", value)}
 />
-    <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} />
+    <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "acc_info")} />
     {/* <Textarea label="Special Instructions" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} className="col-span-4"/> */}
   </>
 )}
@@ -794,7 +899,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
 
         {mode.code === "S" && (
           <Panel className="lg:col-span-12" icon={Ship} title="Container Details" meta={`${containers.length} container${containers.length === 1 ? "" : "s"}`}>
-            <ContainerGrid rows={containers} setRows={setContainers} />
+            <ContainerGrid rows={containers} setRows={setContainers} onSync={syncContainersToPack} />
           </Panel>
         )}
 
@@ -812,23 +917,26 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
         </Panel> */}
 
        {isSea && (
-  <Panel className="lg:col-span-12" icon={Ship} title="Bill Of Lading Route" meta={`${pack.port_code || "Loading"} -> ${pack.destination_port || "Discharge"}`}>
-    <div className="freight-job-field-grid freight-job-field-grid-4">
-      <Field label="MSWB / Master BL" value={pack.doc_ref} onChange={(value) => setPackField(setPack, "doc_ref", value)} />
-      <Field label="HBL No" value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
-      <Field label="WBL Date" type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
-      <Field label="Pre-Carriage By" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
-      <Field label="Place of Receipt" value={pack.place_receipt} onChange={(value) => setPackField(setPack, "place_receipt", value)} />
-      <Field label="Port of Loading" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} />
-      <Field label="Port of Discharge" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
-      <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} />
-      <Field label="Frt Amt" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} />
-       {/* <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} className="lg:col-span-2" />
-       <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)}className="lg:col-span-2" />
-      <Lookup label="Agent Country" value={pack.agent_country} valueField="COUNTRY_CODE" displayFields={["COUNTRY_CODE", "COUNTRY_NAME"]} columns={[{ field: "COUNTRY_CODE", header: "Code" }, { field: "COUNTRY_NAME", header: "Country" }]} loadOptions={(search) => lookup("freight_country", companyCode, "NULL", "NULL", search)} onChange={(value) => setPackField(setPack, "agent_country", value)} /> */} 
-      <Field label="Issuing Carrier Name" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
-      <Field label="Issuing Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} className="lg:col-span-2"  />
-      {/* <Field label="Org B/L Desc" value={pack.org_bl_desc} onChange={(value) => setPackField(setPack, "org_bl_desc", value)}   className="lg:col-span-2" /> */}
+  <Panel className="lg:col-span-12" icon={Ship} title="Bill Of Lading Route & Carrier" meta={`${pack.port_code || "Loading"} -> ${pack.destination_port || "Discharge"}`}>
+    <div className="freight-job-field-grid grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+      <Field label="Pre-Carriage By" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "vessel_name")} />
+      <Field label="Place of Receipt" value={pack.place_receipt} onChange={(value) => setPackField(setPack, "place_receipt", value)} maxLength={55} />
+      <Field label="Port of Loading" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} maxLength={55} />
+      <Field label="Port of Discharge" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} maxLength={55} />
+      <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} maxLength={55} />
+      <Field label="Freight Amount" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} />
+      <Lookup
+        label="Freight Payable At"
+        value={pack.payableat}
+        valueField="PAYABLEAT"
+        displayFields={["PAYABLEAT", "PAYABLEAT_NAME"]}
+        columns={[{ field: "PAYABLEAT", header: "Code" }, { field: "PAYABLEAT_NAME", header: "Payable At" }]}
+        loadOptions={(search) => lookup("freight_payable_at", companyCode, "NULL", "NULL", search)}
+        onChange={(value) => setPackField(setPack, "payableat", value)}
+      />
+      <Field label="Number of Originals B/Ls" type="number" value={pack.no_of_original_bl} onChange={(value) => setPackField(setPack, "no_of_original_bl", value)} />
+      <Field label="Issuing Carrier Name" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} maxLength={freightTextLimit("TF_PACKLIST", "issuing_carrier")} />
+      <Field label="Issuing Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} className="lg:col-span-2" maxLength={freightTextLimit("TF_PACKLIST", "issuing_carrier_add")} />
     </div>
   </Panel>
 )}
@@ -852,14 +960,14 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
               {/* <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} /> */}
               {/* <Field label="Issuing Carrier" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
               <Field label="Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} /> */}
-              <Field label="Agent IATA Code" value={pack.agents_iata_code} onChange={(value) => setPackField(setPack, "agents_iata_code", value)} />
-              <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} />
-              <Field label="Account No" value={pack.accnt_no} onChange={(value) => setPackField(setPack, "accnt_no", value)} />
-              <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} />
+              <Field label="Agent IATA Code" value={pack.agents_iata_code} onChange={(value) => setPackField(setPack, "agents_iata_code", value)} maxLength={freightTextLimit("TF_PACKLIST", "agents_iata_code")} />
+              <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "acc_info")} />
+              <Field label="Account No" value={pack.accnt_no} onChange={(value) => setPackField(setPack, "accnt_no", value)} maxLength={freightTextLimit("TF_PACKLIST", "accnt_no")} />
+              <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} maxLength={freightTextLimit("TF_PACKLIST", "curr_code")} />
               <SelectField label="CHGS Code" value={pack.chg_code} options={["PP", "CC"]} onChange={(value) => setPackField(setPack, "chg_code", value)} />
-              <Field label="Dec Val of Carriage" value={pack.dec_val_carr} onChange={(value) => setPackField(setPack, "dec_val_carr", value)} />
-              <Field label="Dec Val of Customs" value={pack.dec_val_cus} onChange={(value) => setPackField(setPack, "dec_val_cus", value)} />
-              <Field label="Insurance Amt" value={pack.amt_insurance} onChange={(value) => setPackField(setPack, "amt_insurance", value)} />
+              <Field label="Dec Val of Carriage" value={pack.dec_val_carr} onChange={(value) => setPackField(setPack, "dec_val_carr", value)} maxLength={freightTextLimit("TF_PACKLIST", "dec_val_carr")} />
+              <Field label="Dec Val of Customs" value={pack.dec_val_cus} onChange={(value) => setPackField(setPack, "dec_val_cus", value)} maxLength={freightTextLimit("TF_PACKLIST", "dec_val_cus")} />
+              <Field label="Insurance Amt" value={pack.amt_insurance} onChange={(value) => setPackField(setPack, "amt_insurance", value)} maxLength={freightTextLimit("TF_PACKLIST", "amt_insurance")} />
             
               <Field label="Valuation Chg" type="number" value={pack.valuation_chg} onChange={(value) => setPackField(setPack, "valuation_chg", value)} />
               <Field label="Tax Chg" type="number" value={pack.tax_chg} onChange={(value) => setPackField(setPack, "tax_chg", value)} />
@@ -878,7 +986,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
 
         {isAir && (
           <Panel className="lg:col-span-12" icon={PackageCheck} title="Dimension Details" meta={`${dimensions.length} cargo dimension lines`}>
-            <DimensionGrid rows={dimensions} setRows={setDimensions} />
+            <DimensionGrid rows={dimensions} setRows={setDimensions} onSync={syncDimensionsToPack} />
           </Panel>
         )}
 
@@ -916,17 +1024,17 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       <Field label="Agent Chrg Amount" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
       <Field label="Carrier Chg Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
       <Field label="Executed On" type="date" value={pack.executed_on} onChange={(value) => setPackField(setPack, "executed_on", value)} />
-      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
-      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
-      <Textarea className="sm:col-span-2" label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
+      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} maxLength={freightTextLimit("TF_PACKLIST", "issue_place")} />
+      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} maxLength={freightTextLimit("TF_PACKLIST", "signature")} />
+      <Textarea className="sm:col-span-2" label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} maxLength={freightTextLimit("TF_PACKLIST", "handling_info")} />
     </>
   )}
 
   {isSea && (
     <>
-      {/* <Field label="Frt Amt" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} /> */}
-      <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} />
-      <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)} />
+      <Field label="Terms of Delivery" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} maxLength={freightTextLimit("TF_PACKLIST", "terms_of_delivery")} />
+      <Field label="Agent Name" value={pack.agent_name} onChange={(value) => setPackField(setPack, "agent_name", value)} maxLength={freightTextLimit("TF_PACKLIST", "agent_name")} />
+      <Field label="Agent Address" value={pack.agent_address} onChange={(value) => setPackField(setPack, "agent_address", value)} maxLength={freightTextLimit("TF_PACKLIST", "agent_address")} />
       <Lookup
         label="Agent Country"
         value={pack.agent_country}
@@ -936,20 +1044,22 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
         loadOptions={(search) => lookup("freight_country", companyCode, "NULL", "NULL", search)}
         onChange={(value) => setPackField(setPack, "agent_country", value)}
       />
+      <Field label="Agent Amount" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
+      <Field label="Carrier Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
       <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
-      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
-      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
+      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} maxLength={freightTextLimit("TF_PACKLIST", "issue_place")} />
+      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} maxLength={freightTextLimit("TF_PACKLIST", "signature")} />
     </>
   )}
 
   {isRoad && (
     <>
-      <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
+      <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} maxLength={freightTextLimit("TF_PACKLIST", "terms_of_delivery")} />
       <Field label="Agent Amt" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
       <Field label="Carrier Amt" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
       <Field label="Date of Issue" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
-      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
-      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
+      <Field label="Place of Issue" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} maxLength={freightTextLimit("TF_PACKLIST", "issue_place")} />
+      <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} maxLength={freightTextLimit("TF_PACKLIST", "signature")} />
     </>
   )}
 </div>
@@ -959,6 +1069,322 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
       </fieldset>
     </form>
   );
+}
+
+function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
+  const ready = checks.every((item) => item.tone === "ok");
+  const reviewCount = checks.filter((item) => item.tone !== "ok").length;
+
+  return (
+    <section className="grid gap-2 rounded-md border bg-card p-2.5 shadow-sm mb-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className={`grid h-8 w-8 place-items-center rounded-md ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+            {ready ? <ShieldCheck size={16} /> : <Sparkles size={16} />}
+          </span>
+          <div>
+            <h2 className="m-0 text-sm font-semibold text-foreground">Pack List Assist &amp; Validation</h2>
+            <p className="m-0 text-xs text-muted-foreground">PowerBuilder manifest compliance, party checks, container/dimension calculations.</p>
+          </div>
+        </div>
+        <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+          {ready ? "Ready to Save" : `${reviewCount} to review`}
+        </span>
+      </div>
+      <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-4">
+        {checks.map((check) => (
+          <div
+            key={check.title}
+            className={`rounded-md border px-2.5 py-2 ${
+              check.tone === "danger"
+                ? "border-red-200 bg-red-50 text-red-800"
+                : check.tone === "warn"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              {check.tone === "ok" ? <ShieldCheck size={13} /> : <AlertTriangle size={13} />}
+              {check.title}
+            </div>
+            <p className="m-0 mt-1 text-[11px] leading-snug opacity-85">{check.detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function buildPacklistSmartChecks(
+  pack: PackForm,
+  containers: ContainerLine[],
+  dimensions: DimensionLine[],
+  modeCode: string
+): SmartCheck[] {
+  const isAir = modeCode === "A";
+  const isSea = modeCode === "S";
+  const isRoad = modeCode === "R";
+
+  const checks: SmartCheck[] = [];
+
+  // 1. Job Reference & Status
+  if (pack.job_no.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "Job Reference",
+      detail: `Job ${pack.job_no} linked (${pack.job_type || "IMP"}).`,
+    });
+  } else {
+    checks.push({
+      tone: "danger",
+      title: "Job Reference",
+      detail: "Pack list must be associated with an active Job.",
+    });
+  }
+
+  // 2. Shipper Details (Mandatory in PowerBuilder: gf_checknull('STR', ls_shipper_name, 'Shipper Name/Address'))
+  if (pack.shipper_name.trim() && pack.shipper_address.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "Shipper Profile",
+      detail: `${pack.shipper_name.slice(0, 30)}... verified with address.`,
+    });
+  } else if (pack.shipper_name.trim()) {
+    checks.push({
+      tone: "warn",
+      title: "Shipper Profile",
+      detail: "Shipper address is missing (required in PowerBuilder).",
+    });
+  } else {
+    checks.push({
+      tone: "danger",
+      title: "Shipper Profile",
+      detail: "Shipper Name & Address are mandatory per PB validation.",
+    });
+  }
+
+  // 3. Consignee Details
+  if (pack.consignee_name.trim() && pack.consignee_address.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "Consignee Profile",
+      detail: `${pack.consignee_name.slice(0, 30)}... verified with address.`,
+    });
+  } else if (pack.consignee_name.trim()) {
+    checks.push({
+      tone: "warn",
+      title: "Consignee Profile",
+      detail: "Consignee address should be provided for delivery.",
+    });
+  } else {
+    checks.push({
+      tone: "warn",
+      title: "Consignee Profile",
+      detail: "Consignee details are pending.",
+    });
+  }
+
+  // 4. P.O. Number (Mandatory in PowerBuilder & checked against duplicates)
+  if (pack.po_no.trim()) {
+    checks.push({
+      tone: "ok",
+      title: "P.O. Number",
+      detail: `PO No: ${pack.po_no} recorded.`,
+    });
+  } else {
+    checks.push({
+      tone: "danger",
+      title: "P.O. Number",
+      detail: "Purchase Order (P.O.) number is mandatory in PB.",
+    });
+  }
+
+  // 5. Cargo Measures & UOM
+  const qty = Number(pack.quantity) || 0;
+  const gross = Number(pack.gross_wt) || 0;
+  if (qty > 0 && pack.puom.trim() && gross > 0) {
+    checks.push({
+      tone: "ok",
+      title: "Cargo Manifest",
+      detail: `${qty} ${pack.puom}, Gross: ${gross.toFixed(2)} kg, Vol: ${Number(pack.volume || 0).toFixed(3)} cbm.`,
+    });
+  } else if (!pack.puom.trim()) {
+    checks.push({
+      tone: "danger",
+      title: "Cargo Manifest",
+      detail: "Packaging UOM is required.",
+    });
+  } else if (qty <= 0) {
+    checks.push({
+      tone: "danger",
+      title: "Cargo Manifest",
+      detail: "Cargo quantity / piece count must be greater than 0.",
+    });
+  } else {
+    checks.push({
+      tone: "warn",
+      title: "Cargo Manifest",
+      detail: "Gross weight should be greater than 0.",
+    });
+  }
+
+  // 6. Mode-specific checks
+  if (isSea) {
+    // Vessel & Routing
+    if (pack.vessel_name.trim() && (pack.port_code.trim() || pack.destination_port.trim())) {
+      checks.push({
+        tone: "ok",
+        title: "Sea Carrier & Route",
+        detail: `Vessel: ${pack.vessel_name} (${pack.port_code || "Origin"} -> ${pack.destination_port || "Dest"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Sea Carrier & Route",
+        detail: "Specify Vessel Name and Loading/Discharge ports.",
+      });
+    }
+
+    // Containers (TF_CONTAINER_DET)
+    if (containers.length > 0) {
+      const emptyCont = containers.some((c) => !c.container_no.trim());
+      if (emptyCont) {
+        checks.push({
+          tone: "danger",
+          title: "Container Details",
+          detail: "All container detail rows must have a valid Container Number.",
+        });
+      } else {
+        const teuCount = containers.filter((c) => c.t_f === "T").length;
+        const feuCount = containers.filter((c) => c.t_f === "F").length;
+        checks.push({
+          tone: "ok",
+          title: "Container Details",
+          detail: `${containers.length} container(s) verified: ${teuCount} TEU, ${feuCount} FEU.`,
+        });
+      }
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Container Details",
+        detail: "No containers added. Add container records in Container Details.",
+      });
+    }
+
+    // Bill of Lading
+    if (pack.bl_no.trim() || pack.doc_ref.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "B/L Documentation",
+        detail: `B/L No: ${pack.bl_no || pack.doc_ref} (${pack.bl_date ? formatDate(pack.bl_date) : "Date pending"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "B/L Documentation",
+        detail: "Master/House B/L number is recommended before finalizing.",
+      });
+    }
+  } else if (isAir) {
+    // Air Route & Flight
+    if (pack.port_code.trim() && pack.destination_port.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Air Route",
+        detail: `${pack.port_code} -> ${pack.destination_port} ${pack.flight_info ? `(Flt: ${pack.flight_info})` : ""}.`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Air Route",
+        detail: "Airport of Origin and Destination should be specified.",
+      });
+    }
+
+    // AWB Ref
+    if (pack.bl_no.trim() || pack.doc_ref.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Air Waybill (AWB)",
+        detail: `AWB: ${pack.bl_no || pack.doc_ref} (${pack.bl_date ? formatDate(pack.bl_date) : "Date pending"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "danger",
+        title: "Air Waybill (AWB)",
+        detail: "MAWB or HAWB number is required for air documentation.",
+      });
+    }
+
+    // Dimensions & Chargeable Wt (TF_PACKLIST_DIM)
+    const chgWt = Number(pack.charge_wt) || 0;
+    if (dimensions.length > 0) {
+      checks.push({
+        tone: "ok",
+        title: "Cargo Dimensions",
+        detail: `${dimensions.length} dimension line(s) synced. Chargeable Wt: ${chgWt.toFixed(2)} kg.`,
+      });
+    } else if (chgWt > 0) {
+      checks.push({
+        tone: "ok",
+        title: "Cargo Dimensions",
+        detail: `Chargeable weight set to ${chgWt.toFixed(2)} kg. Dimensions optional.`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Cargo Dimensions",
+        detail: "Add dimension lines or specify Chargeable Weight.",
+      });
+    }
+  } else if (isRoad) {
+    // Road Truck & Vehicle Type
+    if (pack.container_no.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Truck / Vehicle",
+        detail: `Vehicle No: ${pack.container_no} (${pack.container_type || "Standard"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "danger",
+        title: "Truck / Vehicle",
+        detail: "Truck No is mandatory for road freight dispatch.",
+      });
+    }
+
+    // Waybill
+    if (pack.bl_no.trim() || pack.doc_ref.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Waybill Ref",
+        detail: `HBWL No: ${pack.bl_no || pack.doc_ref} (${pack.bl_date ? formatDate(pack.bl_date) : "Date pending"}).`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Waybill Ref",
+        detail: "Waybill / Doc reference is recommended.",
+      });
+    }
+
+    // Value of Goods
+    if (pack.dec_val_carr.trim()) {
+      checks.push({
+        tone: "ok",
+        title: "Value of Goods",
+        detail: `Declared value: ${pack.dec_val_carr}.`,
+      });
+    } else {
+      checks.push({
+        tone: "warn",
+        title: "Value of Goods",
+        detail: "Declared value of goods should be entered for insurance/customs.",
+      });
+    }
+  }
+
+  return checks;
 }
 
 function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: ReactNode; screenTitle?: string }) {
@@ -995,29 +1421,66 @@ function Panel({ title, icon: Icon, children, className = "" }: { title: string;
   );
 }
 
-function Field({ label, value, onChange, type = "text", readOnly = false, required, className = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  readOnly = false,
+  required,
+  className = "",
+  maxLength,
+  maxBytes,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  readOnly?: boolean;
+  required?: boolean;
+  className?: string;
+  maxLength?: number;
+  maxBytes?: number;
+  placeholder?: string;
+}) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField label={label} value={type === "date" ? formatDate(value) : value} className={className} />;
   const safeValue = type === "date" ? normalizeDateInput(value) : value;
   return (
     <label className={`freight-compact-label flex flex-col gap-1 text-[11px] font-semibold text-foreground ${className}`}>
       <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
-      {type === "date" ? (<FreightDatePicker className="freight-calendar-field"
-        value={safeValue}
-        required={required}
-        onChange={(nextValue) => onChange(nextValue)} />) : type === "datetime-local" ? (<FreightDateTimePicker className="freight-calendar-field"
-        value={safeValue}
-        required={required}
-        onChange={(nextValue) => onChange(nextValue)} />) : (<Input
-        className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
-        type={type}
-        value={safeValue}
-        readOnly={readOnly}
-        required={required}
-        onChange={(event) => onChange(event.target.value)}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
-      />)}
+      {type === "date" ? (
+        <FreightDatePicker
+          className="freight-calendar-field"
+          value={safeValue}
+          required={required}
+          placeholder={placeholder}
+          onChange={(nextValue) => onChange(nextValue)}
+        />
+      ) : type === "datetime-local" ? (
+        <FreightDateTimePicker
+          className="freight-calendar-field"
+          value={safeValue}
+          required={required}
+          placeholder={placeholder}
+          onChange={(nextValue) => onChange(nextValue)}
+        />
+      ) : (
+        <Input
+          className={`h-7 rounded-md border-input bg-background px-2 text-xs font-normal text-foreground ${type === "number" ? "text-right tabular-nums" : ""}`}
+          type={type}
+          value={safeValue}
+          readOnly={readOnly}
+          required={required}
+          maxLength={maxLength}
+          maxBytes={maxBytes ?? maxLength}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+          onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+        />
+      )}
     </label>
   );
 }
@@ -1044,7 +1507,27 @@ function SelectField({ label, value, options, onChange, required, className = ""
   );
 }
 
-function Textarea({ label, value, onChange, className = "", rows = 2, required }: { label: string; value: string; onChange: (value: string) => void; className?: string; rows?: number; required?: boolean }) {
+function Textarea({
+  label,
+  value,
+  onChange,
+  className = "",
+  rows = 2,
+  required,
+  maxLength,
+  maxBytes,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  rows?: number;
+  required?: boolean;
+  maxLength?: number;
+  maxBytes?: number;
+  placeholder?: string;
+}) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
   return (
@@ -1052,6 +1535,9 @@ function Textarea({ label, value, onChange, className = "", rows = 2, required }
       <span>{label} {required && <span className="text-destructive font-bold ml-0.5" style={{ color: "#E24B4A" }}>*</span>}</span>
       <TextAreaControl
         rows={rows}
+        maxLength={maxLength}
+        maxBytes={maxBytes ?? maxLength}
+        placeholder={placeholder}
         className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-normal text-foreground shadow-none"
         value={value}
         required={required}
@@ -1181,6 +1667,8 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     item_no: "",
     routing: "",
     terms_of_delivery: "",
+    payableat: "",
+    no_of_original_bl: "",
     curr_code: "OMR",
     ex_rate: "1",
     rate: "",
@@ -1253,10 +1741,40 @@ function toContainerLine(row: LookupRow, index: number): ContainerLine {
 
 const containerTypes = ["STANDARD", "HIGHCUBE", "REFER", "HIGH CUBE REFER", "OPEN TOP", "FLAT RACK", "MAIN DECK PALLET", "LOWER DECK PALLET", "LD-2", "LD-3", "LD-4", "LD-7", "LD-11", "TANK", "BULK", "OPEN SIDE", "PLAT FORM", "VENTILATED"];
 
-function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Dispatch<SetStateAction<ContainerLine[]>> }) {
+function ContainerGrid({ rows, setRows, onSync }: { rows: ContainerLine[]; setRows: Dispatch<SetStateAction<ContainerLine[]>>; onSync?: (updated: ContainerLine[]) => void }) {
   const editable = useContext(PackEditContext);
   const update = (rowIndex: number, field: keyof ContainerLine, value: string) => {
-    setRows((current) => current.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row));
+    setRows((current) => {
+      const next = current.map((row, index) => {
+        if (index !== rowIndex) return row;
+        const updated = { ...row, [field]: value };
+        if (field === "container_type") {
+          const upper = value.toUpperCase();
+          if (upper.includes("40") || upper.includes("FEU") || upper.includes("45")) {
+            updated.t_f = "F";
+          } else if (upper.includes("20") || upper.includes("TEU")) {
+            updated.t_f = "T";
+          }
+        }
+        return updated;
+      });
+      onSync?.(next);
+      return next;
+    });
+  };
+  const addContainer = () => {
+    setRows((current) => {
+      const next = [...current, emptyContainer(current.length + 1)];
+      onSync?.(next);
+      return next;
+    });
+  };
+  const removeContainer = (rowIndex: number) => {
+    setRows((current) => {
+      const next = current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, srno: String(index + 1) }));
+      onSync?.(next);
+      return next;
+    });
   };
   const totals = rows.reduce((result, row) => ({
     volume: result.volume + (Number(row.volume) || 0),
@@ -1265,40 +1783,265 @@ function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Disp
   }), { volume: 0, gross: 0, packages: 0 });
 
   return (
-    <div className="freight-container-grid overflow-hidden rounded-md border bg-background">
-      <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground"></span>
-        {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyContainer(current.length + 1)])}><Plus size={14} />Container</Button>}
-      </div>
-      <div className="overflow-auto">
-        <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
-          <span>Sr</span><span>Container No</span><span>Container Type</span><span>TEU / FEU</span><span>Seal No</span><span>Cube (m3)</span><span>Gross Wt (kg)</span><span>Nos</span><span>UOM</span><span>Description</span><span>Pickup Date</span><span>BL No</span><span />
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
+      {/* Finance Line Actions Header */}
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <Ship size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Sea Container Manifest (TF_CONTAINER_DET)
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {rows.length} {rows.length === 1 ? "container" : "containers"}
+          </span>
+
+          {/* Inline KPI Strip */}
+          {rows.length > 0 && (
+            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Volume:</span> {totals.volume.toFixed(3)} m³
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+                <span className="text-emerald-700 font-bold">Gross Wt:</span> {totals.gross.toFixed(2)} kg
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 font-medium text-amber-900">
+                <span className="text-amber-700 font-bold">Pkgs:</span> {totals.packages}
+              </span>
+            </div>
+          )}
         </div>
-        {rows.map((row, rowIndex) => (
-          <div key={`${row.srno}-${rowIndex}`} className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b px-2 py-1">
-            {editable ? <>
-              <Input className="h-7 text-center text-xs" value={row.srno} readOnly />
-              <Input className="h-7 uppercase text-xs" value={row.container_no} onChange={(event) => update(rowIndex, "container_no", event.target.value.toUpperCase())} />
-              <select className="h-7 rounded-md border bg-background px-1 text-xs" value={row.container_type} onChange={(event) => update(rowIndex, "container_type", event.target.value)}>{containerTypes.map((option) => <option key={option}>{option}</option>)}</select>
-              <select className="h-7 rounded-md border bg-background px-1 text-xs" value={row.t_f} onChange={(event) => update(rowIndex, "t_f", event.target.value)}><option value="T">TEU</option><option value="F">FEU</option><option value="V">45FT</option><option value="E">48FT</option></select>
-              <Input className="h-7 text-xs" value={row.seal_no} onChange={(event) => update(rowIndex, "seal_no", event.target.value)} />
-              <Input className="h-7 text-right text-xs" type="number" step="0.001" value={row.volume} onChange={(event) => update(rowIndex, "volume", event.target.value)} />
-              <Input className="h-7 text-right text-xs" type="number" step="0.01" value={row.gross_weight} onChange={(event) => update(rowIndex, "gross_weight", event.target.value)} />
-              <Input className="h-7 text-right text-xs" type="number" value={row.no_of_pkgs} onChange={(event) => update(rowIndex, "no_of_pkgs", event.target.value)} />
-              <Input className="h-7 text-xs" value={row.puom} onChange={(event) => update(rowIndex, "puom", event.target.value)} />
-              <Input className="h-7 text-xs" value={row.contn_desc} onChange={(event) => update(rowIndex, "contn_desc", event.target.value)} />
-              <FreightDatePicker className="freight-calendar-field"
-        value={row.contn_pick_date}
-        onChange={(nextValue) => update(rowIndex, "contn_pick_date", nextValue)} />
-              <Input className="h-7 text-xs" value={row.bl_no} onChange={(event) => update(rowIndex, "bl_no", event.target.value)} />
-              <Button type="button" size="icon" variant="ghost" title="Remove container" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, srno: String(index + 1) })))}><Trash2 size={14} /></Button>
-            </> : <>
-              {[row.srno, row.container_no, row.container_type, row.t_f, row.seal_no, row.volume, row.gross_weight, row.no_of_pkgs, row.puom, row.contn_desc, formatDate(row.contn_pick_date), row.bl_no].map((value, index) => <span key={index} title={value} className="min-h-7 truncate px-1 py-1 text-xs font-semibold text-foreground">{value || "-"}</span>)}<span />
-            </>}
-          </div>
-        ))}
-        {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No container details. Add every Sea container used for this job.</div>}
-        {!!rows.length && <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 bg-muted/25 px-2 py-1.5 text-xs font-semibold"><span className="col-span-5 text-right">Totals</span><span className="text-right">{totals.volume.toFixed(3)}</span><span className="text-right">{totals.gross.toFixed(2)}</span><span className="text-right">{totals.packages}</span></div>}
+
+        <div className="flex items-center gap-1.5">
+          {editable && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={addContainer}
+              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+            >
+              <Plus size={13} className="mr-1" /> Add Container
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Finance Table */}
+      <div className="commercial-lines-scroll overflow-auto max-h-[360px] min-h-[140px]">
+        <table className="finance-lines-table w-full text-xs min-w-[1480px] border-collapse">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
+            <tr>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
+              <th className="px-2 py-2 text-left w-[170px] text-slate-700 font-bold border-r border-slate-200">Container No</th>
+              <th className="px-2 py-2 text-left w-[150px] text-slate-700 font-bold border-r border-slate-200">Container Type</th>
+              <th className="px-2 py-2 text-center w-[90px] text-slate-700 font-bold border-r border-slate-200">TEU / FEU</th>
+              <th className="px-2 py-2 text-left w-[130px] text-slate-700 font-bold border-r border-slate-200">Seal No</th>
+              <th className="px-2 py-2 text-right w-[105px] text-slate-700 font-bold border-r border-slate-200">Cube (m³)</th>
+              <th className="px-2 py-2 text-right w-[115px] text-slate-700 font-bold border-r border-slate-200">Gross Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Nos / Pkgs</th>
+              <th className="px-2 py-2 text-left w-[95px] text-slate-700 font-bold border-r border-slate-200">UOM</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-slate-700 font-bold border-r border-slate-200">Description</th>
+              <th className="px-2 py-2 text-center w-[135px] text-slate-700 font-bold border-r border-slate-200">Pickup Date</th>
+              <th className="px-2 py-2 text-left w-[130px] text-slate-700 font-bold border-r border-slate-200">BL No</th>
+              <th className="px-2 py-2 text-center w-[50px] text-slate-700 font-bold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map((row, rowIndex) => (
+              <tr
+                key={`${row.srno}-${rowIndex}`}
+                className={`transition-colors ${
+                  rowIndex % 2 === 1 ? "bg-slate-50/40 hover:bg-blue-50/40" : "bg-white hover:bg-blue-50/40"
+                }`}
+              >
+                <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                  {rowIndex + 1}
+                </td>
+                <td className="px-1.5 py-1 w-[170px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 uppercase text-xs font-semibold"
+                      value={row.container_no}
+                      maxLength={freightTextLimit("TF_CONTAINER_DET", "container_no")}
+                      onChange={(e) => update(rowIndex, "container_no", e.target.value.toUpperCase())}
+                    />
+                  ) : (
+                    <span className="font-semibold text-slate-800">{row.container_no || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[150px]">
+                  {editable ? (
+                    <select
+                      className="h-7 w-full rounded-md border bg-background px-1 text-xs"
+                      value={row.container_type}
+                      onChange={(e) => update(rowIndex, "container_type", e.target.value)}
+                    >
+                      {containerTypes.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span>{row.container_type || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[90px] text-center">
+                  {editable ? (
+                    <select
+                      className="h-7 w-full rounded-md border bg-background px-1 text-xs font-semibold text-center"
+                      value={row.t_f}
+                      onChange={(e) => update(rowIndex, "t_f", e.target.value)}
+                    >
+                      <option value="T">TEU</option>
+                      <option value="F">FEU</option>
+                      <option value="V">45FT</option>
+                      <option value="E">48FT</option>
+                    </select>
+                  ) : (
+                    <span className="font-semibold">{row.t_f || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[130px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.seal_no}
+                      maxLength={freightTextLimit("TF_CONTAINER_DET", "seal_no")}
+                      onChange={(e) => update(rowIndex, "seal_no", e.target.value)}
+                    />
+                  ) : (
+                    <span>{row.seal_no || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[105px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs text-amber-700 bg-amber-50/40"
+                      type="number"
+                      step="0.001"
+                      value={row.volume}
+                      onChange={(e) => update(rowIndex, "volume", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right text-amber-700 font-semibold">{row.volume || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[115px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold text-emerald-700 bg-emerald-50/40"
+                      type="number"
+                      step="0.01"
+                      value={row.gross_weight}
+                      onChange={(e) => update(rowIndex, "gross_weight", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right text-emerald-700 font-semibold">{row.gross_weight || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold"
+                      type="number"
+                      value={row.no_of_pkgs}
+                      onChange={(e) => update(rowIndex, "no_of_pkgs", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold">{row.no_of_pkgs || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[95px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs uppercase"
+                      value={row.puom}
+                      maxLength={freightTextLimit("TF_CONTAINER_DET", "puom")}
+                      onChange={(e) => update(rowIndex, "puom", e.target.value)}
+                    />
+                  ) : (
+                    <span>{row.puom || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 min-w-[180px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.contn_desc}
+                      maxLength={freightTextLimit("TF_CONTAINER_DET", "contn_desc")}
+                      onChange={(e) => update(rowIndex, "contn_desc", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block truncate">{row.contn_desc || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[135px]">
+                  {editable ? (
+                    <FreightDatePicker
+                      className="freight-calendar-field"
+                      value={row.contn_pick_date}
+                      onChange={(nextValue) => update(rowIndex, "contn_pick_date", nextValue)}
+                    />
+                  ) : (
+                    <span className="block text-center">{formatDate(row.contn_pick_date) || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[130px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.bl_no}
+                      maxLength={freightTextLimit("TF_CONTAINER_DET", "bl_no")}
+                      onChange={(e) => update(rowIndex, "bl_no", e.target.value)}
+                    />
+                  ) : (
+                    <span>{row.bl_no || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 text-center w-[50px]">
+                  {editable ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                      title="Remove container"
+                      onClick={() => removeContainer(rowIndex)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={13} className="py-8 px-4 text-center text-xs text-muted-foreground">
+                  <p className="m-0 text-slate-500 font-medium">No container details recorded. Click 'Add Container' to add Sea containers.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-slate-300 bg-slate-100 font-bold text-xs text-slate-900 sticky bottom-0 z-10">
+              <tr>
+                <td colSpan={5} className="px-2 py-1.5 text-right uppercase tracking-wider text-slate-600 font-bold text-[11px]">
+                  Totals:
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-amber-800">
+                  {totals.volume.toFixed(3)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-emerald-800">
+                  {totals.gross.toFixed(2)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-slate-800">
+                  {totals.packages}
+                </td>
+                <td colSpan={5} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
     </div>
   );
@@ -1326,115 +2069,421 @@ function CargoMeasureTable({
   companyCode: string;
 }) {
   const editable = useContext(PackEditContext);
-  const gridTemplate = columns.map((c) => c.width).join(" ");
 
   return (
-    <div className="freight-cargo-table overflow-hidden rounded-md border bg-background">
-      {/* <div className="overflow-auto">
-        <div
-          className="grid gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground"
-          style={{ gridTemplateColumns: gridTemplate }}
-        > */}
+    // <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
+    //   <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+    //     <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+    //       <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+    //         <PackageCheck size={14} />
+    //       </span>
+    //       <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+    //         Cargo Summary & Measurements
+    //       </span>
+    //     </div>
+    //   </div>
 
-              <div className="overflow-auto" style={{ width: "fit-content", minWidth: "100%" }}>
-        <div
-          className="grid gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground"
-          style={{ gridTemplateColumns: gridTemplate }}
-        >
-          {columns.map((c) => (
-            <span key={c.key}>{c.label}</span>
-          ))}
-        </div>
-        <div className="grid gap-1 px-2 py-1.5" style={{ gridTemplateColumns: gridTemplate }}>
-          {columns.map((c) => {
-            const value = (pack[c.key] as string) || "";
-            if (!editable) {
-              return (
-                <span key={c.key} className="min-h-7 truncate px-1 py-1 text-xs font-semibold text-foreground">
-                  {value || "-"}
-                </span>
-              );
-            }
-            if (c.lookupUom) {
-              return (
-                <LookupField
+    //   <div className="commercial-lines-scroll overflow-auto">
+        <div className="rounded-md border bg-card shadow-xs overflow-hidden" style={{ minHeight: 0, height: "auto" }}>
+        <div className="overflow-auto" style={{ minHeight: 0, height: "auto" }}>
+
+        <table className="finance-lines-table w-full text-xs border-collapse">
+          <thead className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-wider shadow-xs whitespace-nowrap border-b-2 border-slate-300">
+            <tr>
+              {columns.map((c) => (
+                <th
                   key={c.key}
-                  value={value}
-                  compact
-                  valueField="UOM_CODE"
-                  displayFields={["UOM_CODE", "UOM_NAME"]}
-                  columns={[{ field: "UOM_CODE", header: "Code" }, { field: "UOM_NAME", header: "NAME" }]}
-                  loadOptions={(search) => lookup("freight_uom", companyCode, "NULL", "NULL", search)}
-                  onChange={(val) => setPackField(setPack, c.key, val)}
-                />
-              );
-            }
-            if (c.type === "select") {
-              return (
-                <select
-                  key={c.key}
-                  className="h-7 rounded-md border bg-background px-1 text-xs"
-                  value={value}
-                  onChange={(event) => setPackField(setPack, c.key, event.target.value)}
+                  style={{ width: c.width }}
+                  className={`px-2 py-2 text-slate-700 font-bold text-[11px] uppercase border-r border-slate-200 last:border-r-0 ${
+                    c.type === "number" ? "text-right" : "text-left"
+                  }`}
                 >
-                  <option value="">-</option>
-                  {c.options?.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              );
-            }
-            return (
-              <Input
-                key={c.key}
-                className={`h-7 text-xs ${c.type === "number" ? "text-right" : ""}`}
-                type={c.type === "number" ? "number" : "text"}
-                readOnly={c.readOnly}
-                value={value}
-                onChange={(event) => setPackField(setPack, c.key, event.target.value)}
-              />
-            );
-          })}
-        </div>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="bg-white hover:bg-blue-50/40 transition-colors">
+              {columns.map((c) => {
+                const value = (pack[c.key] as string) || "";
+                if (!editable) {
+                  return (
+                    <td
+                      key={c.key}
+                      style={{ width: c.width }}
+                      className={`px-1.5 py-1.5 ${c.type === "number" ? "text-right font-semibold" : ""}`}
+                    >
+                      <span className="block truncate font-medium text-slate-800">
+                        {value || "-"}
+                      </span>
+                    </td>
+                  );
+                }
+                if (c.lookupUom) {
+                  return (
+                    <td key={c.key} style={{ width: c.width }} className="px-1.5 py-1">
+                      <LookupField
+                        value={value}
+                        compact
+                        valueField="UOM_CODE"
+                        displayFields={["UOM_CODE", "UOM_NAME"]}
+                        columns={[{ field: "UOM_CODE", header: "Code" }, { field: "UOM_NAME", header: "NAME" }]}
+                        loadOptions={(search) => lookup("freight_uom", companyCode, "NULL", "NULL", search)}
+                        onChange={(val) => setPackField(setPack, c.key, val)}
+                      />
+                    </td>
+                  );
+                }
+                if (c.type === "select") {
+                  return (
+                    <td key={c.key} style={{ width: c.width }} className="px-1.5 py-1">
+                      <select
+                        className="h-7 w-full rounded-md border bg-background px-1 text-xs"
+                        value={value}
+                        onChange={(event) => setPackField(setPack, c.key, event.target.value)}
+                      >
+                        <option value="">-</option>
+                        {c.options?.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </td>
+                  );
+                }
+                return (
+                  <td key={c.key} style={{ width: c.width }} className="px-1.5 py-1">
+                    <Input
+                      className={`h-7 text-xs ${c.type === "number" ? "text-right font-semibold" : ""}`}
+                      type={c.type === "number" ? "number" : "text"}
+                      step={c.type === "number" ? "any" : undefined}
+                      readOnly={c.readOnly}
+                      value={value}
+                      maxLength={freightTextLimit("TF_PACKLIST", c.key)}
+                      onChange={(event) => setPackField(setPack, c.key, event.target.value)}
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>> }) {
+function DimensionGrid({ rows, setRows, onSync }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>>; onSync?: (updated: DimensionLine[]) => void }) {
   const editable = useContext(PackEditContext);
-  const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
   const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
+
+  const update = (rowIndex: number, column: keyof DimensionLine, val: string) => {
+    setRows((current) => {
+      const next = current.map((item, index) => {
+        if (index !== rowIndex) return item;
+        const row = { ...item, [column]: val };
+        // PowerBuilder formula: volume = (L * B * H * Q) / 1000000; cwt = (L * B * H * Q) / 6000
+        const l = Number(column === "length" ? val : row.length) || 0;
+        const b = Number(column === "breadth" ? val : row.breadth) || 0;
+        const h = Number(column === "height" ? val : row.height) || 0;
+        const q = Number(column === "qty" ? val : row.qty) || 0;
+        const gross = Number(column === "gross_wt" ? val : row.gross_wt) || 0;
+
+        if (l > 0 && b > 0 && h > 0 && q > 0) {
+          row.volume = ((l * b * h * q) / 1000000).toFixed(3);
+          const volWt = (l * b * h * q) / 6000;
+          row.chargeable_wt = (gross > 0 ? Math.max(gross, volWt) : volWt).toFixed(2);
+        } else if (gross > 0 && !row.chargeable_wt) {
+          row.chargeable_wt = gross.toFixed(2);
+        }
+
+        if (column === "qty" && (!row.total_qty || row.total_qty === "0")) {
+          row.total_qty = val;
+        }
+        return row;
+      });
+      onSync?.(next);
+      return next;
+    });
+  };
+
+  const addDimension = () => {
+    setRows((current) => {
+      const next = [...current, emptyDimension(current.length + 1)];
+      onSync?.(next);
+      return next;
+    });
+  };
+
+  const removeDimension = (rowIndex: number) => {
+    setRows((current) => {
+      const next = current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) }));
+      onSync?.(next);
+      return next;
+    });
+  };
+
+  const totals = rows.reduce(
+    (acc, row) => ({
+      qty: acc.qty + (Number(row.qty) || 0),
+      gross: acc.gross + (Number(row.gross_wt) || 0),
+      chargeable: acc.chargeable + (Number(row.chargeable_wt) || 0),
+      volume: acc.volume + (Number(row.volume) || 0),
+    }),
+    { qty: 0, gross: 0, chargeable: 0, volume: 0 }
+  );
+
   return (
-    <div className="freight-dimension-grid overflow-hidden rounded-md border bg-background">
-      <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
-        <span className="text-xs font-semibold text-foreground">Air cargo dimensions</span>
-        {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>}
-      </div>
-      <div className="overflow-auto">
-        <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
-          {columns.map((column) => <span key={column}>{column.replace(/_/g, " ")}</span>)}<span />
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden mt-2">
+      {/* Finance Line Actions Header */}
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <PackageCheck size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            Air Cargo Dimensions
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {rows.length} {rows.length === 1 ? "line" : "lines"}
+          </span>
+
+          {/* Inline KPI Strip */}
+          {rows.length > 0 && (
+            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Qty:</span> {totals.qty}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+                <span className="text-emerald-700 font-bold">Gross Wt:</span> {totals.gross.toFixed(2)} kg
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-medium text-indigo-900">
+                <span className="text-indigo-700 font-bold">Chg Wt:</span> {totals.chargeable.toFixed(2)} kg
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 font-medium text-amber-900">
+                <span className="text-amber-700 font-bold">Volume:</span> {totals.volume.toFixed(3)} m³
+              </span>
+            </div>
+          )}
         </div>
-        {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b px-2 py-1">
-            {columns.map((column) => (
-              editable ? (
-                <Input
-                  key={column}
-                  className={`h-7 text-xs ${numeric.has(column) ? "text-right" : ""}`}
-                  type={numeric.has(column) ? "number" : "text"}
-                  value={row[column]}
-                  readOnly={column === "sr_no"}
-                  onChange={(event) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column]: event.target.value } : item))}
-                />
-              ) : (
-                <span key={column} className={`min-h-7 rounded-sm px-1 py-1 text-xs font-semibold text-foreground ${numeric.has(column) ? "text-right" : ""}`}>{row[column] || "-"}</span>
-              )
+
+        <div className="flex items-center gap-1.5">
+          {editable && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={addDimension}
+              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+            >
+              <Plus size={13} className="mr-1" /> Add Dimension Line
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Finance Table */}
+      <div className="commercial-lines-scroll overflow-auto max-h-[360px] min-h-[140px]">
+        <table className="finance-lines-table w-full text-xs min-w-[1240px] border-collapse">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
+            <tr>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Length (cm)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Breadth (cm)</th>
+              <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Height (cm)</th>
+              <th className="px-2 py-2 text-right w-[75px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
+              <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Gross Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[100px] text-slate-700 font-bold border-r border-slate-200">Chg Wt (kg)</th>
+              <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Volume (m³)</th>
+              <th className="px-2 py-2 text-right w-[80px] text-slate-700 font-bold border-r border-slate-200">Total Qty</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-slate-700 font-bold border-r border-slate-200">Cargo Details</th>
+              <th className="px-2 py-2 text-left min-w-[180px] text-slate-700 font-bold border-r border-slate-200">Prod Description</th>
+              <th className="px-2 py-2 text-center w-[50px] text-slate-700 font-bold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map((row, rowIndex) => (
+              <tr
+                key={rowIndex}
+                className={`transition-colors ${
+                  rowIndex % 2 === 1 ? "bg-slate-50/40 hover:bg-blue-50/40" : "bg-white hover:bg-blue-50/40"
+                }`}
+              >
+                <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                  {rowIndex + 1}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      step="any"
+                      value={row.length}
+                      onChange={(e) => update(rowIndex, "length", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.length || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      step="any"
+                      value={row.breadth}
+                      onChange={(e) => update(rowIndex, "breadth", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.breadth || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[85px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      step="any"
+                      value={row.height}
+                      onChange={(e) => update(rowIndex, "height", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.height || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[75px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold"
+                      type="number"
+                      value={row.qty}
+                      onChange={(e) => update(rowIndex, "qty", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold">{row.qty || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[95px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold"
+                      type="number"
+                      step="0.01"
+                      value={row.gross_wt}
+                      onChange={(e) => update(rowIndex, "gross_wt", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold">{row.gross_wt || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[100px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs font-semibold text-indigo-700 bg-indigo-50/40"
+                      type="number"
+                      step="0.01"
+                      value={row.chargeable_wt}
+                      onChange={(e) => update(rowIndex, "chargeable_wt", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-semibold text-indigo-700">{row.chargeable_wt || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[95px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs text-amber-700 bg-amber-50/40"
+                      type="number"
+                      step="0.001"
+                      value={row.volume}
+                      onChange={(e) => update(rowIndex, "volume", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right text-amber-700">{row.volume || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 w-[80px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-right text-xs"
+                      type="number"
+                      value={row.total_qty}
+                      onChange={(e) => update(rowIndex, "total_qty", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block text-right font-medium">{row.total_qty || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 min-w-[180px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.cargo_details}
+                      maxLength={freightTextLimit("TF_PACKLIST_DIM", "cargo_details")}
+                      onChange={(e) => update(rowIndex, "cargo_details", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block truncate">{row.cargo_details || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1.5 py-1 min-w-[180px]">
+                  {editable ? (
+                    <Input
+                      className="h-7 text-xs"
+                      value={row.prod_description}
+                      maxLength={freightTextLimit("TF_PACKLIST_DIM", "prod_description")}
+                      onChange={(e) => update(rowIndex, "prod_description", e.target.value)}
+                    />
+                  ) : (
+                    <span className="block truncate">{row.prod_description || "-"}</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 text-center w-[50px]">
+                  {editable ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                      title="Remove dimension"
+                      onClick={() => removeDimension(rowIndex)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  ) : null}
+                </td>
+              </tr>
             ))}
-            {editable ? <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) })))}><Trash2 size={14} /></Button> : <span />}
-          </div>
-        ))}
-        {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No air dimension lines. Add length, breadth, height and weight details when needed.</div>}
+            {!rows.length && (
+              <tr>
+                <td colSpan={12} className="py-8 px-4 text-center text-xs text-muted-foreground">
+                  <p className="m-0 text-slate-500 font-medium">No air dimension lines recorded. Click 'Add Dimension Line' to enter cargo dimensions.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-slate-300 bg-slate-100 font-bold text-xs text-slate-900 sticky bottom-0 z-10">
+              <tr>
+                <td colSpan={4} className="px-2 py-1.5 text-right uppercase tracking-wider text-slate-600 font-bold text-[11px]">
+                  Totals:
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-slate-800">
+                  {totals.qty}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-emerald-800">
+                  {totals.gross.toFixed(2)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-indigo-800">
+                  {totals.chargeable.toFixed(2)}
+                </td>
+                <td className="px-1.5 py-1.5 text-right font-mono font-bold text-amber-800">
+                  {totals.volume.toFixed(3)}
+                </td>
+                <td colSpan={4} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
     </div>
   );
@@ -1477,7 +2526,7 @@ function toPackDraftFromJob(row: LookupRow, companyCode: string, userId: string,
     job_type: lookupText(row, "job_type") || base.job_type,
     vessel_name: lookupText(row, "vessel_name") || lookupText(row, "carrier") || base.vessel_name,
     voyage_no: lookupText(row, "voyage_no") || base.voyage_no,
-    bl_no: lookupText(row, "doc_ref") || base.bl_no,
+    bl_no: lookupText(row, "hawb") || lookupText(row, "doc_ref") || base.bl_no,
     hawb: lookupText(row, "hawb") || base.hawb,
     curr_code: lookupText(row, "curr_code") || base.curr_code,
     ex_rate: lookupText(row, "ex_rate") || base.ex_rate,
