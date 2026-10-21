@@ -340,19 +340,19 @@ export default function MonthlySalarySummaryPage() {
     setError("");
     setMessage("Select filters and run the report.");
   };
-
-  const handleExcel = async () => {
-    if (!lastParamsRef.current) return;
-    setExporting(true);
-    try {
-      await getMonthlySalarySummaryReportExcelDownload(buildPayload(lastParamsRef.current));
-    } catch (err) {
-      console.error("Excel export error:", err);
-      setError("Excel export failed. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  };
+const handleExcel = async () => {
+  if (!lastParamsRef.current) return;
+  setExporting(true);
+  setError("");
+  try {
+    await getMonthlySalarySummaryReportExcelDownload(buildPayload(lastParamsRef.current));
+  } catch (err: any) {
+    console.error("Excel export error:", err);
+    setError(err?.message ?? "Excel export failed. Please try again.");
+  } finally {
+    setExporting(false);
+  }
+};
 
   const handleOpenInNewWindow = () => {
     if (!reportHtml) return;

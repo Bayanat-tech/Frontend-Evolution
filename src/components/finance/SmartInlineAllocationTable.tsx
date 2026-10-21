@@ -193,38 +193,7 @@ export function SmartInlineAllocationTable({
 
         {/* Right-side actions: Add, Reload, Collapse */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {!childTable && onSetChildTable && (
-            <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-              <span className="text-[11px] text-slate-500 font-semibold mr-0.5">Attach:</span>
-              <button
-                type="button"
-                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("job")}
-                disabled={disabled}
-              >
-                + Job
-              </button>
-              <button
-                type="button"
-                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("expense")}
-                disabled={disabled}
-              >
-                + Expense
-              </button>
-              <button
-                type="button"
-                className="h-6 px-2.5 text-[11px] font-semibold rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap shrink-0 shadow-2xs inline-flex items-center"
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("invoice")}
-                disabled={disabled}
-              >
-                + Invoices
-              </button>
-            </div>
-          )}
+          
 
           {childTable === "invoice" && onRefreshInvoices && (
             <button
@@ -461,16 +430,16 @@ export function SmartInlineAllocationTable({
                             columns={[
                               { field: "job_no", header: "Job No" },
                               { field: "job_date", header: "Job Date" },
-                              { field: "confrim_date", header: "Confirm Date" },
+                              { field: "confirm_date", header: "Confirm Date" },
                               { field: "prin_code", header: "Principal Code" },
                             ]}
                             valueField="job_no"
-                            displayFields={["job_no", "job_date", "confrim_date", "prin_code"]}
+                            displayFields={["job_no", "job_date", "confirm_date", "prin_code"]}
                             loadOptions={() =>
                               getDynamicLookup({
                                 parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
-                                loginid: user?.loginid ?? "",
-                                code1: user?.company_code ?? "",
+                                loginid: (user as any)?.loginid ?? (user as any)?.user?.loginid ?? "",
+                                code1: (user as any)?.company_code ?? (user as any)?.user?.company_code ?? "",
                               })
                             }
                             disabled={disabled}
@@ -633,17 +602,29 @@ export function SmartInlineAllocationTable({
 
                       {/* Job No */}
                       <td className="px-1 py-0.5">
-                        <input
-                          className="h-[25px] w-full rounded border border-slate-300 bg-white px-2 py-0 text-xs text-slate-900 focus:border-[#00378C] focus:outline-none"
-                          disabled={disabled}
+                        <LookupField
+                          label="Job No"
+                          compact
+                          placeholder="Job No"
                           value={text(row.job_no)}
-                          onChange={(e) => onChange(row.id, { job_no: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
+                          displayValue={text(row.job_no)}
+                          columns={[
+                            { field: "job_no", header: "Job No" },
+                            { field: "job_date", header: "Job Date" },
+                            { field: "confirm_date", header: "Confirm Date" },
+                            { field: "prin_code", header: "Principal Code" },
+                          ]}
+                          valueField="job_no"
+                          displayFields={["job_no", "job_date", "confirm_date", "prin_code"]}
+                          loadOptions={() =>
+                            getDynamicLookup({
+                              parameter: "AC_BP_BR_TR_TI_JOBDETAIL",
+                              loginid: (user as any)?.loginid ?? (user as any)?.user?.loginid ?? "",
+                              code1: (user as any)?.company_code ?? (user as any)?.user?.company_code ?? "",
+                            })
+                          }
+                          disabled={disabled}
+                          onChange={(value) => onChange(row.id, { job_no: value })}
                         />
                       </td>
 

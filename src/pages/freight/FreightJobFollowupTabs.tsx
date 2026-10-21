@@ -1,6 +1,6 @@
 import { FreightDatePicker, FreightDateTimePicker } from "../../components/freight/FreightDatePicker";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
+import { ArrowLeft, Bell, CheckSquare, FileText, Info, List, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -146,18 +146,48 @@ export function FreightJobFollowupTab({
   }
 
   async function deleteRow(row: LookupRow) {
-    if (!job) return;
     if (readOnly) {
       notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
       return;
     }
-    const key = kind === "documents" ? { doc_nr: text(row, "doc_nr") } : kind === "deposits" ? { sr_no: text(row, "sr_no") } : { op_code: text(row, "op_code") };
+
+    const docNr = text(row, "doc_nr");
+    const opCode = text(row, "op_code");
+    const srNo = text(row, "sr_no");
+    const identifier = kind === "documents" ? docNr : kind === "deposits" ? srNo : opCode;
+
+    // Optimistically remove from UI state immediately
+    const previousRows = rows;
+    setRows((current) => current.filter((item) => item !== row));
+
+    // If it is a new locally-added row that was never saved to DB, we're done
+    if (!identifier) {
+      notify({ type: "success", text: "Line removed." });
+      return;
+    }
+
+    const prinCode = text(row, "prin_code") || text(job || undefined, "prin_code");
+    const jobNo = text(row, "job_no") || text(job || undefined, "job_no");
+    const compCode = text(row, "company_code") || companyCode;
+
+    if (!jobNo || !prinCode) {
+      notify({ type: "success", text: "Line removed." });
+      return;
+    }
+
+    const key = kind === "documents" ? { doc_nr: docNr } : kind === "deposits" ? { sr_no: srNo } : { op_code: opCode };
     setSaving(true);
     try {
-      await api.post(`/api/freight/${cfg.endpoint}/delete`, { ...jobPayload(companyCode, job), ...key });
-      await loadRows(job);
-      notify({ type: "success", text: "Line deleted." });
+      await api.post(`/api/freight/${cfg.endpoint}/delete`, {
+        company_code: compCode,
+        prin_code: prinCode,
+        job_no: jobNo,
+        ...key,
+      });
+      notify({ type: "success", text: "Line deleted successfully." });
     } catch (error: any) {
+      // Restore row on failure
+      setRows(previousRows);
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete line." });
     } finally {
       setSaving(false);
@@ -188,26 +218,28 @@ export function FreightJobFollowupTab({
 
   return (
     <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-muted-foreground">Active Job:</span>
-          <strong className="text-primary font-bold">{text(job || undefined, "job_no") || "No Job Selected"}</strong>
-          <span className="text-slate-300">•</span>
-          <span className="font-semibold text-muted-foreground">Principal:</span>
-          <strong className="text-foreground font-semibold">{text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}</strong>
-          {text(job || undefined, "doc_ref") && (
-            <>
-              <span className="text-slate-300">•</span>
-              <span className="font-semibold text-muted-foreground">Ref:</span>
-              <strong className="text-foreground">{text(job || undefined, "doc_ref")}</strong>
-            </>
-          )}
+      {!embeddedInWorkspace && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border border-border bg-card text-xs shadow-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-muted-foreground">Active Job:</span>
+            <strong className="text-primary font-bold">{text(job || undefined, "job_no") || "No Job Selected"}</strong>
+            <span className="text-slate-300">•</span>
+            <span className="font-semibold text-muted-foreground">Principal:</span>
+            <strong className="text-foreground font-semibold">{text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}</strong>
+            {text(job || undefined, "doc_ref") && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="font-semibold text-muted-foreground">Ref:</span>
+                <strong className="text-foreground">{text(job || undefined, "doc_ref")}</strong>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">{cfg.summary}:</span>
+            <strong className="font-bold text-primary">{stats}</strong>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">{cfg.summary}:</span>
-          <strong className="font-bold text-primary">{stats}</strong>
-        </div>
-      </div>
+      )}
 
       {!embeddedInWorkspace && <div className="freight-form-header">
         <div className="flex flex-wrap items-center justify-between gap-2 w-full">
@@ -273,9 +305,41 @@ export function FreightJobFollowupTab({
   );
 }
 
+const columnStyles: Record<string, { width: string; align?: "center" | "right" | "left"; isFlexible?: boolean }> = {
+  "#": { width: "42px", align: "center" },
+  doc_nr: { width: "90px", align: "center" },
+  doc_desc: { width: "240px", align: "left" },
+  sr_no: { width: "80px", align: "center" },
+  op_code: { width: "130px", align: "left" },
+  op_desc: { width: "230px", align: "left" },
+  op_assigned: { width: "160px", align: "left" },
+  op_date: { width: "135px", align: "center" },
+  op_remarks: { width: "260px", align: "left", isFlexible: true },
+  end_date: { width: "135px", align: "center" },
+  end_remarks: { width: "260px", align: "left", isFlexible: true },
+  op_yesno: { width: "90px", align: "center" },
+  remarks: { width: "300px", align: "left", isFlexible: true },
+  mandatory: { width: "85px", align: "center" },
+  collected: { width: "85px", align: "center" },
+  doc_received_dt: { width: "135px", align: "center" },
+  doc_received_by: { width: "140px", align: "left" },
+  document_type: { width: "130px", align: "left" },
+  deposit_type: { width: "130px", align: "left" },
+  amount: { width: "110px", align: "right" },
+  currency: { width: "80px", align: "center" },
+  deposit_date: { width: "135px", align: "center" },
+  deposit_expiry_date: { width: "135px", align: "center" },
+  status: { width: "90px", align: "center" },
+  be_no: { width: "120px", align: "left" },
+  claim_ref_no: { width: "120px", align: "left" },
+  deposit_remarks: { width: "240px", align: "left", isFlexible: true },
+};
+
 function DocumentsGrid({ rows, setRows, deleteRow, onAttach, onInit, saving, readOnly, userId }: GridProps & { onAttach: (row: LookupRow) => void; onInit?: () => void; saving?: boolean; userId?: string }) {
   return (
     <EditableGrid
+      title="Job Document Checklist"
+      icon={FileText}
       columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]}
       rows={rows}
       setRows={setRows}
@@ -301,6 +365,8 @@ function DocumentsGrid({ rows, setRows, deleteRow, onAttach, onInit, saving, rea
 function InstructionGrid({ rows, setRows, deleteRow, onInit, saving, readOnly, companyCode, opType, opMode }: GridProps & { onInit?: () => void; saving?: boolean; companyCode: string; opType: string; opMode: string }) {
   return (
     <EditableGrid
+      title="Job Instructions & Follow-up"
+      icon={Info}
       columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]}
       rows={rows}
       setRows={setRows}
@@ -309,7 +375,7 @@ function InstructionGrid({ rows, setRows, deleteRow, onInit, saving, readOnly, c
       saving={saving}
       addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })}
       readOnly={readOnly}
-      labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: "Instruction Assigned To", op_date: "Instruction Date", op_remarks: "Remarks" }}
+      labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: "Instruction Assigned", op_date: "Instruction Date", op_remarks: "Remarks" }}
       instructionLookup={{
         load: async () => {
           const response = await api.post<{ data?: LookupRow[] }>("/api/freight/job-instructions/codes", {
@@ -327,6 +393,8 @@ function InstructionGrid({ rows, setRows, deleteRow, onInit, saving, readOnly, c
 function AlertGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridProps & { onInit?: () => void; saving?: boolean }) {
   return (
     <EditableGrid
+      title="Job Operational Alerts"
+      icon={Bell}
       columns={["op_desc", "op_date", "op_yesno", "remarks"]}
       rows={rows}
       setRows={setRows}
@@ -343,6 +411,8 @@ function AlertGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridP
 function DepositGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: GridProps & { onInit?: () => void; saving?: boolean }) {
   return (
     <EditableGrid
+      title="Container & Customs Deposits"
+      icon={WalletCards}
       columns={["sr_no", "deposit_type", "amount", "currency", "deposit_date", "deposit_expiry_date", "status", "be_no", "claim_ref_no", "deposit_remarks"]}
       rows={rows}
       setRows={setRows}
@@ -357,52 +427,209 @@ function DepositGrid({ rows, setRows, deleteRow, onInit, saving, readOnly }: Gri
 
 type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean; labels?: Record<string, string> };
 
-function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach, onInit, saving, readOnly = false, labels, instructionLookup }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void; onInit?: () => void; saving?: boolean; instructionLookup?: { load: () => Promise<LookupRow[]> } }) {
+function EditableGrid({
+  title,
+  icon: GridIcon = List,
+  columns,
+  rows,
+  setRows,
+  deleteRow,
+  addFactory,
+  onAttach,
+  onInit,
+  saving,
+  readOnly = false,
+  labels,
+  instructionLookup,
+}: GridProps & {
+  title?: string;
+  icon?: any;
+  columns: string[];
+  onAttach?: (row: LookupRow) => void;
+  onInit?: () => void;
+  saving?: boolean;
+  instructionLookup?: { load: () => Promise<LookupRow[]> };
+}) {
   return (
-    <div className="freight-job-table-shell overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-      <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-        <div className="text-xs font-semibold text-foreground">{rows.length} lines</div>
+    <div className="commercial-lines-card rounded-md border bg-card shadow-xs overflow-hidden">
+      {/* Finance Line Actions Header */}
+      <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
+        <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
+          <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
+            <GridIcon size={14} />
+          </span>
+          <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            {title || "Job Detail Lines"}
+          </span>
+          <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            {rows.length} {rows.length === 1 ? "line" : "lines"}
+          </span>
+        </div>
         <div className="flex items-center gap-1.5">
           {onInit && !readOnly && (
-            <Button type="button" size="sm" variant="outline" onClick={onInit} disabled={saving}>
-              <Search size={13} /> Init from Master
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onInit}
+              disabled={saving}
+              className="h-7 text-xs font-medium cursor-pointer"
+            >
+              <Search size={13} className="mr-1" /> Init from Master
             </Button>
           )}
           {addFactory && !readOnly && (
-            <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}>
-              <Plus size={13} /> Add Line
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}
+              disabled={readOnly}
+              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+            >
+              <Plus size={13} className="mr-1" /> Add Line
             </Button>
           )}
         </div>
       </div>
-      <div className="max-h-[calc(100vh-330px)] overflow-auto">
-        <div className="freight-job-table-head grid min-w-[1100px] gap-1 bg-muted/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-b" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(110px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
-          {columns.map((column) => <span key={column}>{labels?.[column] ?? label(column)}</span>)}{onAttach && <span>Files</span>}<span />
-        </div>
-        {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="freight-job-table-row grid min-w-[1100px] gap-1 border-b border-border/50 px-3 py-1 hover:bg-muted/15 transition-colors" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(110px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
-            {columns.map((column) => <Cell key={column} row={row} column={column} readOnly={readOnly} instructionLookup={instructionLookup} onInstructionChange={(value, selected) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, OP_CODE: value, OP_DESC: text(selected || undefined, "op_desc") } : item))} onChange={(value) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item))} />)}
-            {onAttach && <Button type="button" size="icon" variant="ghost" title="Document attachments" onClick={() => onAttach(row)}><Paperclip size={14} /></Button>}
-            <Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={() => deleteRow(row)}><Trash2 size={14} /></Button>
-          </div>
-        ))}
-        {!rows.length && (
-          <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-center">
-            <p className="text-xs text-muted-foreground m-0">No records saved for this job yet.</p>
-            <div className="flex flex-wrap items-center gap-2">
-              {onInit && !readOnly && (
-                <Button type="button" size="sm" variant="default" onClick={onInit} disabled={saving}>
-                  <Search size={13} /> Initialize from Masters
-                </Button>
-              )}
-              {addFactory && !readOnly && (
-                <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}>
-                  <Plus size={13} /> Add Line Manually
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
+
+      {/* Finance Styled Scrollable Table */}
+      <div className="commercial-lines-scroll overflow-auto min-h-[220px]" style={{ maxHeight: "calc(100dvh - 210px)" }}>
+        <table className="finance-lines-table w-full text-xs min-w-[1000px] border-collapse">
+          <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
+            <tr>
+              <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
+              {columns.map((column) => {
+                const style = columnStyles[column.toLowerCase()] || {};
+                const isRight = style.align === "right";
+                const isCenter = style.align === "center";
+                return (
+                  <th
+                    key={column}
+                    style={style.width && !style.isFlexible ? { width: style.width } : undefined}
+                    className={`px-2 py-2 text-slate-700 font-bold text-[11px] uppercase border-r border-slate-200 ${
+                      isRight ? "text-right" : isCenter ? "text-center" : "text-left"
+                    } ${style.isFlexible ? "w-auto" : ""}`}
+                  >
+                    {labels?.[column] ?? label(column)}
+                  </th>
+                );
+              })}
+              {onAttach && <th className="px-2 py-2 text-center w-[46px] text-slate-700 font-bold border-r border-slate-200">Files</th>}
+              <th className="px-2 py-2 text-center w-[50px] text-slate-700 font-bold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {rows.map((row, rowIndex) => (
+              <tr
+                key={rowIndex}
+                className={`transition-colors ${
+                  rowIndex % 2 === 1 ? "bg-slate-50/40 hover:bg-blue-50/40" : "bg-white hover:bg-blue-50/40"
+                }`}
+              >
+                <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                  {rowIndex + 1}
+                </td>
+                {columns.map((column) => {
+                  const style = columnStyles[column.toLowerCase()] || {};
+                  return (
+                    <td
+                      key={column}
+                      style={style.width && !style.isFlexible ? { width: style.width } : undefined}
+                      className={`px-1.5 py-1 ${style.isFlexible ? "w-auto" : ""}`}
+                    >
+                      <Cell
+                        row={row}
+                        column={column}
+                        readOnly={readOnly}
+                        instructionLookup={instructionLookup}
+                        onInstructionChange={(value, selected) =>
+                          setRows((current) =>
+                            current.map((item, index) =>
+                              index === rowIndex
+                                ? { ...item, OP_CODE: value, OP_DESC: text(selected || undefined, "op_desc") }
+                                : item
+                            )
+                          )
+                        }
+                        onChange={(value) =>
+                          setRows((current) =>
+                            current.map((item, index) =>
+                              index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item
+                            )
+                          )
+                        }
+                      />
+                    </td>
+                  );
+                })}
+                {onAttach && (
+                  <td className="px-1 py-1 text-center w-[46px]">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50 cursor-pointer"
+                      title="Document attachments"
+                      onClick={() => onAttach(row)}
+                    >
+                      <Paperclip size={14} />
+                    </Button>
+                  </td>
+                )}
+                <td className="px-1 py-1 text-center w-[50px]">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                    title="Delete line"
+                    disabled={readOnly}
+                    onClick={() => deleteRow(row)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan={columns.length + (onAttach ? 2 : 1) + 1}
+                  className="py-10 px-4 text-center text-xs text-muted-foreground"
+                >
+                  <div className="flex flex-col items-center justify-center gap-2.5">
+                    <p className="m-0 text-slate-500 font-medium">No records saved for this job yet.</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {onInit && !readOnly && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          onClick={onInit}
+                          disabled={saving}
+                          className="h-7 text-xs !bg-[#00378C] !text-white hover:!bg-[#002d72]"
+                        >
+                          <Search size={13} className="mr-1" /> Initialize from Masters
+                        </Button>
+                      )}
+                      {addFactory && !readOnly && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}
+                          className="h-7 text-xs"
+                        >
+                          <Plus size={13} className="mr-1" /> Add Line Manually
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -440,6 +667,16 @@ function Cell({ row, column, onChange, onInstructionChange, instructionLookup, r
   if (column === "op_yesno") {
     const yesNo = normalizeYesNo(value);
     return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={yesNo} disabled={readOnly} onChange={(event) => onChange(event.target.value)}><option value=""> </option><option value="Y">Yes</option><option value="N">No</option></select>;
+  }
+  if (normalizedColumn === "doc_nr" || normalizedColumn === "sr_no") {
+    return (
+      <Input
+        className="h-7 text-xs text-center font-mono font-medium px-1 bg-white"
+        value={value}
+        disabled={readOnly}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
   }
   return <Input className="h-7 text-xs" value={value} disabled={readOnly} onChange={(event) => onChange(event.target.value)} />;
 }

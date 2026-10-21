@@ -122,17 +122,16 @@ export default function VacationSeparationReportPage() {
   };
 
   const handleExcel = async () => {
-    if (!lastParamsRef.current) return;
-    setExporting(true);
-    try {
-      await getVacationSeparationReportExcelDownload(buildPayload(lastParamsRef.current));
-    } catch (err) {
-      console.error("Excel export error:", err);
-      setError("Excel export failed. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  };
+  if (!lastParamsRef.current) return;
+  setExporting(true);
+  try {
+    await getVacationSeparationReportExcelDownload(buildPayload(lastParamsRef.current));
+  } catch (err) {
+    console.error("Excel export error:", err);
+  } finally {
+    setExporting(false);
+  }
+};
 
   const handleOpenInNewWindow = () => {
     if (!reportHtml) return;
