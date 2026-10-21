@@ -193,52 +193,7 @@ export function SmartInlineAllocationTable({
 
         {/* Right-side actions: Add, Reload, Collapse */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {onSetChildTable && (
-            <div className="flex items-center gap-1 shrink-0 whitespace-nowrap bg-slate-100 p-0.5 rounded border border-slate-200">
-              <button
-                type="button"
-                className={`h-5 px-2 text-[10px] font-semibold rounded cursor-pointer whitespace-nowrap shrink-0 transition-colors inline-flex items-center gap-1 ${
-                  childTable === "job"
-                    ? "bg-[#00378C] text-white shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-white"
-                }`}
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("job")}
-                disabled={disabled}
-                title="Switch allocation to Job"
-              >
-                <Briefcase size={9} /> Job
-              </button>
-              <button
-                type="button"
-                className={`h-5 px-2 text-[10px] font-semibold rounded cursor-pointer whitespace-nowrap shrink-0 transition-colors inline-flex items-center gap-1 ${
-                  childTable === "invoice"
-                    ? "bg-[#00378C] text-white shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-white"
-                }`}
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("invoice")}
-                disabled={disabled}
-                title="Switch allocation to Invoices"
-              >
-                <FileText size={9} /> Invoices
-              </button>
-              <button
-                type="button"
-                className={`h-5 px-2 text-[10px] font-semibold rounded cursor-pointer whitespace-nowrap shrink-0 transition-colors inline-flex items-center gap-1 ${
-                  childTable === "expense"
-                    ? "bg-[#00378C] text-white shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-white"
-                }`}
-                style={{ width: "auto", minWidth: "max-content" }}
-                onClick={() => onSetChildTable("expense")}
-                disabled={disabled}
-                title="Switch allocation to Expense"
-              >
-                <Receipt size={9} /> Expense
-              </button>
-            </div>
-          )}
+          
 
           {childTable === "invoice" && onRefreshInvoices && (
             <button
