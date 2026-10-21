@@ -233,6 +233,7 @@
   import VacationSeparationReportPage from "../pages/hr/Reports/Vacationseparationreportpage ";
   import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypage";
   import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
+import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
 
   import HrDocumentReport from "../pages/hr/Reports/HrDocumentReport";
   import HrLabourCardExpiryReport from "../pages/hr/Reports/HrLabourCardExpiry";
@@ -1064,52 +1065,65 @@
       element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
     },
 
-    // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
+  // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
 
-    {
-      name: "Purchase Request Register",
-      match: ({ pathname }) => {
-        const normalized = pathname.toLowerCase();
-        return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
-          normalized.includes("/almswf/reports/purchase_request_register");
-      },
-      element: () => <PurchaseRequestRegisterReport />,
-    },
-    {
-      name: "ALMS My Task Pending",
-      match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),
-      element: () => <Mytaskalmspage initialTab={0} />,
-    },
-    {
-      name: "ALMS My Task In Progress",
-      match: (context) => isAlmsMyTaskTabRoute(context, ["in_progress", "in-progress"]),
-      element: () => <Mytaskalmspage initialTab={1} />,
-    },
-    {
-      name: "ALMS My Task Rejected",
-      match: (context) => isAlmsMyTaskTabRoute(context, ["rejected"]),
-      element: () => <Mytaskalmspage initialTab={2} />,
-    },
-    {
-      name: "ALMS My Task Sent Back",
-      match: (context) => isAlmsMyTaskTabRoute(context, ["sent_back", "sent-back"]),
-      element: () => <Mytaskalmspage initialTab={3} />,
-    },
-    {
-      name: "ALMS My Task Approved",
-      match: (context) => isAlmsMyTaskTabRoute(context, ["approved", "final_approved", "final-approved"]),
-      element: () => <Mytaskalmspage initialTab={4} />,
-    },
-    {
-      name: "ALMS My Task Po Generated",
-      match: (context) => isAlmsMyTaskTabRoute(context, ["po_generated", "po-generated"]),
-      element: () => <Mytaskalmspage initialTab={5} />,
-    },
-    {
-      name: 'My Task',
-      match: (context) => isMyTaskRoute(context),
-      element: () => <Mytaskalmspage initialTab={0} />
-    },
+  // {
+  //   name: "Purchase Request Register",
+  //   match: ({ pathname }) => {
+  //     const normalized = pathname.toLowerCase();
+  //     return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
+  //       normalized.includes("/almswf/reports/purchase_request_register");
+  //   },
+  //   element: () => <PrRegisterPage />,
+  // },
+
+
+  {
+  name: "Purchase Request Register",
+  match: ({ pathname }) => {
+    const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+    return (
+      normalized.endsWith("/almswf/almswf/reports/purchase_request_register") ||
+      normalized.endsWith("/almswf/reports/purchase_request_register")
+    );
+  },
+  element: () => <PrRegisterPage />,
+},
+  {
+    name: "ALMS My Task Pending",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),
+    element: () => <Mytaskalmspage initialTab={0} />,
+  },
+  {
+    name: "ALMS My Task In Progress",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["in_progress", "in-progress"]),
+    element: () => <Mytaskalmspage initialTab={1} />,
+  },
+  {
+    name: "ALMS My Task Rejected",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["rejected"]),
+    element: () => <Mytaskalmspage initialTab={2} />,
+  },
+  {
+    name: "ALMS My Task Sent Back",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["sent_back", "sent-back"]),
+    element: () => <Mytaskalmspage initialTab={3} />,
+  },
+  {
+    name: "ALMS My Task Approved",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["approved", "final_approved", "final-approved"]),
+    element: () => <Mytaskalmspage initialTab={4} />,
+  },
+  {
+    name: "ALMS My Task Po Generated",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["po_generated", "po-generated"]),
+    element: () => <Mytaskalmspage initialTab={5} />,
+  },
+  {
+    name: 'My Task',
+    match: (context) => isMyTaskRoute(context),
+    element: () => <Mytaskalmspage initialTab={0} />
+  },
 
     {
       name: 'Credit Request page',
