@@ -233,7 +233,7 @@ export function PurchaseOrderLinesTable({
             title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
           >
             <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
           </button>
 
           <div className="bisc-table-search">

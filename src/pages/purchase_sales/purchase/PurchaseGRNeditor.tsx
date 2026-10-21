@@ -267,7 +267,7 @@ export function PurchaseGRNEditor({
 
   const handleSaveAsDraft = () => {
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
-      for (let i = 0; i < rows.length; i++) {
+    for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const lineNo = i + 1;
 
@@ -401,26 +401,26 @@ export function PurchaseGRNEditor({
 
 
   const handleExcel = async () => {
-  if (!form.doc_no) {
-    setError("Save the GRN before exporting to Excel");
-    return;
-  }
-  setExportingExcel(true);
-  setError("");
-  try {
-    await exportGrnPrintReportExcel({
-      parameter: "GRN_Print",
-      loginid: user?.loginid || user?.username || "ADMIN",
-      company_code: user?.company_code,
-      doc_type: PO_DOC_TYPE.GRN,
-      doc_no: String(form.doc_no),
-    } as any);
-  } catch (e: any) {
-    setError(e?.response?.data?.message || e?.message || "Excel export failed");
-  } finally {
-    setExportingExcel(false);
-  }
-};
+    if (!form.doc_no) {
+      setError("Save the GRN before exporting to Excel");
+      return;
+    }
+    setExportingExcel(true);
+    setError("");
+    try {
+      await exportGrnPrintReportExcel({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: String(form.doc_no),
+      } as any);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Excel export failed");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
   const openRejectDialog = () => {
     setRejectError("");
     setRejectReason("");
@@ -579,7 +579,7 @@ export function PurchaseGRNEditor({
                       {actionLoading === "reject" ? "Rejecting..." : "Reject"}
                     </Button>
                   )}
-                  {isPendingTab  && form.doc_no &&(
+                  {isPendingTab && form.doc_no && (
                     <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
                       {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
                     </Button>
@@ -592,20 +592,20 @@ export function PurchaseGRNEditor({
                       {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
                     </Button>
                     <Button
-  type="button"
-  variant="secondary"
-  onClick={() => void handleExcel()}
-  disabled={exportingExcel}
->
-  {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-  Excel
-</Button>
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleExcel()}
+                      disabled={exportingExcel}
+                    >
+                      {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                      Excel
+                    </Button>
                   </>
                 )}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                   <Paperclip size={15} /> Files
                 </Button>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+                {/* <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button> */}
               </div>
             </div>
           </CardHeader>

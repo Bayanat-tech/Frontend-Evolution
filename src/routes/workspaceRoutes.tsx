@@ -229,6 +229,7 @@ import LeaveResumptionPage from "../pages/hr/Reports/LeaveResumptionPage";
 import VacationSeparationReportPage from "../pages/hr/Reports/Vacationseparationreportpage ";
 import MonthlySalarySummaryPage from "../pages/hr/Reports/Monthlysalarysummarypage";
 import EmployeeAddressListPage from "../pages/hr/Reports/Employeeaddresslistpage";
+import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 
 
 type WorkspaceRouteContext = {
@@ -353,7 +354,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <SalaryAdvanceRecoveryPage />,
   },
 
- 
+   {
+    name: "A/C JV Process",
+    match: ({ pathname }) => pathname.toLowerCase().includes("workspace/hcm/hcm/utilities/jv-process"),
+    element: () => <EmployeeJVProcess />,
+  },
+
   {
     name: 'Travel Fare Page',
     match: (context) => isHrRoute(context) && isHrTravelFareRoute(context),
@@ -3141,6 +3147,14 @@ function isProductCategoryRoute(pathname: string) {
         normalized.includes("/ims/purchase_sales/masters/product_category") ||
     normalized.includes("/ims/purchase_sales/masters/product%20category") ||
     normalized.includes("/ims/purchase_sales/masters/product-category")
+  );
+}
+
+function isJVProcessed(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+        normalized.includes("/workspace/hcm/hr/jv-process") 
   );
 }
 

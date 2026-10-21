@@ -135,6 +135,7 @@ export function MaterialHeaderForm({
             <CField label="Remarks" className="col-span-2">
               <textarea
                 className="h-[48px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                maxLength={250}
                 disabled={headerAndLineDisabled}
                 value={form.remarks || ""}
                 onChange={(e) => updateField("remarks", e.target.value)}
@@ -213,19 +214,30 @@ export function MaterialHeaderForm({
             <CField label="JobCard No">
               <Input
                 className="h-7 text-xs text-left"
+                maxLength={20}
                 type="text"
                 disabled={headerAndLineDisabled}
                 value={form.job_card_no}
-                onChange={(e) => updateField("job_card_no", e.target.value )}
+                onChange={(e) => updateField("job_card_no", e.target.value)}
               />
             </CField>
-            <CField label="Delivery Term" className="col-span-1">
-              <Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} />
+            <CField
+              label="Delivery Term"
+              className={form.doc_type === "MRT" ? "col-span-5" : "col-span-1"}
+            >
+              <Input
+                className="h-7 text-xs"
+                disabled={headerAndLineDisabled}
+                maxLength={250}
+                value={form.dlvr_term}
+                onChange={(e) => updateField("dlvr_term", e.target.value)}
+              />
             </CField>
             {docTypeUpper === "MIS" && (
               <CField label="Order Details" className="col-span-2">
                 <Input
                   className="h-7 w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs"
+                  maxLength={250}
                   disabled={headerAndLineDisabled}
                   value={form.order_details || ""}
                   onChange={(e) => updateField("order_details" as keyof PurchaseOrderForm, e.target.value)}

@@ -229,6 +229,7 @@ export function SalesDNHeaderForm({
                                     so_zone_code: text(getLookupValue(item, "so_zone_code")),
                                     so_zone_name: text(getLookupValue(item, "so_zone_name")),
                                     serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+                                    sorder_remarks:text(getLookupValue(item, "sorder_remarks"))
                                 }));
                                 console.log("Mapped length:", mappedDetails?.length);
                                 setdetails?.(mappedDetails);

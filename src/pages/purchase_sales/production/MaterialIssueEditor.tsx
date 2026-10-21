@@ -104,7 +104,7 @@ export function MaterialIssueEditor({
   const [reportPreviewExporting, setReportPreviewExporting] = useState(false);
   const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const submitBtnRef = useRef<HTMLDivElement>(null);
-const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
+  const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
 
 
@@ -199,7 +199,7 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
-          job_card_no:text(headerRaw.job_card_no  || current.job_card_no),
+          job_card_no: text(headerRaw.job_card_no || current.job_card_no),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
@@ -209,7 +209,7 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load Sales Order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Material Issue");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -254,10 +254,10 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
-    
+
   })();
-      const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
-    const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
+  const totalAmountDisct = rows.reduce((sum, row) => sum + amountBeforeDiscPrice(row), 0);
+  const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const updateField = (
     field: keyof PurchaseOrderForm,
     value: string | number
@@ -360,34 +360,34 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
 
   // ── Print now opens the in-app NewReportDialog (raw HTML, no blob URL) ──
   const openReport = async () => {
-  if (!form.doc_no) {
-    setError("Save the Material Issue before printing");
-    return;
-  }
+    if (!form.doc_no) {
+      setError("Save the Material Issue before printing");
+      return;
+    }
 
-  const params = {
-    company_code: user?.company_code,
-    doc_type: SO_DOC_TYPE.MIS,
-    doc_no: form.doc_no,
+    const params = {
+      company_code: user?.company_code,
+      doc_type: SO_DOC_TYPE.MIS,
+      doc_no: form.doc_no,
+    };
+    const preview = openPurchaseReport(`Material Issue ${form.doc_no}`.trim());
+
+    try {
+      const html = await getSOrderReportHtml(params);
+      preview.ready({
+        html,
+        filename: `purchase_return_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
+        orientation: "portrait",
+        onExcel: async () => {
+          await getSoOrderReportExcel(params);
+        },
+      });
+    } catch (printError) {
+      preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
+    }
   };
-  const preview = openPurchaseReport(`Material Issue ${form.doc_no}`.trim());
 
-  try {
-    const html = await getSOrderReportHtml(params);
-    preview.ready({
-      html,
-      filename: `purchase_return_${form.doc_no}_${new Date().toISOString().slice(0, 10)}`,
-      orientation: "portrait",
-      onExcel: async () => {
-        await getSoOrderReportExcel(params);
-      },
-    });
-  } catch (printError) {
-    preview.fail(printError instanceof Error ? printError : new Error("Unable to load report"));
-  }
-};
 
-  
 
   const handleExportExcel = async () => {
     if (!form.doc_no) {
@@ -416,7 +416,7 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.MIS, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase Quotation saved as draft");
+    }, "Material Issues saved as draft");
   };
 
   // const handleSubmitClick = () => {
@@ -444,13 +444,13 @@ const [submitConfirmPos, setSubmitConfirmPos] = useState({ top: 0, right: 0 });
     if (invalidRow) {
       return setError("One or more line items have zero total amount. Please check quantity and unit price before submitting");
     }
-const rect = submitBtnRef.current?.getBoundingClientRect();
-if (rect) {
-  setSubmitConfirmPos({
-    top: rect.bottom + 8,
-    right: window.innerWidth - rect.right,
-  });
-}
+    const rect = submitBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setSubmitConfirmPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
     setShowSubmitConfirm(true);
   };
 
@@ -461,13 +461,13 @@ if (rect) {
     }
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", SO_DOC_TYPE.MIS, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
+    }, editMode ? "Material Issue updated successfully" : "Material Issue created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", SO_DOC_TYPE.MIS, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order cancelled");
+    }, "Material Issue cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -489,7 +489,7 @@ if (rect) {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", SO_DOC_TYPE.MIS, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Sales Order rejected");
+    }, "Material Issue rejected");
   };
 
   // ---- Send Back handlers ----
@@ -546,7 +546,7 @@ if (rect) {
       };
       await runWorkflow("SENTBACK", SO_DOC_TYPE.MIS, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Sales Order sent back");
+    }, "Material Issue sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -563,9 +563,9 @@ if (rect) {
               {/* <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Sales Order" : "New Sales Order"}
+                  {editMode ? "Edit Material Issue" : "New Material Issue"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Sales Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Material Issue</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -595,27 +595,8 @@ if (rect) {
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleExportExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
-                     <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2">
                   {isPendingTab && (
                     <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                       {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={15} />}
@@ -623,20 +604,20 @@ if (rect) {
                     </Button>
                   )}
                   <div ref={submitBtnRef} className="relative z-[100] overflow-visible">
-                      {isPendingTab && (
-                    <Button
-                      type="button"
-                      onClick={handleSubmitClick}
-                      disabled={actionDisabled || actionBarBusy}
-                    >
-                      {actionLoading === "submit" ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      {actionLoading === "submit" ? "Submitting..." : "Submit"}
-                    </Button>
-   )}
+                    {isPendingTab && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmitClick}
+                        disabled={actionDisabled || actionBarBusy}
+                      >
+                        {actionLoading === "submit" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {actionLoading === "submit" ? "Submitting..." : "Submit"}
+                      </Button>
+                    )}
                     {showSubmitConfirm &&
                       createPortal(
                         <div
@@ -675,7 +656,27 @@ if (rect) {
                   )}
 
                 </div>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+                {form.doc_no && (
+                  <>
+                    {/* <Button type="button" variant="secondary" onClick={() => void openReport()}>
+                    <Printer size={15} /> Print
+                  </Button> */}
+                    <Button
+                      aria-label="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleExportExcel()}
+                      disabled={reportPreviewExporting}
+                    >
+                      {reportPreviewExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
+                {/* <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button> */}
               </div>
             </div>
           </CardHeader>
@@ -684,9 +685,9 @@ if (rect) {
             <div className="cancelled-document-banner" role="status">
               <div>
                 <span className="cancelled-document-kicker">Cancelled Document</span>
-                <strong>{form.doc_no || "Sales Order"}</strong>
+                <strong>{form.doc_no || "Material Issue"}</strong>
               </div>
-              <p>This Sales Order is cancelled and opened in read-only mode.</p>
+              <p>This Material Issue is cancelled and opened in read-only mode.</p>
             </div>
           )}
 
@@ -856,9 +857,9 @@ if (rect) {
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
-        title="Sales Order Attachments"
+        title="Material Issue Attachments"
         module="SO"
-        type="Sales Order"
+        type="Material Issue"
         companyCode={user?.company_code || ""}
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
