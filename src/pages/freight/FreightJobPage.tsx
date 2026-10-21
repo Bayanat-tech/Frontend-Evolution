@@ -882,7 +882,7 @@ export function FreightJobPage({
                     <DateField label="ETD" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
                     <DateField label="Exp. Date of Arrival" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
                     <DateField label="Act. Date of Arrival" value={job.ata} onChange={(value) => setJobField(setJob, "ata", value)} />
-                    <DateField label="Clearance Date" value={job.clearance_date} onChange={(value) => setJobField(setJob, "clearance_date", value)} />
+                    {/* <DateField label="Clearance Date" value={job.clearance_date} onChange={(value) => setJobField(setJob, "clearance_date", value)} /> */}
                     <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)}  maxLength={freightTextLimit("TI_JOB", "transit_time")} />
                     {mode.code === "S" && (
                       <DateField label="LOU" value={job.letter_undertaking} onChange={(value) => setJobField(setJob, "letter_undertaking", value)} />
