@@ -387,6 +387,30 @@ export function PurchaseQuotationEditor({
         tx_compnt_perc_1: form.tx_compnt_1_expmt === "S" ? 5 : 0,
       },
     ]);
+  const importRows = (items: Partial<PurchaseOrderLineRow>[]) =>
+    setRows((current) => [
+      // drop the untouched blank line a new document starts with
+      ...current.filter((row) => text(row.prod_code).trim()),
+      ...items.map((it) => {
+        const base = {
+          ...emptyLineRow(form.div_code),
+          tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+          tx_cat_code: `${form.tx_cat_code || ""}`,
+          ...it,
+        } as PurchaseOrderLineRow;
+
+        // header tax type wins, same as addRow / the tax effect
+        if (!form.tx_compnt_1_expmt) return base;
+        const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
+        return {
+          ...base,
+          tx_compnt_1_expmt: form.tx_compnt_1_expmt,
+          tx_compnt_perc_1: taxPerc,
+          tx_compnt_amt_1: (Number(lineAmount(base)) || 0) * (taxPerc / 100),
+        };
+      }),
+    ]);
+
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
@@ -827,6 +851,7 @@ export function PurchaseQuotationEditor({
                   updateRow={updateRow}
                   addRow={addRow}
                   removeRow={removeRow}
+                  onImportRows={importRows}
                   headerAndLineDisabled={headerAndLineDisabled}
                   discAmt={form.disc_price}
                   ex_rate={form.ex_rate}
