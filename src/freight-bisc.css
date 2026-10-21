@@ -1362,24 +1362,6 @@ input[tabindex="-1"].opacity-0,
   position: relative;
 }
 
-.freight-workspace-ui .freight-job-journey-panel .freight-panel-body > .grid::after {
-  content: "→";
-  position: absolute;
-  top: 25px;
-  left: 50%;
-  z-index: 2;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border: 1px solid #c6d5e8;
-  border-radius: 999px;
-  color: #06479c;
-  background: #fff;
-  font-size: 12px;
-  transform: translate(-50%, -50%);
-}
-
 .freight-workspace-ui .freight-job-mode-visual {
   overflow: hidden;
   border: 1px solid #bfd0e5;

@@ -798,7 +798,7 @@ export function FreightJobPage({
             >
               <div className="grid gap-2 sm:grid-cols-2">
                 <ModeCarrierLookup
-                  className={mode.code === "S" ? "sm:col-span-1" : "sm:col-span-2"}
+                  className="sm:col-span-1"
                   mode={mode.code}
                   companyCode={companyCode}
                   value={job.vessel_name}
@@ -925,8 +925,7 @@ export function FreightJobPage({
                   }
                   required
                 />
-                <Field label="Exchange Rate" type="number" value={job.ex_rate} onChange={(value) => setJobField(setJob, "ex_rate", value)} required />
-                <Lookup
+                 <Lookup
                   label="Freight Payable At"
                   value={job.payableat}
                   valueField="PAYABLEAT"
@@ -935,6 +934,7 @@ export function FreightJobPage({
                   loadOptions={(search) => lookup("freight_payable_at", companyCode, "NULL", "NULL", search)}
                   onChange={(value) => setJobField(setJob, "payableat", value)}
                 />
+                <Field label="Exchange Rate" type="number" value={job.ex_rate} onChange={(value) => setJobField(setJob, "ex_rate", value)} required />
                 <Field label="No of Orig Docs" type="number" value={job.no_of_original_bl} onChange={(value) => setJobField(setJob, "no_of_original_bl", value)} />
                 {mode.code === "S" && !isExportLike && (
                   <>
