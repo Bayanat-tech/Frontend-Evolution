@@ -242,6 +242,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
   import HrVarianceReport from "../pages/hr/Reports/HrVarianceReport";
   import HrEmployeeDetailsReport from "../pages/hr/Reports/HrEmployeeDetailsReport";
   import HrEmployeeWiseCostReport from "../pages/hr/Reports/HrEmployeeWiseCostReport";
+import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
 
   type WorkspaceRouteContext = {
     pathname: string;
@@ -412,6 +413,11 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
       match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/advance/deduction_letter"),
       element: () => <SalaryAdvanceRecoveryPage />,
     },
+      {
+    name: "A/C JV Process",
+    match: ({ pathname }) => pathname.toLowerCase().includes("workspace/hcm/hcm/utilities/jv-process"),
+    element: () => <EmployeeJVProcess />,
+  },
 
     {
     name: "HR Retirement Report",
@@ -2481,6 +2487,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
     const normalized = pathname.toLowerCase().replace(/\/+$/, "");
     return normalized === "/workspace/wms/wms";
   }
+  
   function isWmsInboundRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     if (!normalized.includes("/wms/")) return false;
@@ -2942,6 +2949,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
     return normalized.includes("/appraisal_weightage") ||
       normalized.includes("/appraisal_weightage");
   }
+  
 
   function getPamsMasterConfig(context: WorkspaceRouteContext) {
     if (!isPamsRoute(context.pathname)) return null;

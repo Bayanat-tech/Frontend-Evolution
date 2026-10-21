@@ -30,6 +30,7 @@ import {
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -145,6 +146,7 @@ export function PurchaseInvoiceLinesTable({
   const grandTotal = totalAmountDisct - TotalDiscAmount(rows);
   const finalTotal = grandTotal + totalTaxAmount;
   const discountScope = form.discount_scoope || "ITEM";
+  
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const filteredRows = useMemo(() => {
@@ -220,7 +222,7 @@ export function PurchaseInvoiceLinesTable({
             title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
           >
             <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
           </button>
 
           <div className="bisc-table-search">

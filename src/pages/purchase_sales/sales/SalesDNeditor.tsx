@@ -650,7 +650,7 @@ export function SalesDNEditor({
                     <Paperclip size={15} /> Files
                   </Button>
                 </div>
-                <Button
+                {/* <Button
                   aria-label="Close"
                   type="button"
                   variant="secondary"
@@ -658,7 +658,7 @@ export function SalesDNEditor({
                   onClick={onClose}
                 >
                   <X size={16} />
-                </Button>
+                </Button> */}
               </div>
             </div>
           </CardHeader>
