@@ -317,8 +317,6 @@ const AddPRRequestPage = ({
   const [activeTab, setActiveTab] = useState<"items" | "terms">("items");
   const [terms, setTerms] = useState<any[]>([]);
   const [termsLoadTick, setTermsLoadTick] = useState(0);
-  // Keeps the terms exactly as saved on the server (keyed by supplier code),
-  // so the supplier-sync effect can restore them instead of creating blank rows.
   const serverTermsRef = useRef<Map<string, any>>(new Map());
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -326,7 +324,11 @@ const AddPRRequestPage = ({
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(true);
 
-  const [userApprovalLevel, setUserApprovalLevel] = useState<number>(0);
+  // In edit/view mode user level is 0 until resolved. Add mode is always 1.
+  // userLevelLoading is used ONLY to gate the Add Line / Import Excel buttons
+  // so a 2nd-level approver never sees them flash before level resolves.
+  const [userApprovalLevel, setUserApprovalLevel] = useState<number>(isEditMode || isViewMode ? 0 : 1);
+  const [userLevelLoading, setUserLevelLoading] = useState<boolean>(isEditMode || isViewMode);
   const [lastApprovalLevel, setLastApprovalLevel] = useState<number>(7);
   const [displayDate, setDisplayDate] = useState("");
   const isInitialized = useRef(false);
@@ -419,31 +421,51 @@ const AddPRRequestPage = ({
     }
   }, [header.REQUEST_DATE]);
 
+  // Resolve user level. While `userLevelLoading` is true, buttons/inputs are
+  // gated so 2nd-level approvers never see Add Line / Import Excel flash.
   useEffect(() => {
-    if (!isEditMode && !isViewMode) { setUserApprovalLevel(1); return; }
+    if (!isEditMode && !isViewMode) {
+      setUserApprovalLevel(1);
+      setUserLevelLoading(false);
+      return;
+    }
+
+    if (!header.FLOW_CODE) {
+      if (!loading) {
+        setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
+        setUserLevelLoading(false);
+      }
+      return;
+    }
+
+    let cancelled = false;
     const fetchUserLevel = async () => {
-      if (!user?.loginid || !companyCode || !header.FLOW_CODE) return;
       try {
         const result = await almsCommonSelect({
           parameter: "PS_PREQUEST_ENTRY_GET_USER_LEVEL",
           loginid, code1: companyCode, code2: header.FLOW_CODE || "",
           code3: user?.loginid || "", code4: "",
         });
+        if (cancelled) return;
         if (result && result.length > 0) {
           setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
           const ll = Number(result[0].LAST_LEVEL) || 0;
           if (ll > 0) setLastApprovalLevel(ll);
+        } else {
+          setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
         }
-        else setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
       } catch {
+        if (cancelled) return;
         setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
+      } finally {
+        if (!cancelled) setUserLevelLoading(false);
       }
     };
     fetchUserLevel();
-  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, isEditMode, isViewMode]);
+    return () => { cancelled = true; };
+  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, loading, isEditMode, isViewMode]);
 
   const shouldShowSupplier = () => isSupplierUser;
-  // FIX #1: Terms & Conditions tab is only for the two supplier users.
   const shouldShowTermsTab = () => isSupplierUser;
 
   const { data: productCodes = [] } = useQuery<LookupItem[]>({
@@ -482,23 +504,28 @@ const AddPRRequestPage = ({
     enabled: !!companyCode,
   });
 
+  // placeholderData keeps previous cached data visible instantly while fresh
+  // data loads in background — no blank screen on repeat visits.
   const { data: hdrList = [], isFetching: hdrFetching } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({ parameter: "PS_PREQUEST_ENTRY_HEADER_PAGE", loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
     staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
+    placeholderData: (prev: any) => prev,
   });
   const { data: itemList = [], isFetching: itemsFetching } = useQuery<TPRItem[]>({
     queryKey: ["pr-item-list", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRItem>({ parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE", loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
     staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
+    placeholderData: (prev: any) => prev,
   });
   const { data: termsList = [] } = useQuery<any[]>({
     queryKey: ["pr-terms", requestNumber, companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TERMS", loginid, code1: companyCode, code2: requestNumber || "", code3: "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
     staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
+    placeholderData: (prev: any) => prev,
   });
   const { data: flowDetailData } = useQuery<LookupItem[]>({
     queryKey: ["pr-flow-details", flowCode, companyCode],
@@ -641,9 +668,6 @@ const AddPRRequestPage = ({
     });
   }, [userApprovalLevel]);
 
-  // Load terms from the server. Column names are normalised (upper/lower case)
-  // and a copy is kept in serverTermsRef so the supplier-sync effect below can
-  // restore the saved values (Delivery Term / Payment Terms / Warranty / Remarks).
   useEffect(() => {
     if (termsList.length > 0) {
       const pick = (row: any, k: string) => row?.[k] ?? row?.[k.toLowerCase()] ?? "";
@@ -675,8 +699,6 @@ const AddPRRequestPage = ({
 
   useEffect(() => {
     if (!isSupplierUser) return;
-    // In edit/view mode, wait until the saved items are loaded. Otherwise `used`
-    // is empty and every saved term row gets wiped out.
     if ((isEditMode || isViewMode) && !!requestNumber && !itemsLoadedRef.current) return;
 
     const used: string[] = [];
@@ -715,7 +737,6 @@ const AddPRRequestPage = ({
         }
         const orphan = orphans.shift();
         if (orphan) return { ...orphan, SUPPLIER: sup, SUPPLIER_NAME: name };
-        // Restore what was saved on the server for this supplier, if any.
         const fromServer = serverTermsRef.current.get(sup);
         if (fromServer) return { ...fromServer, SUPPLIER: sup, SUPPLIER_NAME: name || fromServer.SUPPLIER_NAME };
         return {
@@ -1020,8 +1041,6 @@ const AddPRRequestPage = ({
     enabled: sendBackOpen && !!requestNumber,
   });
 
-  // FIX #2: Use the real creator (CREATE_USER) — not the last modifier (USER_ID) —
-  // and dedupe by both loginid and display name to avoid duplicate entries.
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
     const seenIds = new Set<string>();
@@ -1033,9 +1052,7 @@ const AddPRRequestPage = ({
       const upperId = trimmedId.toUpperCase();
       const upperLabel = String(label || "").trim().toUpperCase();
 
-      // Skip if already added or it's the current user
       if (seenIds.has(upperId) || upperId === String(loginid).trim().toUpperCase()) return;
-      // Skip duplicate names
       if (upperLabel && seenNames.has(upperLabel)) return;
 
       seenIds.add(upperId);
@@ -1043,14 +1060,12 @@ const AddPRRequestPage = ({
       opts.push({ loginid: trimmedId, label: label || trimmedId, level });
     };
 
-    // Add the creator (using CREATE_USER, not USER_ID)
     const creatorId = (header as any).CREATE_USER;
     const creatorName = (header as any).CREATE_USER_NAME || "";
     if (creatorId) {
       addOpt(String(creatorId), creatorName, 0);
     }
 
-    // Add targets from the query
     sendBackTargets.forEach((row: any) => {
       const lg = String(row.loginid ?? row.LOGINID ?? "").trim();
       const emp = String(row.emp_name ?? row.EMP_NAME ?? "").trim();
@@ -1208,7 +1223,6 @@ const AddPRRequestPage = ({
       const index = prev.findIndex((i) => (i as any).id === id);
       if (index === -1) return prev;
 
-      // Force sanitize Supplier field if it comes as "Code - Name"
       let normalizedValue = value;
       if (field === "SUPPLIER" && typeof value === "string") {
         normalizedValue = value.split(" - ")[0].trim();
@@ -1311,8 +1325,8 @@ const AddPRRequestPage = ({
   ];
   const supplierColumns = [{ field: "SUPPLIER_CODE", header: "Code" }, { field: "SUPPLIER_NAME", header: "Name" }];
 
-  const canEditRequested = !disabled && userApprovalLevel < 2;
-  const canEditApproved = !disabled && userApprovalLevel >= 2;
+  const canEditRequested = !disabled && !userLevelLoading && userApprovalLevel < 2;
+  const canEditApproved = !disabled && !userLevelLoading && userApprovalLevel >= 2;
 
   const resetDiscountItems = () =>
     setItems((prev) => prev.map((item) => {
@@ -1770,7 +1784,8 @@ const AddPRRequestPage = ({
                         </div>
                       </>
                     )}
-                    {!effectiveViewMode && activeTab === "items" && userApprovalLevel < 2 && (
+                    {/* Buttons only render AFTER user level resolves — 2nd-level approver will never see them flash */}
+                    {!effectiveViewMode && activeTab === "items" && !userLevelLoading && userApprovalLevel < 2 && (
                       <>
                         <Button disabled={disabled} type="button" onClick={() => setImportOpen(true)} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><FileSpreadsheet size={14} /> Import Excel</Button>
                         <Button disabled={disabled} type="button" onClick={addItemLine} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><Plus size={14} /> Add Line</Button>
