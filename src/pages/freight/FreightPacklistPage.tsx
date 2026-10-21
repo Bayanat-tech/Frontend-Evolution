@@ -366,7 +366,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "PACKLIST_NO", header: "Pack No", size: 110, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "packlist_no") || "Auto"}</button> },
     { accessorKey: "SEQ_NUMBER", header: "Seq", size: 70 },
-    { accessorKey: "JOB_NO", header: "Job No", size: 120 },
+    // { accessorKey: "JOB_NO", header: "Job No", size: 120 },
     { accessorKey: "JOB_DATE", header: "Job Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
     { accessorKey: "PRIN_CODE", header: "Principal", size: 90 },
     { accessorKey: "PRIN_NAME", header: "Principal Name", size: 220 },
@@ -696,7 +696,7 @@ const cargoColumns = isAir ? airCargoColumns : isRoad ? roadCargoColumns : seaCa
         <div className="freight-job-section-grid">
         <Panel className="pack-document-panel lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / Job ${pack.job_no || "Pending"}`}>
           <div className="freight-job-field-grid grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            <ReadOnlyField label="Job No" value={pack.job_no || "-"} />
+            {/* <ReadOnlyField label="Job No" value={pack.job_no || "-"} /> */}
             <ReadOnlyField label="Pack List No" value={pack.packlist_no || "Auto"} />
             <Field label="P.O. No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} required maxLength={freightTextLimit("TF_PACKLIST", "po_no")} />
             <Field
