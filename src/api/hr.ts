@@ -57,6 +57,26 @@ export async function deleteHrGm(endpoint: string, ids: unknown[]) {
   return response.data;
 }
 
+
+export async function getHrReportHtml(
+  endpoint: string,
+  params: Record<string, unknown>,
+): Promise<string> {
+  const cleanParams = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== null),
+  );
+  // "/hr/reports/contract" -> "/api/hr/reports/contract"
+  const url = endpoint.startsWith("/api") ? endpoint : `/api${endpoint}`;
+
+  const response = await api.get<string>(url, {
+    params: cleanParams,
+    responseType: "text",
+    transformResponse: (d) => d,
+  });
+  if (!response.data) throw new Error("Unable to fetch report");
+  return response.data;
+}
+
 export type HrLeaveFlowResponse = {
   tableData: LookupRow[];
   count: number;
