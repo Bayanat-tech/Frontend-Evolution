@@ -1,15 +1,15 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Paperclip, FileText, Printer, FileSpreadsheet } from "lucide-react";
+import { X, Paperclip, FileText, Printer, FileSpreadsheet, Loader2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { DataTable } from "../../components/ui/DataTable";
-import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Badge } from "../../components/ui/Badge";
-import { CardHeader } from "../../components/ui/Card";
+import { CardContent, CardHeader } from "../../components/ui/Card";
+import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
 import { printCapexApprovalReport } from "./CapexApprovalReport";
@@ -49,6 +49,7 @@ export type TCPHeader = {
   BUDGETED?: string;       // Y/N
   BOARD_APPROVAL?: string; // Y/N
   purch_status?: string;   // Status label shown in header chip
+  PURCH_STATUS?: string;   // same, uppercase variant
 };
 
 export type TCPItem = {
@@ -72,7 +73,7 @@ type AddCPRequestPageProps = {
   isEditMode: boolean;
   isViewMode?: boolean;
   existingData?: { request_number?: string };
-  onClose: (refresh?: boolean) => void;
+  onClose: (refresh?: boolean, message?: string) => void;
 };
 
 function num(v: unknown) {
@@ -99,7 +100,7 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const disabled = isViewMode || saving;
 
   // ── Fetch header ───────────────────────────────────────────────────────────
-  const { data: hdrList = [], isLoading: hdrLoading } = useQuery<TCPHeader[]>({
+  const { data: hdrList = [], isLoading: hdrLoading, isError: hdrError } = useQuery<TCPHeader[]>({
     queryKey: ["cp-header", requestNumber, companyCode],
     queryFn: () =>
       almsCommonSelect<TCPHeader>({
@@ -117,8 +118,7 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     }
   }, [hdrList]);
 
-  // Derived loading flag — resolves as soon as the header query settles,
-  // even if it comes back empty, instead of relying on manual state.
+  // Derived loading flag — header query settle zali ki (empty/error asli tari) resolve hoto
   const loading = !!requestNumber && hdrLoading;
 
   // ── Fetch details (read-only, sourced from PR line items) ─────────────────
@@ -139,6 +139,8 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
+  const statusLabel = header.purch_status || header.PURCH_STATUS || "";
+  const canExport = !!requestNumber && !itemsLoading && !saving;
 
   // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrint = () => {
@@ -162,9 +164,7 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   };
 
   // ── Generate Excel ──────────────────────────────────────────────────────────
-  // TODO: wire this to your actual export endpoint/util. Left as a clear stub
-  // so it's easy to plug in (e.g. an XLSX export util, or a backend endpoint
-  // that streams a file back).
+  // TODO: wire this to your actual export endpoint/util.
   const handleGenerateExcel = async () => {
     setSaving(true);
     setNotice(null);
@@ -189,18 +189,42 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       { accessorKey: "ITEM_SRNO", header: "Item SR No", size: 100 },
       { accessorKey: "ITEM_CODE", header: "Item Code", size: 120 },
       { accessorKey: "ITEM_DESP", header: "Item Description", size: 300 },
-      { accessorKey: "ITEM_QTY", header: "Quantity", size: 100, cell: ({ getValue }) => fmt3(num(getValue())) },
-      { accessorKey: "ITEM_RATE", header: "Rate", size: 100, cell: ({ getValue }) => fmt3(num(getValue())) },
-      { accessorKey: "AMOUNT", header: "Amount", size: 120, cell: ({ getValue }) => <strong>{fmt3(num(getValue()))}</strong> },
-      { accessorKey: "TX_COMPNT_AMT_1", header: "Tax", size: 100, cell: ({ getValue }) => fmt3(num(getValue())) },
+      {
+        accessorKey: "ITEM_QTY",
+        header: () => <div className="text-right">Quantity</div>,
+        size: 100,
+        cell: ({ getValue }) => <div className="text-right">{fmt3(num(getValue()))}</div>,
+      },
+      {
+        accessorKey: "ITEM_RATE",
+        header: () => <div className="text-right">Rate</div>,
+        size: 100,
+        cell: ({ getValue }) => <div className="text-right">{fmt3(num(getValue()))}</div>,
+      },
+      {
+        accessorKey: "AMOUNT",
+        header: () => <div className="text-right">Amount</div>,
+        size: 120,
+        cell: ({ getValue }) => <div className="text-right font-semibold">{fmt3(num(getValue()))}</div>,
+      },
+      {
+        accessorKey: "TX_COMPNT_AMT_1",
+        header: () => <div className="text-right">Tax</div>,
+        size: 100,
+        cell: ({ getValue }) => <div className="text-right">{fmt3(num(getValue()))}</div>,
+      },
     ],
     []
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Root wrapper flow-based — sidebar visible rahato
+  // (junhe: "fixed inset-0 z-50" + "h-screen" + footer bar kadhle)
+  // ═══════════════════════════════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
-        {/* ── Command header (same format as AddPRRequestPage) ───────────────── */}
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <section className="finance-document-ui payment-workbench commercial-editor grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+        {/* ── Command header ─────────────────────────────────────────────── */}
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -218,158 +242,175 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
                 <strong className="block text-sm leading-tight text-primary-foreground">{fmt3(totalAmount)}</strong>
               </div>
-              {header.purch_status && (
+              {statusLabel && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                   <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Status</span>
-                  <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">{header.purch_status}</Badge>
+                  <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">{statusLabel}</Badge>
                 </div>
               )}
             </div>
+
             <div className="flex items-center gap-2">
               {requestNumber && (
                 <>
-                  <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
-                  <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>
+                  <Button type="button" variant="secondary" onClick={handlePrint} disabled={!canExport}>
+                    <Printer size={15} /> Print
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => void handleGenerateExcel()} disabled={!canExport}>
+                    {saving ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />}
+                    {saving ? "Generating..." : "Excel"}
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}>
+                    <Paperclip size={15} /> Files
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}>
+                    <FileText size={15} /> Log
+                  </Button>
                 </>
               )}
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
+              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
+                <X size={16} />
+              </Button>
             </div>
           </div>
         </CardHeader>
 
-        <div className="min-h-0 overflow-auto p-3">
+        <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Capex Request...</div>
+          ) : hdrError ? (
+            <div className="grid min-h-[420px] place-items-center text-sm text-destructive">Unable to load Capex Request</div>
           ) : (
-            <div className="grid gap-3">
+            <div className="commercial-editor-sections grid min-w-0 gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
               <div className="rounded-md border bg-card">
-                  <div className="border-b bg-secondary/40 px-3 py-1.5">
-                    <p className="eyebrow m-0">Header</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <label className="field">
-                      <span>Request Number</span>
-                      <Input disabled value={header.REQUEST_NUMBER || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Request Date</span>
-                      <Input disabled type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} />
-                    </label>
-                    <label className="field">
-                      <span>Ref. Request Number</span>
-                      <Input disabled value={header.REF_REQUEST_NUMBER || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Ref. Request Date</span>
-                      <Input disabled type="date" value={header.REF_REQUEST_DATE ? String(header.REF_REQUEST_DATE).slice(0, 10) : ""} />
-                    </label>
-                    <label className="field">
-                      <span>Supplier Code</span>
-                      <Input disabled value={header.SUPPLIER || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Supplier Name</span>
-                      <Input disabled value={header.AC_NAME || ""} />
-                    </label>
-                    <label className="field">
-                      <span>PO Number</span>
-                      <Input disabled value={header.REF_DOC_NO || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Budgeted (Y/N)</span>
-                      <select
-                        disabled={disabled}
-                        value={header.BUDGETED || ""}
-                        onChange={(e) => setHdr("BUDGETED", e.target.value)}
-                        className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
-                      >
-                        <option value="">— Select —</option>
-                        <option value="Y">Y</option>
-                        <option value="N">N</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Board Approval (Y/N)</span>
-                      <select
-                        disabled={disabled}
-                        value={header.BOARD_APPROVAL || ""}
-                        onChange={(e) => setHdr("BOARD_APPROVAL", e.target.value)}
-                        className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
-                      >
-                        <option value="">— Select —</option>
-                        <option value="Y">Y</option>
-                        <option value="N">N</option>
-                      </select>
-                    </label>
-
-                    <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
-                      <span>Description</span>
-                      <textarea
-                        disabled={disabled}
-                        rows={4}
-                        value={header.DESCRIPTION || ""}
-                        onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                      />
-                    </label>
-                    <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
-                      <span>Remarks</span>
-                      <textarea
-                        disabled={disabled}
-                        rows={4}
-                        value={header.REMARKS || ""}
-                        onChange={(e) => setHdr("REMARKS", e.target.value)}
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                      />
-                    </label>
-                  </div>
+                <div className="border-b bg-secondary/40 px-3 py-1.5">
+                  <p className="eyebrow m-0">Header</p>
+                  <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
                 </div>
+                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  <label className="field">
+                    <span>Request Number</span>
+                    <Input disabled value={header.REQUEST_NUMBER || ""} />
+                  </label>
+                  <label className="field">
+                    <span>Request Date</span>
+                    <Input disabled type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} />
+                  </label>
+                  <label className="field">
+                    <span>Ref. Request Number</span>
+                    <Input disabled value={header.REF_REQUEST_NUMBER || ""} />
+                  </label>
+                  <label className="field">
+                    <span>Ref. Request Date</span>
+                    <Input disabled type="date" value={header.REF_REQUEST_DATE ? String(header.REF_REQUEST_DATE).slice(0, 10) : ""} />
+                  </label>
+                  <label className="field">
+                    <span>Supplier Code</span>
+                    <Input disabled value={header.SUPPLIER || ""} />
+                  </label>
+                  <label className="field">
+                    <span>Supplier Name</span>
+                    <Input disabled value={header.AC_NAME || ""} />
+                  </label>
+                  <label className="field">
+                    <span>PO Number</span>
+                    <Input disabled value={header.REF_DOC_NO || ""} />
+                  </label>
+                  <label className="field">
+                    <span>Budgeted (Y/N)</span>
+                    <select
+                      disabled={disabled}
+                      value={header.BUDGETED || ""}
+                      onChange={(e) => setHdr("BUDGETED", e.target.value)}
+                      className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                    >
+                      <option value="">— Select —</option>
+                      <option value="Y">Y</option>
+                      <option value="N">N</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Board Approval (Y/N)</span>
+                    <select
+                      disabled={disabled}
+                      value={header.BOARD_APPROVAL || ""}
+                      onChange={(e) => setHdr("BOARD_APPROVAL", e.target.value)}
+                      className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                    >
+                      <option value="">— Select —</option>
+                      <option value="Y">Y</option>
+                      <option value="N">N</option>
+                    </select>
+                  </label>
+
+                  <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                    <span>Description</span>
+                    <textarea
+                      disabled={disabled}
+                      rows={4}
+                      value={header.DESCRIPTION || ""}
+                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                    <span>Remarks</span>
+                    <textarea
+                      disabled={disabled}
+                      rows={4}
+                      value={header.REMARKS || ""}
+                      onChange={(e) => setHdr("REMARKS", e.target.value)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
 
               <div className="commercial-lines-card rounded-md border bg-card">
-                  <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-                    <div>
-                      <p className="eyebrow m-0">Details</p>
-                      <h3 className="m-0 text-sm font-semibold leading-tight">Line Items</h3>
-                    </div>
-                  </div>
-                  <DataTable
-                    columns={itemColumns}
-                    data={items}
-                    title={`${items.length} Items`}
-                    loading={itemsLoading}
-                    height={360}
-                    density="grid"
-                    enablePagination={false}
-                    getRowId={(row) => String(row.ITEM_SRNO ?? row.ITEM_CODE ?? "")}
-                  />
-                  <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                    <span className="text-muted-foreground">Amount</span><strong className="text-primary">{fmt3(totalAmount)}</strong>
-                  </div>
-                  <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
-                    <span className="text-muted-foreground">Tax</span><strong className="text-primary">{fmt3(totalTax)}</strong>
+                <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+                  <div>
+                    <p className="eyebrow m-0">Details</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Line Items</h3>
                   </div>
                 </div>
+                <DataTable
+                  columns={itemColumns}
+                  data={items}
+                  title={`${items.length} Items`}
+                  loading={itemsLoading}
+                  emptyText="No line items"
+                  height={360}
+                  density="grid"
+                  enablePagination={false}
+                  getRowId={(row, index) => `${row.ITEM_SRNO ?? row.ITEM_CODE ?? "row"}_${index}`}
+                />
+                <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
+                  <span className="text-muted-foreground">Amount</span>
+                  <strong className="text-primary">{fmt3(totalAmount)}</strong>
+                </div>
+                <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
+                  <span className="text-muted-foreground">Tax</span>
+                  <strong className="text-primary">{fmt3(totalTax)}</strong>
+                </div>
+              </div>
             </div>
           )}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="text-sm text-muted-foreground">Total Amount <strong className="text-primary">{fmt3(totalAmount)}</strong></div>
-          <div className="flex items-center gap-2">
-            <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
-            <Button disabled={saving} type="button" variant="outline" onClick={handlePrint}>
-              <Printer size={15} /> Print
-            </Button>
-            <Button disabled={saving} type="button" variant="default" onClick={handleGenerateExcel}>
-              <FileSpreadsheet size={15} /> {saving ? "Generating..." : "Generate Excel"}
-            </Button>
-          </div>
-        </div>
+        </CardContent>
       </section>
 
+      <AttachmentDialog
+        open={attachOpen}
+        onClose={() => setAttachOpen(false)}
+        requestNumber={requestNumber}
+        title="Capex Request Attachments"
+        module="LMS"
+        type="CP"
+        companyCode={companyCode}
+        loginId={loginid}
+        readOnly={isViewMode}
+      />
     </div>
   );
 };
