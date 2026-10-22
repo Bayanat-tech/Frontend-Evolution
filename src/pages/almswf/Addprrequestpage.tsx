@@ -1737,7 +1737,7 @@ const AddPRRequestPage = ({
                   </div>
                   <div className="ml-2 flex shrink-0 items-center gap-2">
                     <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setCommentsOpen(true)}>
-                      <MessageSquare size={12} className="mr-1" /> Comments & Activity
+                      <MessageSquare size={12} className="mr-1" /> Comments & History
                     </Button>
                     <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setHeaderOpen(true)}>
                       Show Header Fields <ChevronDown size={13} className="ml-1" />
