@@ -100,6 +100,7 @@ const Required = () => <span className="ml-0.5 text-destructive">*</span>;
 
 const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
 
+
 const TEXTAREA_CLS =
   "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -450,7 +451,7 @@ const AddCRRequestPage = ({
             </div>
           ) : (
            <div
-  className="grid w-full min-w-0 grid-cols-1 auto-rows-max content-start gap-3"
+  className="grid w-full min-w-0 grid-cols-1 auto-rows-max content-start gap-1"
   style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
 >
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
