@@ -1,6 +1,6 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import {
-  ArrowLeft, Edit2, FileText, Plus, RefreshCw, Save, Trash2, X,
+  ArrowLeft, Edit2, FileText, Plus, RefreshCw, Printer, Save, Trash2, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -222,6 +222,90 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     setView("editor");
   };
 
+  const printRecord = (record: Record<string, unknown>) => {
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+
+    if (!printWindow) {
+      toast.error("Please allow pop-ups to print this record");
+      return;
+    }
+
+    const escapeHtml = (value: unknown) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const fieldsHtml = tableFields
+      .map(
+        (field) => `
+        <tr>
+          <th>${escapeHtml(field.label)}</th>
+          <td>${escapeHtml(formatValue(record[field.name]))}</td>
+        </tr>
+      `,
+      )
+      .join("");
+
+    printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${escapeHtml(config.title)} - Print</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 24px;
+            color: #222;
+          }
+          h2 {
+            text-align: center;
+            margin-bottom: 8px;
+          }
+          p {
+            text-align: center;
+            color: #666;
+            margin-bottom: 24px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+            font-size: 13px;
+          }
+          th {
+            width: 35%;
+            background: #f3f4f6;
+          }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <h2>${escapeHtml(config.title)}</h2>
+        <p>Record Details</p>
+        <table>
+          <tbody>${fieldsHtml}</tbody>
+        </table>
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `);
+
+    printWindow.document.close();
+  };
+
   const handleCloseEditor = () => {
     setView("list");
     setEditMode(false);
@@ -243,6 +327,16 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
+
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => printRecord(row.original)}
+              title={`Print ${config.title}`}
+            >
+              <Printer size={13} />
+            </button>
+
             <button
               type="button"
               className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -251,6 +345,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
             >
               <Edit2 size={13} />
             </button>
+
+
             <button
               type="button"
               disabled={config.deleteMode === "disabled"}
