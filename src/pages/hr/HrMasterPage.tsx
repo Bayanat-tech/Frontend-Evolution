@@ -25,6 +25,7 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
+import { NewReportDialog } from "../../components/new_report_format";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -149,6 +150,10 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   // view state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
@@ -231,27 +236,39 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const openBackendReport = async (extraParams: Record<string, unknown>) => {
     if (!config.reportEndpoint) return;
 
-    // Open the window synchronously (inside the click) so pop-up blockers allow it
-    const win = window.open("", "_blank", "width=1100,height=800");
-    if (!win) {
-      toast.error("Please allow pop-ups to print this report");
-      return;
-    }
-    win.document.write('<p style="font-family:Arial,sans-serif;padding:24px;color:#555">Loading report...</p>');
+    setReportHtml(null);
+    setReportError("");
+    setReportLoading(true);
+    setPreviewOpen(true); // dialog turant khulega, andar "Generating report…" dikhega
 
     try {
+      // NOTE: print:"true" mat bhejo. Dialog ka apna Print button hai,
+      // aur auto-print script preview me dikkat karta hai.
       const html = await getHrReportHtml(config.reportEndpoint, {
         company_code: companyCode,
-        print: "true",
         ...extraParams,
       });
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
+      setReportHtml(html);
     } catch (error) {
-      win.close();
-      toast.error(getErrorMessage(error, `Unable to open ${config.title} report`));
+      setReportError(getErrorMessage(error, `Unable to open ${config.title} report`));
+    } finally {
+      setReportLoading(false);
     }
+  };
+
+  const closeReportPreview = () => {
+    setPreviewOpen(false);
+    setReportHtml(null);
+    setReportError("");
+  };
+
+  const openReportInNewWindow = () => {
+    if (!reportHtml) return;
+    const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    if (!win) toast.error("Please allow pop-ups to open the report");
   };
 
   const printRecordLocal = (record: Record<string, unknown>) => {
@@ -656,10 +673,27 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
           </>
         }
       >
+
+       
         <p className="m-0 text-sm text-muted-foreground">
           Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.
         </p>
       </Dialog>
+       <NewReportDialog
+          open={previewOpen}
+          onClose={closeReportPreview}
+          title={config.title}
+          htmlContent={reportHtml}
+          loading={reportLoading}
+          error={reportError || null}
+          meta={{
+            companyName: companyCode,
+            user: loginid,
+            period: "All",
+            generatedAt: new Date().toLocaleString(),
+          }}
+          onOpenInNewWindow={openReportInNewWindow}
+        />
     </section>
   );
 }
