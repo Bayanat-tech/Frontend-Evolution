@@ -1,11 +1,10 @@
-import { Edit2, FileText, List, Plus, RotateCcw, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
+import { Edit2, FileText, List, Plus, Save, Trash2, X, Loader2, Building2, IdCard, Ruler, Box, ShieldCheck, LayoutGrid, StickyNote, ChevronRight } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { FinanceListActionsMenu } from "../../components/finance/FinanceListActionsMenu";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { useAuth } from "../../state/AuthContext";
@@ -47,7 +46,7 @@ const makeEmpty = (): ProductRow => ({
 });
 
 /* ─────────────────────────────────────────────────────────────
-   SectionPanel — Clean white box with blue icon
+   SectionPanel — EXACT Freight structure (from WMS)
    ───────────────────────────────────────────────────────────── */
 function SectionPanel({
   title,
@@ -59,20 +58,24 @@ function SectionPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm mb-4 w-full">
-      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex h-7 w-7 items-center justify-center rounded bg-[#00378C] text-white">
-          <Icon size={16} />
+    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="freight-section-icon">
+            <Icon size={16} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
+          </div>
         </div>
-        <h3 className="m-0 text-[13px] font-semibold text-slate-800">{title}</h3>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="freight-panel-body p-3">{children}</div>
     </section>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Field — Uppercase bold label, spacing
+   Field — matches WmsMasterForm / Freight label styling
    ───────────────────────────────────────────────────────────── */
 function Field({
   label,
@@ -86,10 +89,10 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={`group flex flex-col gap-1.5 ${className ?? ""}`}>
-      <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600 transition-colors">
+    <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
+      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
         {label}
-        {required && <strong className="ml-0.5 font-bold" style={{ color: "#E24B4A" }}> *</strong>}
+        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
       </span>
       {children}
     </label>
@@ -97,7 +100,7 @@ function Field({
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Checkbox
+   Checkbox — native, blue, side-by-side (uses DIV, not label)
    ───────────────────────────────────────────────────────────── */
 function CheckboxField({
   checked,
@@ -111,19 +114,19 @@ function CheckboxField({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex h-10 items-center gap-2 select-none">
+    <div className="inline-flex items-center gap-2 select-none h-9">
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: "#00378C", width: "16px", height: "16px" }}
+        style={{ accentColor: "#00378C", width: "15px", height: "15px" }}
         className="shrink-0 cursor-pointer rounded border border-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00378C]/25 disabled:cursor-not-allowed disabled:opacity-50"
       />
       {label && (
         <span
           onClick={() => !disabled && onChange(!checked)}
-          className={`text-[12px] font-medium text-slate-700 leading-none transition-colors ${
+          className={`text-[11.5px] font-medium text-slate-700 leading-none transition-colors ${
             disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:text-slate-900"
           }`}
         >
@@ -147,13 +150,14 @@ const ProductPurchaseSales = () => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
-  const [formOpen, setFormOpen] = useState(false);
+  
+  // View state
+  const [view, setView] = useState<"list" | "editor">("list");
   const [editMode, setEditMode] = useState(false);
   const [original, setOriginal] = useState<ProductRow | null>(null);
   const [form, setForm] = useState<ProductRow>(() => makeEmpty());
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(0);
-
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
 
@@ -191,7 +195,7 @@ const ProductPurchaseSales = () => {
     setStep(0);
     setError("");
     setNotice(null);
-    setFormOpen(true);
+    setView("editor");
   };
 
   const openEdit = (row: ProductRow) => {
@@ -201,12 +205,13 @@ const ProductPurchaseSales = () => {
     setStep(0);
     setError("");
     setNotice(null);
-    setFormOpen(true);
+    setView("editor");
   };
 
-  const closeForm = () => {
-    setFormOpen(false);
-    setError("");
+  const handleCloseEditor = () => {
+    setView("list");
+    setEditMode(false);
+    setOriginal(null);
   };
 
   const setField = (key: string, value: any) => {
@@ -235,7 +240,7 @@ const ProductPurchaseSales = () => {
       const data: ProductRow = editMode ? { ...(original || {}), ...form } : form;
       await saveProduct(data, loginId, companyCode);
       setNotice({ type: "success", message: editMode ? "Successfully updated" : "Successfully created" });
-      setFormOpen(false);
+      handleCloseEditor();
       await loadRows(false);
     } catch (err) {
       setError(getErrorMessage(err, "Unable to save product"));
@@ -312,492 +317,450 @@ const ProductPurchaseSales = () => {
     [],
   );
 
-  const pageTitle = formOpen ? (editMode ? "Edit Product" : "New Product") : "Product";
-
-  return (
-    // Added w-full max-w-full to force the container to take the whole screen
-    <div className="flex flex-col gap-4 p-4 bg-[#f8fafc] min-h-screen w-full max-w-full overflow-x-hidden">
-      
-      {formOpen && (
-        <div className="relative flex flex-col w-full rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-          
-          {/* Header with Gradient Line */}
-          <div className="relative border-b border-slate-200">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-500" />
-            <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 pt-5">
-              <div className="flex items-center gap-3">
-                <FileText className="text-[#00378C]" size={20} />
-                <h1 className="m-0 text-xl font-semibold tracking-tight text-slate-900">{pageTitle}</h1>
-                {!editMode && (
-                  <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                    Draft
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeForm}
-                  disabled={saving}
-                  className="h-8 gap-1.5 text-xs font-semibold px-3 rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
-                >
-                  <ArrowLeft size={14} /> List
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeForm}
-                  disabled={saving}
-                  className="h-8 gap-1.5 text-xs font-semibold px-3 rounded-md border-slate-300 text-slate-700 hover:bg-slate-50"
-                >
-                  <X size={14} /> Close
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => handleSubmit()}
-                  disabled={saving}
-                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-sm text-xs font-semibold px-4 rounded-md"
-                >
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  Save
-                </Button>
+  /* ─────────────────────────────────────────────────────────
+     EDITOR — Full-page, Freight-style header (with Save button)
+     ───────────────────────────────────────────────────────── */
+  if (view === "editor") {
+    return (
+      <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
+        {/* Freight-style transaction header */}
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+              <FileText size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">
+                  {editMode ? "Edit Product" : "New Product"}
+                </h1>
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700">
+                  {editMode ? "Editing" : "Draft"}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Tabs - Full Width Gray Bar */}
-          <div className="flex w-full overflow-x-auto bg-slate-50 border-b border-slate-200">
-            {STEPS.map((label, index) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setStep(index)}
-                aria-pressed={step === index}
-                className={`whitespace-nowrap px-5 py-3 text-sm font-medium transition-colors border-b-2 ${
-                  step === index 
-                    ? "border-[#00378C] text-[#00378C] bg-white shadow-[0_1px_0_0_#fff]" 
-                    : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor}>
+              <List size={14} /> List
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleCloseEditor} disabled={saving}>
+              <X size={14} /> Close
+            </Button>
+            <Button type="button" size="sm" onClick={() => handleSubmit()} disabled={saving}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saving ? "Saving" : "Save"}
+            </Button>
           </div>
+        </div>
 
-          {/* Content Area - Gray background, full width */}
-          <div className="flex flex-col gap-4 p-5 bg-slate-50 w-full">
-            {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-                {error}
-              </div>
-            )}
-            
-            {/* ══ STEP 0 — Product Details ══ */}
-            {step === 0 && (
-              <div className="w-full">
-                <SectionPanel title="Classification" icon={Building2}>
-                  <div className="grid gap-4 md:grid-cols-2 w-full">
-                    <Field label="Group Code" required>
-                      <LookupField
-                        label=""
-                        value={form.group_code ?? ""}
-                        valueField="group_code"
-                        displayFields={["group_code", "group_name"]}
-                        columns={[
-                          { field: "group_code", header: "Group Code" },
-                          { field: "group_name", header: "Group Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("group_code", value)}
-                        compact
-                      />
-                    </Field>
+        {/* Form content */}
+        <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+          
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          )}
 
-                    <Field label="Brand Code" required>
-                      <LookupField
-                        label=""
-                        value={form.brand_code ?? ""}
-                        valueField="brand_code"
-                        displayFields={["brand_code", "brand_name"]}
-                        columns={[
-                          { field: "brand_code", header: "Brand Code" },
-                          { field: "brand_name", header: "Brand Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("brand_code", value)}
-                        compact
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
+          {/* ── Tabs shell (Freight style) ── */}
+          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
+            <div className="freight-tabs-list flex overflow-x-auto">
+              {STEPS.map((label, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setStep(index)}
+                  aria-pressed={step === index}
+                  className={`freight-workspace-tab ${step === index ? "active" : ""}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-                <SectionPanel title="Identification" icon={IdCard}>
-                  <div className="grid gap-4 md:grid-cols-2 w-full">
-                    <Field label="Product Code" required>
-                      <Input
-                        value={form.prod_code ?? ""}
-                        disabled={editMode}
-                        onChange={(e) => setField("prod_code", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Product Name" required>
-                      <Input 
-                        value={form.prod_name ?? ""} 
-                        onChange={(e) => setField("prod_name", e.target.value)} 
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Model #">
-                      <Input 
-                        value={form.model_number ?? ""} 
-                        onChange={(e) => setField("model_number", e.target.value)} 
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Variant / Season">
-                      <Input 
-                        value={form.season_code ?? form.variant_code ?? ""} 
-                        onChange={(e) => setField("season_code", e.target.value)} 
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
-              </div>
-            )}
+            <div className="freight-tabs-panel border-t p-3 grid gap-3">
+              {/* ══ STEP 0 — Product Details ══ */}
+              {step === 0 && (
+                <>
+                  <SectionPanel title="Classification" icon={Building2}>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="Group Code" required>
+                        <LookupField
+                          label=""
+                          value={form.group_code ?? ""}
+                          valueField="group_code"
+                          displayFields={["group_code", "group_name"]}
+                          columns={[
+                            { field: "group_code", header: "Group Code" },
+                            { field: "group_name", header: "Group Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_GROUP",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("group_code", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="Brand Code" required>
+                        <LookupField
+                          label=""
+                          value={form.brand_code ?? ""}
+                          valueField="brand_code"
+                          displayFields={["brand_code", "brand_name"]}
+                          columns={[
+                            { field: "brand_code", header: "Brand Code" },
+                            { field: "brand_name", header: "Brand Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_BRAND",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("brand_code", value)}
+                          compact
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
 
-            {/* ══ STEP 1 — UOM & Volume ══ */}
-            {step === 1 && (
-              <div className="w-full">
-                <SectionPanel title="Unit of Measure" icon={Box}>
-                  <div className="grid gap-4 md:grid-cols-3 w-full">
-                    <Field label="No. of UOMs">
-                      <Input disabled value={form.uom_count ?? 0} className="h-10 bg-slate-50/50 border-slate-200 w-full" />
-                    </Field>
-                    <Field label="Primary UOM" required>
-                      <LookupField
-                        label=""
-                        value={form.p_uom ?? ""}
-                        valueField="uom_code"
-                        displayFields={["uom_code", "uom_name"]}
-                        columns={[
-                          { field: "uom_code", header: "Code" },
-                          { field: "uom_name", header: "Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("p_uom", value)}
-                        compact
-                      />
-                    </Field>
-                    <Field label="Lower UOM" required>
-                      <LookupField
-                        label=""
-                        value={form.l_uom ?? ""}
-                        valueField="uom_code"
-                        displayFields={["uom_code", "uom_name"]}
-                        columns={[
-                          { field: "uom_code", header: "Code" },
-                          { field: "uom_name", header: "Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("l_uom", value)}
-                        compact
-                      />
-                    </Field>
-                    <Field label="UPPP" required>
-                      <Input
-                        type="number"
-                        value={form.uppp ?? 0}
-                        onChange={(e) => setField("uppp", Number(e.target.value))}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
+                  <SectionPanel title="Identification" icon={IdCard}>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Field label="Product Code" required>
+                        <Input
+                          value={form.prod_code ?? ""}
+                          disabled={editMode}
+                          onChange={(e) => setField("prod_code", e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Product Name" required className="md:col-span-2">
+                        <Input 
+                          value={form.prod_name ?? ""} 
+                          onChange={(e) => setField("prod_name", e.target.value)} 
+                        />
+                      </Field>
+                      <Field label="Model #">
+                        <Input 
+                          value={form.model_number ?? ""} 
+                          onChange={(e) => setField("model_number", e.target.value)} 
+                        />
+                      </Field>
+                      <Field label="Variant / Season">
+                        <Input 
+                          value={form.season_code ?? form.variant_code ?? ""} 
+                          onChange={(e) => setField("season_code", e.target.value)} 
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
+                </>
+              )}
 
-                <SectionPanel title="Dimensions" icon={Ruler}>
-                  <div className="grid gap-4 md:grid-cols-4 w-full">
-                    {[
-                      { label: "Length", key: "length" },
-                      { label: "Breadth", key: "breadth" },
-                      { label: "Height", key: "height" },
-                      { label: "Volume", key: "volume" },
-                      { label: "Gross Weight", key: "gross_wt" },
-                      { label: "Net Weight", key: "net_wt" },
-                    ].map(({ label, key }) => (
-                      <Field label={label} key={key}>
+              {/* ══ STEP 1 — UOM & Volume ══ */}
+              {step === 1 && (
+                <>
+                  <SectionPanel title="Unit of Measure" icon={Box}>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <Field label="No. of UOMs">
+                        <Input disabled value={form.uom_count ?? 0} />
+                      </Field>
+                      <Field label="Primary UOM" required>
+                        <LookupField
+                          label=""
+                          value={form.p_uom ?? ""}
+                          valueField="uom_code"
+                          displayFields={["uom_code", "uom_name"]}
+                          columns={[
+                            { field: "uom_code", header: "Code" },
+                            { field: "uom_name", header: "Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("p_uom", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="Lower UOM" required>
+                        <LookupField
+                          label=""
+                          value={form.l_uom ?? ""}
+                          valueField="uom_code"
+                          displayFields={["uom_code", "uom_name"]}
+                          columns={[
+                            { field: "uom_code", header: "Code" },
+                            { field: "uom_name", header: "Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_UOM",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("l_uom", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="UPPP" required>
                         <Input
                           type="number"
-                          value={form[key] ?? 0}
-                          onChange={(e) => setField(key, Number(e.target.value))}
-                          className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                          value={form.uppp ?? 0}
+                          onChange={(e) => setField("uppp", Number(e.target.value))}
                         />
                       </Field>
-                    ))}
-                  </div>
-                </SectionPanel>
-              </div>
-            )}
+                    </div>
+                  </SectionPanel>
 
-            {/* ══ STEP 2 — Manufacture & Validation ══ */}
-            {step === 2 && (
-              <div className="w-full">
-                <SectionPanel title="Manufacture Details" icon={Building2}>
-                  <div className="grid gap-4 md:grid-cols-3 w-full">
-                    <Field label="Manufacturer Code">
-                      <Input 
-                        value={form.manu_code ?? ""} 
-                        onChange={(e) => setField("manu_code", e.target.value)} 
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Origin Country">
-                      <Input 
-                        value={form.origin_country ?? ""} 
-                        onChange={(e) => setField("origin_country", e.target.value)} 
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Alternate Product">
-                      <Input
-                        value={form.alt_prod_code ?? ""}
-                        onChange={(e) => setField("alt_prod_code", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
+                  <SectionPanel title="Dimensions & Weight" icon={Ruler}>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      {[
+                        { label: "Length", key: "length" },
+                        { label: "Breadth", key: "breadth" },
+                        { label: "Height", key: "height" },
+                        { label: "Volume", key: "volume" },
+                        { label: "Gross Weight", key: "gross_wt" },
+                        { label: "Net Weight", key: "net_wt" },
+                      ].map(({ label, key }) => (
+                        <Field label={label} key={key}>
+                          <Input
+                            type="number"
+                            value={form[key] ?? 0}
+                            onChange={(e) => setField(key, Number(e.target.value))}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  </SectionPanel>
+                </>
+              )}
 
-                <SectionPanel title="Pricing" icon={ShieldCheck}>
-                  <div className="grid gap-4 md:grid-cols-4 w-full">
-                    <Field label="Cost Rate Unit">
-                      <Input
-                        type="number"
-                        value={form.cost_rate ?? 0}
-                        onChange={(e) => setField("cost_rate", Number(e.target.value))}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Retail Price">
-                      <Input
-                        type="number"
-                        value={form.retail_rate ?? 0}
-                        onChange={(e) => setField("retail_rate", Number(e.target.value))}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Sales Rate">
-                      <Input
-                        type="number"
-                        value={form.sales_rate ?? 0}
-                        onChange={(e) => setField("sales_rate", Number(e.target.value))}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Reorder Qty">
-                      <Input
-                        type="number"
-                        value={form.reorder_qty ?? 0}
-                        onChange={(e) => setField("reorder_qty", Number(e.target.value))}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
-                
-                <SectionPanel title="Tax Component" icon={ShieldCheck}>
-                  <div className="grid gap-4 md:grid-cols-4 w-full">
-                     {[1, 2, 3, 4].map((num) => (
-                      <Field label={`Tax Component ${num}`} key={`tx_${num}`}>
+              {/* ══ STEP 2 — Manufacture & Validation ══ */}
+              {step === 2 && (
+                <>
+                  <SectionPanel title="Manufacture Details" icon={Building2}>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Field label="Manufacturer Code">
+                        <Input 
+                          value={form.manu_code ?? ""} 
+                          onChange={(e) => setField("manu_code", e.target.value)} 
+                        />
+                      </Field>
+                      <Field label="Origin Country">
+                        <Input 
+                          value={form.origin_country ?? ""} 
+                          onChange={(e) => setField("origin_country", e.target.value)} 
+                        />
+                      </Field>
+                      <Field label="Alternate Product">
                         <Input
-                          value={form[`tx_compt_${num}`] ?? ""}
-                          onChange={(e) => setField(`tx_compt_${num}`, e.target.value)}
-                          className="h-10 bg-slate-50/50 border-slate-200 w-full"
+                          value={form.alt_prod_code ?? ""}
+                          onChange={(e) => setField("alt_prod_code", e.target.value)}
                         />
                       </Field>
-                    ))}
-                  </div>
-                </SectionPanel>
-              </div>
-            )}
+                    </div>
+                  </SectionPanel>
 
-            {/* ══ STEP 3 — Category & Product ══ */}
-            {step === 3 && (
-              <div className="w-full">
-                <SectionPanel title="Classification" icon={LayoutGrid}>
-                  <div className="grid gap-4 md:grid-cols-3 w-full">
-                    <Field label="Category Code">
-                      <LookupField
-                        label=""
-                        value={form.category_code ?? ""}
-                        valueField="category_code"
-                        displayFields={["category_code", "category_name"]}
-                        columns={[
-                          { field: "category_code", header: "Code" },
-                          { field: "category_name", header: "Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("category_code", value)}
-                        compact
-                      />
-                    </Field>
-                    
-                    <Field label="Product Type Code">
-                      <LookupField
-                        label=""
-                        value={form.prodtype_code ?? ""}
-                        valueField="prodtype_code"
-                        displayFields={["prodtype_code", "prodtype_name"]}
-                        columns={[
-                          { field: "prodtype_code", header: "Code" },
-                          { field: "prodtype_name", header: "Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("prodtype_code", value)}
-                        compact
-                      />
-                    </Field>
+                  <SectionPanel title="Pricing & Reorder" icon={ShieldCheck}>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <Field label="Cost Rate Unit">
+                        <Input
+                          type="number"
+                          value={form.cost_rate ?? 0}
+                          onChange={(e) => setField("cost_rate", Number(e.target.value))}
+                        />
+                      </Field>
+                      <Field label="Retail Price">
+                        <Input
+                          type="number"
+                          value={form.retail_rate ?? 0}
+                          onChange={(e) => setField("retail_rate", Number(e.target.value))}
+                        />
+                      </Field>
+                      <Field label="Sales Rate">
+                        <Input
+                          type="number"
+                          value={form.sales_rate ?? 0}
+                          onChange={(e) => setField("sales_rate", Number(e.target.value))}
+                        />
+                      </Field>
+                      <Field label="Reorder Qty">
+                        <Input
+                          type="number"
+                          value={form.reorder_qty ?? 0}
+                          onChange={(e) => setField("reorder_qty", Number(e.target.value))}
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
+                  
+                  <SectionPanel title="Tax Component" icon={ShieldCheck}>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      {[1, 2, 3, 4].map((num) => (
+                        <Field label={`Tax Component ${num}`} key={`tx_${num}`}>
+                          <Input
+                            value={form[`tx_compt_${num}`] ?? ""}
+                            onChange={(e) => setField(`tx_compt_${num}`, e.target.value)}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  </SectionPanel>
+                </>
+              )}
 
-                    <Field label="Division Code">
-                      <LookupField
-                        label=""
-                        value={form.div_code ?? ""}
-                        valueField="div_code"
-                        displayFields={["div_code", "div_name"]}
-                        columns={[
-                          { field: "div_code", header: "Code" },
-                          { field: "div_name", header: "Name" },
-                        ]}
-                        loadOptions={async () => {
-                          return await getDynamicLookup({
-                            parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION",
-                            loginid: loginId,
-                            code1: companyCode,
-                          }) || [];
-                        }}
-                        onChange={(value) => setField("div_code", value)}
-                        compact
-                      />
-                    </Field>
-                    
-                    <Field label="Color Code">
-                      <Input
-                        value={form.color_code ?? ""}
-                        onChange={(e) => setField("color_code", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
+              {/* ══ STEP 3 — Category & Product ══ */}
+              {step === 3 && (
+                <>
+                  <SectionPanel title="Category & Division" icon={LayoutGrid}>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Field label="Category Code">
+                        <LookupField
+                          label=""
+                          value={form.category_code ?? ""}
+                          valueField="category_code"
+                          displayFields={["category_code", "category_name"]}
+                          columns={[
+                            { field: "category_code", header: "Code" },
+                            { field: "category_name", header: "Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_CATEGORY",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("category_code", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="Product Type Code">
+                        <LookupField
+                          label=""
+                          value={form.prodtype_code ?? ""}
+                          valueField="prodtype_code"
+                          displayFields={["prodtype_code", "prodtype_name"]}
+                          columns={[
+                            { field: "prodtype_code", header: "Code" },
+                            { field: "prodtype_name", header: "Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_PRODTYPE",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("prodtype_code", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="Division Code">
+                        <LookupField
+                          label=""
+                          value={form.div_code ?? ""}
+                          valueField="div_code"
+                          displayFields={["div_code", "div_name"]}
+                          columns={[
+                            { field: "div_code", header: "Code" },
+                            { field: "div_name", header: "Name" },
+                          ]}
+                          loadOptions={async () => {
+                            return await getDynamicLookup({
+                              parameter: "PURCHASE_SALES_DD_ONLY_COMPANY_HR_DIVISION",
+                              loginid: loginId,
+                              code1: companyCode,
+                            }) || [];
+                          }}
+                          onChange={(value) => setField("div_code", value)}
+                          compact
+                        />
+                      </Field>
+                      <Field label="Color Code">
+                        <Input
+                          value={form.color_code ?? ""}
+                          onChange={(e) => setField("color_code", e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
 
-                <SectionPanel title="Barcode and QR Code" icon={ShieldCheck}>
-                  <div className="grid gap-4 md:grid-cols-4 w-full">
-                    <Field label="Barcode">
-                      <Input
-                        value={form.barcode ?? ""}
-                        onChange={(e) => setField("barcode", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Size Code">
-                      <Input
-                        value={form.size_code ?? ""}
-                        onChange={(e) => setField("size_code", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Active">
-                      <CheckboxField
-                        checked={form.active === "Y" || form.active === true}
-                        onChange={(v) => setField("active", v ? "Y" : "N")}
-                        label="Yes/No"
-                      />
-                    </Field>
-                    <Field label="Co Packing">
-                      <Input
-                        value={form.co_packing ?? ""}
-                        onChange={(e) => setField("co_packing", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                    <Field label="Product Stage">
-                      <Input
-                        value={form.product_stage ?? ""}
-                        onChange={(e) => setField("product_stage", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
+                  <SectionPanel title="Barcode & Attributes" icon={ShieldCheck}>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <Field label="Barcode">
+                        <Input
+                          value={form.barcode ?? ""}
+                          onChange={(e) => setField("barcode", e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Size Code">
+                        <Input
+                          value={form.size_code ?? ""}
+                          onChange={(e) => setField("size_code", e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Active">
+                        <CheckboxField
+                          checked={form.active === "Y" || form.active === true}
+                          onChange={(v) => setField("active", v ? "Y" : "N")}
+                          label="Yes/No"
+                        />
+                      </Field>
+                      <Field label="Co Packing">
+                        <Input
+                          value={form.co_packing ?? ""}
+                          onChange={(e) => setField("co_packing", e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Product Stage">
+                        <Input
+                          value={form.product_stage ?? ""}
+                          onChange={(e) => setField("product_stage", e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
 
-                <SectionPanel title="Remarks" icon={StickyNote}>
-                  <div className="grid gap-4 md:grid-cols-1 w-full">
-                    <Field label="Remarks">
-                      <Input
-                        value={form.remarks ?? ""}
-                        onChange={(e) => setField("remarks", e.target.value)}
-                        className="h-10 bg-slate-50/50 border-slate-200 w-full"
-                      />
-                    </Field>
-                  </div>
-                </SectionPanel>
-              </div>
-            )}
+                  <SectionPanel title="Notes" icon={StickyNote}>
+                    <div className="grid gap-3 md:grid-cols-1">
+                      <Field label="Remarks">
+                        <Input
+                          value={form.remarks ?? ""}
+                          onChange={(e) => setField("remarks", e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  </SectionPanel>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-200 bg-white">
+          {/* ── Bottom action row (Freight style) ── */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
             <button
               type="button"
               onClick={() => setStep((s) => s - 1)}
-              className={`inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition-colors ${
+              className={`inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground transition-colors ${
                 step === 0 ? "invisible" : ""
               }`}
             >
-              <ChevronLeft size={14} /> Back
+              <X size={11} /> Back
             </button>
 
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] text-slate-500 font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-muted-foreground">
                 Step {step + 1} of {STEPS.length}
               </span>
 
@@ -805,28 +768,31 @@ const ProductPurchaseSales = () => {
                 <button
                   type="button"
                   onClick={() => setStep((s) => s + 1)}
-                  className="inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-xs font-semibold shadow-sm bg-[#00378C] hover:bg-[#002d72] text-white transition-all"
+                  className="inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                 >
-                  Next <ChevronRight size={14} className="ml-1" />
+                  Next <ChevronRight size={11} className="ml-1" />
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={saving}
                   onClick={() => handleSubmit()}
-                  className={`inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-xs font-semibold shadow-sm transition-all ${
+                  className={`inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm transition-all ${
                     saving
-                      ? "bg-[#00378C]/60 text-white cursor-not-allowed"
-                      : "bg-[#00378C] hover:bg-[#002d72] text-white"
+                      ? "bg-primary/60 text-primary-foreground cursor-not-allowed"
+                      : editMode
+                      ? "bg-amber-600 hover:bg-amber-700 text-white"
+                      : "bg-primary hover:bg-primary/90 text-primary-foreground"
                   }`}
                 >
                   {saving ? (
                     <>
-                      <Loader2 size={14} className="animate-spin mr-1" /> Saving…
+                      <Loader2 size={11} className="animate-spin" /> Saving…
                     </>
                   ) : (
                     <>
-                      Save <Save size={14} className="ml-1" />
+                      {editMode ? "Update" : "Submit"}
+                      <Save size={11} className="ml-1" />
                     </>
                   )}
                 </button>
@@ -834,49 +800,65 @@ const ProductPurchaseSales = () => {
             </div>
           </div>
         </div>
-      )}
+      </section>
+    );
+  }
 
-      {/* ---------- LIST ---------- */}
-      {!formOpen && (
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm w-full">
-          <DataTable
-            columns={columns}
-            data={filteredRows}
-            title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Records`}
-            searchValue={query}
-            onSearchChange={setQuery}
-            searchPlaceholder="Search product..."
-            loading={loading}
-            emptyText="No products found"
-            height="calc(100dvh - 150px)"
-            minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
-            density="grid"
-            enablePagination={false}
-            enableExport={false}
-            actionButton={
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  onClick={openAdd}
-                  className="h-8 gap-1.5 bg-[#00378C] text-white hover:bg-[#002d72] shadow-xs text-xs font-semibold px-3.5 rounded-lg"
-                >
-                  <Plus size={14} strokeWidth={2.5} /> Add
-                </Button>
-                <FinanceListActionsMenu
-                  fyPeriod=""
-                  fyPeriods={[]}
-                  onFyPeriodChange={() => {}}
-                  onExport={() =>
-                    exportToCsv(filteredRows, columns, `product-${new Date().toISOString().slice(0, 10)}.csv`)
-                  }
-                  onRefresh={() => void loadRows(false)}
-                />
-              </div>
-            }
-            getRowId={(row, index) => `${String(row.prod_code ?? "")}_${index}`}
-          />
+  /* ─────────────────────────────────────────────────────────
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
+     ───────────────────────────────────────────────────────── */
+  return (
+    <section className="freight-enquiry-list-screen grid gap-2">
+      {/* Page title only — buttons live inside the DataTable toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <div className="flex items-center gap-2.5">
+          <h2
+            className="text-foreground m-0"
+            style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
+          >
+            Products
+          </h2>
         </div>
-      )}
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length.toLocaleString()} Products`}
+        subtitle="Product List"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search product..."
+        loading={loading}
+        emptyText="No products found"
+        height="calc(100dvh - 150px)"
+        minWidth={Math.max(900, LIST_COLUMNS.reduce((sum, column) => sum + (column.width || 160), 120))}
+        density="grid"
+        enablePagination={false}
+        enableExport={false}
+        getRowId={(row, index) => `${String(row.prod_code ?? "")}_${index}`}
+        toolbar={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              Add Product
+            </button>
+            <FinanceListActionsMenu
+              fyPeriod=""
+              fyPeriods={[]}
+              onFyPeriodChange={() => {}}
+              onExport={() =>
+                exportToCsv(filteredRows, columns, `product-${new Date().toISOString().slice(0, 10)}.csv`)
+              }
+              onRefresh={() => void loadRows(false)}
+            />
+          </div>
+        }
+      />
 
       {/* ---------- DELETE CONFIRM ---------- */}
       <Dialog
@@ -901,7 +883,7 @@ const ProductPurchaseSales = () => {
           Delete <strong>{String(deleteTarget?.prod_code ?? "")}</strong>?
         </p>
       </Dialog>
-    </div>
+    </section>
   );
 };
 
