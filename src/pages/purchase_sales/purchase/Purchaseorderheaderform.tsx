@@ -275,11 +275,13 @@ export function PurchaseOrderHeaderForm({
                       // doc_no: text(getLookupValue(row || {}, "doc_no")),
                       ac_code: text(getLookupValue(row || {}, "ac_code")),
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
-                      dept_code: text(getLookupValue(row || {}, "dept_code")),
+                      // dept_code: text(getLookupValue(row || {}, "dept_code")),
                       remarks: text(getLookupValue(row || {}, "remarks")).slice(0,250),
                       ref_date: text(getLookupValue(row || {}, "ref_date")),
-                      curr_code: text(getLookupValue(row || {}, "curr_code")),
-                      curr_name: text(getLookupValue(row || {}, "curr_name")),
+                      curr_code: text(getLookupValue(row || {}, "curr_code") || accountRow?.curr_code),
+                      curr_name: text(getLookupValue(row || {}, "curr_name") || accountRow?.curr_name),
+                      dept_code: text(getLookupValue(row || {}, "dept_code") || accountRow?.dept_code),
+                      dept_name: text(getLookupValue(row || {}, "dept_name") || accountRow?.dept_name),
                       ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                       other_expense_cost: numberOrZero(getLookupValue(row || {}, "other_expense_cost")),
                       disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
@@ -594,8 +596,8 @@ export function PurchaseOrderHeaderForm({
                   disabled={headerAndLineDisabled || discountScope === "ITEM"}
                   value={
                     discountScope === "ITEM"
-                      ? DiscAmountPercentage(form, rows || []).toFixed(3)
-                      : numberOrZero(form.disc_hdr_percent).toFixed(3)
+                      ? DiscAmountPercentage(form, rows || []).toFixed(2)
+                      : numberOrZero(form.disc_hdr_percent).toFixed(2)
                   }
                   onChange={(e) => {
                     const value = Number(e.target.value || 0);
