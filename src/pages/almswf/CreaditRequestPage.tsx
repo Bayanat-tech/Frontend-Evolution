@@ -69,7 +69,7 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const [tabCounts, setTabCounts] = useState<Record<string, number>>({
   PENDING: 0, INPROGRESS: 0, CLOSED: 0, CANCELED: 0, REJECTED: 0, SENDBACK: 0,
 });
-const isViewOnlyTab = tab === "CLOSED" || tab === "CANCELED" || tab === "INPROGRESS";
+const isInProgressTab = tab === "INPROGRESS";
 
   // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
   const [taskPopup, setTaskPopup] = useState({
@@ -151,7 +151,7 @@ const loadTabCounts = async () => {
     );
   }, [rows, query]);
 
-  // ── Popup handlers ──────────────────────────────────────────────────────────
+
   const openAddPopup = () => {
   setTaskPopup({
     open: true,
@@ -160,15 +160,19 @@ const loadTabCounts = async () => {
   });
 };
 
-const openRow = (row: TPurchaseSummaryTxn) => {
+const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
   setTaskPopup({
     open: true,
-    title: `${isViewOnlyTab ? "View" : "Edit"} CR - ${row.REQUEST_NUMBER}`,
-    data: { existingData: row, isEditMode: !isViewOnlyTab, isViewMode: isViewOnlyTab },
+    title: `${actionType === "edit" ? "Edit" : "View"} CR - ${row.REQUEST_NUMBER}`,
+    data: {
+      existingData: row,
+      isEditMode: actionType === "edit",
+      isViewMode: actionType === "view",
+    },
   });
 };
 
-// message: editor band zhalyavar success toast list page var dakhvto
+
 const closePopup = (refresh?: boolean, message?: string) => {
   setTaskPopup((prev) => ({ ...prev, open: false }));
   if (refresh) {
@@ -218,33 +222,35 @@ const closePopup = (refresh?: boolean, message?: string) => {
       },
     },
     { accessorKey: "NEXT_ACTION_BY", header: "Next Action By", size: 160, cell: ({ getValue }) => String(getValue() || "—") },
-    {
+        {
       id: "actions",
       header: "Actions",
-      size: 80,
+      size: 100,
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => openRow(row.original)} title={isViewOnlyTab ? "View" : "Edit"}>
-            {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
+          <Button size="icon" variant="ghost" onClick={() => handleActions("view", row.original)} title="View">
+            <Eye size={15} />
           </Button>
+          {!isInProgressTab && (
+            <Button size="icon" variant="ghost" onClick={() => handleActions("edit", row.original)} title="Edit">
+              <Edit2 size={15} />
+            </Button>
+          )}
         </div>
       ),
     },
   ],
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [isViewOnlyTab]
+  [isInProgressTab]
 );
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ FULL-PAGE CR EDITOR — sidebar visible rahega (Dialog wrapper hata diya)
-  // ═══════════════════════════════════════════════════════════════════════
+
   if (taskPopup.open) {
   return (
     <AddCRRequestPage
       isEditMode={taskPopup.data.isEditMode}
       isViewMode={taskPopup.data.isViewMode}
-      isPendingTab={tab === "PENDING"}
+    
       existingData={
         taskPopup.data.existingData
           ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }

@@ -1,6 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Save, Send, X, ChevronLeft, FileText, Paperclip, Loader2 } from "lucide-react";
+import {
+  Save,
+  Send,
+  X,
+  ChevronLeft,
+  FileText,
+  Paperclip,
+  Loader2,
+  ClipboardList,
+  MapPin,
+  Landmark,
+  CreditCard,
+  Layers,
+  MessageSquare,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -80,8 +95,36 @@ type AddCRRequestPageProps = {
   onClose: (refresh?: boolean, message?: string) => void;
 };
 
-// Module level: component identity stable, inputs ka focus nahi jaata
+
 const Required = () => <span className="ml-0.5 text-destructive">*</span>;
+
+const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
+
+const TEXTAREA_CLS =
+  "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
+
+type SectionCardProps = {
+  icon: LucideIcon;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+};
+
+
+const SectionCard = ({ icon: Icon, title, hint, children }: SectionCardProps) => (
+  <div className="shrink-0 rounded-xl border bg-card shadow-sm">
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b bg-gradient-to-r from-slate-50 to-white px-3 py-2">
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#00378C] text-white shadow-sm">
+          <Icon size={16} />
+        </span>
+        <h3 className="m-0 text-sm font-semibold leading-tight">{title}</h3>
+      </div>
+      {hint && <span className="truncate text-xs text-muted-foreground">{hint}</span>}
+    </div>
+    {children}
+  </div>
+);
 
 const AddCRRequestPage = ({
   isEditMode,
@@ -133,6 +176,13 @@ const AddCRRequestPage = ({
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
+
+
+  const envSelected = [
+    header.ACCOUNT_ENV_TMS === "Y" && "TMS",
+    header.ACCOUNT_ENV_WMS === "Y" && "WMS",
+    header.ACCOUNT_ENV_FREIGHT === "Y" && "FREIGHT",
+  ].filter(Boolean) as string[];
 
   const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
@@ -225,10 +275,10 @@ const AddCRRequestPage = ({
       const result = await saveHeader(status, extra);
       if (result.success) {
         afterOk?.();
-        onClose(true, successMsg); // success toast list page var dakhvto
+        onClose(true, successMsg); 
       } else {
         const msg = (result as any).message || "Action failed";
-        // dialog open asel tar error dialog madhech dakhav, nahitar page var
+     
         if (rejectOpen || sendBackOpen) setDialogError(msg);
         else setNotice({ type: "error", message: msg });
       }
@@ -293,8 +343,8 @@ const AddCRRequestPage = ({
           isCancelled ? "is-cancelled grid-rows-[auto_auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)]"
         }`}
       >
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
+       <CardHeader className="commercial-command-header h-auto overflow-visible border-b bg-primary px-4 pb-2 pt-3 text-primary-foreground shadow-sm">
+  <div className="flex min-h-10 items-center justify-between gap-3">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
@@ -399,18 +449,17 @@ const AddCRRequestPage = ({
               Unable to load Credit Request
             </div>
           ) : (
-            <div className="commercial-editor-sections grid min-w-0 gap-3">
+           <div
+  className="grid w-full min-w-0 grid-cols-1 auto-rows-max content-start gap-3"
+  style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
+>
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-              {/* Request Number / Date + Company */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <p className="eyebrow m-0">Header</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-6">
+              {/* ── 1. Request Information ─────────────────────────────────── */}
+              <SectionCard icon={ClipboardList} title="Request Information" hint="Credit Request">
+                <div className={GRID_4}>
                   <label className="field">
-                    <span>Request Number <Required /></span>
+                    <span>Request Number</span>
                     <Input disabled value={requestNumber || "New"} />
                   </label>
                   <label className="field">
@@ -422,44 +471,42 @@ const AddCRRequestPage = ({
                       onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
                     />
                   </label>
-                  <label className="field col-span-3">
+                  <label className="field md:col-span-2">
                     <span>Company Name<Required /></span>
                     <Input disabled={disabled} value={header.COMPANY_NAME || ""} onChange={(e) => setHdr("COMPANY_NAME", e.target.value)} />
                   </label>
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Office Address */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Office Address</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-6">
+              {/* ── 2. Office Address ──────────────────────────────────────── */}
+              <SectionCard icon={MapPin} title="Office Address" hint={header.CITY || "Office location"}>
+                <div className={GRID_4}>
+                  {/* Row 1 */}
                   <label className="field"><span>Way No<Required /></span><Input disabled={disabled} value={header.WAY_NO || ""} onChange={(e) => setHdr("WAY_NO", e.target.value)} /></label>
                   <label className="field"><span>Bldg No<Required /></span><Input disabled={disabled} value={header.BLDG_NO || ""} onChange={(e) => setHdr("BLDG_NO", e.target.value)} /></label>
                   <label className="field"><span>Flat No<Required /></span><Input disabled={disabled} value={header.FLAT_NO || ""} onChange={(e) => setHdr("FLAT_NO", e.target.value)} /></label>
                   <label className="field"><span>Location<Required /></span><Input disabled={disabled} value={header.LOCATION || ""} onChange={(e) => setHdr("LOCATION", e.target.value)} /></label>
 
+                  {/* Row 2 */}
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
                   <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
                   <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
+                  {/* Row 3 */}
                   <label className="field"><span>Fax No<Required /></span><Input disabled={disabled} value={header.FAX_NO || ""} onChange={(e) => setHdr("FAX_NO", e.target.value)} /></label>
                   <label className="field"><span>Website<Required /></span><Input disabled={disabled} value={header.WEBSITE || ""} onChange={(e) => setHdr("WEBSITE", e.target.value)} /></label>
-                  <label className="field col-span-2"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.EMAIL || ""} onChange={(e) => setHdr("EMAIL", e.target.value)} /></label>
+                  <label className="field md:col-span-2"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.EMAIL || ""} onChange={(e) => setHdr("EMAIL", e.target.value)} /></label>
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Finance Details */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Finance Details</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-6">
-                  <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
+              {/* ── 3. Finance Details ─────────────────────────────────────── */}
+              <SectionCard icon={Landmark} title="Finance Details" hint="Contacts And Registration">
+                <div className={GRID_4}>
+                  {/* Row 1 */}
+                  <label className="field"><span>Finance Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
                   <label className="field">
-                    <span>Tel No<Required /></span>
+                    <span>Finance Tel No<Required /></span>
                     <Input
                       disabled={disabled}
                       type="tel"
@@ -475,61 +522,13 @@ const AddCRRequestPage = ({
                       <p className="mt-1 text-xs text-destructive">Tel No must be exactly 10 digits</p>
                     )}
                   </label>
-                  <label className="field"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
+                  <label className="field"><span>Finance Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
                   <label className="field"><span>Commercial Reg No<Required /></span><Input disabled={disabled} value={header.COMMERCIAL_REG_NO || ""} onChange={(e) => setHdr("COMMERCIAL_REG_NO", e.target.value)} /></label>
+
+                  {/* Row 2 */}
                   <label className="field"><span>Business Sector<Required /></span><Input disabled={disabled} value={header.BUSINESS_SECTOR || ""} onChange={(e) => setHdr("BUSINESS_SECTOR", e.target.value)} /></label>
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.REMARKS_CONTACT_PERSON || ""} onChange={(e) => setHdr("REMARKS_CONTACT_PERSON", e.target.value)} /></label>
                   <label className="field"><span>Authorized Signatory<Required /></span><Input disabled={disabled} value={header.AUTHORIZED_SIGNATORY || ""} onChange={(e) => setHdr("AUTHORIZED_SIGNATORY", e.target.value)} /></label>
-                </div>
-              </div>
-
-              {/* Comments */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-3">
-                  <label className="field">
-                    <span>Description<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.DESCRIPTION || ""}
-                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Comments<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.COMMENTS || ""}
-                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Remarks<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.REMARKS || ""}
-                      onChange={(e) => setHdr("REMARKS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {/* Credit Requested */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Credit Requested/Sanctioned</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-5">
-                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setHdr("CREDIT_LIMIT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("REQUESTED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                   <label className="field">
                     <span>Credit Form Signature Date<Required /></span>
                     <Input
@@ -539,51 +538,97 @@ const AddCRRequestPage = ({
                       onChange={(e) => setHdr("CREDIT_FORM_SIGNATURE_DATE", e.target.value)}
                     />
                   </label>
+                </div>
+              </SectionCard>
+
+              {/* ── 4. Credit Requested / Sanctioned ───────────────────────── */}
+              <SectionCard icon={CreditCard} title="Credit Requested / Sanctioned" hint="Requested And Sanctioned Limits">
+                <div className={GRID_4}>
+                  <label className="field"><span>Credit Limit<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.CREDIT_LIMIT ?? ""} onChange={(e) => setHdr("CREDIT_LIMIT", Number(e.target.value))} /></label>
+                  <label className="field"><span>Requested Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.REQUESTED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("REQUESTED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                   <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
                   <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Account Environment */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Account Environment</h3>
-                </div>
-                <div className="flex flex-wrap items-center gap-4 p-3">
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={header.ACCOUNT_ENV_TMS === "Y"}
-                      onChange={(e) => setHdr("ACCOUNT_ENV_TMS", e.target.checked ? "Y" : "N")}
-                    />
-                    TMS
-                  </label>
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={header.ACCOUNT_ENV_WMS === "Y"}
-                      onChange={(e) => setHdr("ACCOUNT_ENV_WMS", e.target.checked ? "Y" : "N")}
-                    />
-                    WMS
-                  </label>
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={header.ACCOUNT_ENV_FREIGHT === "Y"}
-                      onChange={(e) => setHdr("ACCOUNT_ENV_FREIGHT", e.target.checked ? "Y" : "N")}
-                    />
-                    FREIGHT
-                  </label>
+              {/* ── 5. Account Environment ─────────────────────────────────── */}
+              <SectionCard
+                icon={Layers}
+                title="Account Environment"
+                hint={envSelected.length ? envSelected.join(" · ") : "No environment selected"}
+              >
+                <div className={GRID_4}>
+                  {(
+                    [
+                      ["ACCOUNT_ENV_TMS", "TMS"],
+                      ["ACCOUNT_ENV_WMS", "WMS"],
+                      ["ACCOUNT_ENV_FREIGHT", "FREIGHT"],
+                    ] as const
+                  ).map(([field, label]) => {
+                    const checked = header[field] === "Y";
+                    return (
+                      <label
+                        key={field}
+                        className={`flex h-9 items-center gap-2 self-end rounded-md border px-3 text-sm font-medium transition-colors ${
+                          checked ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "bg-background"
+                        } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-secondary"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={disabled}
+                          checked={checked}
+                          onChange={(e) => setHdr(field, e.target.checked ? "Y" : "N")}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
 
-                  <label className="field min-w-[200px]">
+                  <label className="field">
                     <span>Account No<Required /></span>
                     <Input disabled={disabled} value={header.ACCOUNT_NO || ""} onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)} />
                   </label>
                 </div>
-              </div>
+              </SectionCard>
+
+              {/* ── 6. Comments ────────────────────────────────────────────── */}
+              <SectionCard icon={MessageSquare} title="Comments" hint="Description And Remarks">
+                <div className="grid grid-cols-1 gap-2 p-3 lg:grid-cols-3">
+                  <label className="field">
+                    <span>Description<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      placeholder="Description"
+                      value={header.DESCRIPTION || ""}
+                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
+                      className={TEXTAREA_CLS}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Comments<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      placeholder="Comments"
+                      value={header.COMMENTS || ""}
+                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
+                      className={TEXTAREA_CLS}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Remarks<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      placeholder="Remarks"
+                      value={header.REMARKS || ""}
+                      onChange={(e) => setHdr("REMARKS", e.target.value)}
+                      className={TEXTAREA_CLS}
+                    />
+                  </label>
+                </div>
+              </SectionCard>
             </div>
           )}
         </CardContent>
@@ -605,7 +650,7 @@ const AddCRRequestPage = ({
         }
       >
         <textarea
-          rows={4}
+          rows={3}
           value={remarkText}
           onChange={(e) => { setRemarkText(e.target.value); setDialogError(""); }}
           placeholder="Enter reject remark..."
@@ -630,7 +675,7 @@ const AddCRRequestPage = ({
         }
       >
         <textarea
-          rows={4}
+          rows={3}
           value={remarkText}
           onChange={(e) => { setRemarkText(e.target.value); setDialogError(""); }}
           placeholder="Enter send back reason..."
