@@ -19,6 +19,7 @@ import { TabStrip } from "../../../components/commonComponents";
 import { openPurchaseReport } from "../Reports/PurchaseReportPreviewState";
 import { PurchaseReportPreview } from "../Reports/Purchasereportpreview";
 import { MaterialIssueEditor } from "./MaterialIssueEditor";
+import { FinanceStatusBadge } from "../../../components/finance/FinanceDocumentActionButtons";
 
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
@@ -290,6 +291,15 @@ const loadRows = async (clearNotice = true) => {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
+   const openEditor = (row: SalesOrderRow) => {
+      const cancelledRow =
+        String(row.canceled || "N").toUpperCase() === "Y" ||
+        tab === "CANCELED" ||
+        String(row.last_action || "").toUpperCase() === "CANCELED";
+      setEditor({ mode: "edit", row: { ...row, canceled: cancelledRow ? "Y" : "N" } as any });
+    };
+  
+
   const columns = useMemo<ColumnDef<SalesOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -302,10 +312,14 @@ const loadRows = async (clearNotice = true) => {
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
     {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
+             accessorKey: "cancelled",
+             header: () => <div className="text-center font-bold">Status</div>,
+             cell: ({ getValue }) => (
+               <div className="flex justify-center">
+                 <FinanceStatusBadge isCancelled={String(getValue() || "N") === "Y"} />
+               </div>
+             ),
+           },
     {
       id: "reason",
       header: "Reason",
@@ -319,7 +333,7 @@ const loadRows = async (clearNotice = true) => {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title={isViewOnlyTab ? "View" : "Edit"}>
+          <Button size="icon" variant="ghost" onClick={() => openEditor(row.original)} title={isViewOnlyTab ? "View" : "Edit"}>
             {isViewOnlyTab ? <Eye size={15} /> : <Edit2 size={15} />}
           </Button>
           <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintSalesOrder(row.original)}>

@@ -824,7 +824,7 @@ export function FreightJobPage({
                 {mode.code === "R" ? (
                   <>
                     <Field label="Driver Name" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)}  maxLength={freightTextLimit("TI_JOB", "driver_ref")} />
-                    <Field label="Contact No." value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)}  maxLength={freightTextLimit("TI_JOB", "driver_remarks")} />
+                    <Field label="Driver Remarks/Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)}  maxLength={freightTextLimit("TI_JOB", "driver_remarks")} />
                     <Field label="Doc Ref #" value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} required  maxLength={freightTextLimit("TI_JOB", "doc_ref")} />
                     <Field label="House Ref#" value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} required  maxLength={freightTextLimit("TI_JOB", "hawb")} />
                   </>

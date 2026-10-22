@@ -230,11 +230,11 @@ export function SalesInvoiceHeaderForm({
                 {/* MIDDLE COLUMN — Other Details */}
                 <div className="flex flex-col gap-1.5">
                     <HeaderBlock label="Other Details" icon={<FileText size={11} />} gridCols="grid-cols-6" grow>
-                        {editMode && (
+                        {/* {editMode && (
                             <CField label="Doc No" className="col-span-2">
                                 <Input className="h-7 text-xs" disabled value={form.si_doc_no || ""} />
                             </CField>
-                        )}
+                        )} */}
                         <CField label="Doc Date" required className="col-span-2">
                             <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
                         </CField>
@@ -412,7 +412,7 @@ export function SalesInvoiceHeaderForm({
                         )}
 
                         <CField label="INV No" required className="col-span-2">
-                            <Input className="h-7 text-xs" type="text" disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(e) => updateField("inv_no", e.target.value)} />
+                            <Input className="h-7 text-xs" type="text" maxLength={20} disabled={headerAndLineDisabled} required value={form.inv_no} onChange={(e) => updateField("inv_no", e.target.value)} />
                         </CField>
                         <CField label="INV Date" required className="col-span-2">
                             <Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} required value={form.inv_date} onChange={(e) => updateField("inv_date", e.target.value)} />
@@ -499,7 +499,7 @@ export function SalesInvoiceHeaderForm({
                     </HeaderBlock>
 
                     <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-2">
-                        <CField label="Delivery Contact"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.so_dlvr_contact} onChange={(e) => updateField("so_dlvr_contact", e.target.value)} /></CField>
+                        <CField label="Delivery Contact"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.so_dlvr_contact} onChange={(e) => updateField("so_dlvr_contact", e.target.value)} /></CField>
                         <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} maxLength={20} value={form.so_dlvr_mobile} onChange={(e) => updateField("so_dlvr_mobile", cleanPhone(e.target.value))} /></CField>
                         <CField label="Delivery Email Address"><Input    className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} maxLength={100} type="email" disabled={headerAndLineDisabled} value={form.so_dlvr_email} onChange={(e) => updateField("so_dlvr_email", (e.target.value))} /></CField>
                         <CField label="Delivery Term"><Input className="h-7 text-xs" disabled={headerAndLineDisabled}   maxLength={250} value={form.so_dlvr_term} onChange={(e) => updateField("so_dlvr_term", e.target.value)} /></CField>

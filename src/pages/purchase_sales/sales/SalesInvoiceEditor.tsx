@@ -787,9 +787,9 @@ export function SalesInvoiceEditor({
                   </Button>
 
                 </div>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
+                {/* <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
                   <X size={16} />
-                </Button>
+                </Button> */}
               </div>
             </div>
           </CardHeader>

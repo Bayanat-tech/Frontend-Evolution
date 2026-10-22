@@ -764,7 +764,7 @@ const handlePrint = async () => {
                   </Button>
 
                 </div>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+                {/* <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button> */}
               </div>
             </div>
           </CardHeader>

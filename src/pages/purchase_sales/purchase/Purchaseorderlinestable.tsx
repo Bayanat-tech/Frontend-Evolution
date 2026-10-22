@@ -1,4 +1,4 @@
-import { Columns3, List, Plus, Search, Trash2, X } from "lucide-react";
+import { Columns3, List, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
@@ -27,6 +27,9 @@ import {
 import { SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Dialog } from "../../../components/ui/Dialog";
+import Importpoitems from "./Importpoitems";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -130,6 +133,7 @@ export function PurchaseOrderLinesTable({
   loginid,
   ex_rate,
   docType,
+  onImportRows
 }: {
   form: PurchaseOrderForm;
   setdetails?: (rows: SalesOrderLineRow[]) => void;
@@ -143,7 +147,7 @@ export function PurchaseOrderLinesTable({
   loginid?: string;
   ex_rate?: number;
   docType?: PODocType | SODocType | null;
-
+  onImportRows?: (rows: Partial<PurchaseOrderLineRow>[]) => void;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -155,7 +159,10 @@ export function PurchaseOrderLinesTable({
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const discountScope = form.discount_scoope || "ITEM";
   const [lineSearch, setLineSearch] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const [showAllColumns, setShowAllColumns] = useState(false);
+  // "Unit Per Primary" tooltip - rendered in a portal so rows / scroll container can't cover or clip it
+  const [uppTip, setUppTip] = useState<{ value: number; x: number; y: number } | null>(null);
   const filteredRows = useMemo(() => {
     const q = lineSearch.trim().toLowerCase();
     if (!q) return rows;
@@ -198,7 +205,7 @@ export function PurchaseOrderLinesTable({
       if (!r.zone_code) updateRow(r.id, { zone_code: defaultZone });
     });
   }, [defaultZone, rows, headerAndLineDisabled]);
-  
+
   return (
     <div
       className="commercial-lines-card rounded-md border bg-card min-w-0"
@@ -230,7 +237,7 @@ export function PurchaseOrderLinesTable({
             title={showAllColumns ? "Switch to Compact View (fits screen)" : "Show all columns including per-line Currency, Tax Code, Job & Ex Rate"}
           >
             <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-            <span>{showAllColumns ? "All Columns" : "Compact View"}</span>
+            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
           </button>
 
           <div className="bisc-table-search">
@@ -250,6 +257,9 @@ export function PurchaseOrderLinesTable({
           </div>
           <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addRow} className="commercial-add-line-btn">
             <Plus size={14} /> Add Line
+          </Button>
+          <Button disabled={headerAndLineDisabled || !form.div_code || !form.curr_code || !onImportRows} size="sm" type="button" variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload size={14} /> Import
           </Button>
         </div>
       </div>
@@ -358,7 +368,15 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
 
-                  <td className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20" style={stickyStyle("product", docType, showAllColumns)}>
+                  <td
+                    className="finance-sticky-col finance-account-cell group bg-card px-2 py-1 hover:!z-20"
+                    style={stickyStyle("product", docType, showAllColumns)}
+                    onMouseEnter={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setUppTip({ value: numberOrZero(row.uppp), x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                    }}
+                    onMouseLeave={() => setUppTip(null)}
+                  >
                     <LookupField
                       label=""
                       value={row.prod_code || ""}
@@ -388,9 +406,6 @@ export function PurchaseOrderLinesTable({
                         updateRow(row.id, patch);
                       }}
                     />
-                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      Unit Per Primary: {row.uppp}
-                    </span>
                   </td>
 
                   {/* Primary: Qty */}
@@ -501,7 +516,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_percent}
+                      value={row.disc_percent.toFixed(2)}
                       onChange={(event) => {
                         const discPercent = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -521,7 +536,7 @@ export function PurchaseOrderLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_price}
+                      value={row.disc_price.toFixed(3)}
                       onChange={(event) => {
                         const discPrice = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -722,6 +737,42 @@ export function PurchaseOrderLinesTable({
           <strong className="text-sm text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>
+      <Dialog
+        open={importOpen}
+        wide
+        title="Import Items from Excel"
+        description="Upload an Excel file, review the validation status, then add the valid lines."
+        onClose={() => setImportOpen(false)}
+      >
+        {importOpen && onImportRows && (
+          <Importpoitems
+            companyCode={companyCode}
+            loginid={loginid}
+            existingCodes={rows.map((r) => r.prod_code)}
+            discountScope={discountScope}
+            onImport={onImportRows}
+            onClose={() => setImportOpen(false)}
+          />
+        )}
+      </Dialog>
+
+      {uppTip &&
+        createPortal(
+          <div
+            className="pointer-events-none whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg"
+            style={{
+              position: "fixed",
+              top: uppTip.y,
+              left: uppTip.x,
+              transform: "translateX(-50%)",
+              zIndex: 9999,
+            }}
+          >
+            Unit Per Primary: {uppTip.value}
+          </div>,
+          document.body
+        )}
     </div>
+
   );
 }

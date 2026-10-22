@@ -1,11 +1,11 @@
-import { Search } from "lucide-react";
+import { Search, IdCard } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { executeDynamicMutation, getDynamicLookup } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../state/AuthContext";
+import type { LucideIcon } from "lucide-react";
 
 export type TProductType = {
   prodtype_code?: string;
@@ -25,6 +25,60 @@ const EMPTY: TProductType = {
   prodtype_code: "",
   prodtype_name: "",
 };
+
+/* ─────────────────────────────────────────────────────────────
+   SectionPanel — EXACT Freight structure (from WMS)
+   ───────────────────────────────────────────────────────────── */
+function SectionPanel({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="freight-section-icon">
+            <Icon size={16} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
+          </div>
+        </div>
+      </div>
+      <div className="freight-panel-body p-3">{children}</div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Field — matches WmsMasterForm / Freight label styling
+   ───────────────────────────────────────────────────────────── */
+function Field({
+  label,
+  required,
+  children,
+  className,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`freight-field-label group flex flex-col gap-0.5 ${className ?? ""}`}>
+      <span className="text-[11px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+        {label}
+        {required && <strong className="text-destructive ml-0.5 font-bold"> *</strong>}
+      </span>
+      {children}
+    </label>
+  );
+}
 
 export function AddProductTypeForm({ mode, existingData, onClose, onSavingChange }: Props) {
   const { user } = useAuth();
@@ -124,18 +178,10 @@ export function AddProductTypeForm({ mode, existingData, onClose, onSavingChange
         onClose={() => setApiError("")}
       />
 
-      <Card>
-        <CardHeader>
-          <div>
-            <p className="eyebrow">Product Type</p>
-            <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
-          </div>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
-          <label className="field min-w-0">
-            <span>
-              Prod Type Code <strong className="text-destructive"> *</strong>
-            </span>
+      <SectionPanel title="Basic Information" icon={IdCard}>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          
+          <Field label="Prod Type Code" required>
             <div className="flex min-w-0 items-center gap-1">
               <div className="min-w-0 flex-1">
                 <Input
@@ -145,6 +191,7 @@ export function AddProductTypeForm({ mode, existingData, onClose, onSavingChange
                     set("prodtype_code", e.target.value);
                     setDuplicateWarning("");
                   }}
+                  className={errors.prodtype_code ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </div>
               {codeEditable && (
@@ -155,36 +202,36 @@ export function AddProductTypeForm({ mode, existingData, onClose, onSavingChange
                   title="Check code availability"
                   disabled={checking || !form.prodtype_code?.trim()}
                   onClick={checkDuplicate}
+                  className="h-9 w-9 shrink-0"
                 >
-                  <Search size={14} />
+                  <Search size={14} className={checking ? "animate-pulse" : ""} />
                 </Button>
               )}
             </div>
-            {errors.prodtype_code && <span className="mt-0.5 text-xs text-destructive">{errors.prodtype_code}</span>}
+            {errors.prodtype_code && <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodtype_code}</span>}
             {!errors.prodtype_code && duplicateWarning && (
               <span
-                className={`mt-0.5 text-xs ${
+                className={`mt-0.5 text-[10px] font-medium ${
                   duplicateWarning.includes("already exists") ? "text-destructive" : "text-emerald-600"
                 }`}
               >
                 {duplicateWarning}
               </span>
             )}
-          </label>
+          </Field>
 
-          <label className="field min-w-0">
-            <span>
-              Prod Type Name <strong className="text-destructive"> *</strong>
-            </span>
+          <Field label="Prod Type Name" required>
             <Input
               disabled={readonly}
               value={form.prodtype_name ?? ""}
               onChange={(e) => set("prodtype_name", e.target.value)}
+              className={errors.prodtype_name ? "border-destructive focus-visible:ring-destructive" : ""}
             />
-            {errors.prodtype_name && <span className="mt-0.5 text-xs text-destructive">{errors.prodtype_name}</span>}
-          </label>
-        </CardContent>
-      </Card>
+            {errors.prodtype_name && <span className="mt-0.5 text-[10px] font-medium text-destructive">{errors.prodtype_name}</span>}
+          </Field>
+
+        </div>
+      </SectionPanel>
     </form>
   );
 }
