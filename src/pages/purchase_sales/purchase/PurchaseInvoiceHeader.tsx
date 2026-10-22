@@ -288,14 +288,16 @@ export function PurchaseInvoiceHeaderForm({
                                             po_doc_no: text(getLookupValue(row || {}, "po_doc_no")),
                                             ac_code: text(getLookupValue(row || {}, "ac_code")),
                                             ac_name: text(getLookupValue(row || {}, "ac_name")),
-                                            dept_code: text(getLookupValue(row || {}, "dept_code")),
-                                            dept_name: text(getLookupValue(row || {}, "dept_name")),
+                                            curr_code: text(getLookupValue(row || {}, "curr_code") || accountRow?.curr_code),
+                                            curr_name: text(getLookupValue(row || {}, "curr_name") || accountRow?.curr_name),
+                                            dept_code: text(getLookupValue(row || {}, "dept_code") || accountRow?.dept_code),
+                                            dept_name: text(getLookupValue(row || {}, "dept_name") || accountRow?.dept_name),
                                             remarks: text(getLookupValue(row || {}, "remarks")),
                                             po_remarks: text(getLookupValue(row || {}, "po_remarks")),
                                             po_ref_no: text(getLookupValue(row || {}, "po_ref_no")),
                                             po_ref_date: text(getLookupValue(row || {}, "po_ref_date")),
-                                            curr_code: text(getLookupValue(row || {}, "curr_code")),
-                                            curr_name: text(getLookupValue(row || {}, "curr_name")),
+                                            // curr_code: text(getLookupValue(row || {}, "curr_code")),
+                                            // curr_name: text(getLookupValue(row || {}, "curr_name")),
                                             ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                                             address1: text(getLookupValue(row || {}, "address1") || accountRow?.address1),
                                             address2: text(getLookupValue(row || {}, "address2") || accountRow?.address2),
@@ -330,7 +332,7 @@ export function PurchaseInvoiceHeaderForm({
                                             inv_no: text(getLookupValue(row || {}, "inv_no")),
                                             inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
                                             pinvoice_total_amount: numberOrZero(getLookupValue(row || {}, "pinvoice_total_amount")),
-                                            po_tx_compnt_1_expmt: text(getLookupValue(row || {}, "po_tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
+                                            tx_compnt_1_expmt: text(getLookupValue(row || {}, "tx_compnt_1_expmt")) || current.tx_compnt_1_expmt,
                                             tx_compnt_perc_1: getLookupValue(row || {}, "tx_compnt_perc_1") == null
                                                 ? current.tx_compnt_perc_1
                                                 : numberOrZero(getLookupValue(row || {}, "tx_compnt_perc_1")),
@@ -583,8 +585,8 @@ export function PurchaseInvoiceHeaderForm({
                                     disabled={headerAndLineDisabled || discountScope === "ITEM"}
                                     value={
                                         discountScope === "ITEM"
-                                            ? DiscAmountPercentage(form, rows || []).toFixed(3)
-                                            : numberOrZero(form.disc_hdr_percent).toFixed(3)
+                                            ? DiscAmountPercentage(form, rows || []).toFixed(2)
+                                            : numberOrZero(form.disc_hdr_percent).toFixed(2)
                                     }
                                     onChange={(e) => {
                                         const value = Number(e.target.value || 0);
@@ -663,9 +665,9 @@ export function PurchaseInvoiceHeaderForm({
                     </div>
 
                     <HeaderBlock label="Project & Scope" icon={<Briefcase size={11} />} gridCols="grid-cols-3">
-                        <CField label="Project Name"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
-                        <CField label="PR No"><Input className="h-7 text-xs text-right" maxLength={50} disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
-                        <CField label="Scope of Work"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
+                        <CField label="Project Name"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.po_project_name} onChange={(e) => updateField("po_project_name", e.target.value)} /></CField>
+                        <CField label="PR No"><Input className="h-7 text-xs text-right" maxLength={50} disabled={headerAndLineDisabled} value={form.po_pr_no} onChange={(e) => updateField("po_pr_no", e.target.value)} /></CField>
+                        <CField label="Scope of Work"><Input className="h-7 text-xs" maxLength={50} disabled={headerAndLineDisabled} value={form.po_scope_of_work} onChange={(e) => updateField("po_scope_of_work", e.target.value)} /></CField>
                     </HeaderBlock>
                 </div>
 
