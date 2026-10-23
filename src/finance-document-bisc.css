@@ -1715,7 +1715,25 @@ form.commercial-document-workbench {
   font-weight: 700 !important;
 }
 
+/* Job / Expense allocation panel only (Invoice has 8 cols, so it is untouched) */
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) {
+  min-width: 400px !important;
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-table {
+  width: 45% !important;
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(2) {
+  width: 180px !important;  /* JOB NO */
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(3),
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(4) {
+  width: 230px !important;  /* DOC REF, DOC REF 2 */
+}
 
+/* ── Finance list pages: no page scroll, table scrolls inside ── */
+.workspace-content:has(.finance-list-page:not(.finance-document-editing)) {
+  overflow: hidden !important;
+}
 
 
 /* Main document details only; nested allocation tables keep their own palette. */
@@ -1749,3 +1767,20 @@ form.commercial-document-workbench {
 }
 /* Keep invalid amount fields visibly marked. */
 .finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input[class*="!border-rose-500"] { border-color: #f43f5e !important; }
+.finance-list-table-wrap {
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+.finance-list-table-wrap .data-table-scroll {
+  height: calc(100dvh - 350px) !important;   /* shorter table: tune this number */
+  min-height: 550px;
+  max-height: none !important;
+  overflow: auto !important;                 /* the only scrollbar */
+}
+
+.finance-list-table-wrap .data-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}

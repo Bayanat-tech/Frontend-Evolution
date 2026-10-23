@@ -13,6 +13,8 @@ export type BiscDatePickerProps = {
   error?: boolean;
   required?: boolean;
   compact?: boolean;
+  min?: string; // YYYY-MM-DD
+  max?: string;
 };
 
 const MONTH_NAMES = [
@@ -32,6 +34,8 @@ export function BiscDatePicker({
   maxYear = 2050,
   error = false,
   compact = false,
+  min,
+  max,
 }: BiscDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +66,14 @@ export function BiscDatePicker({
   // Calendar view month & year state
   const [viewYear, setViewYear] = useState<number>(() => parsedDate?.getFullYear() ?? new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState<number>(() => parsedDate?.getMonth() ?? new Date().getMonth());
+  
+
+  const ymd = (y: number, m: number, d: number) =>
+  `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+   const isOutOfRange = (y: number, m: number, d: number) => {
+  const s = ymd(y, m, d);
+  return (min ? s < min.slice(0, 10) : false) || (max ? s > max.slice(0, 10) : false);
+};
 
   // Sync view when parsedDate changes externally
   useEffect(() => {
@@ -376,12 +388,19 @@ export function BiscDatePicker({
             {/* Day Grid */}
             <div className="grid grid-cols-7 gap-y-1 place-items-center">
               {calendarCells.map((cell, idx) => (
+                // <button
+                //   key={idx}
+                //   type="button"
+                //   onClick={() => handleSelectDay(cell.year, cell.month, cell.day)}
+                //   className={`size-7 text-[11px] font-normal flex items-center justify-center rounded-full transition-all cursor-pointer
+                //     ${cell.isSelected
                 <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelectDay(cell.year, cell.month, cell.day)}
-                  className={`size-7 text-[11px] font-normal flex items-center justify-center rounded-full transition-all cursor-pointer
-                    ${cell.isSelected
+  key={idx}
+  type="button"
+  disabled={isOutOfRange(cell.year, cell.month, cell.day)}
+  onClick={() => handleSelectDay(cell.year, cell.month, cell.day)}
+  className={`size-7 text-[11px] font-normal flex items-center justify-center rounded-full transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent
+    ${cell.isSelected
                       ? "bg-[#00378C] text-white font-semibold shadow-sm"
                       : cell.isToday
                       ? "bg-[#e0e7ff] text-[#00378C] font-semibold hover:bg-blue-100"
@@ -399,6 +418,7 @@ export function BiscDatePicker({
             <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 mt-2">
               <button
                 type="button"
+                disabled={(() => { const t = new Date(); return isOutOfRange(t.getFullYear(), t.getMonth(), t.getDate()); })()}
                 onClick={handleSelectToday}
                 className="cursor-pointer py-1 px-4 text-xs font-semibold text-[#00378C] bg-[#e8eef6] hover:bg-[#d8e4f2] rounded-full transition-colors text-center"
               >
