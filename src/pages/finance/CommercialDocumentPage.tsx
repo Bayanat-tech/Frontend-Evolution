@@ -46,7 +46,9 @@ import { FinanceListActionsMenu } from "../../components/finance/FinanceListActi
 import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
-import { formatDate } from "../../utils/date";
+// import { formatDate } from "../../utils/date";
+import { formatDate, getFyRange, fyDateProps, clampToFy, validateFyDate } from "../../utils/date";
+import type { FyRange } from "../../utils/date";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
@@ -199,7 +201,9 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
-
+  // const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod), [fyPeriods, fyPeriod]);
+  const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod, { docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined }), [fyPeriods, fyPeriod, editor]);
+// report
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -382,6 +386,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
+      <div className="finance-list-table-wrap">
       <DataTable
         columns={columns}
         data={rows}
@@ -433,6 +438,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         }}
         rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
       />
+      </div>
 
       </>}
       {editor && (
@@ -440,6 +446,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           <CommercialEditor
             docType={docType}
             editor={editor}
+            fyRange={fyRange}
             onClose={() => {
               setNotice(null);
               setEditor(null);
@@ -563,7 +570,9 @@ function CommercialEditor({
   editor,
   onClose,
   onSaved,
+  fyRange,
 }: {
+  fyRange: FyRange;
   docType: CommercialType;
   editor: { mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow };
   onClose: () => void;
@@ -571,7 +580,10 @@ function CommercialEditor({
 }) {
   const { user } = useAuth();
   const editMode = editor.mode === "edit";
-  const [form, setForm] = useState<FormState>(() => emptyForm(docType, editor.mode === "create" ? editor.div : undefined));
+  // const [form, setForm] = useState<FormState>(() => emptyForm(docType, editor.mode === "create" ? editor.div : undefined));
+  const [form, setForm] = useState<FormState>(() => { const f = emptyForm(docType, editor.mode === "create" ? editor.div : undefined); const d = clampToFy(f.doc_date, fyRange); 
+    return { ...f, doc_date: d, inv_date: d };
+  });
   const [loading, setLoading] = useState(editMode);
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -947,7 +959,12 @@ const limitProps = (f: keyof FormState) => ({
   event.preventDefault();
 
   const hErr: Record<string, string> = {};
+  // if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
   if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
+  else {
+  const fyErr = validateFyDate(form.doc_date, fyRange, "Doc Date");
+  if (fyErr) hErr.doc_date = fyErr;
+}
   if (!form.ac_code)                    hErr.ac_code   = isPO || isPI ? "Supplier is required" : "Customer is required";
   if (!form.curr_code)                  hErr.curr_code = "Currency is required";
   if (!form.ex_rate || form.ex_rate <= 0) hErr.ex_rate = "Exchange Rate must be > 0";
@@ -960,26 +977,6 @@ const limitProps = (f: keyof FormState) => ({
   if (form.dlvr_mobile && form.dlvr_mobile.trim() && !isValidPhoneNumber(form.dlvr_mobile)) {
     hErr.dlvr_mobile = "Mobile must contain numbers only";
   }
-
-  // Character limit validations
-  // if (form.ref_no && form.ref_no.length > 30) {
-  //   setError("You have exceeded the character limit for Ref No.");
-  //   return;
-  // }
-  // if (form.remarks && form.remarks.length > 250) {
-  //   setError("You have exceeded the character limit for Remarks.");
-  //   return;
-  // }
-  // for (const line of form.detail) {
-  //   if (line.remarks && line.remarks.length > 250) {
-  //     setError("You have exceeded the character limit for Remarks.");
-  //     return;
-  //   }
-  //   if (line.l4_description && line.l4_description.length > 250) {
-  //     setError("You have exceeded the character limit for Remarks.");
-  //     return;
-  //   }
-  // }
 
     // Character limit validations
   for (const [f, l] of Object.entries(HEADER_LIMITS)) {
@@ -1026,19 +1023,69 @@ const limitProps = (f: keyof FormState) => ({
   setSaving(true);
   setError("");
   try {
+    let savedDocNo = form.doc_no || "";
     if (docType === "PO") {
-      const payload  = buildCommercialPayload(form, user?.company_code || "");
-      const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
-      const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
-      if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
+  const payload = buildCommercialPayload(form, user?.company_code || "");
+  const endpoint = editMode
+    ? "/api/finance/transactions/lpo-update"
+    : "/api/finance/transactions/lpo-document";
+
+  const response = editMode
+    ? await api.put(endpoint, payload)
+    : await api.post(endpoint, payload);
+
+  console.log("PO save response:", response.data);
+  console.log("PO submitted document number:", form.doc_no);
+
+  if (!response.data?.success) {
+    throw new Error(
+      response.data?.message || "Unable to save LPO document"
+    );
+  }
+  savedDocNo =
+  response.data?.data?.purchase_doc_no ??
+  response.data?.purchase_doc_no ??
+  response.data?.doc_no ??
+  response.data?.data?.doc_no ??
+  response.data?.header?.doc_no ??
+  response.data?.data?.header?.doc_no ??
+  form.doc_no ??
+  "";
     } else {
-      const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
-      await upsertBulkAccountEntryApi(bulkPayload);
+      const bulkPayload = buildCommercialBulkAccountEntryPayload(
+        form,
+        user?.company_code || "",
+        user?.loginid || ""
+      );
+
+      const result: any = await upsertBulkAccountEntryApi(bulkPayload);
+
+      console.log("Commercial document save response:", result);
+
+      savedDocNo =
+        result?.doc_no ??
+        result?.data?.doc_no ??
+        result?.header?.doc_no ??
+        result?.data?.header?.doc_no ??
+        savedDocNo;
     }
-    await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
-  } catch (submitError) {
-    setError(submitError instanceof Error ? submitError.message : "Unable to save document");
-  } finally {
+
+    const docNo = String(savedDocNo || "").trim();
+
+    await onSaved(
+      `Document ${editMode ? "updated" : "created"} successfully${
+        docNo ? ` — Doc No: ${docNo}` : ""
+      }`
+    );
+    // } catch (submitError) {
+  //   setError(submitError instanceof Error ? submitError.message : "Unable to save document");
+   } catch (submitError: any) {
+      setError(
+        submitError?.response?.data?.message ||
+        submitError?.response?.data?.details ||
+        (submitError instanceof Error ? submitError.message : "Unable to save document")
+      );
+    } finally {
     setSaving(false);
   }
  };
@@ -1289,7 +1336,7 @@ const limitProps = (f: keyof FormState) => ({
                 <div className="flex flex-col gap-1.5">
                   <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
                     <CField label="Doc Date" required error={fieldErrors.doc_date} className="col-span-1">
-                      <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
+                      <BiscDatePicker compact {...fyDateProps(fyRange)} disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
                     </CField>
 
                     {!isPO && (
@@ -1372,7 +1419,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     {isPO && (
                       <CField label="Ref Date" className="col-span-1">
-                        <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
+                        <BiscDatePicker compact max={dateInput(form.doc_date)} disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
                       </CField>
                     )}
 
@@ -1401,7 +1448,7 @@ const limitProps = (f: keyof FormState) => ({
                     {!isPO && (
                       <CField label="INV Date" required error={fieldErrors.inv_date} className="col-span-1">
                         <div className="relative">
-                          <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+                          <BiscDatePicker compact max={dateInput(form.doc_date)} disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
                           <input
                             tabIndex={-1}
                             aria-hidden="true"

@@ -2,7 +2,9 @@ import { AlignCenter, Ban, ChevronDown, ChevronUp, Columns3, Download, Edit2, Li
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { SmartInlineAllocationTable } from "../../components/finance/SmartInlineAllocationTable";
-import { formatDate } from "../../utils/date";
+// import { formatDate } from "../../utils/date";
+import { formatDate, getFyRange, fyDateProps, clampToFy, validateFyDate, localToday  } from "../../utils/date";
+import type { FyRange } from "../../utils/date";
 import { formatDocNo } from "../../utils/docNo";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
 import { api } from "../../api/client";
@@ -77,7 +79,8 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   RJV: { title: "Reverse JV", subtitle: "Reverse ledger journal", addLabel: "Add Voucher" },
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
 export function PaymentDocumentPage({ docType, menuTitle }: { docType: TransactionType; menuTitle?: string }) {
@@ -116,7 +119,12 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportTitle, setReportTitle] = useState("Document Report");
-
+  
+  // const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod), [fyPeriods, fyPeriod]);
+  const fyRange = useMemo(
+  () => getFyRange(fyPeriods, fyPeriod, { docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined }),
+  [fyPeriods, fyPeriod, editor]
+);
   const handleOpenReport = async (docType: string, docNo: string, title?: string) => {
     if (!docNo) return;
 
@@ -316,7 +324,8 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
         />
       )}
 
-      <div className="min-h-[650px]">
+      {/* <div className="min-h-[650px]"> */}
+      <div className="finance-list-table-wrap">  
         <DataTable
           columns={columns}
           data={rows}
@@ -380,6 +389,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
       {editor && (
         <div className="finance-document-editor finance-payment-editor finance-document-ui">
           <PaymentDocumentEditor
+            fyRange={fyRange}
             docType={docType}
             editor={editor}
             onClose={() => {
@@ -436,15 +446,15 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   );
 }
 
-
-
 function PaymentDocumentEditor({
   docType,
   editor,
   onClose,
   onCancelled,
   onSaved,
+  fyRange,
 }: {
+  fyRange: FyRange;
   docType: TransactionType;
   editor: EditorState;
   onClose: () => void;
@@ -453,7 +463,11 @@ function PaymentDocumentEditor({
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
-  const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  // const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
+  const [form, setForm] = useState<TransactionHeader>(() => {
+  const h = emptyHeader(docType, editor);
+  return { ...h, doc_date: clampToFy(h.doc_date, fyRange) };
+});
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
@@ -473,7 +487,6 @@ function PaymentDocumentEditor({
   const toggleRowExpanded = (id: string) => {
     setExpandedRowIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
-
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -768,7 +781,6 @@ function PaymentDocumentEditor({
     });
   }, [form.detail.map((d) => `${d.amount}_${d.tx_compnt_perc_1}_${d.tx_compnt_1_expmt}_${d.tx_compntcat_code_1}`).join(","), getTaxPercForCode]);
 
-
   const disabled = form.canceled === "Y" || saving;
 
   const cancelCurrentDocument = async () => {
@@ -905,7 +917,7 @@ function PaymentDocumentEditor({
 
       return {
         ...current,
-        // ✅ Keep user's typed amount, don't snap it
+        // Keep user's typed amount, don't snap it
         detail: current.detail.map((row) =>
           row.id === id ? { ...row, amount: newAmount, ...taxPatch } : row
         ),
@@ -913,7 +925,7 @@ function PaymentDocumentEditor({
       };
     });
   };
-  // REPLACE WITH:
+  
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
@@ -1240,7 +1252,9 @@ function PaymentDocumentEditor({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!form.doc_date) return setError("Doc Date is required");
+   if (!form.doc_date) return setError("Doc Date is required");
+   const fyErr = validateFyDate(form.doc_date, fyRange, "Doc Date");
+   if (fyErr) return setError(fyErr);
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
@@ -1370,10 +1384,23 @@ function PaymentDocumentEditor({
       console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
       const bulkPayload = buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || "");
       console.log("Bulk payload header:", bulkPayload.header);
-      await upsertBulkAccountEntryApi(bulkPayload);
-      await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save document");
+      // await upsertBulkAccountEntryApi(bulkPayload);
+      // await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
+      const result: any = await upsertBulkAccountEntryApi(bulkPayload);
+      console.log("save response:", result); 
+      const savedDocNo = text(
+       result?.doc_no ?? result?.data?.doc_no ?? result?.header?.doc_no ?? (editMode ? form.doc_no : "")
+      );
+      const shownDocNo = savedDocNo && savedDocNo !== "0" ? formatDocNo(savedDocNo) : "";
+      await onSaved(`Document ${editMode ? "updated" : "created"} successfully${shownDocNo ? ` — Doc No: ${shownDocNo}` : ""}`
+      );
+    } catch (submitError:any) {
+      setError(
+        submitError?.response?.data?.message ||
+        submitError?.response?.data?.details ||
+        (submitError instanceof Error ? submitError.message : "Unable to save document")
+      );
+      // setError(submitError instanceof Error ? submitError.message : "Unable to save document");
     } finally {
       setSaving(false);
     }
@@ -1594,7 +1621,7 @@ function PaymentDocumentEditor({
                     </div>
                     <div className="finance-payment-header-fields">
 
-                      <Field label="Doc Date" required><BiscDatePicker disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
+                      <Field label="Doc Date" required><BiscDatePicker {...fyDateProps(fyRange)}  disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
                       {(docType === "BP" || docType === "BR") && (
                         <>
@@ -1656,7 +1683,7 @@ function PaymentDocumentEditor({
                           onChange={(event) => updateField("ref_no", event.target.value)}
                         />
                       </Field>
-                      <Field label="Ref Date"><BiscDatePicker disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} /></Field>
+                      <Field label="Ref Date"><BiscDatePicker max={dateInput(form.doc_date)} disabled={disabled} value={dateInput(form.ref_date)} onChange={(val) => updateField("ref_date", val)} /></Field>
                     </div>
                   </div>
 
@@ -1774,91 +1801,6 @@ function PaymentDocumentEditor({
                     </div>
                   </div>
                 </div>
-
-                {/* Section 3: Party & Order Details (Optional / PB Parity) - Commented out to maximize space for Accounting Lines
-                <div className="finance-payment-header-block">
-                  <div
-                    className="finance-section-title cursor-pointer select-none flex items-center justify-between"
-                    onClick={() => setShowPartyDetails(!showPartyDetails)}
-                    title={showPartyDetails ? "Collapse Party & Order Details" : "Expand Party & Order Details"}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="finance-section-icon"><Building2 size={11} /></span>
-                      <span>Party & Order Details (Optional)</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-[11px] text-[#00378c] font-medium hover:underline mr-1">
-                      <span>{showPartyDetails ? "Collapse" : "Expand"}</span>
-                      {showPartyDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </div>
-                  </div>
-                  {showPartyDetails && (
-                    <div className="finance-payment-party-fields grid grid-cols-6 max-xl:grid-cols-3 max-sm:grid-cols-2 gap-2 p-2 bg-white">
-                      <Field label="Payment Terms">
-                        <Input disabled={disabled} value={form.payment_terms || ""} onChange={(e) => updateField("payment_terms", e.target.value)} placeholder="e.g. 30 Days" />
-                      </Field>
-                      <Field
-                        label="LPO No"
-                        error={form.lpo_no && form.lpo_no.length > 30 ? `Max 30 (${form.lpo_no.length})` : undefined}
-                      >
-                        <Input
-                          maxLength={30}
-                          disabled={disabled}
-                          value={form.lpo_no || ""}
-                          className={form.lpo_no && form.lpo_no.length > 30 ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("lpo_no", e.target.value)}
-                          placeholder="LPO / PO Reference"
-                        />
-                      </Field>
-                      <Field label="LPO Date">
-                        <BiscDatePicker disabled={disabled} value={dateInput(form.lpo_date)} onChange={(val) => updateField("lpo_date", val)} />
-                      </Field>
-                      <Field
-                        label="Party Phone"
-                        error={(form.party_phone && form.party_phone.length > 30 ? `Max 30 (${form.party_phone.length})` : undefined) || (form.party_phone && !isValidPhoneNumber(form.party_phone) ? "Must contain numbers only" : undefined)}
-                      >
-                        <Input
-                          type="tel"
-                          maxLength={30}
-                          disabled={disabled}
-                          value={form.party_phone || ""}
-                          className={((form.party_phone && form.party_phone.length > 30) || (form.party_phone && !isValidPhoneNumber(form.party_phone))) ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_phone", sanitizePhoneNumber(e.target.value))}
-                          placeholder="Phone"
-                        />
-                      </Field>
-                      <Field
-                        label="Party Fax"
-                        error={(form.party_fax && form.party_fax.length > 30 ? `Max 30 (${form.party_fax.length})` : undefined) || (form.party_fax && !isValidPhoneNumber(form.party_fax) ? "Must contain numbers only" : undefined)}
-                      >
-                        <Input
-                          type="tel"
-                          maxLength={30}
-                          disabled={disabled}
-                          value={form.party_fax || ""}
-                          className={((form.party_fax && form.party_fax.length > 30) || (form.party_fax && !isValidPhoneNumber(form.party_fax))) ? "!border-rose-500 !ring-rose-400" : ""}
-                          onChange={(e) => updateField("party_fax", sanitizePhoneNumber(e.target.value))}
-                          placeholder="Fax"
-                        />
-                      </Field>
-                      <div className="col-span-1 max-xl:col-span-3 max-sm:col-span-2">
-                        <Field
-                          label="Party Address"
-                          error={form.party_address && form.party_address.length > 250 ? `Max 250 (${form.party_address.length})` : undefined}
-                        >
-                          <Input
-                            maxLength={250}
-                            disabled={disabled}
-                            value={form.party_address || ""}
-                            className={form.party_address && form.party_address.length > 250 ? "!border-rose-500 !ring-rose-400" : ""}
-                            onChange={(e) => updateField("party_address", e.target.value)}
-                            placeholder="Full Party Address"
-                          />
-                        </Field>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                */}
               </div>
             )}
 
@@ -1935,7 +1877,7 @@ function PaymentDocumentEditor({
                       {showAllColumns && <th className="px-2 py-2 text-left">Tax Type</th>}
                       <th className="finance-th-tax px-2 py-2 text-right text-amber-800 bg-amber-50/70 border-b-2 border-amber-300">Tax %</th>
                       <th className="finance-th-tax finance-amount-cell px-2 py-2 text-right text-amber-800 bg-amber-100/70 border-b-2 border-amber-400 font-bold">Tax Amt</th>
-                      {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>}
+                      {/* {showAllColumns && <th className="px-2 py-2 text-left">Job No</th>} */}
                       {showAllColumns && <th className="px-2 py-2 text-left">Ex Rate</th>}
                       {showAllColumns && <th className="finance-th-base-amt finance-amount-cell px-2 py-2 text-right">Base Amount</th>}
                       <th className="finance-sticky-col-right px-1 py-2 text-center w-[76px] min-w-[76px] max-w-[76px]">Action</th>
@@ -2261,11 +2203,11 @@ function PaymentDocumentEditor({
                             />
                           </td>
 
-                          {showAllColumns && (
+                          {/* {showAllColumns && (
                             <td className="w-20 max-w-[80px] px-1 py-1">
                               <Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} />
                             </td>
-                          )}
+                          )} */}
 
                           {showAllColumns && (
                             <td className="w-20 max-w-[85px] px-1 py-1">
@@ -2946,6 +2888,8 @@ function mapExistingDocument(
     cheque_date: dateInput(header.cheque_date || fallbackDetail.cheque_date),
     cheque_bank: text(header.cheque_bank || fallbackDetail.cheque_bank),
     ac_payee: text(header.ac_payee || fallbackDetail.ac_payee),
+    ref_no: text(header.ref_no || fallbackDetail.ref_no),
+    ref_date: dateInput(header.ref_date || fallbackDetail.ref_date),
     canceled: text(header.canceled || fallbackDetail.canceled),
     detail,
     children,
