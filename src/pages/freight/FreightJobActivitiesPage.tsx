@@ -141,6 +141,23 @@ export function FreightJobActivitiesPage({
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [lineSearch, setLineSearch] = useState("");
+  const [masterCurrency, setMasterCurrency] = useState<{ curr_code: string; ex_rate: string }>({ curr_code: "OMR", ex_rate: "1" });
+
+  useEffect(() => {
+    if (!companyCode) return;
+    loadFreightLookup("freight_currency", companyCode, "").then((currencies) => {
+      const base = currencies.find((c) => Number(lookupText(c, "ex_rate")) === 1) || currencies[0];
+      if (base) {
+        setMasterCurrency({
+          curr_code: lookupText(base, "curr_code") || "OMR",
+          ex_rate: lookupText(base, "ex_rate") || "1",
+        });
+      }
+    }).catch(() => {});
+  }, [companyCode]);
+
+  const baseCurrency = lookupText(header, "curr_code") || masterCurrency.curr_code || "OMR";
+  const companyName = String(userRecord.company_name || userRecord.COMPANY_NAME || companyCode);
 
   const filteredLines = useMemo(() => {
     if (!lineSearch.trim()) return lines;
@@ -624,13 +641,13 @@ export function FreightJobActivitiesPage({
             {/* Inline KPI Strip */}
             <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
               <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
-                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} OMR
+                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} {baseCurrency}
               </span>
               <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
-                <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} OMR
+                <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} {baseCurrency}
               </span>
               <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
-                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} OMR
+                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} {baseCurrency}
               </span>
               <span
                 className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
@@ -639,7 +656,7 @@ export function FreightJobActivitiesPage({
                     : "bg-rose-50 border-rose-300 text-rose-800"
                 }`}
               >
-                <span>Profit:</span> {money(totals.profit)} OMR
+                <span>Profit:</span> {money(totals.profit)} {baseCurrency}
               </span>
             </div>
           </div>
@@ -729,16 +746,16 @@ export function FreightJobActivitiesPage({
                 <th className="px-2 py-1.5 text-left min-w-[170px] text-slate-700 border-r border-slate-200">Description</th>
                 <th className="px-2 py-1.5 text-right w-[60px] text-slate-700 border-r border-slate-200" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
                 {/* Income Columns */}
-                <th className="px-2 py-1.5 text-right w-[85px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Rate (OMR)</th>
-                <th className="px-2 py-1.5 text-right w-[95px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Bill Amt (OMR)</th>
+                <th className="px-2 py-1.5 text-right w-[85px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Rate ({baseCurrency})</th>
+                <th className="px-2 py-1.5 text-right w-[95px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Bill Amt ({baseCurrency})</th>
                 {/* Expense Columns (With PB Distinct Yellow for Other Cost) */}
                 <th className="px-2 py-1.5 text-right w-[95px] bg-amber-100 text-amber-950 font-extrabold border-r border-amber-300" title="Other Cost Amt (PB actual_cost)">
-                  Other Cost Amt (OMR)
+                  Other Cost Amt ({baseCurrency})
                 </th>
                 <th className="px-2 py-1.5 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Code</th>
-                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Price (OMR)</th>
+                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Price ({baseCurrency})</th>
                 <th className="px-2 py-2 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transporter Code</th>
-                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transp Price (OMR)</th>
+                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transp Price ({baseCurrency})</th>
                 {/* Tax & Action */}
                 <th className="px-2 py-1.5 text-center w-[110px] text-emerald-900 bg-emerald-50/80 border-r border-slate-200">Tax / VAT</th>
                 <th className="px-2 py-1.5 text-center w-[75px] text-slate-700">Actions</th>
@@ -1277,13 +1294,13 @@ export function FreightJobActivitiesPage({
                 </div>
                 <div>
                   <span className="text-amber-800 font-semibold">Base Currency: </span>
-                  <span className="font-mono font-bold text-primary">OMR (AAA LOGISTICS)</span>
+                  <span className="font-mono font-bold text-primary">{baseCurrency} ({companyName})</span>
                 </div>
               </div>
             </div>
 
             <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 flex items-center justify-between">
-              <span>Enter figures from your sheet in <strong>Foreign Currency (FC)</strong>. The system calculates and displays <strong>Base OMR</strong> on the main table: <code className="bg-slate-200/80 px-1 rounded font-mono text-[10.5px]">Base (OMR) = Foreign × Ex. Rate</code></span>
+              <span>Enter figures from your sheet in <strong>Foreign Currency (FC)</strong>. The system calculates and displays <strong>Base {baseCurrency}</strong> on the main table: <code className="bg-slate-200/80 px-1 rounded font-mono text-[10.5px]">Base ({baseCurrency}) = Foreign × Ex. Rate</code></span>
             </div>
 
             {/* 1. Sales / Billing Currency */}
@@ -1329,7 +1346,7 @@ export function FreightJobActivitiesPage({
                   </button>
                 </div>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base revenue: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].bill)}</strong>
+                  base revenue: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].bill)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1439,7 +1456,7 @@ export function FreightJobActivitiesPage({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Rate (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Rate ({baseCurrency})</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].bill_rate)}
                   </div>
@@ -1452,7 +1469,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>2. Vendor / Actual Cost Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base cost: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].actual_cost)}</strong>
+                  base cost: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].actual_cost)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1515,7 +1532,7 @@ export function FreightJobActivitiesPage({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Cost (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Cost ({baseCurrency})</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].actual_cost)}
                   </div>
@@ -1528,7 +1545,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-sky-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>3. Agent / Partner Price Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base agent: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].partners_price)}</strong>
+                  base agent: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].partners_price)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1591,7 +1608,7 @@ export function FreightJobActivitiesPage({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Price (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Price ({baseCurrency})</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].partners_price)}
                   </div>
@@ -1604,7 +1621,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-indigo-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>4. Transporter Price Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base transp: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].transport_price)}</strong>
+                  base transp: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].transport_price)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1707,11 +1724,11 @@ export function FreightJobActivitiesPage({
               <div className="flex items-center gap-4">
                 <div>
                   <span className="text-emerald-800 font-semibold">Revenue: </span>
-                  <span className="font-mono font-bold text-primary">OMR {money(lines[activeTaxIndex].bill)}</span>
+                  <span className="font-mono font-bold text-primary">{baseCurrency} {money(lines[activeTaxIndex].bill)}</span>
                 </div>
                 <div>
                   <span className="text-emerald-800 font-semibold">Cost: </span>
-                  <span className="font-mono font-bold text-emerald-700">OMR {money(lines[activeTaxIndex].actual_cost)}</span>
+                  <span className="font-mono font-bold text-emerald-700">{baseCurrency} {money(lines[activeTaxIndex].actual_cost)}</span>
                 </div>
               </div>
             </div>
@@ -1721,7 +1738,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-primary flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>1. Sales Tax / Output VAT (Customer Billing)</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  Sales Tax Amt: <strong className="text-primary font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
+                  Sales Tax Amt: <strong className="text-primary font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
                   {Boolean(lines[activeTaxIndex].bill_curr_code && lines[activeTaxIndex].bill_curr_code !== "OMR") && (
                     <span className="ml-1 text-[10px] text-sky-700 font-normal">
                       ({money(lines[activeTaxIndex].tx_compnt_amt_1)} {lines[activeTaxIndex].bill_curr_code})
@@ -1813,7 +1830,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>2. Vendor Cost Tax / Input VAT (Expenses)</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
+                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
                   {Boolean(lines[activeTaxIndex].ac_curr_code && lines[activeTaxIndex].ac_curr_code !== "OMR") && (
                     <span className="ml-1 text-[10px] text-emerald-700 font-normal">
                       ({money(lines[activeTaxIndex].tx_compnt_amt_1_cost)} {lines[activeTaxIndex].ac_curr_code})

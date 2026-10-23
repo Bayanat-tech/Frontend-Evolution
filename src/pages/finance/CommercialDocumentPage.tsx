@@ -1736,7 +1736,7 @@ const limitProps = (f: keyof FormState) => ({
                 </div>
               </div>
               <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
-                <table className={`finance-lines-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
+                <table className={`finance-lines-table finance-detail-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
