@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowLeft, Banknote, ChevronDown, Edit2, FileText, IdCard, ListChecks, Loader2, Plus,
-  RefreshCw, Save, StickyNote, Trash2, UserCog, X,
+  ArrowLeft, Banknote, Calculator, ChevronDown, ChevronUp, Edit2, FileText, List, Loader2,
+  Plus, RefreshCw, Save, StickyNote, Trash2, UserCheck, X,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { getDynamicLookup, type LookupRow } from "../../api/lookups";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
-import { Field } from "../../components/ui/Formblocks";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useToast } from "../../components/ui/AlertToast";
@@ -319,44 +317,79 @@ function buildSavePayload(
   return { header: headerPayload, details: detailPayload };
 }
 
-// ---------- UI building block: collapsible Freight panel ----------
-function CollapsibleSection({
-  title,
-  icon: Icon,
-  defaultOpen = true,
+// ---------- UI building blocks (same as the Absent Memo form) ----------
+
+// Control styles shared by the header form.
+const CTL = "h-7 text-xs";
+const TEXTAREA =
+  "h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+
+// Group card: icon + title strip, then a tight field area.
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  actions,
+  gridCols = "grid-cols-2",
+  bodyClass,
+  className = "",
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  actions?: ReactNode;
+  gridCols?: string;
+  /** Replaces the default grid body classes (e.g. for a flex row of short fields). */
+  bodyClass?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">{icon}</span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+        {actions && <span className="ml-auto">{actions}</span>}
+      </div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Compact label above the control (10px).
+function CField({
+  label,
+  required,
+  className = "",
   children,
 }: {
-  title: string;
-  icon: LucideIcon;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
+  label: string;
+  required?: boolean;
+  className?: string;
+  children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-
   return (
-    <section className="freight-panel overflow-hidden rounded-md border bg-background shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        title={open ? "Collapse section" : "Expand section"}
-        className={`freight-panel-title flex w-full cursor-pointer items-center justify-between gap-2 bg-muted/35 px-3 py-2 text-left transition-colors hover:bg-muted/60 ${
-          open ? "border-b" : ""
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="freight-section-icon">
-            <Icon size={16} />
-          </span>
-          <h3 className="m-0 truncate text-[11px] font-semibold text-foreground">{title}</h3>
-        </div>
-        <ChevronDown
-          size={14}
-          className={`shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-        />
-      </button>
-      <div className={`freight-panel-body p-3 ${open ? "" : "hidden"}`}>{children}</div>
-    </section>
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-destructive">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 truncate">
+      <span className="font-semibold text-[#00378C]">{label}:</span>
+      <span className="truncate font-medium">{value}</span>
+    </span>
   );
 }
 
@@ -379,6 +412,7 @@ export default function SalaryAdvanceRecoveryPage() {
   const [header, setHeader] = useState<Partial<MainRow>>(emptyHeader());
   const [details, setDetails] = useState<DetailRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
 
   const patchHeader = (patch: Partial<MainRow>) => setHeader((prev) => ({ ...prev, ...patch }));
 
@@ -439,6 +473,7 @@ export default function SalaryAdvanceRecoveryPage() {
       user_id: userId,
     });
     setDetails([]);
+    setShowHeader(true);
     setMode("add");
   };
 
@@ -449,6 +484,7 @@ export default function SalaryAdvanceRecoveryPage() {
       doc_date: toInputDate(row.doc_date),
       recover_from_dt: toInputDate(row.recover_from_dt),
     });
+    setShowHeader(true);
     setMode("edit");
     void fetchDetail(row.doc_no);
   };
@@ -529,7 +565,57 @@ export default function SalaryAdvanceRecoveryPage() {
       return next;
     });
   }, []);
+    const handleAllocate = useCallback(() => {
+      const amount = Number(header.amount || 0);
+      const period = Number(header.recovery_period || 0);
 
+      if (!Number.isFinite(amount) || amount <= 0) {
+        toast.warning("Enter a valid Amount (greater than 0) before allocating.");
+        return;
+      }
+      if (!Number.isFinite(period) || period <= 0 || !Number.isInteger(period)) {
+        toast.warning("Enter a valid Period (positive whole months) before allocating.");
+        return;
+      }
+
+      const perRow = Number((amount / period).toFixed(3));
+      const startDate = header.recover_from_dt || new Date().toISOString().slice(0, 10);
+
+      let running = 0;
+      const newDetails: DetailRow[] = Array.from({ length: period }, (_, i) => {
+        // Give the last row the remainder so Σ rows === header.amount
+        const isLast = i === period - 1;
+        const rowAmount = isLast ? Number((amount - running).toFixed(3)) : perRow;
+        running += rowAmount;
+
+        const rowDate = new Date(startDate);
+        rowDate.setMonth(rowDate.getMonth() + i);
+
+        const base = emptyDetailRow(
+          companyCode,
+          header.doc_type || "SA",
+          header.doc_no || "",
+          i + 1,
+        );
+
+        return {
+          ...base,
+          employee_id: header.employee_id || null,
+          emplyee_code: header.employee_code || null,
+          recover_mth_amt: rowAmount,
+          amount: rowAmount,
+          recover_from_dt: rowDate.toISOString().slice(0, 10),
+          allocated_amt: 0,
+          balance_amt: rowAmount,
+          pay_comp_id: header.pay_comp_id || "",
+        };
+      });
+
+      setDetails(newDetails);
+      toast.success(
+        `Allocated ${period} row${period === 1 ? "" : "s"} of ${perRow.toFixed(3)} each.`,
+      );
+    }, [header, companyCode, toast]);
   const mainColumns = useMemo<ColumnDef<MainRow>[]>(
     () => [
       { accessorKey: "doc_no", header: "Doc No", size: 90, enableSorting: false },
@@ -687,6 +773,7 @@ export default function SalaryAdvanceRecoveryPage() {
         enableSorting: false,
         cell: ({ row }) => (
           <Select
+            className="h-7 px-2 text-sm"
             value={row.original.cancel_status ?? "N"}
             onChange={(e) => updateDetail(row.index, "cancel_status", e.target.value)}
           >
@@ -716,6 +803,12 @@ export default function SalaryAdvanceRecoveryPage() {
       },
     ],
     [loadPayComponentOptions, header.employee_id, updateDetail, removeDetailRow],
+  );
+
+  // No per-column filter icons in the lines grid (keeps the header clean).
+  const gridDetailColumns = useMemo(
+    () => detailColumns.map((c) => ({ ...c, enableColumnFilter: false })),
+    [detailColumns],
   );
 
   /* ─────────────────────────────────────────────────────────
@@ -778,6 +871,7 @@ export default function SalaryAdvanceRecoveryPage() {
      ───────────────────────────────────────────────────────── */
   const isEdit = mode === "edit";
   const totalAmount = details.reduce((sum, r) => sum + Number(r.recover_mth_amt || 0), 0);
+  const lineCount = details.length;
 
   return (
     <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
@@ -818,168 +912,278 @@ export default function SalaryAdvanceRecoveryPage() {
         </div>
       </div>
 
-      <CollapsibleSection title="Document" icon={FileText}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Doc No">
-            <Input
-              value={header.doc_no ?? ""}
-              onChange={(e) => patchHeader({ doc_no: e.target.value })}
-              disabled={isEdit}
-              placeholder="Auto"
+      {!showHeader ? (
+        /* Collapsed: one-line summary */
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50/70 px-3.5 py-1.5 text-xs shadow-xs">
+          <div className="flex min-w-0 flex-wrap items-center gap-4 text-slate-700">
+            <SummaryItem label="Doc No" value={header.doc_no ? String(header.doc_no) : "Auto"} />
+            <SummaryItem label="Doc Date" value={formatDisplayDate(header.doc_date) || "-"} />
+            <SummaryItem
+              label="Employee"
+              value={header.employee_name || header.employee_code || "Not selected"}
             />
-          </Field>
-
-          <Field label="Doc Date" required>
-            <Input
-              type="date"
-              value={header.doc_date ?? ""}
-              onChange={(e) => patchHeader({ doc_date: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Doc Type">
-            <Input value="Salary Advance" readOnly disabled />
-          </Field>
-
-          <Field label="Ref No">
-            <Input value={header.ref_no ?? ""} onChange={(e) => patchHeader({ ref_no: e.target.value })} />
-          </Field>
+            <SummaryItem label="Amount" value={Number(header.amount || 0).toFixed(3)} />
+            <SummaryItem label="Period" value={`${Number(header.recovery_period || 0)} mo`} />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-2 h-6 shrink-0 cursor-pointer border-[#00378C] text-xs font-semibold text-[#00378C] hover:bg-blue-100/60"
+            onClick={() => setShowHeader(true)}
+          >
+            Show Header Fields <ChevronDown size={13} className="ml-1" />
+          </Button>
         </div>
-      </CollapsibleSection>
+      ) : (
+        <div className="overflow-hidden rounded-md border-2 border-gray-100 bg-card">
+          <div className="grid items-stretch gap-1.5 p-1.5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.3fr)]">
+            {/* ══ Block 1: Document Details ══ */}
+            <HeaderBlock
+              label="Document Details"
+              icon={<FileText size={11} />}
+              actions={
+                <button
+                  type="button"
+                  onClick={() => setShowHeader(false)}
+                  className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-[#00378C] hover:underline"
+                >
+                  Hide <ChevronUp size={12} />
+                </button>
+              }
+            >
+              <CField label="Doc No">
+                <Input
+                  className={CTL}
+                  value={header.doc_no ?? ""}
+                  onChange={(e) => patchHeader({ doc_no: e.target.value })}
+                  disabled={isEdit}
+                  placeholder="Auto"
+                />
+              </CField>
 
-      <CollapsibleSection title="Employee & Recovery" icon={UserCog}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Employee" className="md:col-span-2">
-            <LookupField
-              value={header.employee_id ?? ""}
-              displayValue={header.employee_name ?? header.employee_code ?? ""}
-              columns={[
-                { field: "employee_code", header: "Code" },
-                { field: "rpt_name", header: "Name" },
-              ]}
-              valueField="employee_id"
-              displayFields={["employee_code", "rpt_name"]}
-              loadOptions={loadEmployeeOptions}
-              onChange={(_val, row) => {
-                patchHeader({
-                  employee_id: (row?.employee_id as string | undefined) ?? "",
-                  employee_code: (row?.employee_code as string | undefined) ?? "",
-                  employee_name: (row?.rpt_name as string | undefined) ?? "",
-                });
-              }}
-              compact
-              dense
-              placeholder="Select employee"
-            />
-          </Field>
+              <CField label="Doc Date" required className="max-w-[150px]">
+                <Input
+                  className={CTL}
+                  type="date"
+                  value={header.doc_date ?? ""}
+                  onChange={(e) => patchHeader({ doc_date: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Effective From">
-            <Input
-              type="date"
-              value={header.recover_from_dt ?? ""}
-              onChange={(e) => patchHeader({ recover_from_dt: e.target.value })}
-            />
-          </Field>
+              <CField label="Doc Type">
+                <Input className={CTL} value="Salary Advance" readOnly disabled />
+              </CField>
 
-          <Field label="Amount">
-            <Input
-              type="number"
-              step="0.001"
-              className="text-right"
-              value={header.amount ?? 0}
-              onChange={(e) => patchHeader({ amount: Number(e.target.value) })}
-            />
-          </Field>
+              <CField label="Ref No">
+                <Input
+                  className={CTL}
+                  value={header.ref_no ?? ""}
+                  onChange={(e) => patchHeader({ ref_no: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Period">
-            <Input
-              type="number"
-              value={header.recovery_period ?? 0}
-              onChange={(e) => patchHeader({ recovery_period: Number(e.target.value) })}
-            />
-          </Field>
-        </div>
-      </CollapsibleSection>
+              <CField label="Employee" required className="col-span-2 max-w-[340px]">
+                <LookupField
+                  value={header.employee_id ?? ""}
+                  displayValue={header.employee_name ?? header.employee_code ?? ""}
+                  columns={[
+                    { field: "employee_code", header: "Code" },
+                    { field: "rpt_name", header: "Name" },
+                  ]}
+                  valueField="employee_id"
+                  displayFields={["employee_code", "rpt_name"]}
+                  loadOptions={loadEmployeeOptions}
+                  onChange={(_val, row) => {
+                    patchHeader({
+                      employee_id: (row?.employee_id as string | undefined) ?? "",
+                      employee_code: (row?.employee_code as string | undefined) ?? "",
+                      employee_name: (row?.rpt_name as string | undefined) ?? "",
+                    });
+                  }}
+                  compact
+                  dense
+                  placeholder="Select employee"
+                />
+              </CField>
+            </HeaderBlock>
 
-      <CollapsibleSection title="Letter & Signatory" icon={IdCard}>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Name From">
-            <Input value={header.name_from ?? ""} onChange={(e) => patchHeader({ name_from: e.target.value })} />
-          </Field>
+            {/* ══ Block 2: From, To & Signatory ══ */}
+            <HeaderBlock label="From, To & Signatory" icon={<UserCheck size={11} />}>
+              <CField label="Name From">
+                <Input
+                  className={CTL}
+                  value={header.name_from ?? ""}
+                  onChange={(e) => patchHeader({ name_from: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Name To">
-            <Input value={header.name_to ?? ""} onChange={(e) => patchHeader({ name_to: e.target.value })} />
-          </Field>
+              <CField label="Name To">
+                <Input
+                  className={CTL}
+                  value={header.name_to ?? ""}
+                  onChange={(e) => patchHeader({ name_to: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Addr From">
-            <Input value={header.addr_from ?? ""} onChange={(e) => patchHeader({ addr_from: e.target.value })} />
-          </Field>
+              <CField label="Addr From">
+                <Input
+                  className={CTL}
+                  value={header.addr_from ?? ""}
+                  onChange={(e) => patchHeader({ addr_from: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Addr To">
-            <Input value={header.addr_to ?? ""} onChange={(e) => patchHeader({ addr_to: e.target.value })} />
-          </Field>
+              <CField label="Addr To">
+                <Input
+                  className={CTL}
+                  value={header.addr_to ?? ""}
+                  onChange={(e) => patchHeader({ addr_to: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Letter Subject" className="md:col-span-2">
-            <Input
-              value={header.lettr_subject ?? ""}
-              onChange={(e) => patchHeader({ lettr_subject: e.target.value })}
-            />
-          </Field>
+              <CField label="Signatory Name">
+                <Input
+                  className={CTL}
+                  value={header.signatory_name ?? ""}
+                  onChange={(e) => patchHeader({ signatory_name: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Signatory Name">
-            <Input
-              value={header.signatory_name ?? ""}
-              onChange={(e) => patchHeader({ signatory_name: e.target.value })}
-            />
-          </Field>
+              <CField label="Signatory Position">
+                <Input
+                  className={CTL}
+                  value={header.signatory_position ?? ""}
+                  onChange={(e) => patchHeader({ signatory_position: e.target.value })}
+                />
+              </CField>
+            </HeaderBlock>
 
-          <Field label="Signatory Position">
-            <Input
-              value={header.signatory_position ?? ""}
-              onChange={(e) => patchHeader({ signatory_position: e.target.value })}
-            />
-          </Field>
-        </div>
-      </CollapsibleSection>
+            {/* ══ Block 3: Letter Details (widest — remarks live here) ══ */}
+            <HeaderBlock label="Letter Details" icon={<StickyNote size={11} />}>
+              <CField label="Letter Subject" className="col-span-2">
+                <Input
+                  className={CTL}
+                  value={header.lettr_subject ?? ""}
+                  onChange={(e) => patchHeader({ lettr_subject: e.target.value })}
+                />
+              </CField>
 
-      <CollapsibleSection title="Remarks" icon={StickyNote}>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Remarks 1">
-            <Input value={header.remarks_1 ?? ""} onChange={(e) => patchHeader({ remarks_1: e.target.value })} />
-          </Field>
+              <CField label="Remarks 1">
+                <textarea
+                  className={TEXTAREA}
+                  value={header.remarks_1 ?? ""}
+                  onChange={(e) => patchHeader({ remarks_1: e.target.value })}
+                />
+              </CField>
 
-          <Field label="Remarks 2">
-            <Input value={header.remarks_2 ?? ""} onChange={(e) => patchHeader({ remarks_2: e.target.value })} />
-          </Field>
-        </div>
-      </CollapsibleSection>
+              <CField label="Remarks 2">
+                <textarea
+                  className={TEXTAREA}
+                  value={header.remarks_2 ?? ""}
+                  onChange={(e) => patchHeader({ remarks_2: e.target.value })}
+                />
+              </CField>
+            </HeaderBlock>
 
-      <CollapsibleSection title={`Detail Lines (${details.length})`} icon={ListChecks}>
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs text-muted-foreground">
-              Total Month Amount{" "}
-              <span className="text-sm font-semibold text-foreground tabular-nums">
-                {totalAmount.toFixed(3)}
-              </span>
-            </div>
-            <Button type="button" size="sm" variant="outline" onClick={addDetailRow}>
-              <Plus size={14} /> Add Row
+            {/* ══ Block 4: Recovery Details — one slim row, like the old form ══ */}
+            <HeaderBlock
+              label="Recovery Details"
+              icon={<Banknote size={11} />}
+              className="xl:col-span-3"
+              bodyClass="flex flex-wrap items-end gap-x-3 gap-y-1.5 px-2.5 py-2"
+            >
+              <CField label="Effective From" className="w-[150px]">
+                <Input
+                  className={CTL}
+                  type="date"
+                  value={header.recover_from_dt ?? ""}
+                  onChange={(e) => patchHeader({ recover_from_dt: e.target.value })}
+                />
+              </CField>
+
+              <CField label="Amount (Base Currency)" className="w-[170px]">
+                <Input
+                  className={`${CTL} text-right font-mono`}
+                  type="number"
+                  step="0.001"
+                  value={header.amount ?? 0}
+                  onChange={(e) => patchHeader({ amount: Number(e.target.value) })}
+                />
+              </CField>
+
+              <CField label="Period (Months)" className="w-[110px]">
+                <Input
+                  className={`${CTL} text-right`}
+                  type="number"
+                  value={header.recovery_period ?? 0}
+                  onChange={(e) => patchHeader({ recovery_period: Number(e.target.value) })}
+                />
+              </CField>
+              
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 border-[#00378C] px-2.5 text-xs font-semibold text-[#00378C] hover:bg-blue-50"
+              onClick={handleAllocate}
+              title="Split Amount ÷ Period into detail rows"
+            >
+              <Calculator size={13} /> Allocate
             </Button>
+            </HeaderBlock>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Lines card: toolbar (title · count · Add Row), grid, total chip ══ */}
+      <div className="min-w-0 overflow-hidden rounded-md border border-[#cbd5e1] bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
+          <div className="flex items-center gap-2">
+            <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+              <List size={11} />
+            </span>
+            <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">Detail Lines</h3>
+            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#00378C]">
+              {lineCount} {lineCount === 1 ? "line" : "lines"}
+            </span>
           </div>
 
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 gap-1 px-2.5 text-xs"
+            title="Add row"
+            onClick={addDetailRow}
+          >
+            <Plus size={13} /> Add Row
+          </Button>
+        </div>
+
+        <div className="p-2">
           <DataTable
-            columns={detailColumns}
+            columns={gridDetailColumns}
             data={details}
             loading={detailLoading}
             emptyText="No recovery lines. Click Add Row to start."
-            height={280}
+            height={240}
             minWidth={950}
             density="grid"
             getRowId={(_row, index) => String(index)}
           />
         </div>
-      </CollapsibleSection>
+
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2">
+          <div className="flex min-h-9 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">
+              Total Month Amount
+            </span>
+            <strong className="font-mono text-base font-black tabular-nums text-[#00378c]">
+              {totalAmount.toFixed(3)}
+            </strong>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
