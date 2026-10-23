@@ -1,26 +1,21 @@
-// AddUpdate/AddSalaryAdditionDeductionPage.tsx
-//
-// Salary Addition/Deduction form — GradeMaster-style:
-//  • forwardRef + useImperativeHandle → parent header "Save" button calls save()
-//  • Single page (no tabs): SectionPanel / Field building blocks stacked top to bottom
-//  • Form owns validation + upsert; toast for feedback
-//  • No bottom button row — List / Close / Save live in the page header
-
 import { useFormik } from "formik";
-import { FileText, ListChecks, Plus, StickyNote, Trash2, UserRound } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import {
+  ChevronDown, ChevronUp, FileText, List, Plus, StickyNote, Trash2, UserCheck,
+} from "lucide-react";
+import {
+  forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState,
+  type ReactNode,
+} from "react";
 import hrSalaryAdvDedServiceInstance from "../../../../api/hr/upsertHrSalaryAdvDed";
 import { getDynamicLookup } from "../../../../api/lookups";
 import { useToast } from "../../../../components/ui/AlertToast";
 import { Button } from "../../../../components/ui/Button";
-import { Field, SectionPanel } from "../../../../components/ui/Formblocks";
 import { Input } from "../../../../components/ui/Input";
 import { LookupField } from "../../../../components/ui/LookupField";
 import { Select } from "../../../../components/ui/Select";
 import { useAuth } from "../../../../state/AuthContext";
 import type { SalaryAdditionDeductionDetailRow } from "./types";
 
-/* ✅ Expose save() to the parent (header Save button) */
 export type SalaryFormHandle = {
   save: () => Promise<void>;
 };
@@ -45,9 +40,11 @@ const normalizeDateValue = (value: any) => {
   return date.toISOString().slice(0, 10);
 };
 
+const toDisplayDate = (ymd: string) => (ymd ? ymd.split("-").reverse().join("/") : "-");
+
 const getInitialFormValues = (rowData: any) => ({
   docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
-  docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? "ADV"),
+  docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? "ADD"),
   docDate: normalizeDateValue(rowData?.doc_date) || (rowData ? "" : normalizeDateValue(new Date())),
   refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
   nameFrom: normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
@@ -77,6 +74,78 @@ const mapDetailApiRow = (row: any, index: number): SalaryAdditionDeductionDetail
   };
 };
 
+/* ───────────── UI building blocks (same as the Absent Memo form) ───────────── */
+
+// Control styles shared by the header form.
+const CTL = "h-7 text-xs";
+const TEXTAREA =
+  "h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+
+// Group card: icon + title strip, then a tight field grid.
+function HeaderBlock({
+  label,
+  icon,
+  children,
+  actions,
+  gridCols = "grid-cols-2",
+  className = "",
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+  actions?: ReactNode;
+  gridCols?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
+      <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">{icon}</span>
+        <span className="text-xs font-bold text-[#00378C]">{label}</span>
+        {actions && <span className="ml-auto">{actions}</span>}
+      </div>
+      <div className={`grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`}>{children}</div>
+    </div>
+  );
+}
+
+// Compact label above the control (10px), with an optional inline error.
+function CField({
+  label,
+  required,
+  error,
+  className = "",
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
+      <span className="flex items-center justify-between gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        <span>
+          {label}
+          {required && <span className="ml-1 text-destructive">*</span>}
+        </span>
+        {error && <span className="font-semibold normal-case tracking-tight text-destructive">{error}</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 truncate">
+      <span className="font-semibold text-[#00378C]">{label}:</span>
+      <span className="truncate font-medium">{value}</span>
+    </span>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────────
    Main Form (forwardRef so parent can trigger save)
    ───────────────────────────────────────────────────────────── */
@@ -89,6 +158,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
 
     const [detailRows, setDetailRows] = useState<SalaryAdditionDeductionDetailRow[]>([]);
     const [errors, setErrors] = useState<{ docDate?: string }>({});
+    const [showHeader, setShowHeader] = useState(true);
 
     const initialValues = useMemo(() => getInitialFormValues(existingData), [existingData]);
 
@@ -179,6 +249,11 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
     };
 
     const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const totalAmountText = totalAmount.toLocaleString(undefined, {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3,
+    });
+    const lineCount = detailRows.length;
 
     /* ── validation ── */
     const validate = (): string | null => {
@@ -200,11 +275,12 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       }
 
       const values = formik.values;
+
       try {
         const header = {
           company_code: user?.company_code ?? "",
-          doc_type: values.docType ,
-          doc_no: values.docNo ? Number(values.docNo) :  null ,
+          doc_type: values.docType,
+          doc_no: values.docNo ? Number(values.docNo) : null,
           doc_date: values.docDate ? new Date(values.docDate).toISOString() : new Date().toISOString(),
           ref_no: values.refNo || "",
           name_from: values.nameFrom || "",
@@ -222,7 +298,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
 
         const details = detailRows.map((row, index) => ({
           company_code: user?.company_code ?? "",
-          doc_type: values.docType ,
+          doc_type: values.docType,
           doc_no: values.docNo ? Number(values.docNo) : null,
           sr_no: Number(row.srNo) || index + 1,
           employee_id: row.employeeId || "",
@@ -261,119 +337,171 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       disabled: readonly,
     });
 
+    const docTypeLabel = formik.values.docType === "DED" ? "Deduction" : "Addition";
+
     // ── UI ──────────────────────────────────────────────────
-    // Single page: every section is always visible, stacked top to bottom.
     return (
       <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
-        {/* ── Document Information ── */}
-        <SectionPanel title="Document Information" icon={FileText}>
-          <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Doc No">
-              <Input
-                {...text("docNo")}
-                disabled={readonly || isEdit}
-                placeholder={isEdit ? "" : "Auto"}
-              />
-            </Field>
-            <Field label="Doc Date" required error={errors.docDate}>
-              <Input type="date" {...text("docDate")} />
-            </Field>
-
-            <Field label="Doc Type">
-              <Select
-                name="docType"
-                value={formik.values.docType}
-                onChange={formik.handleChange}
-                disabled={readonly}
+        {!showHeader ? (
+          /* Collapsed: one-line summary */
+          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50/70 px-3.5 py-1.5 text-xs shadow-xs">
+            <div className="flex min-w-0 flex-wrap items-center gap-4 text-slate-700">
+              <SummaryItem label="Doc No" value={formik.values.docNo || "Auto"} />
+              <SummaryItem label="Doc Date" value={toDisplayDate(formik.values.docDate)} />
+              <SummaryItem label="Type" value={docTypeLabel} />
+              {formik.values.refNo && <SummaryItem label="Ref" value={formik.values.refNo} />}
+              <SummaryItem label="Total" value={totalAmountText} />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="ml-2 h-6 shrink-0 cursor-pointer border-[#00378C] text-xs font-semibold text-[#00378C] hover:bg-blue-100/60"
+              onClick={() => setShowHeader(true)}
+            >
+              Show Header Fields <ChevronDown size={13} className="ml-1" />
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-md border-2 border-gray-100 bg-card">
+            <div className="grid items-stretch gap-1.5 p-1.5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.3fr)]">
+              {/* ══ Block 1: Document Details ══ */}
+              <HeaderBlock
+                label="Document Details"
+                icon={<FileText size={11} />}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => setShowHeader(false)}
+                    className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-[#00378C] hover:underline"
+                  >
+                    Hide <ChevronUp size={12} />
+                  </button>
+                }
               >
-                <option value="ADD">Addition</option>
-                <option value="DED">Deduction</option>
-              </Select>
-            </Field>
-            
-            <Field label="Ref No">
-              <Input {...text("refNo")} />
-            </Field>
-          </div>
-        </SectionPanel>
+                <CField label="Doc No">
+                  <Input
+                    className={CTL}
+                    {...text("docNo")}
+                    disabled={readonly || isEdit}
+                    placeholder={isEdit ? "" : "Auto"}
+                  />
+                </CField>
 
-        {/* ── From | To ── */}
-        <div className="grid gap-2 md:grid-cols-2">
-          <SectionPanel title="From" icon={UserRound}>
-            <div className="grid gap-3">
-              <Field label="Name From">
-                <Input {...text("nameFrom")} />
-              </Field>
-              <Field label="Addr From">
-                <Input {...text("addrFrom")} />
-              </Field>
+                <CField label="Doc Date" required error={errors.docDate} className="max-w-[150px]">
+                  <Input className={CTL} type="date" {...text("docDate")} />
+                </CField>
+
+                <CField label="Doc Type">
+                  <Select
+                    className={CTL}
+                    name="docType"
+                    value={formik.values.docType}
+                    onChange={formik.handleChange}
+                    disabled={readonly}
+                  >
+                    <option value="ADD">Addition</option>
+                    <option value="DED">Deduction</option>
+                  </Select>
+                </CField>
+
+                <CField label="Ref No">
+                  <Input className={CTL} {...text("refNo")} />
+                </CField>
+              </HeaderBlock>
+
+              {/* ══ Block 2: From, To & Signatory ══ */}
+              <HeaderBlock label="From, To & Signatory" icon={<UserCheck size={11} />}>
+                <CField label="Name From">
+                  <Input className={CTL} {...text("nameFrom")} />
+                </CField>
+
+                <CField label="Name To">
+                  <Input className={CTL} {...text("nameTo")} />
+                </CField>
+
+                <CField label="Addr From">
+                  <Input className={CTL} {...text("addrFrom")} />
+                </CField>
+
+                <CField label="Addr To">
+                  <Input className={CTL} {...text("addrTo")} />
+                </CField>
+
+                <CField label="Signatory Name">
+                  <Input className={CTL} {...text("signatoryName")} />
+                </CField>
+
+                <CField label="Signatory Position">
+                  <Input className={CTL} {...text("signatoryPosition")} />
+                </CField>
+              </HeaderBlock>
+
+              {/* ══ Block 3: Letter Details (widest — remarks live here) ══ */}
+              <HeaderBlock label="Letter Details" icon={<StickyNote size={11} />}>
+                <CField label="Letter Subject" className="col-span-2">
+                  <Input className={CTL} {...text("lettrSubject")} />
+                </CField>
+
+                <CField label="Remarks 1">
+                  <textarea className={TEXTAREA} {...text("remarks1")} />
+                </CField>
+
+                <CField label="Remarks 2">
+                  <textarea className={TEXTAREA} {...text("remarks2")} />
+                </CField>
+              </HeaderBlock>
             </div>
-          </SectionPanel>
-
-          <SectionPanel title="To" icon={UserRound}>
-            <div className="grid gap-3">
-              <Field label="Name To">
-                <Input {...text("nameTo")} />
-              </Field>
-              <Field label="Addr To">
-                <Input {...text("addrTo")} />
-              </Field>
-            </div>
-          </SectionPanel>
-        </div>
-
-        {/* ── Letter & Signatory ── */}
-        <SectionPanel title="Letter & Signatory" icon={StickyNote}>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Letter Subject" className="md:col-span-2">
-              <Input {...text("lettrSubject")} />
-            </Field>
-            <Field label="Remarks 1">
-              <Input {...text("remarks1")} />
-            </Field>
-            <Field label="Remarks 2">
-              <Input {...text("remarks2")} />
-            </Field>
-            <Field label="Signatory Name">
-              <Input {...text("signatoryName")} />
-            </Field>
-            <Field label="Signatory Position">
-              <Input {...text("signatoryPosition")} />
-            </Field>
           </div>
-        </SectionPanel>
+        )}
 
-        {/* ── Addition / Deduction Lines ── */}
-        <SectionPanel
-          title={`Addition / Deduction Lines (${detailRows.length})`}
-          icon={ListChecks}
-        >
-          {!readonly && (
-            <div className="mb-2 flex justify-end">
-              <Button type="button" size="sm" variant="outline" onClick={handleAddDetailRow}>
-                <Plus size={12} /> Add Line
+        {/* ══ Lines card: toolbar (title · count · Add Line), table, total chip ══ */}
+        <div className="min-w-0 overflow-hidden rounded-md border border-[#cbd5e1] bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+                <List size={11} />
+              </span>
+              <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">
+                Addition / Deduction Lines
+              </h3>
+              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#00378C]">
+                {lineCount} {lineCount === 1 ? "line" : "lines"}
+              </span>
+            </div>
+
+            {!readonly && (
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 gap-1 px-2.5 text-xs"
+                title="Add line"
+                onClick={handleAddDetailRow}
+              >
+                <Plus size={13} /> Add Line
               </Button>
-            </div>
-          )}
-          <div className="overflow-auto rounded-md border">
-            <table className="w-full min-w-[900px] text-[12px]">
-              <thead className="bg-secondary/60">
-                <tr>
-                  <th className="px-2 py-2 text-left w-12">No</th>
-                  <th className="px-2 py-2 text-left w-56">Employee</th>
-                  <th className="px-2 py-2 text-left w-44">Pay Unit</th>
-                  <th className="px-2 py-2 text-left">Description</th>
-                  <th className="px-2 py-2 text-left w-32">Amount</th>
-                  <th className="px-2 py-2 text-left w-40">Effective From</th>
-                  <th className="px-2 py-2 text-left w-24">Cancel</th>
-                  {!readonly && <th className="px-2 py-2 text-left w-12">Action</th>}
+            )}
+          </div>
+
+          <div className="max-h-[56vh] min-h-[160px] overflow-auto">
+            <table className="w-full min-w-[900px] text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-semibold text-slate-700">
+                <tr className="border-b border-[#cbd5e1]">
+                  <th className="w-12 px-2 py-1.5 text-left">No</th>
+                  <th className="w-56 px-2 py-1.5 text-left">Employee</th>
+                  <th className="w-44 px-2 py-1.5 text-left">Pay Unit</th>
+                  <th className="px-2 py-1.5 text-left">Description</th>
+                  <th className="w-32 px-2 py-1.5 text-right">Amount</th>
+                  <th className="w-40 px-2 py-1.5 text-left">Effective From</th>
+                  <th className="w-24 px-2 py-1.5 text-left">Cancel</th>
+                  {!readonly && <th className="w-12 px-2 py-1.5 text-center">Action</th>}
                 </tr>
               </thead>
               <tbody>
                 {detailRows.length === 0 ? (
                   <tr>
                     <td
-                      className="px-3 py-6 text-center text-muted-foreground"
+                      className="px-3 py-8 text-center text-muted-foreground"
                       colSpan={readonly ? 7 : 8}
                     >
                       {readonly ? "No lines" : "No lines — click Add Line"}
@@ -381,7 +509,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                   </tr>
                 ) : (
                   detailRows.map((row, index) => (
-                    <tr className="border-t" key={String(row.srNo)}>
+                    <tr className="border-t odd:bg-muted/20" key={String(row.srNo)}>
                       <td className="px-2 py-1 text-xs">{index + 1}</td>
                       <td className="px-2 py-1">
                         <LookupField
@@ -446,6 +574,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                       </td>
                       <td className="px-2 py-1">
                         <Input
+                          className={CTL}
                           disabled={readonly}
                           value={row.description}
                           onChange={(e) => updateRow(row.srNo, { description: e.target.value })}
@@ -453,6 +582,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                       </td>
                       <td className="px-2 py-1">
                         <Input
+                          className={`${CTL} text-right font-mono`}
                           type="number"
                           step="0.001"
                           disabled={readonly}
@@ -462,6 +592,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                       </td>
                       <td className="px-2 py-1">
                         <Input
+                          className={CTL}
                           type="date"
                           disabled={readonly}
                           value={row.effectiveFrom}
@@ -470,6 +601,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                       </td>
                       <td className="px-2 py-1">
                         <Select
+                          className={CTL}
                           disabled={readonly}
                           value={row.cancel}
                           onChange={(e) => updateRow(row.srNo, { cancel: e.target.value })}
@@ -479,12 +611,12 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                         </Select>
                       </td>
                       {!readonly && (
-                        <td className="px-2 py-1">
+                        <td className="px-2 py-1 text-center">
                           <button
                             type="button"
                             title="Remove line"
                             onClick={() => handleRemoveDetailRow(row.srNo)}
-                            className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            className="inline-grid h-6 w-6 cursor-pointer place-items-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -494,25 +626,18 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                   ))
                 )}
               </tbody>
-              {detailRows.length > 0 && (
-                <tfoot className="border-t bg-secondary/40">
-                  <tr>
-                    <td className="px-2 py-2 text-right font-medium" colSpan={4}>
-                      Total Amount
-                    </td>
-                    <td className="px-2 py-2 font-semibold text-primary">
-                      {totalAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 3,
-                        maximumFractionDigits: 3,
-                      })}
-                    </td>
-                    <td colSpan={readonly ? 2 : 3} />
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
-        </SectionPanel>
+
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2">
+            <div className="flex min-h-9 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Total Amount</span>
+              <strong className="font-mono text-base font-black tabular-nums text-[#00378c]">
+                {totalAmountText}
+              </strong>
+            </div>
+          </div>
+        </div>
       </div>
     );
   },
