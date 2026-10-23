@@ -1,6 +1,19 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Paperclip, FileText, Printer, FileSpreadsheet, Loader2 } from "lucide-react";
+import {
+  X,
+  Paperclip,
+  FileText,
+  Printer,
+  FileSpreadsheet,
+  Loader2,
+  ClipboardList,
+  Building2,
+  ShieldCheck,
+  MessageSquare,
+  ListChecks,
+  type LucideIcon,
+} from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "../../components/ui/Button";
@@ -82,6 +95,35 @@ function num(v: unknown) {
 function fmt3(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
+
+// ─── Module-level UI helpers ──────────────────────────────────────────────
+const GRID_4 = "grid grid-cols-1 gap-x-3 gap-y-2 p-3 md:grid-cols-2 xl:grid-cols-4";
+const TEXTAREA_CLS =
+  "min-h-[40px] w-full resize-y rounded-md border bg-background px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60";
+const SELECT_CLS =
+  "flex h-8 w-full rounded-md border bg-background px-3 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-60";
+type SectionCardProps = {
+  icon: LucideIcon;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+};
+
+// Icon box + title (left) + muted hint (right)
+const SectionCard = ({ icon: Icon, title, hint, children }: SectionCardProps) => (
+  <div className="shrink-0 rounded-xl border bg-card shadow-sm">
+        <div className="flex items-center justify-between gap-3 rounded-t-xl border-b bg-gradient-to-r from-slate-50 to-white px-3 py-1.5">
+      <div className="flex items-center gap-2">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#00378C] text-white shadow-sm">
+          <Icon size={14} />
+        </span>
+        <h3 className="m-0 text-sm font-semibold leading-tight">{title}</h3>
+      </div>
+      {hint && <span className="truncate text-xs text-muted-foreground">{hint}</span>}
+    </div>
+    {children}
+  </div>
+);
 
 const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClose }: AddCPRequestPageProps) => {
   const { user } = useAuth();
@@ -170,7 +212,7 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setNotice(null);
     try {
       await almsSave({
-        parameter: "Amlspf_GenerateCPExcel", // TODO: confirm actual SP / export endpoint name
+        parameter: "Amlspf_GenerateCPExcel",
         loginid,
         code1: companyCode,
         code2: requestNumber,
@@ -217,19 +259,15 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     []
   );
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // Root wrapper flow-based — sidebar visible rahato
-  // (junhe: "fixed inset-0 z-50" + "h-screen" + footer bar kadhle)
-  // ═══════════════════════════════════════════════════════════════════════
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <section className="finance-document-ui payment-workbench commercial-editor grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
         {/* ── Command header ─────────────────────────────────────────────── */}
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
+        <CardHeader className="commercial-command-header h-auto overflow-visible border-b bg-primary px-4 pb-2 pt-3 text-primary-foreground shadow-sm">
+          <div className="flex min-h-12 items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <div>
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
+              <div className="py-0.5">
+                <p className="m-0 mb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wide text-primary-foreground/70">
                   {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
                 </p>
                 <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Capex Request</h2>
@@ -275,21 +313,21 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
           </div>
         </CardHeader>
 
-        <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
+        <CardContent className="commercial-editor-body block min-h-0 w-full min-w-0 overflow-auto p-3">
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Capex Request...</div>
           ) : hdrError ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-destructive">Unable to load Capex Request</div>
           ) : (
-            <div className="commercial-editor-sections grid min-w-0 gap-3">
+            <div
+  className="grid w-full min-w-0 auto-rows-max grid-cols-1 content-start gap-1 [&_.field>span]:mb-0.5 [&_.field>span]:text-[11px] [&_.field]:gap-0.5 [&_input:not([type=checkbox])]:h-8 [&_input:not([type=checkbox])]:py-0 [&_input:not([type=checkbox])]:text-[13px]"
+  style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
+>
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <p className="eyebrow m-0">Header</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              {/* ── 1. Request Information ─────────────────────────────────── */}
+              <SectionCard icon={ClipboardList} title="Request Information" hint="Capex Request">
+                <div className={GRID_4}>
                   <label className="field">
                     <span>Request Number</span>
                     <Input disabled value={header.REQUEST_NUMBER || ""} />
@@ -306,11 +344,17 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     <span>Ref. Request Date</span>
                     <Input disabled type="date" value={header.REF_REQUEST_DATE ? String(header.REF_REQUEST_DATE).slice(0, 10) : ""} />
                   </label>
+                </div>
+              </SectionCard>
+
+              {/* ── 2. Supplier & Order ────────────────────────────────────── */}
+              <SectionCard icon={Building2} title="Supplier & Order" hint={header.AC_NAME || "Supplier details"}>
+                <div className={GRID_4}>
                   <label className="field">
                     <span>Supplier Code</span>
                     <Input disabled value={header.SUPPLIER || ""} />
                   </label>
-                  <label className="field">
+                  <label className="field md:col-span-2">
                     <span>Supplier Name</span>
                     <Input disabled value={header.AC_NAME || ""} />
                   </label>
@@ -318,13 +362,19 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     <span>PO Number</span>
                     <Input disabled value={header.REF_DOC_NO || ""} />
                   </label>
+                </div>
+              </SectionCard>
+
+              {/* ── 3. Approval Details ────────────────────────────────────── */}
+              <SectionCard icon={ShieldCheck} title="Approval Details" hint={statusLabel || "Budget and board approval"}>
+                <div className={GRID_4}>
                   <label className="field">
                     <span>Budgeted (Y/N)</span>
                     <select
                       disabled={disabled}
                       value={header.BUDGETED || ""}
                       onChange={(e) => setHdr("BUDGETED", e.target.value)}
-                      className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                      className={SELECT_CLS}
                     >
                       <option value="">— Select —</option>
                       <option value="Y">Y</option>
@@ -337,44 +387,50 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       disabled={disabled}
                       value={header.BOARD_APPROVAL || ""}
                       onChange={(e) => setHdr("BOARD_APPROVAL", e.target.value)}
-                      className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                      className={SELECT_CLS}
                     >
                       <option value="">— Select —</option>
                       <option value="Y">Y</option>
                       <option value="N">N</option>
                     </select>
                   </label>
+                </div>
+              </SectionCard>
 
-                  <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+              {/* ── 4. Comments ────────────────────────────────────────────── */}
+              <SectionCard icon={MessageSquare} title="Comments" hint="Description And Remarks">
+                <div className="grid grid-cols-1 gap-x-3 gap-y-2 p-3 lg:grid-cols-2">
+                  <label className="field">
                     <span>Description</span>
                     <textarea
                       disabled={disabled}
-                      rows={4}
+                      rows={2}
+                      placeholder="Description"
                       value={header.DESCRIPTION || ""}
                       onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      className={TEXTAREA_CLS}
                     />
                   </label>
-                  <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                  <label className="field">
                     <span>Remarks</span>
                     <textarea
                       disabled={disabled}
-                      rows={4}
+                      rows={2}
+                      placeholder="Remarks"
                       value={header.REMARKS || ""}
                       onChange={(e) => setHdr("REMARKS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      className={TEXTAREA_CLS}
                     />
                   </label>
                 </div>
-              </div>
+              </SectionCard>
 
-              <div className="commercial-lines-card rounded-md border bg-card">
-                <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-                  <div>
-                    <p className="eyebrow m-0">Details</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Line Items</h3>
-                  </div>
-                </div>
+              {/* ── 5. Line Items ──────────────────────────────────────────── */}
+              <SectionCard
+                icon={ListChecks}
+                title="Line Items"
+                hint={`${items.length} ${items.length === 1 ? "item" : "items"}`}
+              >
                 <DataTable
                   columns={itemColumns}
                   data={items}
@@ -386,15 +442,21 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   enablePagination={false}
                   getRowId={(row, index) => `${row.ITEM_SRNO ?? row.ITEM_CODE ?? "row"}_${index}`}
                 />
-                <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Amount</span>
-                  <strong className="text-primary">{fmt3(totalAmount)}</strong>
+                <div className="flex flex-wrap items-center justify-end gap-x-8 gap-y-1 rounded-b-xl border-t bg-secondary/40 px-3 py-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Amount</span>
+                    <strong className="text-primary">{fmt3(totalAmount)}</strong>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Tax</span>
+                    <strong className="text-primary">{fmt3(totalTax)}</strong>
+                  </div>
+                  <div className="flex items-center gap-2 border-l pl-8">
+                    <span className="font-semibold text-muted-foreground">Total</span>
+                    <strong className="text-base text-primary">{fmt3(totalAmount + totalTax)}</strong>
+                  </div>
                 </div>
-                <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Tax</span>
-                  <strong className="text-primary">{fmt3(totalTax)}</strong>
-                </div>
-              </div>
+              </SectionCard>
             </div>
           )}
         </CardContent>

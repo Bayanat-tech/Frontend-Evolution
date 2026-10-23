@@ -100,6 +100,7 @@ const Required = () => <span className="ml-0.5 text-destructive">*</span>;
 
 const GRID_4 = "grid grid-cols-1 gap-0.5 p-1 md:grid-cols-2 xl:grid-cols-4";
 
+
 const TEXTAREA_CLS =
   "min-h-[56px] w-full resize-y rounded-md border bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -275,10 +276,10 @@ const AddCRRequestPage = ({
       const result = await saveHeader(status, extra);
       if (result.success) {
         afterOk?.();
-        onClose(true, successMsg); 
+        onClose(true, successMsg);
       } else {
         const msg = (result as any).message || "Action failed";
-     
+
         if (rejectOpen || sendBackOpen) setDialogError(msg);
         else setNotice({ type: "error", message: msg });
       }
@@ -339,12 +340,11 @@ const AddCRRequestPage = ({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       <section
-        className={`finance-document-ui payment-workbench commercial-editor grid h-full min-h-0 ${
-          isCancelled ? "is-cancelled grid-rows-[auto_auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)]"
-        }`}
+        className={`finance-document-ui payment-workbench commercial-editor grid h-full min-h-0 ${isCancelled ? "is-cancelled grid-rows-[auto_auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)]"
+          }`}
       >
-       <CardHeader className="commercial-command-header h-auto overflow-visible border-b bg-primary px-4 pb-2 pt-3 text-primary-foreground shadow-sm">
-  <div className="flex min-h-10 items-center justify-between gap-3">
+        <CardHeader className="commercial-command-header h-auto overflow-visible border-b bg-primary px-4 pb-2 pt-3 text-primary-foreground shadow-sm">
+          <div className="flex min-h-10 items-center justify-between gap-3">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
@@ -449,10 +449,10 @@ const AddCRRequestPage = ({
               Unable to load Credit Request
             </div>
           ) : (
-           <div
-  className="grid w-full min-w-0 grid-cols-1 auto-rows-max content-start gap-3"
-  style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
->
+            <div
+              className="grid w-full min-w-0 grid-cols-1 auto-rows-max content-start gap-1"
+              style={{ height: "auto", maxHeight: "none", overflow: "visible" }}
+            >
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
               {/* ── 1. Request Information ─────────────────────────────────── */}
@@ -569,9 +569,8 @@ const AddCRRequestPage = ({
                     return (
                       <label
                         key={field}
-                        className={`flex h-9 items-center gap-2 self-end rounded-md border px-3 text-sm font-medium transition-colors ${
-                          checked ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "bg-background"
-                        } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-secondary"}`}
+                        className={`flex h-9 items-center gap-2 self-end rounded-md border px-3 text-sm font-medium transition-colors ${checked ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "bg-background"
+                          } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-secondary"}`}
                       >
                         <input
                           type="checkbox"
