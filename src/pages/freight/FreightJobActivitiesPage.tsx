@@ -1,7 +1,7 @@
 import { freightTextLimit, freightValidationError, assertFreightRecords } from "../../utils/freightValidation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Calculator, CheckCircle2, Edit2, List, ListPlus, Plus, RefreshCw, Save, Search, Trash2, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, Calculator, CheckCircle2, CheckSquare, Edit2, FileText, List, ListPlus, Plus, Printer, RefreshCw, Save, Search, Trash2, TrendingUp, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect, freightTaxCategories, freightTaxComponents } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
@@ -75,6 +75,8 @@ type ActivityLine = {
   tx_compnt_amt_1_cost: string;
   tx_compnt_lcuramt_1_cost: string;
   tx_compnt_1_expmt_cost: string;
+  tx_compnt_lcuramt_2_cost?: string;
+  tx_compnt_lcuramt_3_cost?: string;
 };
 
 const modeMap = {
@@ -139,6 +141,23 @@ export function FreightJobActivitiesPage({
   const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [lineSearch, setLineSearch] = useState("");
+  const [masterCurrency, setMasterCurrency] = useState<{ curr_code: string; ex_rate: string }>({ curr_code: "OMR", ex_rate: "1" });
+
+  useEffect(() => {
+    if (!companyCode) return;
+    loadFreightLookup("freight_currency", companyCode, "").then((currencies) => {
+      const base = currencies.find((c) => Number(lookupText(c, "ex_rate")) === 1) || currencies[0];
+      if (base) {
+        setMasterCurrency({
+          curr_code: lookupText(base, "curr_code") || "OMR",
+          ex_rate: lookupText(base, "ex_rate") || "1",
+        });
+      }
+    }).catch(() => {});
+  }, [companyCode]);
+
+  const baseCurrency = lookupText(header, "curr_code") || masterCurrency.curr_code || "OMR";
+  const companyName = String(userRecord.company_name || userRecord.COMPANY_NAME || companyCode);
 
   const filteredLines = useMemo(() => {
     if (!lineSearch.trim()) return lines;
@@ -403,6 +422,29 @@ export function FreightJobActivitiesPage({
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
         {notice && <NoticeChip notice={notice} />}
         {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            const jobNo = lookupText(header, "job_no");
+            if (jobNo) window.location.href = `/freight_invoice/invoice?job_no=${encodeURIComponent(jobNo)}`;
+          }}
+          title="Generate Customer Invoice"
+          className="text-xs"
+        >
+          <FileText size={14} />Invoice
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => window.print()}
+          title="Print Job Invoice & Activities"
+          className="text-xs"
+        >
+          <Printer size={14} />Print
+        </Button>
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
@@ -524,6 +566,27 @@ export function FreightJobActivitiesPage({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {notice && <NoticeChip notice={notice} />}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const jobNo = lookupText(header, "job_no");
+                if (jobNo) window.location.href = `/freight_invoice/invoice?job_no=${encodeURIComponent(jobNo)}`;
+              }}
+              title="Generate Customer Invoice"
+            >
+              <FileText size={14} /> Generate Invoice
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => window.print()}
+              title="Print Job Invoice & Activities"
+            >
+              <Printer size={14} /> Print Invoice
+            </Button>
             <Button type="button" size="sm" onClick={addLine} disabled={isLineLocked} className="!bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]">
               <Plus size={14} /> Add Line
             </Button>
@@ -578,13 +641,13 @@ export function FreightJobActivitiesPage({
             {/* Inline KPI Strip */}
             <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
               <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
-                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} OMR
+                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} {baseCurrency}
               </span>
               <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
-                <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} OMR
+                <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} {baseCurrency}
               </span>
               <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
-                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} OMR
+                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} {baseCurrency}
               </span>
               <span
                 className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
@@ -593,7 +656,7 @@ export function FreightJobActivitiesPage({
                     : "bg-rose-50 border-rose-300 text-rose-800"
                 }`}
               >
-                <span>Profit:</span> {money(totals.profit)} OMR
+                <span>Profit:</span> {money(totals.profit)} {baseCurrency}
               </span>
             </div>
           </div>
@@ -653,21 +716,49 @@ export function FreightJobActivitiesPage({
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
           <table className="finance-lines-table w-full text-xs min-w-[1360px] border-collapse">
-            <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
-              <tr>
-                <th className="finance-sticky-col finance-col-no px-2 py-2 text-center w-9 bg-slate-100 text-slate-700 font-bold border-r border-slate-200">#</th>
-                <th className="px-2 py-2 text-left w-[185px] text-slate-700 font-bold border-r border-slate-200">Activity</th>
-                <th className="px-2 py-2 text-left min-w-[170px] text-slate-700 font-bold border-r border-slate-200">Description</th>
-                <th className="px-2 py-2 text-right w-[55px] text-slate-700 font-bold border-r border-slate-200">Qty</th>
-                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Rate (OMR)</th>
-                <th className="px-2 py-2 text-right w-[95px] text-slate-700 font-bold border-r border-slate-200">Revenue (OMR)</th>
-                <th className="px-2 py-2 text-center w-[110px] text-amber-900 bg-amber-50/80 border-r border-b-2 border-amber-300 font-bold">Tax / VAT</th>
-                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Cost (OMR)</th>
-                <th className="px-2 py-2 text-left w-[165px] text-slate-700 font-bold border-r border-slate-200">Agent / Broker</th>
-                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Agent (OMR)</th>
-                <th className="px-2 py-2 text-left w-[165px] text-slate-700 font-bold border-r border-slate-200">Transporter</th>
-                <th className="px-2 py-2 text-right w-[85px] text-slate-700 font-bold border-r border-slate-200">Transp (OMR)</th>
-                <th className="px-2 py-2 text-center w-[75px] text-slate-700 font-bold">Actions</th>
+            <thead className="sticky top-0 shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
+              {/* Tier 1 Header: Group Categories (PB Income & Expense Division) */}
+              <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none border-b border-slate-300">
+                <th colSpan={5} className="bg-slate-200/90 text-slate-700 border-r border-slate-300 py-1 px-2">
+                  Service & Activity Details
+                </th>
+                <th colSpan={2} className="bg-blue-600 text-white border-r border-blue-700 py-1 px-2 shadow-inner">
+                  Income (Billing)
+                </th>
+                <th colSpan={5} className="bg-amber-600 text-white border-r border-amber-700 py-1 px-2 shadow-inner">
+                  Expense (Costs & Vendors)
+                </th>
+                <th colSpan={1} className="bg-emerald-600 text-white border-r border-emerald-700 py-1 px-2">
+                  Tax
+                </th>
+                <th colSpan={1} className="bg-slate-200/90 text-slate-700 py-1 px-2">
+                  Actions
+                </th>
+              </tr>
+
+              {/* Tier 2 Header: Individual Columns */}
+              <tr className="bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                <th className="finance-sticky-col finance-col-no px-1.5 py-1.5 text-center w-8 bg-slate-100 text-slate-700 border-r border-slate-200" title="Tick / Select">
+                  Tick
+                </th>
+                <th className="px-2 py-1.5 text-center w-9 bg-slate-100 text-slate-700 border-r border-slate-200">#</th>
+                <th className="px-2 py-1.5 text-left w-[185px] text-slate-700 border-r border-slate-200">Activity</th>
+                <th className="px-2 py-1.5 text-left min-w-[170px] text-slate-700 border-r border-slate-200">Description</th>
+                <th className="px-2 py-1.5 text-right w-[60px] text-slate-700 border-r border-slate-200" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                {/* Income Columns */}
+                <th className="px-2 py-1.5 text-right w-[85px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Rate ({baseCurrency})</th>
+                <th className="px-2 py-1.5 text-right w-[95px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Bill Amt ({baseCurrency})</th>
+                {/* Expense Columns (With PB Distinct Yellow for Other Cost) */}
+                <th className="px-2 py-1.5 text-right w-[95px] bg-amber-100 text-amber-950 font-extrabold border-r border-amber-300" title="Other Cost Amt (PB actual_cost)">
+                  Other Cost Amt ({baseCurrency})
+                </th>
+                <th className="px-2 py-1.5 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Code</th>
+                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Price ({baseCurrency})</th>
+                <th className="px-2 py-2 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transporter Code</th>
+                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transp Price ({baseCurrency})</th>
+                {/* Tax & Action */}
+                <th className="px-2 py-1.5 text-center w-[110px] text-emerald-900 bg-emerald-50/80 border-r border-slate-200">Tax / VAT</th>
+                <th className="px-2 py-1.5 text-center w-[75px] text-slate-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -695,13 +786,23 @@ export function FreightJobActivitiesPage({
                         : "bg-white hover:bg-blue-50/40"
                     }`}
                   >
-                    {/* Row # */}
-                    <td className="finance-sticky-col finance-col-no px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500">
+                    {/* Row Tick & # */}
+                    <td className="finance-sticky-col finance-col-no px-1 py-1 text-center w-8 border-r border-slate-200">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={line.confirmed === "Y"}
+                        disabled={isLineLocked}
+                        onChange={(e) => updateLine(index, { confirmed: e.target.checked ? "Y" : "N" })}
+                        title="Tick / Confirm line"
+                      />
+                    </td>
+                    <td className="px-2 py-1 text-center font-mono text-[11px] font-semibold text-slate-500 border-r border-slate-200">
                       {index + 1}
                     </td>
 
                     {/* Activity Lookup */}
-                    <td className="px-1.5 py-1 w-[185px]">
+                    <td className="px-1.5 py-1 w-[185px] border-r border-slate-200">
                       <ActivityLookup
                         value={line.act_code}
                         displayValue={line.activity}
@@ -752,7 +853,7 @@ export function FreightJobActivitiesPage({
                     </td>
 
                     {/* Description */}
-                    <td className="px-1.5 py-1 min-w-[170px]">
+                    <td className="px-1.5 py-1 min-w-[170px] border-r border-slate-200">
                       <input
                         className="h-7 w-full text-[11px] px-2 rounded border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 font-sans"
                         placeholder="Service description..."
@@ -764,7 +865,7 @@ export function FreightJobActivitiesPage({
                     </td>
 
                     {/* Qty */}
-                    <td className="px-1.5 py-1 w-[55px]">
+                    <td className="px-1.5 py-1 w-[55px] border-r border-slate-200">
                       <MoneyInput
                         value={line.quantity}
                         disabled={isLineLocked}
@@ -774,7 +875,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Rate (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[85px]"
+                      className="px-1.5 py-1 w-[85px] border-r border-slate-200"
                       title={
                         hasForeignCurrency
                           ? `Base: OMR ${money(line.bill_rate)} | Foreign: ${money(line.bill_rate_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
@@ -808,7 +909,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Revenue (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[95px]"
+                      className="px-1.5 py-1 w-[95px] border-r border-slate-200"
                       title={
                         hasForeignCurrency
                           ? `Base: OMR ${money(line.bill)} | Foreign: ${money(line.bill_oc)} ${line.bill_curr_code} (Ex: ${line.bill_ex_rate})`
@@ -840,46 +941,19 @@ export function FreightJobActivitiesPage({
                       />
                     </td>
 
-                    {/* Tax (VAT) Dedicated Button */}
-                    <td className="px-1.5 py-1 w-[110px]">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTaxIndex(index)}
-                        className={`h-7 w-full px-1.5 rounded border flex items-center justify-between gap-1 text-[11px] font-mono transition-all cursor-pointer shadow-2xs ${
-                          hasTax
-                            ? "border-emerald-400 bg-emerald-50/90 text-emerald-900 font-bold hover:bg-emerald-100"
-                            : "border-dashed border-slate-300 bg-slate-50/60 text-slate-500 hover:border-slate-400 hover:bg-slate-100"
-                        }`}
-                        title={
-                          hasTax
-                            ? `Sales Tax: ${line.tx_compnt_perc_1 || 0}% | OMR ${money(line.tx_compnt_lcuramt_1)}${
-                                hasForeignCurrency ? ` (${money(line.tx_compnt_amt_1)} ${line.bill_curr_code})` : ""
-                              }`
-                            : "Click to configure Tax & VAT"
-                        }
-                      >
-                        <span className="flex items-center gap-0.5 font-bold">
-                          <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
-                          <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "0%"}</span>
-                        </span>
-                        <span className="text-[10.5px] tabular-nums font-semibold truncate text-right">
-                          {hasTax ? money(line.tx_compnt_lcuramt_1) : "No Tax"}
-                        </span>
-                      </button>
-                    </td>
-
-                    {/* Cost (OMR) */}
+                    {/* Other Cost Amt (OMR) - PB actual_cost with distinct yellow styling */}
                     <td
-                      className="px-1.5 py-1 w-[85px]"
+                      className="px-1.5 py-1 w-[95px] bg-amber-50/60 border-r border-slate-200"
                       title={
                         line.ac_curr_code && line.ac_curr_code !== "OMR"
-                          ? `Base Cost: OMR ${money(line.actual_cost)} | Foreign: ${money(line.actual_cost_oc)} ${line.ac_curr_code} (Ex: ${line.ac_ex_rate})`
-                          : undefined
+                          ? `Other Cost: OMR ${money(line.actual_cost)} | Foreign: ${money(line.actual_cost_oc)} ${line.ac_curr_code} (Ex: ${line.ac_ex_rate})`
+                          : "Other Cost Amount (actual_cost)"
                       }
                     >
                       <MoneyInput
                         value={line.actual_cost}
                         disabled={isLineLocked}
+                        className="!bg-[#fef9c3] !border-amber-300 text-amber-950 font-bold focus:!bg-[#fef08a]"
                         onChange={(value) => {
                           const newCost = numberValue(value);
                           const acEx = numberValue(line.ac_ex_rate) || 1;
@@ -898,7 +972,7 @@ export function FreightJobActivitiesPage({
                     </td>
 
                     {/* Agent / Broker */}
-                    <td className="px-1.5 py-1 w-[165px]">
+                    <td className="px-1.5 py-1 w-[165px] border-r border-slate-200">
                       <AgentLookup
                         companyCode={companyCode}
                         value={line.broker_code}
@@ -915,7 +989,7 @@ export function FreightJobActivitiesPage({
 
                     {/* Agent Price (OMR) */}
                     <td
-                      className="px-1.5 py-1 w-[85px]"
+                      className="px-1.5 py-1 w-[85px] border-r border-slate-200"
                       title={
                         line.partner_curr_code && line.partner_curr_code !== "OMR"
                           ? `Base Agent: OMR ${money(line.partners_price)} | Foreign: ${money(line.partner_price_oc)} ${line.partner_curr_code} (Ex: ${line.partner_ex_rate})`
@@ -940,7 +1014,7 @@ export function FreightJobActivitiesPage({
                     </td>
 
                     {/* Transporter */}
-                    <td className="px-1.5 py-1 w-[165px]">
+                    <td className="px-1.5 py-1 w-[165px] border-r border-slate-200">
                       <TransporterLookup
                         companyCode={companyCode}
                         value={line.transporter_code}
@@ -979,6 +1053,34 @@ export function FreightJobActivitiesPage({
                           });
                         }}
                       />
+                    </td>
+
+                    {/* Tax (VAT) Dedicated Button */}
+                    <td className="px-1.5 py-1 w-[110px] border-r border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTaxIndex(index)}
+                        className={`h-7 w-full px-1.5 rounded border flex items-center justify-between gap-1 text-[11px] font-mono transition-all cursor-pointer shadow-2xs ${
+                          hasTax
+                            ? "border-emerald-400 bg-emerald-50/90 text-emerald-900 font-bold hover:bg-emerald-100"
+                            : "border-dashed border-slate-300 bg-slate-50/60 text-slate-500 hover:border-slate-400 hover:bg-slate-100"
+                        }`}
+                        title={
+                          hasTax
+                            ? `Sales Tax: ${line.tx_compnt_perc_1 || 0}% | OMR ${money(line.tx_compnt_lcuramt_1)}${
+                                hasForeignCurrency ? ` (${money(line.tx_compnt_amt_1)} ${line.bill_curr_code})` : ""
+                              }`
+                            : "Click to configure Tax & VAT"
+                        }
+                      >
+                        <span className="flex items-center gap-0.5 font-bold">
+                          <Percent size={11} className={hasTax ? "text-emerald-600" : "text-slate-400"} />
+                          <span>{numberValue(line.tx_compnt_perc_1) > 0 ? `${line.tx_compnt_perc_1}%` : "0%"}</span>
+                        </span>
+                        <span className="text-[10.5px] tabular-nums font-semibold truncate text-right">
+                          {hasTax ? money(line.tx_compnt_lcuramt_1) : "No Tax"}
+                        </span>
+                      </button>
                     </td>
 
                     {/* Action Buttons: Currency Calculator & Delete */}
@@ -1020,7 +1122,7 @@ export function FreightJobActivitiesPage({
 
               {!lines.length && (
                 <tr>
-                  <td colSpan={13} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">No service & activity lines yet.</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Click "+ Add Line" to add services or "Populate Quotation" to import approved activities.
@@ -1031,38 +1133,43 @@ export function FreightJobActivitiesPage({
 
               {lines.length > 0 && filteredLines.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-3 py-8 text-center text-sm text-muted-foreground">
                     No activity lines match "<strong>{lineSearch}</strong>"
                   </td>
                 </tr>
               )}
             </tbody>
 
-            {/* Pinned Totals Footer */}
+            {/* Pinned Column Totals Footer */}
             {lines.length > 0 && (
               <tfoot className="sticky bottom-0 bg-slate-100/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 border-t-2 border-slate-300 shadow-xs z-10 whitespace-nowrap">
                 <tr>
-                  <td colSpan={3} className="px-3 py-1.5 text-right font-extrabold uppercase text-slate-600">
-                    Totals ({lines.length} lines):
+                  <td className="px-1 py-1.5 text-center text-slate-400">-</td>
+                  <td className="px-1 py-1.5 text-center text-slate-400">-</td>
+                  <td colSpan={2} className="px-3 py-1.5 text-left font-extrabold uppercase text-slate-600">
+                    Totals ({lines.length} {lines.length === 1 ? "line" : "lines"}):
                   </td>
-                  <td className="px-2 py-1.5 text-right font-mono text-slate-700">-</td>
-                  <td className="px-2 py-1.5 text-right">-</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900">
-                    {money(totals.revenue)}
+                  <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
+                  {/* Income Totals */}
+                  <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200">
+                    {money(totals.incomeBill)}
                   </td>
-                  <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800">
+                  {/* Expense Totals */}
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-amber-950 bg-amber-100/80 border-r border-amber-300">
+                    {money(totals.expenseOthers)}
+                  </td>
+                  <td className="px-2 py-1.5 text-left text-slate-400">-</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700 bg-amber-50/40 border-r border-slate-200">
+                    {money(totals.expenseAgent)}
+                  </td>
+                  <td className="px-2 py-1.5 text-left text-slate-400">-</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700 bg-amber-50/40 border-r border-slate-200">
+                    {money(totals.expenseTransport)}
+                  </td>
+                  {/* Tax Total */}
+                  <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
                     {money(totals.tax)}
-                  </td>
-                  <td className="px-2 py-1.5 text-right font-mono font-bold text-slate-800">
-                    {money(totals.cost)}
-                  </td>
-                  <td className="px-2 py-1.5 text-left">-</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700">
-                    {money(totals.partners)}
-                  </td>
-                  <td className="px-2 py-1.5 text-left">-</td>
-                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-slate-700">
-                    {money(totals.transport)}
                   </td>
                   <td className="px-2 py-1.5 text-center text-[10px] text-slate-500 font-mono">
                     OMR
@@ -1071,6 +1178,86 @@ export function FreightJobActivitiesPage({
               </tfoot>
             )}
           </table>
+        </div>
+
+        {/* PowerBuilder 2D Financial Summary Matrix & Operational Strip */}
+        <div className="border-t border-slate-200 bg-slate-50/80 p-3 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+          <div className="space-y-2 text-xs text-slate-600">
+            <div className="flex items-center gap-1.5 font-medium text-slate-700 bg-white px-2.5 py-1.5 rounded border border-slate-200 shadow-2xs">
+              <span className="font-extrabold text-[#00378C]">* Q / V / W :</span>
+              <span>Type of Measure is Quantity or Volume or Weight</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 bg-white px-2.5 py-1 rounded border border-slate-200">
+              <span><strong className="text-slate-700">Ref:</strong> {lookupText(header, "customer_ref") || lookupText(header, "ref_no") || "-"}</span>
+              <span>•</span>
+              <span><strong className="text-slate-700">Confirm Date:</strong> {formatDate(lookupText(header, "confirm_date")) || "Pending"}</span>
+              <span>•</span>
+              <span><strong className="text-slate-700">GRN Date:</strong> {formatDate(lookupText(header, "grn_date")) || "-"}</span>
+              <span>•</span>
+              <span>
+                <strong className="text-slate-700">Status:</strong>{" "}
+                <span className={`font-semibold ${lookupText(header, "confirm_date") ? "text-emerald-700" : "text-amber-700"}`}>
+                  {lookupText(header, "confirm_date") ? "Confirmed" : "Draft / Open"}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* 2D Financial Matrix Card matching PowerBuilder dw_ft_service_activities_dtl */}
+          <div className="overflow-x-auto w-full xl:w-auto rounded-md border border-slate-300 bg-white shadow-xs">
+            <table className="text-xs border-collapse font-sans text-right min-w-[580px]">
+              <thead>
+                <tr className="border-b border-slate-300 bg-slate-100/90 text-[11px]">
+                  <th className="px-3 py-1 text-left font-bold text-slate-600 border-r border-slate-200">Category</th>
+                  <th colSpan={2} className="px-3 py-1 text-center font-bold text-blue-800 bg-blue-50/80 border-r border-slate-200">Income</th>
+                  <th colSpan={3} className="px-3 py-1 text-center font-bold text-amber-800 bg-amber-50/80 border-r border-slate-200">Expense</th>
+                  <th className="px-3 py-1 text-center font-bold text-emerald-800 bg-emerald-50/80">Profit</th>
+                </tr>
+                <tr className="border-b border-slate-200 bg-slate-50/60 text-[10px] text-slate-600 font-bold uppercase tracking-wider">
+                  <th className="px-3 py-0.5 text-left border-r border-slate-200 text-slate-500">Type</th>
+                  <th className="px-2.5 py-0.5 border-r border-slate-200 bg-blue-50/30">Others</th>
+                  <th className="px-2.5 py-0.5 border-r border-slate-200 bg-blue-50/30">Bill</th>
+                  <th className="px-2.5 py-0.5 border-r border-slate-200 bg-amber-50/30">Others</th>
+                  <th className="px-2.5 py-0.5 border-r border-slate-200 bg-amber-50/30">Agent</th>
+                  <th className="px-2.5 py-0.5 border-r border-slate-200 bg-amber-50/30">Transporter</th>
+                  <th className="px-3 py-0.5 text-emerald-800 bg-emerald-50/30">Net Profit</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-mono tabular-nums divide-y divide-slate-200">
+                <tr className="hover:bg-slate-50">
+                  <td className="px-3 py-1 text-left font-sans font-bold text-slate-700 border-r border-slate-200">Amount</td>
+                  <td className="px-2.5 py-1 text-slate-600 border-r border-slate-200">{money(totals.incomeOthers)}</td>
+                  <td className="px-2.5 py-1 font-bold text-blue-900 border-r border-slate-200">{money(totals.incomeBill)}</td>
+                  <td className="px-2.5 py-1 text-amber-950 bg-amber-50/50 font-semibold border-r border-slate-200">{money(totals.expenseOthers)}</td>
+                  <td className="px-2.5 py-1 text-slate-700 border-r border-slate-200">{money(totals.expenseAgent)}</td>
+                  <td className="px-2.5 py-1 text-slate-700 border-r border-slate-200">{money(totals.expenseTransport)}</td>
+                  <td className={`px-3 py-1 font-bold ${totals.profit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                    {money(totals.profit)}
+                  </td>
+                </tr>
+                <tr className="hover:bg-slate-50 bg-slate-50/30">
+                  <td className="px-3 py-1 text-left font-sans font-bold text-slate-700 border-r border-slate-200">Total TAX :</td>
+                  <td className="px-2.5 py-1 text-slate-500 border-r border-slate-200">{money(totals.incomeOthersTax)}</td>
+                  <td className="px-2.5 py-1 font-semibold text-emerald-800 border-r border-slate-200">{money(totals.incomeBillTax)}</td>
+                  <td className="px-2.5 py-1 text-slate-500 border-r border-slate-200">{money(totals.expenseOthersTax)}</td>
+                  <td className="px-2.5 py-1 text-slate-500 border-r border-slate-200">{money(totals.expenseAgentTax)}</td>
+                  <td className="px-2.5 py-1 text-slate-500 border-r border-slate-200">{money(totals.expenseTransportTax)}</td>
+                  <td className="px-3 py-1 text-slate-400 font-sans text-center">-</td>
+                </tr>
+                <tr className="bg-slate-100/90 font-bold border-t-2 border-slate-300">
+                  <td className="px-3 py-1 text-left font-sans text-slate-900 border-r border-slate-200">Net Amount with TAX :</td>
+                  <td className="px-2.5 py-1 text-slate-800 border-r border-slate-200">{money(totals.incomeOthersNet)}</td>
+                  <td className="px-2.5 py-1 text-blue-950 font-extrabold border-r border-slate-200">{money(totals.incomeBillNet)}</td>
+                  <td className="px-2.5 py-1 text-amber-950 bg-amber-100/50 font-bold border-r border-slate-200">{money(totals.expenseOthersNet)}</td>
+                  <td className="px-2.5 py-1 text-slate-800 border-r border-slate-200">{money(totals.expenseAgentNet)}</td>
+                  <td className="px-2.5 py-1 text-slate-800 border-r border-slate-200">{money(totals.expenseTransportNet)}</td>
+                  <td className={`px-3 py-1 font-extrabold ${totals.profit >= 0 ? "text-emerald-800" : "text-rose-800"}`}>
+                    {money(totals.profit)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1107,13 +1294,13 @@ export function FreightJobActivitiesPage({
                 </div>
                 <div>
                   <span className="text-amber-800 font-semibold">Base Currency: </span>
-                  <span className="font-mono font-bold text-primary">OMR (AAA LOGISTICS)</span>
+                  <span className="font-mono font-bold text-primary">{baseCurrency} ({companyName})</span>
                 </div>
               </div>
             </div>
 
             <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 flex items-center justify-between">
-              <span>Enter figures from your sheet in <strong>Foreign Currency (FC)</strong>. The system calculates and displays <strong>Base OMR</strong> on the main table: <code className="bg-slate-200/80 px-1 rounded font-mono text-[10.5px]">Base (OMR) = Foreign × Ex. Rate</code></span>
+              <span>Enter figures from your sheet in <strong>Foreign Currency (FC)</strong>. The system calculates and displays <strong>Base {baseCurrency}</strong> on the main table: <code className="bg-slate-200/80 px-1 rounded font-mono text-[10.5px]">Base ({baseCurrency}) = Foreign × Ex. Rate</code></span>
             </div>
 
             {/* 1. Sales / Billing Currency */}
@@ -1159,7 +1346,7 @@ export function FreightJobActivitiesPage({
                   </button>
                 </div>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base revenue: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].bill)}</strong>
+                  base revenue: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].bill)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1269,7 +1456,7 @@ export function FreightJobActivitiesPage({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Rate (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Rate ({baseCurrency})</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].bill_rate)}
                   </div>
@@ -1282,7 +1469,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>2. Vendor / Actual Cost Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base cost: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].actual_cost)}</strong>
+                  base cost: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].actual_cost)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1345,7 +1532,7 @@ export function FreightJobActivitiesPage({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Cost (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Cost ({baseCurrency})</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].actual_cost)}
                   </div>
@@ -1358,7 +1545,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-sky-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>3. Agent / Partner Price Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base agent: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].partners_price)}</strong>
+                  base agent: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].partners_price)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1421,7 +1608,7 @@ export function FreightJobActivitiesPage({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Price (OMR)</label>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Base Price ({baseCurrency})</label>
                   <div className="h-7 px-2 flex items-center font-mono font-bold bg-muted/40 rounded border border-input text-foreground">
                     {money(lines[activeFcIndex].partners_price)}
                   </div>
@@ -1434,7 +1621,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-indigo-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>4. Transporter Price Currency</span>
                 <span className="text-[11px] font-mono text-muted-foreground lowercase">
-                  base transp: <strong className="text-foreground uppercase">OMR {money(lines[activeFcIndex].transport_price)}</strong>
+                  base transp: <strong className="text-foreground uppercase">{baseCurrency} {money(lines[activeFcIndex].transport_price)}</strong>
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
@@ -1537,11 +1724,11 @@ export function FreightJobActivitiesPage({
               <div className="flex items-center gap-4">
                 <div>
                   <span className="text-emerald-800 font-semibold">Revenue: </span>
-                  <span className="font-mono font-bold text-primary">OMR {money(lines[activeTaxIndex].bill)}</span>
+                  <span className="font-mono font-bold text-primary">{baseCurrency} {money(lines[activeTaxIndex].bill)}</span>
                 </div>
                 <div>
                   <span className="text-emerald-800 font-semibold">Cost: </span>
-                  <span className="font-mono font-bold text-emerald-700">OMR {money(lines[activeTaxIndex].actual_cost)}</span>
+                  <span className="font-mono font-bold text-emerald-700">{baseCurrency} {money(lines[activeTaxIndex].actual_cost)}</span>
                 </div>
               </div>
             </div>
@@ -1551,7 +1738,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-primary flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>1. Sales Tax / Output VAT (Customer Billing)</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  Sales Tax Amt: <strong className="text-primary font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
+                  Sales Tax Amt: <strong className="text-primary font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
                   {Boolean(lines[activeTaxIndex].bill_curr_code && lines[activeTaxIndex].bill_curr_code !== "OMR") && (
                     <span className="ml-1 text-[10px] text-sky-700 font-normal">
                       ({money(lines[activeTaxIndex].tx_compnt_amt_1)} {lines[activeTaxIndex].bill_curr_code})
@@ -1643,7 +1830,7 @@ export function FreightJobActivitiesPage({
               <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
                 <span>2. Vendor Cost Tax / Input VAT (Expenses)</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
-                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">OMR {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
+                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
                   {Boolean(lines[activeTaxIndex].ac_curr_code && lines[activeTaxIndex].ac_curr_code !== "OMR") && (
                     <span className="ml-1 text-[10px] text-emerald-700 font-normal">
                       ({money(lines[activeTaxIndex].tx_compnt_amt_1_cost)} {lines[activeTaxIndex].ac_curr_code})
@@ -2127,8 +2314,27 @@ function CurrencyLookup({
   );
 }
 
-function MoneyInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
-  return <Input className="h-7 text-right text-[11px] font-mono px-1.5 tabular-nums" type="text" inputMode="decimal" value={value} disabled={disabled} onChange={(event) => onChange(normalizeMoneyInput(event.target.value))} />;
+function MoneyInput({
+  value,
+  onChange,
+  disabled,
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <Input
+      className={`h-7 text-right text-[11px] font-mono px-1.5 tabular-nums ${className}`}
+      type="text"
+      inputMode="decimal"
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(normalizeMoneyInput(event.target.value))}
+    />
+  );
 }
 
 function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
@@ -2291,25 +2497,90 @@ function recalcCostTax(line: ActivityLine) {
 }
 
 function calculateTotals(lines: ActivityLine[]) {
-  return lines.reduce((sum, line) => {
-    // All amounts in lines are strictly maintained in Base Currency (OMR)
-    const revenue = numberValue(line.bill);
-    const cost = numberValue(line.actual_cost);
-    const partners = numberValue(line.partners_price);
-    const transport = numberValue(line.transport_price);
-    const expense = cost + partners + transport;
-    const tax = numberValue(line.tx_compnt_lcuramt_1);
+  return lines.reduce(
+    (sum, line) => {
+      // Income
+      const bill = numberValue(line.bill);
+      const otherBill = 0; // other_bill_amt if present
+      const taxBill = numberValue(line.tx_compnt_lcuramt_1);
+      const taxOtherBill = 0;
 
-    return {
-      revenue: sum.revenue + revenue,
-      expense: sum.expense + expense,
-      cost: sum.cost + cost,
-      partners: sum.partners + partners,
-      transport: sum.transport + transport,
-      tax: sum.tax + tax,
-      profit: sum.profit + revenue - expense,
-    };
-  }, { revenue: 0, expense: 0, cost: 0, partners: 0, transport: 0, tax: 0, profit: 0 });
+      // Expense
+      const costOthers = numberValue(line.actual_cost);
+      const taxCostOthers = numberValue(line.tx_compnt_lcuramt_1_cost);
+
+      const costAgent = numberValue(line.partners_price);
+      const taxCostAgent = numberValue(line.tx_compnt_lcuramt_2_cost);
+
+      const costTransport = numberValue(line.transport_price);
+      const taxCostTransport = numberValue(line.tx_compnt_lcuramt_3_cost);
+
+      const totalIncome = bill + otherBill;
+      const totalExpense = costOthers + costAgent + costTransport;
+      const totalTax = taxBill + taxOtherBill;
+
+      return {
+        // High level totals
+        revenue: sum.revenue + totalIncome,
+        expense: sum.expense + totalExpense,
+        cost: sum.cost + costOthers,
+        partners: sum.partners + costAgent,
+        transport: sum.transport + costTransport,
+        tax: sum.tax + totalTax,
+        profit: sum.profit + totalIncome - totalExpense,
+
+        // Exact PB 2D Matrix Breakdown
+        incomeOthers: sum.incomeOthers + otherBill,
+        incomeOthersTax: sum.incomeOthersTax + taxOtherBill,
+        incomeOthersNet: sum.incomeOthersNet + otherBill + taxOtherBill,
+
+        incomeBill: sum.incomeBill + bill,
+        incomeBillTax: sum.incomeBillTax + taxBill,
+        incomeBillNet: sum.incomeBillNet + bill + taxBill,
+
+        expenseOthers: sum.expenseOthers + costOthers,
+        expenseOthersTax: sum.expenseOthersTax + taxCostOthers,
+        expenseOthersNet: sum.expenseOthersNet + costOthers + taxCostOthers,
+
+        expenseAgent: sum.expenseAgent + costAgent,
+        expenseAgentTax: sum.expenseAgentTax + taxCostAgent,
+        expenseAgentNet: sum.expenseAgentNet + costAgent + taxCostAgent,
+
+        expenseTransport: sum.expenseTransport + costTransport,
+        expenseTransportTax: sum.expenseTransportTax + taxCostTransport,
+        expenseTransportNet: sum.expenseTransportNet + costTransport + taxCostTransport,
+      };
+    },
+    {
+      revenue: 0,
+      expense: 0,
+      cost: 0,
+      partners: 0,
+      transport: 0,
+      tax: 0,
+      profit: 0,
+
+      incomeOthers: 0,
+      incomeOthersTax: 0,
+      incomeOthersNet: 0,
+
+      incomeBill: 0,
+      incomeBillTax: 0,
+      incomeBillNet: 0,
+
+      expenseOthers: 0,
+      expenseOthersTax: 0,
+      expenseOthersNet: 0,
+
+      expenseAgent: 0,
+      expenseAgentTax: 0,
+      expenseAgentNet: 0,
+
+      expenseTransport: 0,
+      expenseTransportTax: 0,
+      expenseTransportNet: 0,
+    }
+  );
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {

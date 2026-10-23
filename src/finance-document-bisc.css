@@ -1715,5 +1715,72 @@ form.commercial-document-workbench {
   font-weight: 700 !important;
 }
 
+/* Job / Expense allocation panel only (Invoice has 8 cols, so it is untouched) */
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) {
+  min-width: 400px !important;
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-table {
+  width: 45% !important;
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(2) {
+  width: 180px !important;  /* JOB NO */
+}
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(3),
+.finance-document-editor .finance-allocation-panel:not(:has(th:nth-child(8))) .finance-allocation-thead th:nth-child(4) {
+  width: 230px !important;  /* DOC REF, DOC REF 2 */
+}
+
+/* ── Finance list pages: no page scroll, table scrolls inside ── */
+.workspace-content:has(.finance-list-page:not(.finance-document-editing)) {
+  overflow: hidden !important;
+}
 
 
+/* Main document details only; nested allocation tables keep their own palette. */
+.finance-document-editor .finance-detail-table > thead > tr > th {
+ background: #f1f5f9 !important; color: #334155 !important;
+ border-right: 1px solid #cbd5e1 !important; border-bottom: 2px solid #94a3b8 !important;
+ font-weight: 700 !important; text-transform: uppercase; letter-spacing: .035em !important;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td { border-right: 1px solid #dbe3ed !important; border-bottom: 1px solid #e2e8f0; }
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row):hover > td { background-color: #f0f6ff !important; }
+.finance-document-editor .finance-detail-table > thead > tr > th:last-child, .finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td:last-child { border-right: 0 !important; }
+.finance-document-editor .finance-detail-table > thead > tr > th.finance-amount-cell:not(.finance-th-tax):not(.finance-th-base-amt) {
+ background: #ecfdf5 !important; color: #047857 !important; border-bottom-color: #34d399 !important;
+}
+.finance-document-editor .finance-detail-table > thead > tr > th.finance-th-tax {
+ background: #fffbeb !important; color: #92400e !important; border-bottom-color: #fbbf24 !important;
+}
+.finance-document-editor .finance-detail-table > thead > tr > th.finance-th-base-amt {
+ background: #eff6ff !important; color: #1d4ed8 !important; border-bottom-color: #60a5fa !important;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input {
+ background: #ecfdf5 !important; color: #047857 !important; border-color: #a7f3d0 !important;
+ font-weight: 700 !important; font-variant-numeric: tabular-nums; opacity: 1; -webkit-text-fill-color: #047857;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input:focus {
+ border-color: #059669 !important; box-shadow: 0 0 0 2px rgb(5 150 105 / 15%) !important;
+}
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input:is(.commercial-tax-amt-input, .commercial-tax-perc-input) {
+ color: #92400e !important; background: #fffbeb !important; font-variant-numeric: tabular-nums;
+ opacity: 1; -webkit-text-fill-color: #92400e;
+}
+/* Keep invalid amount fields visibly marked. */
+.finance-document-editor .finance-detail-table > tbody > tr:not(.finance-allocation-row) > td input.commercial-amount-input[class*="!border-rose-500"] { border-color: #f43f5e !important; }
+.finance-list-table-wrap {
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+.finance-list-table-wrap .data-table-scroll {
+  height: calc(100dvh - 350px) !important;   /* shorter table: tune this number */
+  min-height: 550px;
+  max-height: none !important;
+  overflow: auto !important;                 /* the only scrollbar */
+}
+
+.finance-list-table-wrap .data-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}

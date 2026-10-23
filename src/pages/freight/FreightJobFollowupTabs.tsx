@@ -493,7 +493,7 @@ function EditableGrid({
       </div>
 
       {/* Finance Styled Scrollable Table */}
-      <div className="commercial-lines-scroll overflow-auto min-h-[220px]" style={{ maxHeight: "calc(100dvh - 210px)" }}>
+       <div className="commercial-lines-scroll overflow-auto min-h-[220px]" style={{ maxHeight: "calc(100dvh - 300px)" }}> 
         <table className="finance-lines-table w-full text-xs min-w-[1000px] border-collapse">
           <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
             <tr>

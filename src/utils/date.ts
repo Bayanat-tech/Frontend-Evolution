@@ -67,3 +67,68 @@ export function dateInput(value: unknown): string {
   return date.toISOString().slice(0, 10);
 }
 
+
+// ---------- Financial-year helpers (all finance pages) ----------
+export type FyRange = { min: string; max: string } | null;
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const pick = (row: any, key: string) => row?.[key] ?? row?.[key.toUpperCase()];
+
+/** {min,max} as YYYY-MM-DD, or null for 'All' / rows without dates. */
+// export function getFyRange(fyPeriods: any[], fyPeriod: string): FyRange {
+//   const fy = (fyPeriods || []).find((p) => String(pick(p, "fy_period")) === String(fyPeriod));
+//   if (!fy) return null;
+//   const min = dateInput(pick(fy, "date_from"));
+//   const max = dateInput(pick(fy, "date_to"));
+//   return ISO_DATE.test(min) && ISO_DATE.test(max) ? { min, max } : null;
+// }
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+export const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+// handles YYYY-MM-DD, DD-MM-YYYY and ISO timestamps (converted to local date)
+const ymdLocal = (v: unknown): string => {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const dmy = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+export function getFyRange(fyPeriods: any[], fyPeriod: string, opts?: { docDate?: string }): FyRange {
+  const rows = (fyPeriods || [])
+    .map((p) => ({ code: String(pick(p, "fy_period")), min: ymdLocal(pick(p, "date_from")), max: ymdLocal(pick(p, "date_to")) }))
+    .filter((r) => ISO_DATE.test(r.min) && ISO_DATE.test(r.max));
+  const byDate = (d: string) => rows.find((r) => d >= r.min && d <= r.max);
+  const pack = (r?: { min: string; max: string }): FyRange => (r ? { min: r.min, max: r.max } : null);
+
+  if (opts?.docDate) {                       // edit mode: FY of the saved date
+    const hit = byDate(ymdLocal(opts.docDate));
+    if (hit) return pack(hit);
+  }
+  const selected = rows.find((r) => r.code === String(fyPeriod));
+  if (selected) return pack(selected);       // dropdown FY
+  return pack(byDate(localToday()));         // "All": FY containing today
+}
+
+/** Spread onto BiscDatePicker: <BiscDatePicker {...fyDateProps(fyRange)} /> */
+export const fyDateProps = (r: FyRange) => (r ? { min: r.min, max: r.max } : {});
+
+/** Pull a default date (e.g. today) inside the FY. */
+export const clampToFy = (d: string, r: FyRange) =>
+  !r || !d ? d : d < r.min ? r.min : d > r.max ? r.max : d;
+
+/** Error message or null. Use in submit(). */
+export function validateFyDate(d: string, r: FyRange, label = "Date"): string | null {
+  if (!r || !d) return null;
+  const v = dateInput(d);
+  return v < r.min || v > r.max
+    ? `${label} must be within the financial year (${formatDate(r.min)} – ${formatDate(r.max)}).`
+    : null;
+}

@@ -226,7 +226,7 @@ export function MateriaLReturnEditor({
           tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
           inv_no: text(headerRaw.inv_no),
           inv_date: text(headerRaw.inv_date),
-           job_card_no:text(headerRaw.job_card_no  || current.job_card_no),
+          job_card_no: text(headerRaw.job_card_no || current.job_card_no),
           discount_scoope:
             headerRaw.discount_scoope === "PO" ||
               headerRaw.discount_scoope === "ITEM"
@@ -478,7 +478,7 @@ export function MateriaLReturnEditor({
     if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
     return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.MRT, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase Quotation saved as draft");
+    }, "Material Return saved as draft");
   };
 
   // const handleSubmitClick = () => {
@@ -665,27 +665,7 @@ export function MateriaLReturnEditor({
               />
               <div className="flex items-center gap-2">
                 {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-                {form.doc_no && (
-                  <>
-                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
-                    <Printer size={15} /> Print
-                  </Button> */}
-                    <Button
-                      aria-label="Excel"
-                      title="Excel"
-                      type="button"
-                      variant="secondary"
-                      size="icon"
-                      onClick={() => void handleReportPreviewExcel()}
-                      disabled={reportPreviewExporting}
-                    >
-                      <Download size={15} />
-                    </Button>
-                  </>
-                )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
-                  <Paperclip size={15} /> Files
-                </Button>
+
 
                 <div className="flex items-center gap-2">
                   {isPendingTab && (
@@ -747,7 +727,28 @@ export function MateriaLReturnEditor({
                   )}
 
                 </div>
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+                {form.doc_no && (
+                  <>
+                    {/* <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button> */}
+                    <Button
+                      aria-label="Excel"
+                      title="Excel"
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => void handleReportPreviewExcel()}
+                      disabled={reportPreviewExporting}
+                    >
+                      <Download size={15} />
+                    </Button>
+                  </>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                  <Paperclip size={15} /> Files
+                </Button>
+                {/* <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button> */}
               </div>
             </div>
           </CardHeader>
@@ -764,7 +765,7 @@ export function MateriaLReturnEditor({
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
             {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
+              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Material Return...</div>
             ) : (
               <div className="commercial-editor-sections grid gap-3 min-w-0">
                 <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -867,7 +868,7 @@ export function MateriaLReturnEditor({
                   </Button>
                   {showSubmitConfirm && (
                     <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-lg border bg-white p-3 shadow-lg">
-                      <p className="mb-2 text-sm text-gray-700">Submit this Purchase Quotation?</p>
+                      <p className="mb-2 text-sm text-gray-700">Submit this Material Return?</p>
                       <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => setShowSubmitConfirm(false)}>No</Button>
                         <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={confirmSubmit}>Yes</Button>

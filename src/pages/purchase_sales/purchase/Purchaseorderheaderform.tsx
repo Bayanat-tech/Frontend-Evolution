@@ -275,11 +275,13 @@ export function PurchaseOrderHeaderForm({
                       // doc_no: text(getLookupValue(row || {}, "doc_no")),
                       ac_code: text(getLookupValue(row || {}, "ac_code")),
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
-                      dept_code: text(getLookupValue(row || {}, "dept_code")),
+                      // dept_code: text(getLookupValue(row || {}, "dept_code")),
                       remarks: text(getLookupValue(row || {}, "remarks")).slice(0,250),
                       ref_date: text(getLookupValue(row || {}, "ref_date")),
-                      curr_code: text(getLookupValue(row || {}, "curr_code")),
-                      curr_name: text(getLookupValue(row || {}, "curr_name")),
+                      curr_code: text(getLookupValue(row || {}, "curr_code") || accountRow?.curr_code),
+                      curr_name: text(getLookupValue(row || {}, "curr_name") || accountRow?.curr_name),
+                      dept_code: text(getLookupValue(row || {}, "dept_code") || accountRow?.dept_code),
+                      dept_name: text(getLookupValue(row || {}, "dept_name") || accountRow?.dept_name),
                       ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                       other_expense_cost: numberOrZero(getLookupValue(row || {}, "other_expense_cost")),
                       disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
@@ -403,8 +405,8 @@ export function PurchaseOrderHeaderForm({
 
             {docTypeUpper === "LPO" && (
               <>
-                <CField label="Buyer" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
-                <CField label="WO No" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
+                <CField label="Buyer" className="col-span-2"><Input className="h-7 text-xs" maxLength = {50} disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
+                <CField label="WO No" className="col-span-2"><Input className="h-7 text-xs" maxLength = {50} disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
               </>
             )}
             {docTypeUpper === "JO" && (
@@ -449,9 +451,9 @@ export function PurchaseOrderHeaderForm({
             </CField>)}
             {docTypeUpper === "LPO" && (
               <>
-                <CField label="Project Name" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
-                <CField label="PR No" className="col-span-2"><Input className="h-7 text-xs text-right" disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
-                <CField label="Scope of Work" className="col-span-2"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
+                <CField label="Project Name" className="col-span-2" ><Input className="h-7 text-xs" maxLength = {200} disabled={headerAndLineDisabled} value={form.project_name} onChange={(e) => updateField("project_name", e.target.value)} /></CField>
+                <CField label="PR No" className="col-span-2"><Input className="h-7 text-xs text-right" maxLength = {200} disabled={headerAndLineDisabled} value={form.pr_no} onChange={(e) => updateField("pr_no", e.target.value)} /></CField>
+                <CField label="Scope of Work" className="col-span-2"><Input className="h-7 text-xs" maxLength = {200} disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(e) => updateField("scope_of_work", e.target.value)} /></CField>
               </>
             )}
             <CField
@@ -519,7 +521,7 @@ export function PurchaseOrderHeaderForm({
           <HeaderBlock label="Delivery Terms" icon={<Truck size={11} />} gridCols="grid-cols-4">
             {(docTypeUpper === "LPO" || docTypeUpper === "SO" || docTypeUpper === "PQO" || docTypeUpper === "JO") && (
               <>
-                <CField label="Delivery Contact Person"><Input className="h-7 text-xs" disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
+                <CField label="Delivery Contact Person"><Input className="h-7 text-xs" maxLength = {70} disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
                 {(docTypeUpper === "JO" && <CField label="Delivery Date" ><Input className="h-7 text-xs" type="date" disabled={headerAndLineDisabled} value={form.dlvr_date} onChange={(e) => updateField("dlvr_date", e.target.value)} /></CField>)}
                 <CField label="Delivery Telephone"><Input className="h-7 text-xs" type="tel" disabled={headerAndLineDisabled} value={form.dlvr_mobile} maxLength={20} onChange={(e) => updateField("dlvr_mobile", cleanPhone(e.target.value))} /></CField>
                 <CField label="Delivery Email Address"><Input className={`h-7 text-xs ${emailInvalid ? "border-destructive" : ""}`} type="email" maxLength={100} disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", (e.target.value))} /></CField>
@@ -594,8 +596,8 @@ export function PurchaseOrderHeaderForm({
                   disabled={headerAndLineDisabled || discountScope === "ITEM"}
                   value={
                     discountScope === "ITEM"
-                      ? DiscAmountPercentage(form, rows || []).toFixed(3)
-                      : numberOrZero(form.disc_hdr_percent).toFixed(3)
+                      ? DiscAmountPercentage(form, rows || []).toFixed(2)
+                      : numberOrZero(form.disc_hdr_percent).toFixed(2)
                   }
                   onChange={(e) => {
                     const value = Number(e.target.value || 0);

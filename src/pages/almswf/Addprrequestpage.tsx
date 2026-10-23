@@ -18,9 +18,11 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsCommonSelect, almsSavePrequestBulk } from "../../api/alms";
-import { openPRPurchaseReport } from "../../api/transactions";
+import { getPrRegisterFormReportExcel, getPrRegisterFormReportHtml, openPRPurchaseReport } from "../../api/transactions";
 import { useToast } from "../../components/ui/AlertToast";
 import { PurchaseDocumentIdentity } from "./PurchaseDocumentIdentity";
+import { openPurchaseReport } from "../purchase_sales/Reports/PurchaseReportPreviewState";
+import { PurchaseReportPreview } from "../purchase_sales/Reports/Purchasereportpreview";
 import ImportPrItems, { PrImportRow } from "./Importpritems";
 
 
@@ -315,20 +317,24 @@ const AddPRRequestPage = ({
   const [activeTab, setActiveTab] = useState<"items" | "terms">("items");
   const [terms, setTerms] = useState<any[]>([]);
   const [termsLoadTick, setTermsLoadTick] = useState(0);
+  const serverTermsRef = useRef<Map<string, any>>(new Map());
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(true);
 
-  const [userApprovalLevel, setUserApprovalLevel] = useState<number>(0);
+  // In edit/view mode user level is 0 until resolved. Add mode is always 1.
+  // userLevelLoading is used ONLY to gate the Add Line / Import Excel buttons
+  // so a 2nd-level approver never sees them flash before level resolves.
+  const [userApprovalLevel, setUserApprovalLevel] = useState<number>(isEditMode || isViewMode ? 0 : 1);
+  const [userLevelLoading, setUserLevelLoading] = useState<boolean>(isEditMode || isViewMode);
   const [lastApprovalLevel, setLastApprovalLevel] = useState<number>(7);
   const [displayDate, setDisplayDate] = useState("");
   const isInitialized = useRef(false);
   const itemsLoadedRef = useRef(false);
   const lastLoadedRequestRef = useRef<string | undefined>(undefined);
   const headerLoadedRef = useRef<string | null>(null);
-  const termsLoadedRef = useRef<string | null>(null);
 
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
@@ -345,7 +351,6 @@ const AddPRRequestPage = ({
     staleTime: 0
   });
 
-  // Server history + comments just sent (shown instantly, de-duplicated once server returns them)
   const displayHistory = useMemo(() => {
     const serverTexts = new Set(
       historyList
@@ -416,33 +421,52 @@ const AddPRRequestPage = ({
     }
   }, [header.REQUEST_DATE]);
 
+  // Resolve user level. While `userLevelLoading` is true, buttons/inputs are
+  // gated so 2nd-level approvers never see Add Line / Import Excel flash.
   useEffect(() => {
-    if (!isEditMode && !isViewMode) { setUserApprovalLevel(1); return; }
+    if (!isEditMode && !isViewMode) {
+      setUserApprovalLevel(1);
+      setUserLevelLoading(false);
+      return;
+    }
+
+    if (!header.FLOW_CODE) {
+      if (!loading) {
+        setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
+        setUserLevelLoading(false);
+      }
+      return;
+    }
+
+    let cancelled = false;
     const fetchUserLevel = async () => {
-      if (!user?.loginid || !companyCode || !header.FLOW_CODE) return;
       try {
         const result = await almsCommonSelect({
           parameter: "PS_PREQUEST_ENTRY_GET_USER_LEVEL",
           loginid, code1: companyCode, code2: header.FLOW_CODE || "",
           code3: user?.loginid || "", code4: "",
         });
+        if (cancelled) return;
         if (result && result.length > 0) {
           setUserApprovalLevel(Number(result[0].FLOW_LEVEL) || 0);
           const ll = Number(result[0].LAST_LEVEL) || 0;
           if (ll > 0) setLastApprovalLevel(ll);
+        } else {
+          setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
         }
-        else setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
       } catch {
+        if (cancelled) return;
         setUserApprovalLevel(Number(header.FLOW_LEVEL_RUNNING) || 0);
+      } finally {
+        if (!cancelled) setUserLevelLoading(false);
       }
     };
     fetchUserLevel();
-  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, isEditMode, isViewMode]);
+    return () => { cancelled = true; };
+  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, loading, isEditMode, isViewMode]);
 
-  // Supplier column + Terms tab are driven by the logged-in employee code (SUPPLIER_USER_CODES),
-  // not by approval level.
   const shouldShowSupplier = () => isSupplierUser;
-  const shouldShowTermsTab = () => isSupplierUser || (header as any).FINAL_APPROVED === "Y";
+  const shouldShowTermsTab = () => isSupplierUser;
 
   const { data: productCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-product-lookup", companyCode],
@@ -480,23 +504,28 @@ const AddPRRequestPage = ({
     enabled: !!companyCode,
   });
 
+  // placeholderData keeps previous cached data visible instantly while fresh
+  // data loads in background — no blank screen on repeat visits.
   const { data: hdrList = [], isFetching: hdrFetching } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({ parameter: "PS_PREQUEST_ENTRY_HEADER_PAGE", loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
     staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
+    placeholderData: (prev: any) => prev,
   });
   const { data: itemList = [], isFetching: itemsFetching } = useQuery<TPRItem[]>({
     queryKey: ["pr-item-list", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRItem>({ parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE", loginid, code1: companyCode, code2: "PR", code3: requestNumber || "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber,
     staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
+    placeholderData: (prev: any) => prev,
   });
   const { data: termsList = [] } = useQuery<any[]>({
     queryKey: ["pr-terms", requestNumber, companyCode],
     queryFn: () => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TERMS", loginid, code1: companyCode, code2: requestNumber || "", code3: "", code4: "" }),
     enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
     staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
+    placeholderData: (prev: any) => prev,
   });
   const { data: flowDetailData } = useQuery<LookupItem[]>({
     queryKey: ["pr-flow-details", flowCode, companyCode],
@@ -580,12 +609,16 @@ const AddPRRequestPage = ({
       return;
     }
     const enriched = itemList.map((row) => {
+      const rawSup = String((row as any).SUPPLIER || "").trim();
+      const supCode = rawSup.includes(" - ") ? rawSup.split(" - ")[0].trim() : rawSup;
+
       const base: TPRItem = {
         ...row,
         id: (row as any).id || newId(),
         ITEM_DESP: row.ITEM_DESP || productCodes.find((i) => i.PROD_CODE === row.ITEM_CODE)?.PROD_NAME || "",
         COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
-        SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
+        SUPPLIER: supCode,
+        SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === supCode)?.SUPPLIER_NAME || "",
         TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
         TX_COMPNTCAT_NAME: (row as any).TX_COMPNTCAT_NAME || taxComponentList.find((t) => t.TX_COMPNTCAT_CODE === row.TX_COMPNTCAT_CODE_1)?.TX_COMPNTCAT_NAME || "",
         CURR_NAME: (row as any).CURR_NAME || currencyList.find((c) => c.CURR_CODE === row.CURR_CODE)?.CURR_NAME || "",
@@ -635,41 +668,46 @@ const AddPRRequestPage = ({
     });
   }, [userApprovalLevel]);
 
-  // Load saved terms from DB ONCE per request (dedupe by supplier: 1 supplier = 1 row)
   useEffect(() => {
-    if (termsList.length === 0) { if (isViewMode && requestNumber) setTerms([]); return; }
-    const key = requestNumber || "";
-    if (termsLoadedRef.current === key) return;
-    termsLoadedRef.current = key;
-
-    const seen = new Set<string>();
-    const enriched: any[] = [];
-    termsList.forEach((row: any) => {
-      const sup = String(row.SUPPLIER || "").trim();
-      if (sup && seen.has(sup)) return;
-      if (sup) seen.add(sup);
-      enriched.push({
-        ...row,
-        id: row.id || newId(),
-        SUPPLIER_NAME: row.SUPPLIER_NAME || "",
+    if (termsList.length > 0) {
+      const pick = (row: any, k: string) => row?.[k] ?? row?.[k.toLowerCase()] ?? "";
+      const seen = new Set<string>();
+      const enriched: any[] = [];
+      termsList.forEach((row: any) => {
+        const rawSup = String(pick(row, "SUPPLIER")).trim();
+        const sup = rawSup.includes(" - ") ? rawSup.split(" - ")[0].trim() : rawSup;
+        if (sup && seen.has(sup)) return;
+        if (sup) seen.add(sup);
+        enriched.push({
+          ...row,
+          id: row.id || newId(),
+          SUPPLIER: sup,
+          SUPPLIER_NAME: pick(row, "SUPPLIER_NAME") || supplierList.find((x: any) => x.SUPPLIER_CODE === sup)?.SUPPLIER_NAME || "",
+          DLVR_TERM: pick(row, "DLVR_TERM"),
+          PAYMENT_TERMS: pick(row, "PAYMENT_TERMS"),
+          WARRANTY: pick(row, "WARRANTY"),
+          REMARKS: pick(row, "REMARKS"),
+        });
       });
-    });
-    setTerms(enriched);
-    setTermsLoadTick((t) => t + 1);
-  }, [termsList, isViewMode, requestNumber]);
+      enriched.forEach((t) => { if (t.SUPPLIER) serverTermsRef.current.set(t.SUPPLIER, t); });
+      setTerms(enriched);
+      setTermsLoadTick((t) => t + 1);
+    } else if (isViewMode && requestNumber) {
+      setTerms([]);
+    }
+  }, [termsList, isViewMode, requestNumber, supplierList]);
 
-  // Terms sync: ONE row per UNIQUE supplier used in items.
-  // - Same supplier on many items  -> single row
-  // - Supplier changed on an item  -> same row is re-used (typed term text is kept)
-  // - Different suppliers          -> one row each (e.g. Tata + Bajaj = 2 rows)
   useEffect(() => {
     if (!isSupplierUser) return;
+    if ((isEditMode || isViewMode) && !!requestNumber && !itemsLoadedRef.current) return;
 
     const used: string[] = [];
     const nameMap = new Map<string, string>();
     items.forEach((it) => {
-      const s = String(it.SUPPLIER || "").trim();
-      if (!s) return;
+      const rawSup = String(it.SUPPLIER || "").trim();
+      if (!rawSup) return;
+      const s = rawSup.includes(" - ") ? rawSup.split(" - ")[0].trim() : rawSup;
+
       if (!nameMap.has(s)) {
         const nm = (it as any).SUPPLIER_NAME || supplierList.find((x: any) => x.SUPPLIER_CODE === s)?.SUPPLIER_NAME || "";
         nameMap.set(s, nm);
@@ -685,7 +723,8 @@ const AddPRRequestPage = ({
       const orphans: any[] = [];
 
       prev.forEach((t) => {
-        const sup = String(t.SUPPLIER || "").trim();
+        const rawSup = String(t.SUPPLIER || "").trim();
+        const sup = rawSup.includes(" - ") ? rawSup.split(" - ")[0].trim() : rawSup;
         if (sup && used.indexOf(sup) !== -1 && !keptBySupplier.has(sup)) keptBySupplier.set(sup, t);
         else orphans.push(t);
       });
@@ -694,10 +733,12 @@ const AddPRRequestPage = ({
         const name = nameMap.get(sup) || "";
         const existing = keptBySupplier.get(sup);
         if (existing) {
-          return existing.SUPPLIER_NAME === name || !name ? existing : { ...existing, SUPPLIER_NAME: name };
+          return { ...existing, SUPPLIER: sup, SUPPLIER_NAME: name || existing.SUPPLIER_NAME };
         }
         const orphan = orphans.shift();
         if (orphan) return { ...orphan, SUPPLIER: sup, SUPPLIER_NAME: name };
+        const fromServer = serverTermsRef.current.get(sup);
+        if (fromServer) return { ...fromServer, SUPPLIER: sup, SUPPLIER_NAME: name || fromServer.SUPPLIER_NAME };
         return {
           id: newId(),
           COMPANY_CODE: companyCode,
@@ -721,7 +762,7 @@ const AddPRRequestPage = ({
       }
       return next;
     });
-  }, [items, isSupplierUser, supplierList, companyCode, termsLoadTick]);
+  }, [items, isSupplierUser, supplierList, companyCode, termsLoadTick, isEditMode, isViewMode, requestNumber]);
 
   const setHdr = (field: keyof TPRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
@@ -776,20 +817,16 @@ const AddPRRequestPage = ({
     );
   }, [items, lineSearch]);
 
-  // Column widths MUST follow the exact DOM column order of the <thead>/<tbody>:
-  // SR, PRODUCT, PUOM, REQ(4), APPR(4), [SUPPLIER], UNIT PRICE, AMOUNT, DISC%, DISC AMT,
-  // TOTAL(E.T), TAX%, TAX AMT, TOTAL(I.T), [6 extra cols], CAPEX, ACTION
   const colWidths = useMemo(() => {
-    const qtyGroup = [60, 50, 60, 65]; // PQTY, LUOM, LQTY, REQQTY
+    const qtyGroup = [60, 50, 60, 65];
     const w: number[] = [30, 240, 55, ...qtyGroup, ...qtyGroup];
-    if (isSupplierUser) w.push(380); // Supplier: full text visible
+    if (isSupplierUser) w.push(380);
     w.push(80, 105, 65, 70, 108, 60, 70, 108);
     if (showAllColumns) {
-      // LCURR before tax, Tax type, Tax cat, Tax code, Tax LCURR, LCURR after tax
       w.push(200, 100, 260, 270, 160, 210);
     }
-    w.push(90); // CAPEX
-    w.push(70); // Action
+    w.push(90);
+    w.push(70);
     return w;
   }, [showAllColumns, isSupplierUser]);
 
@@ -955,9 +992,27 @@ const AddPRRequestPage = ({
     });
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!requestNumber) { toast.warning("Please save the request before printing.", 4000); return; }
-    openPRPurchaseReport({ parameter: "PS_PREQUEST_ENTRY_PRReport", loginid, code1: companyCode, code2: requestNumber });
+
+    const params = { loginid, company_code: companyCode, request_number: requestNumber };
+    const preview = openPurchaseReport(`Purchase Request - ${requestNumber}`);
+
+    try {
+      const html = await getPrRegisterFormReportHtml(params);
+      preview.ready({
+        html,
+        filename: `purchase_request_${requestNumber}`,
+        orientation: "landscape",
+        onExcel: async () => {
+          await getPrRegisterFormReportExcel(params);
+        },
+      });
+    } catch (err: any) {
+      const msg = err?.message ?? "Failed to load report. Please try again.";
+      preview.fail(new Error(msg));
+      toast.error(msg, 5000);
+    }
   };
 
   const handleApprove = async () => {
@@ -988,19 +1043,38 @@ const AddPRRequestPage = ({
 
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
-    if (header.USER_ID) {
-      const name = (header as any).CREATE_USER_NAME || "";
-      opts.push({ loginid: String(header.USER_ID), label: name || String(header.USER_ID), level: 0 });
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+
+    const addOpt = (id: string, label: string, level: number) => {
+      const trimmedId = String(id || "").trim();
+      if (!trimmedId) return;
+      const upperId = trimmedId.toUpperCase();
+      const upperLabel = String(label || "").trim().toUpperCase();
+
+      if (seenIds.has(upperId) || upperId === String(loginid).trim().toUpperCase()) return;
+      if (upperLabel && seenNames.has(upperLabel)) return;
+
+      seenIds.add(upperId);
+      if (upperLabel) seenNames.add(upperLabel);
+      opts.push({ loginid: trimmedId, label: label || trimmedId, level });
+    };
+
+    const creatorId = (header as any).CREATE_USER;
+    const creatorName = (header as any).CREATE_USER_NAME || "";
+    if (creatorId) {
+      addOpt(String(creatorId), creatorName, 0);
     }
-    const seen = new Set(opts.map((o) => o.loginid));
+
     sendBackTargets.forEach((row: any) => {
-      const lg = String(row.loginid ?? row.LOGINID ?? "");
+      const lg = String(row.loginid ?? row.LOGINID ?? "").trim();
       const emp = String(row.emp_name ?? row.EMP_NAME ?? "").trim();
       const lvl = Number(row.flow_level_running ?? row.FLOW_LEVEL_RUNNING ?? 0) || 0;
-      if (lg && !seen.has(lg) && lg !== loginid) { seen.add(lg); opts.push({ loginid: lg, label: emp || lg, level: lvl }); }
+      addOpt(lg, emp, lvl);
     });
+
     return opts;
-  }, [header.USER_ID, sendBackTargets, loginid]);
+  }, [header.CREATE_USER, (header as any).CREATE_USER_NAME, sendBackTargets, loginid]);
 
   const handleSendBackConfirm = async () => {
     if (!selectedSendBackTo) { toast.warning("Please select who to send this back to", 4000); return; }
@@ -1088,7 +1162,6 @@ const AddPRRequestPage = ({
     setItems([...items, blank]);
   };
 
-  // Bulk-add item lines coming from the Excel import (already validated in ImportPrItems)
   const handleImportItems = (rows: PrImportRow[]) => {
     if (effectiveViewMode || rows.length === 0) return;
     const exRate = num(header.CURRENCY_RATE) || 1;
@@ -1150,6 +1223,11 @@ const AddPRRequestPage = ({
       const index = prev.findIndex((i) => (i as any).id === id);
       if (index === -1) return prev;
 
+      let normalizedValue = value;
+      if (field === "SUPPLIER" && typeof value === "string") {
+        normalizedValue = value.split(" - ")[0].trim();
+      }
+
       if (field === "APPROVED_QTY_PUOM" || field === "APPROVED_QTY_LUOM") {
         const existing = prev[index];
         const draft = { ...existing, [field]: value } as TPRItem;
@@ -1162,7 +1240,7 @@ const AddPRRequestPage = ({
       }
 
       const updated = [...prev];
-      const item = { ...updated[index], [field]: value };
+      const item = { ...updated[index], [field]: normalizedValue };
 
       if (field === "ITEM_CODE" && typeof value === "string") {
         const trimmed = value.trim().toUpperCase();
@@ -1235,8 +1313,6 @@ const AddPRRequestPage = ({
     });
   };
 
-  // Terms rows are auto-managed from the suppliers selected on item lines,
-  // so only the free-text fields are editable.
   const updateTermField = (id: string, field: string, value: unknown) =>
     setTerms((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
 
@@ -1249,8 +1325,8 @@ const AddPRRequestPage = ({
   ];
   const supplierColumns = [{ field: "SUPPLIER_CODE", header: "Code" }, { field: "SUPPLIER_NAME", header: "Name" }];
 
-  const canEditRequested = !disabled && userApprovalLevel < 2;
-  const canEditApproved = !disabled && userApprovalLevel >= 2;
+  const canEditRequested = !disabled && !userLevelLoading && userApprovalLevel < 2;
+  const canEditApproved = !disabled && !userLevelLoading && userApprovalLevel >= 2;
 
   const resetDiscountItems = () =>
     setItems((prev) => prev.map((item) => {
@@ -1263,8 +1339,6 @@ const AddPRRequestPage = ({
     `inline-flex cursor-pointer items-center gap-2 border-b-2 pb-0.5 text-xs font-bold uppercase tracking-wide transition-colors ${active
       ? (shouldShowTermsTab() ? "border-[#00378C] text-[#00378C]" : "border-transparent text-[#00378C]")
       : "border-transparent text-slate-400 hover:text-slate-700"}`;
-  const tabCount =
-    "rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-[#00378C]";
 
   return (
     <>
@@ -1375,10 +1449,6 @@ const AddPRRequestPage = ({
                     </Button>
                   )}
                 </div>
-                  
-                <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
-                  <X size={16} />
-                </Button>
               </div>
             </div>
           </CardHeader>
@@ -1415,653 +1485,656 @@ const AddPRRequestPage = ({
           )}
 
           <CardContent className="commercial-editor-body min-h-0 min-w-0 overflow-auto p-3">
-            {loading ? (
-              <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground"></div>
-            ) : (
-              <div className={`commercial-editor-sections grid gap-3 min-w-0 ${isCancelled ? "cancelled-content-wrapper" : ""}`}>
-                {isCancelled && (
-                  <div className="cancelled-watermark" aria-hidden="true">CANCELLED</div>
-                )}
+            <div className={`commercial-editor-sections grid gap-3 min-w-0 ${isCancelled ? "cancelled-content-wrapper" : ""}`}>
+              {isCancelled && (
+                <div className="cancelled-watermark" aria-hidden="true">CANCELLED</div>
+              )}
 
-                <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+              <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-                {headerOpen ? (
-                  <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
-                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1.35fr)] gap-1 p-1 items-stretch">
+              {headerOpen ? (
+                <div className="rounded-md border-2 border-gray-100 bg-card overflow-hidden">
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1.35fr)] gap-1 p-1 items-stretch">
 
-                      <div className="flex flex-col gap-1.5">
-                        <HeaderBlock label="Description & Remarks" icon={<FileText size={11} />} gridCols="grid-cols-1" grow>
+                    <div className="flex flex-col gap-1.5">
+                      <HeaderBlock label="Description & Remarks" icon={<FileText size={11} />} gridCols="grid-cols-1" grow>
 
-                          <CField label="Description / Reason" required>
-                            <textarea rows={3} disabled={disabled} value={String(header.DESCRIPTION || "")} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs" placeholder="Enter description or reason..." />
-                          </CField>
+                        <CField label="Description / Reason" required>
+                          <textarea rows={3} disabled={disabled} value={String(header.DESCRIPTION || "")} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs" placeholder="Enter description or reason..." />
+                        </CField>
 
-                          <div className="mt-1 flex items-end gap-2">
-                            <div className="min-w-0 flex-1">
-                              <CField label="Remarks" required>
-                                <textarea rows={3} disabled={disabled} value={String(header.REMARKS || "")} onChange={(e) => setHdr("REMARKS", e.target.value)} className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs" placeholder="Enter remarks..." />
-                              </CField>
-                            </div>
-
-                            <Button
-                              type="button"
-                              onClick={() => setCommentsOpen(true)}
-                              className="mb-0.5 inline-flex h-8 shrink-0 items-center gap-2 rounded-full border border-solid !border-emerald-200 !bg-emerald-50 px-4 text-[11px] font-bold uppercase tracking-wide !text-slate-900 shadow-sm transition-all hover:!border-emerald-300 hover:!bg-emerald-100 active:scale-95"
-                            >
-                              <MessageSquare size={13} className="text-emerald-700" />
-                              Com. & Hist.
-                            </Button>
+                        <div className="mt-1 flex items-end gap-2">
+                          <div className="min-w-0 flex-1">
+                            <CField label="Remarks" required>
+                              <textarea rows={3} disabled={disabled} value={String(header.REMARKS || "")} onChange={(e) => setHdr("REMARKS", e.target.value)} className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs" placeholder="Enter remarks..." />
+                            </CField>
                           </div>
 
-                        </HeaderBlock>
-                      </div>
+                          <Button
+                            type="button"
+                            onClick={() => setCommentsOpen(true)}
+                            className="mb-0.5 inline-flex h-8 shrink-0 items-center gap-2 rounded-full border border-solid !border-emerald-200 !bg-emerald-50 px-4 text-[11px] font-bold uppercase tracking-wide !text-slate-900 shadow-sm transition-all hover:!border-emerald-300 hover:!bg-emerald-100 active:scale-95"
+                          >
+                            <MessageSquare size={13} className="text-emerald-700" />
+                            Com. & Hist.
+                          </Button>
+                        </div>
 
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
-                          <CField label="Request Date">
-                            <Input className="h-7 text-xs" disabled type="text" value={displayDate} />
-                          </CField>
-                          <CField label="POD Type" required>
-                            <Select disabled={disabled} value={header.PDO_TYPE || "N"} onChange={(e) => setHdr("PDO_TYPE", e.target.value)} className="h-7 text-xs">
-                              <option value="P">PDO-OTO</option>
-                              <option value="Q">PDO-NON-OTO</option>
-                              <option value="N">NON-PDO</option>
-                            </Select>
-                          </CField>
-                          <CField label="Currency" required>
-                            <LookupField
-                              placeholder="Currency..."
-                              value={header.CURR_CODE || ""}
-                              displayValue={header.CURR_CODE && header.CURR_NAME ? `${header.CURR_CODE} - ${header.CURR_NAME}` : header.CURR_CODE || ""}
-                              columns={currencyColumns}
-                              valueField="CURR_CODE"
-                              displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
-                              loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_CURRENCY", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                              onChange={(value, row) => {
-                                const n = String(row?.CURR_NAME || row?.curr_name || "");
-                                const ex = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
-                                setHdr("CURR_CODE", value); setHdr("CURR_NAME", n); setHdr("CURRENCY_RATE", ex);
-                                updateAllItemsWithHeader({ CURR_CODE: value, CURR_NAME: n, CURRENCY_RATE: ex });
-                              }}
-                              disabled={disabled}
-                            />
-                          </CField>
-                          <CField label="Ex Rate">
-                            <Input className="h-7 text-xs text-right" type="number" step="0.0001" disabled={disabled} value={header.CURRENCY_RATE ?? ""} onChange={(e) => { const r = Number(e.target.value); setHdr("CURRENCY_RATE", r); updateAllItemsWithHeader({ CURRENCY_RATE: r }); }} />
-                          </CField>
-                          <CField label="Flow">
-                            <Input className="h-7 text-xs" disabled type="text" value={header.FLOW_DESCRIPTION || ""} placeholder="—" />
-                          </CField>
-                        </HeaderBlock>
-                      </div>
+                      </HeaderBlock>
+                    </div>
 
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <HeaderBlock label="Tax Configuration" icon={<Receipt size={11} />} gridCols="grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
-                          <CField label="Tax Type">
-                            <Select className="h-7 text-xs w-auto min-w-[68px]" value={String(header.TAX_TYPE || "Std.")} disabled={disabled} onChange={(e) => {
-                              const v = e.target.value;
-                              const perc = v === "Std." ? 5 : 0;
-                              setHdr("TAX_TYPE", v);
-                              setItems((prev) => prev.map((item) => {
-                                const m: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
-                                const ex = num(m.CURRENCY_RATE) || 1;
-                                return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(m, ex) : recalcItem(m, ex);
-                              }));
-                            }}>
-                              <option value="Std.">Std.</option>
-                              <option value="Zero">Zero</option>
-                              <option value="Exempt">Exempt</option>
-                              <option value="No VAT">No VAT</option>
-                            </Select>
-                          </CField>
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
+                        <CField label="Request Date">
+                          <Input className="h-7 text-xs" disabled type="text" value={displayDate} />
+                        </CField>
+                        <CField label="POD Type" required>
+                          <Select disabled={disabled} value={header.PDO_TYPE || "N"} onChange={(e) => setHdr("PDO_TYPE", e.target.value)} className="h-7 text-xs">
+                            <option value="P">PDO-OTO</option>
+                            <option value="Q">PDO-NON-OTO</option>
+                            <option value="N">NON-PDO</option>
+                          </Select>
+                        </CField>
+                        <CField label="Currency" required>
+                          <LookupField
+                            placeholder="Currency..."
+                            value={header.CURR_CODE || ""}
+                            displayValue={header.CURR_CODE && header.CURR_NAME ? `${header.CURR_CODE} - ${header.CURR_NAME}` : header.CURR_CODE || ""}
+                            columns={currencyColumns}
+                            valueField="CURR_CODE"
+                            displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
+                            loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_CURRENCY", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                            onChange={(value, row) => {
+                              const n = String(row?.CURR_NAME || row?.curr_name || "");
+                              const ex = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
+                              setHdr("CURR_CODE", value); setHdr("CURR_NAME", n); setHdr("CURRENCY_RATE", ex);
+                              updateAllItemsWithHeader({ CURR_CODE: value, CURR_NAME: n, CURRENCY_RATE: ex });
+                            }}
+                            disabled={disabled}
+                          />
+                        </CField>
+                        <CField label="Ex Rate">
+                          <Input className="h-7 text-xs text-right" type="number" step="0.0001" disabled={disabled} value={header.CURRENCY_RATE ?? ""} onChange={(e) => { const r = Number(e.target.value); setHdr("CURRENCY_RATE", r); updateAllItemsWithHeader({ CURRENCY_RATE: r }); }} />
+                        </CField>
+                        <CField label="Flow">
+                          <Input className="h-7 text-xs" disabled type="text" value={header.FLOW_DESCRIPTION || ""} placeholder="—" />
+                        </CField>
+                      </HeaderBlock>
+                    </div>
 
-                          <CField label="Tax Category">
-                            <LookupField
-                              placeholder="Tax Category..."
-                              value={header.TX_CAT_CODE || ""}
-                              displayValue={header.TX_CAT_CODE && header.TX_CAT_NAME ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}` : header.TX_CAT_CODE || ""}
-                              columns={taxCategoryColumns}
-                              valueField="TX_CAT_CODE"
-                              displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
-                              loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                              onChange={(val, row) => {
-                                if (row) {
-                                  const tc = String(row.TX_COMPNTCAT_CODE_1 || "");
-                                  const tp = Number(row.TX_COMPNT_PERC_1) || 0;
-                                  const tn = String(row.TX_CAT_NAME || "");
-                                  setHdr("TX_CAT_CODE", val); setHdr("TX_CAT_NAME", tn);
-                                  setHdr("TX_COMPNTCAT_CODE_1", tc); setHdr("TX_COMPNT_PERC_1", tp);
-                                  updateAllItemsWithHeader({ TX_CAT_CODE: val, TX_CAT_NAME: tn, TX_COMPNTCAT_CODE_1: tc, TX_COMPNT_PERC_1: tp });
-                                }
-                              }}
-                              disabled={disabled}
-                            />
-                          </CField>
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <HeaderBlock label="Tax Configuration" icon={<Receipt size={11} />} gridCols="grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+                        <CField label="Tax Type">
+                          <Select className="h-7 text-xs w-auto min-w-[68px]" value={String(header.TAX_TYPE || "Std.")} disabled={disabled} onChange={(e) => {
+                            const v = e.target.value;
+                            const perc = v === "Std." ? 5 : 0;
+                            setHdr("TAX_TYPE", v);
+                            setItems((prev) => prev.map((item) => {
+                              const m: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
+                              const ex = num(m.CURRENCY_RATE) || 1;
+                              return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(m, ex) : recalcItem(m, ex);
+                            }));
+                          }}>
+                            <option value="Std.">Std.</option>
+                            <option value="Zero">Zero</option>
+                            <option value="Exempt">Exempt</option>
+                            <option value="No VAT">No VAT</option>
+                          </Select>
+                        </CField>
 
-                          <CField label="Tax Code">
-                            <LookupField
-                              placeholder="Tax Code..."
-                              value={header.TX_COMPNTCAT_CODE_1 || ""}
-                              displayValue={header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}` : header.TX_COMPNTCAT_CODE_1 || ""}
-                              columns={taxComponentColumns}
-                              valueField="TX_COMPNTCAT_CODE"
-                              displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
-                              loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                              onChange={(val, row) => {
-                                if (row && typeof row === "object") {
-                                  const n = String(row.TX_COMPNTCAT_NAME || "");
-                                  const p = Number(row.TX_PERCNT) || 0;
-                                  setHdr("TX_COMPNTCAT_CODE_1", val); setHdr("TX_COMPNTCAT_NAME", n); setHdr("TX_COMPNT_PERC_1", p);
-                                  updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val, TX_COMPNTCAT_NAME: n, TX_COMPNT_PERC_1: p });
-                                } else {
-                                  setHdr("TX_COMPNTCAT_CODE_1", val);
-                                  updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
-                                }
-                              }}
-                              disabled={disabled}
-                            />
-                          </CField>
-                        </HeaderBlock>
+                        <CField label="Tax Category">
+                          <LookupField
+                            placeholder="Tax Category..."
+                            value={header.TX_CAT_CODE || ""}
+                            displayValue={header.TX_CAT_CODE && header.TX_CAT_NAME ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}` : header.TX_CAT_CODE || ""}
+                            columns={taxCategoryColumns}
+                            valueField="TX_CAT_CODE"
+                            displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                            loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                            onChange={(val, row) => {
+                              if (row) {
+                                const tc = String(row.TX_COMPNTCAT_CODE_1 || "");
+                                const tp = Number(row.TX_COMPNT_PERC_1) || 0;
+                                const tn = String(row.TX_CAT_NAME || "");
+                                setHdr("TX_CAT_CODE", val); setHdr("TX_CAT_NAME", tn);
+                                setHdr("TX_COMPNTCAT_CODE_1", tc); setHdr("TX_COMPNT_PERC_1", tp);
+                                updateAllItemsWithHeader({ TX_CAT_CODE: val, TX_CAT_NAME: tn, TX_COMPNTCAT_CODE_1: tc, TX_COMPNT_PERC_1: tp });
+                              }
+                            }}
+                            disabled={disabled}
+                          />
+                        </CField>
 
-                        <HeaderBlock label="Discount" icon={<Percent size={11} />} gridCols="grid-cols-2" grow>
-                          <div className="col-span-2 flex flex-col gap-0.5">
-                            <span className="text-[10px] font-semibold">Discount Applied To</span>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                              <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
-                                <input type="radio" name="discount_scope" value="PO" checked={discountScope === "PO"} disabled={disabled || items.length === 0} onChange={() => {
-                                  const seededPrice = totalDiscAmount;
-                                  const totalBefore = calculateTotalUnitPrice(items);
-                                  const seededPercent = totalBefore > 0 ? (seededPrice / totalBefore) * 100 : 0;
-                                  setDiscountScope("PO");
-                                  setHdr("DISC_AMOUNT", seededPrice);
-                                  setHdr("DISCOUNT_AMOUNT", seededPercent);
-                                  setDiscAmtText(seededPrice.toFixed(3));
-                                  setDiscPctText(seededPercent.toFixed(3));
-                                }} />
-                                Entire PR
-                              </label>
-                              <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
-                                <input type="radio" name="discount_scope" value="ITEM" checked={discountScope === "ITEM"} disabled={disabled || items.length === 0} onChange={() => { setDiscountScope("ITEM"); setHdr("DISCOUNT_AMOUNT", 0); setHdr("DISC_AMOUNT", 0); }} />
-                                Individual Items
-                              </label>
-                            </div>
+                        <CField label="Tax Code">
+                          <LookupField
+                            placeholder="Tax Code..."
+                            value={header.TX_COMPNTCAT_CODE_1 || ""}
+                            displayValue={header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}` : header.TX_COMPNTCAT_CODE_1 || ""}
+                            columns={taxComponentColumns}
+                            valueField="TX_COMPNTCAT_CODE"
+                            displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                            loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                            onChange={(val, row) => {
+                              if (row && typeof row === "object") {
+                                const n = String(row.TX_COMPNTCAT_NAME || "");
+                                const p = Number(row.TX_PERCNT) || 0;
+                                setHdr("TX_COMPNTCAT_CODE_1", val); setHdr("TX_COMPNTCAT_NAME", n); setHdr("TX_COMPNT_PERC_1", p);
+                                updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val, TX_COMPNTCAT_NAME: n, TX_COMPNT_PERC_1: p });
+                              } else {
+                                setHdr("TX_COMPNTCAT_CODE_1", val);
+                                updateAllItemsWithHeader({ TX_COMPNTCAT_CODE_1: val });
+                              }
+                            }}
+                            disabled={disabled}
+                          />
+                        </CField>
+                      </HeaderBlock>
+
+                      <HeaderBlock label="Discount" icon={<Percent size={11} />} gridCols="grid-cols-2" grow>
+                        <div className="col-span-2 flex flex-col gap-0.5">
+                          <span className="text-[10px] font-semibold">Discount Applied To</span>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                            <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                              <input type="radio" name="discount_scope" value="PO" checked={discountScope === "PO"} disabled={disabled || items.length === 0} onChange={() => {
+                                const seededPrice = totalDiscAmount;
+                                const totalBefore = calculateTotalUnitPrice(items);
+                                const seededPercent = totalBefore > 0 ? (seededPrice / totalBefore) * 100 : 0;
+                                setDiscountScope("PO");
+                                setHdr("DISC_AMOUNT", seededPrice);
+                                setHdr("DISCOUNT_AMOUNT", seededPercent);
+                                setDiscAmtText(seededPrice.toFixed(3));
+                                setDiscPctText(seededPercent.toFixed(3));
+                              }} />
+                              Entire PR
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[10px] font-medium cursor-pointer">
+                              <input type="radio" name="discount_scope" value="ITEM" checked={discountScope === "ITEM"} disabled={disabled || items.length === 0} onChange={() => { setDiscountScope("ITEM"); setHdr("DISCOUNT_AMOUNT", 0); setHdr("DISC_AMOUNT", 0); }} />
+                              Individual Items
+                            </label>
                           </div>
+                        </div>
 
-                          <CField label="Disc %">
-                            <Input
-                              className="h-7 text-xs text-right"
-                              type="text"
-                              inputMode="decimal"
-                              value={discPctText}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                setDiscPctText(raw);
-                                const p = parseFloat(raw);
-                                if (isNaN(p)) return;
-                                setHdr("DISCOUNT_AMOUNT", p);
-                                if (p > 0 && discountScope === "PO") {
-                                  setHdr("DISC_AMOUNT", 0);
-                                  setItems(distributeDiscountToItems(items, p, userApprovalLevel));
-                                  const t = calculateTotalUnitPrice(items);
-                                  if (t > 0) {
-                                    const amt = (p / 100) * t;
-                                    setHdr("DISC_AMOUNT", amt);
-                                    setDiscAmtText(amt.toFixed(3));
-                                  }
-                                } else if (p === 0 && discountScope === "PO") {
-                                  resetDiscountItems();
-                                  setHdr("DISC_AMOUNT", 0);
-                                  setDiscAmtText("0.000");
+                        <CField label="Disc %">
+                          <Input
+                            className="h-7 text-xs text-right"
+                            type="text"
+                            inputMode="decimal"
+                            value={discPctText}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setDiscPctText(raw);
+                              const p = parseFloat(raw);
+                              if (isNaN(p)) return;
+                              setHdr("DISCOUNT_AMOUNT", p);
+                              if (p > 0 && discountScope === "PO") {
+                                setHdr("DISC_AMOUNT", 0);
+                                setItems(distributeDiscountToItems(items, p, userApprovalLevel));
+                                const t = calculateTotalUnitPrice(items);
+                                if (t > 0) {
+                                  const amt = (p / 100) * t;
+                                  setHdr("DISC_AMOUNT", amt);
+                                  setDiscAmtText(amt.toFixed(3));
                                 }
-                              }}
-                              onBlur={(e) => {
-                                const p = parseFloat(e.target.value) || 0;
-                                setDiscPctText(p.toFixed(3));
-                              }}
-                              disabled={disabled || items.length === 0 || discountScope === "ITEM"}
-                            />
-                          </CField>
-                          <CField label="Disc Amt">
-                            <Input
-                              className="h-7 text-xs text-right"
-                              type="text"
-                              inputMode="decimal"
-                              value={discAmtText}
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                setDiscAmtText(raw);
-                                const a = parseFloat(raw);
-                                if (isNaN(a)) return;
-                                setHdr("DISC_AMOUNT", a);
-                                if (a > 0 && discountScope === "PO") {
-                                  setHdr("DISCOUNT_AMOUNT", 0);
-                                  setItems(distributeDiscountFromAmount(items, a, userApprovalLevel));
-                                  const t = calculateTotalUnitPrice(items);
-                                  if (t > 0) {
-                                    const pct = (a / t) * 100;
-                                    setHdr("DISCOUNT_AMOUNT", pct);
-                                    setDiscPctText(pct.toFixed(3));
-                                  }
-                                } else if (a === 0 && discountScope === "PO") {
-                                  resetDiscountItems();
-                                  setHdr("DISCOUNT_AMOUNT", 0);
-                                  setDiscPctText("0.000");
+                              } else if (p === 0 && discountScope === "PO") {
+                                resetDiscountItems();
+                                setHdr("DISC_AMOUNT", 0);
+                                setDiscAmtText("0.000");
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const p = parseFloat(e.target.value) || 0;
+                              setDiscPctText(p.toFixed(3));
+                            }}
+                            disabled={disabled || items.length === 0 || discountScope === "ITEM"}
+                          />
+                        </CField>
+                        <CField label="Disc Amt">
+                          <Input
+                            className="h-7 text-xs text-right"
+                            type="text"
+                            inputMode="decimal"
+                            value={discAmtText}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setDiscAmtText(raw);
+                              const a = parseFloat(raw);
+                              if (isNaN(a)) return;
+                              setHdr("DISC_AMOUNT", a);
+                              if (a > 0 && discountScope === "PO") {
+                                setHdr("DISCOUNT_AMOUNT", 0);
+                                setItems(distributeDiscountFromAmount(items, a, userApprovalLevel));
+                                const t = calculateTotalUnitPrice(items);
+                                if (t > 0) {
+                                  const pct = (a / t) * 100;
+                                  setHdr("DISCOUNT_AMOUNT", pct);
+                                  setDiscPctText(pct.toFixed(3));
                                 }
-                              }}
-                              onBlur={(e) => {
-                                const a = parseFloat(e.target.value) || 0;
-                                setDiscAmtText(a.toFixed(3));
-                              }}
-                              disabled={disabled || items.length === 0 || discountScope === "ITEM"}
-                            />
-                          </CField>
-                        </HeaderBlock>
-                      </div>
+                              } else if (a === 0 && discountScope === "PO") {
+                                resetDiscountItems();
+                                setHdr("DISCOUNT_AMOUNT", 0);
+                                setDiscPctText("0.000");
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const a = parseFloat(e.target.value) || 0;
+                              setDiscAmtText(a.toFixed(3));
+                            }}
+                            disabled={disabled || items.length === 0 || discountScope === "ITEM"}
+                          />
+                        </CField>
+                      </HeaderBlock>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
-                    <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
-                      <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Doc Date:</span><span className="font-medium">{displayDate}</span></span>
-                      <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Flow:</span><span className="font-medium">{header.FLOW_DESCRIPTION || "-"}</span></span>
-                      <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Currency:</span><span className="font-medium">{header.CURR_CODE || "-"} ({Number(header.CURRENCY_RATE || 1).toFixed(4)})</span></span>
-                    </div>
-                    <div className="ml-2 flex shrink-0 items-center gap-2">
-                      <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setCommentsOpen(true)}>
-                        <MessageSquare size={12} className="mr-1" /> Comments & Activity
-                      </Button>
-                      <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setHeaderOpen(true)}>
-                        Show Header Fields <ChevronDown size={13} className="ml-1" />
-                      </Button>
-                    </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-3.5 py-1.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs shadow-xs min-w-0">
+                  <div className="flex items-center gap-4 text-slate-700 flex-wrap min-w-0">
+                    <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Doc Date:</span><span className="font-medium">{displayDate}</span></span>
+                    <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Flow:</span><span className="font-medium">{header.FLOW_DESCRIPTION || "-"}</span></span>
+                    <span className="inline-flex items-center gap-1.5"><span className="font-semibold text-[#00378C]">Currency:</span><span className="font-medium">{header.CURR_CODE || "-"} ({Number(header.CURRENCY_RATE || 1).toFixed(4)})</span></span>
                   </div>
-                )}
+                  <div className="ml-2 flex shrink-0 items-center gap-2">
+                    <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setCommentsOpen(true)}>
+                      <MessageSquare size={12} className="mr-1" /> Comments & History
+                    </Button>
+                    <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setHeaderOpen(true)}>
+                      Show Header Fields <ChevronDown size={13} className="ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-                <div className="flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden rounded-md border-2 border-gray-100 bg-card">
-                  <div className="flex flex-none flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-3">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-white" style={{ backgroundColor: PO_BLUE }}>
-                        <List size={14} />
+              <div className="flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden rounded-md border-2 border-gray-100 bg-card">
+                <div className="flex flex-none flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-white" style={{ backgroundColor: PO_BLUE }}>
+                      <List size={14} />
+                    </span>
+                    <button type="button" onClick={() => setActiveTab("items")} className={tabBtn(activeTab === "items")}>
+                      <span>{isSupplierUser ? "Item Details" : "Details Items"}</span>
+                    </button>
+                    {shouldShowTermsTab() && (
+                      <>
+                        <span className="h-4 w-px bg-slate-300" />
+                        <button type="button" onClick={() => setActiveTab("terms")} className={tabBtn(activeTab === "terms")}>
+                          <span>Terms & Conditions</span>
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-[#00378C]">{terms.length}</span>
+                        </button>
+                      </>
+                    )}
+                    {activeTab === "items" && lineSearch.trim() && (
+                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Filtered ({filteredItems.length} of {items.length})
                       </span>
-                      <button type="button" onClick={() => setActiveTab("items")} className={tabBtn(activeTab === "items")}>
-                        <span>{isSupplierUser ? "Item Details" : "Details Items"}</span>
-                        <span className={tabCount}>{items.length} {items.length === 1 ? "line" : "lines"}</span>
-                      </button>
-                      {shouldShowTermsTab() && (
-                        <>
-                          <span className="h-4 w-px bg-slate-300" />
-                          <button type="button" onClick={() => setActiveTab("terms")} className={tabBtn(activeTab === "terms")}>
-                            <span>Terms & Conditions</span>
-                            <span className={tabCount}>{terms.length}</span>
-                          </button>
-                        </>
-                      )}
-                      {activeTab === "items" && lineSearch.trim() && (
-                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                          Filtered ({filteredItems.length} of {items.length})
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {activeTab === "items" && (
-                        <>
-                          <button type="button" onClick={() => setShowAllColumns(!showAllColumns)} className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all ${showAllColumns ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
-                            <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
-                            <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
-                          </button>
-                          <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-7 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
-                            <Search size={13} className="absolute left-3 text-slate-400" />
-                            <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />
-                            {lineSearch && (
-                              <button type="button" onClick={() => setLineSearch("")} className="absolute right-2 text-slate-400 hover:text-slate-700" title="Clear"><X size={11} /></button>
-                            )}
-                          </div>
-                        </>
-                      )}
-                      {!effectiveViewMode && activeTab === "items" && userApprovalLevel < 2 && (
-                        <>
-                          <Button disabled={disabled} type="button" onClick={() => setImportOpen(true)} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><FileSpreadsheet size={14} /> Import Excel</Button>
-                          <Button disabled={disabled} type="button" onClick={addItemLine} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><Plus size={14} /> Add Line</Button>
-                        </>
-                      )}
-                    </div>
+                    )}
                   </div>
 
-                  {activeTab === "items" && (
-                    <>
-                      <div ref={tableContainerRef} className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
-                        <table
-                          className="finance-lines-table w-full table-fixed border-collapse text-[10px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 [&_th]:whitespace-nowrap [&_th]:leading-tight"
-                          style={{ minWidth: tableMinWidth }}
-                        >
-                          <colgroup>
-                            {colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
-                          </colgroup>
-                          <thead className="sticky top-0 z-30 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: PO_BLUE }}>
-                            <tr>
-                              <th rowSpan={2} className="sticky left-0 z-40 px-0 py-1 text-center align-middle text-[9px]" style={{ backgroundColor: PO_BLUE }}>
-                                <span className="block leading-tight">SR</span>
-                                <span className="block leading-tight">NO</span>
-                              </th>
-                              <th rowSpan={2} className="sticky left-[30px] z-40 px-1 py-1.5 text-center align-middle" style={{ backgroundColor: PO_BLUE }}>PRODUCT</th>
-                              <th rowSpan={2} className="px-0 py-1 text-center align-middle text-[9px]">
-                                <span className="block leading-tight">PUOM</span>
-                              </th>
-                              <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle">REQUESTED QTY</th>
-                              <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle">APPROVED QTY</th>
-                              {shouldShowSupplier() && (
-                                <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">SUPPLIER *</th>
-                              )}
-                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">UNIT PRICE</th>
-                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">AMOUNT</th>
-                              <th colSpan={2} className="px-1 py-1.5 text-center align-middle" style={BAND("#bbf7d0")}>DISCOUNT</th>
-                              <th rowSpan={2} className="group relative px-1 py-1 text-center align-middle !overflow-visible hover:!z-40 text-[9px]">
-                                <span className="block leading-tight">TOTAL AMOUNT</span>
-                                <span className="block leading-tight">(E.T)</span>
-                                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Total Amount Excluding Tax</span>
-                              </th>
-                              <th colSpan={2} className="px-1 py-1.5 text-center align-middle" style={BAND("#f5d0fe")}>TAX</th>
-                              <th rowSpan={2} className="group relative px-1 py-1 text-center align-middle !overflow-visible hover:!z-40 text-[9px]">
-                                <span className="block leading-tight">TOTAL AMOUNT</span>
-                                <span className="block leading-tight">(I.T)</span>
-                                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Total Amount Including Tax</span>
-                              </th>
-                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT BEFORE TAX</th>}
-                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX TYPE</th>}
-                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX CAT</th>}
-                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX CODE</th>}
-                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX LCURR AMOUNT</th>}
-                              {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT AFTER TAX</th>}
+                  <div className="flex items-center gap-2">
+                    {activeTab === "items" && (
+                      <>
+                        <button type="button" onClick={() => setShowAllColumns(!showAllColumns)} className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all ${showAllColumns ? "border-[#00378C]/40 bg-blue-50 text-[#00378C]" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+                          <Columns3 size={13} className={showAllColumns ? "text-[#00378C]" : "text-slate-500"} />
+                          <span>{showAllColumns ? "Compact View" : "All Columns"}</span>
+                        </button>
+                        <div className="relative flex h-8 w-64 items-center rounded-full border border-slate-300 bg-white pl-8 pr-3 transition-all duration-300 ease-out focus-within:w-96 focus-within:border-[#00378C] focus-within:ring-2 focus-within:ring-[#00378C]/20">
+                          <Search size={13} className="absolute left-3 text-slate-400" />
+                          <input className="h-full w-full border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" type="text" value={lineSearch} onChange={(e) => setLineSearch(e.target.value)} placeholder="Search lines..." />
+                        </div>
+                      </>
+                    )}
+                    {/* Buttons only render AFTER user level resolves — 2nd-level approver will never see them flash */}
+                    {!effectiveViewMode && activeTab === "items" && !userLevelLoading && userApprovalLevel < 2 && (
+                      <>
+                        <Button disabled={disabled} type="button" onClick={() => setImportOpen(true)} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><FileSpreadsheet size={14} /> Import Excel</Button>
+                        <Button disabled={disabled} type="button" onClick={addItemLine} className={`h-8 px-3 text-xs ${BTN_BLUE}`}><Plus size={14} /> Add Line</Button>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>
-                              <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
-                            </tr>
-                            <tr>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">PQTY</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">LUOM</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">LQTY</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">REQQTY</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">PQTY</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">LUOM</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">LQTY</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]">APRQTY</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#bbf7d0")}>DISC %</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#bbf7d0")}>DISC AMT</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#f5d0fe")}>TAX %</th>
-                              <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#f5d0fe")}>TAX AMT</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {items.length === 0 ? (
-                              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>No detail lines yet — click "Add Line" to get started</td></tr>
-                            ) : filteredItems.length === 0 ? (
-                              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
-                            ) : filteredItems.map((item) => {
-                              const itemId = (item as any).id || String(item.ITEM_SRNO);
-                              const qty = computeQuantity(item);
-                              const approvedQty = computeApprovedQuantity(item);
-                              const discPrice = num((item as any).DISC_PRICE) || itemDiscPrice(item);
-                              const amount = num(item.AMOUNT) || itemAmount(item);
-                              const taxAmt = num(item.TX_COMPNT_AMT_1) || itemTaxAmount(item);
-                              const lcurrAmt = num((item as any).LCURR_AMT) || itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
-                              const taxLcurr = num((item as any).TX_COMPNT_LCURAMT_1) || itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
-                              const lcurrAfterDisc = num((item as any).LCURR_AFTER_DISCOUNT) || itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
-                              const productDisplay = item.ITEM_CODE && item.ITEM_DESP ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` : (item.ITEM_CODE || "");
-                              const supplierDisplay = item.SUPPLIER && (item as any).SUPPLIER_NAME ? `${item.SUPPLIER} - ${(item as any).SUPPLIER_NAME}` : (item.SUPPLIER || "");
-                              const qtyForCalc = userApprovalLevel >= 2 ? approvedQty : qty;
-                              const grossAmount = num(item.ITEM_RATE) * qtyForCalc;
+                {activeTab === "items" && (
+                  <>
+                    <div ref={tableContainerRef} className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
+                      <table
+                        className="finance-lines-table w-full table-fixed border-collapse text-[10px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 [&_th]:whitespace-nowrap [&_th]:leading-tight"
+                        style={{ minWidth: tableMinWidth }}
+                      >
+                        <colgroup>
+                          {colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+                        </colgroup>
+                        <thead className="sticky top-0 z-30 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: PO_BLUE }}>
+                          <tr>
+                            <th rowSpan={2} className="sticky left-0 z-40 px-0 py-1 text-center align-middle text-[9px]" style={{ backgroundColor: PO_BLUE }}>
+                              <span className="block leading-tight">SR</span>
+                              <span className="block leading-tight">NO</span>
+                            </th>
+                            <th rowSpan={2} className="sticky left-[30px] z-40 px-1 py-1.5 text-center align-middle" style={{ backgroundColor: PO_BLUE }}>PRODUCT</th>
+                            <th rowSpan={2} className="px-0 py-1 text-center align-middle text-[9px]">
+                              <span className="block leading-tight">PUOM</span>
+                            </th>
+                            <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle">REQUESTED QTY</th>
+                            <th colSpan={qtyColSpan} className="px-1 py-1.5 text-center align-middle">APPROVED QTY</th>
+                            {shouldShowSupplier() && (
+                              <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">SUPPLIER *</th>
+                            )}
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">UNIT PRICE</th>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">AMOUNT</th>
+                            <th colSpan={2} className="px-1 py-1.5 text-center align-middle" style={BAND("#bbf7d0")}>DISCOUNT</th>
+                            <th rowSpan={2} className="group relative px-1 py-1 text-center align-middle !overflow-visible hover:!z-40 text-[9px]">
+                              <span className="block leading-tight">TOTAL AMOUNT</span>
+                              <span className="block leading-tight">(E.T)</span>
+                              <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Total Amount Excluding Tax</span>
+                            </th>
+                            <th colSpan={2} className="px-1 py-1.5 text-center align-middle" style={BAND("#f5d0fe")}>TAX</th>
+                            <th rowSpan={2} className="group relative px-1 py-1 text-center align-middle !overflow-visible hover:!z-40 text-[9px]">
+                              <span className="block leading-tight">TOTAL AMOUNT</span>
+                              <span className="block leading-tight">(I.T)</span>
+                              <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Total Amount Including Tax</span>
+                            </th>
+                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT BEFORE TAX</th>}
+                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX TYPE</th>}
+                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX CAT</th>}
+                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX CODE</th>}
+                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">TAX LCURR AMOUNT</th>}
+                            {showAllColumns && <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">LCURR AMOUNT AFTER TAX</th>}
 
-                              return (
-                                <tr className="border-t odd:bg-muted/20" key={itemId}>
-                                  <td className="sticky left-0 z-20 bg-card px-1 py-1 text-center text-[10px]">{item.ITEM_SRNO}</td>
-                                  <td className="group sticky left-[30px] z-20 bg-card px-1 py-1 !overflow-visible hover:!z-[25]">
-                                    <div className="w-full" title={productDisplay}>
-                                      <LookupField
-                                        label="" compact placeholder="Search Product *"
-                                        value={item.ITEM_CODE || ""}
-                                        displayValue={productDisplay}
-                                        columns={productColumns}
-                                        valueField="PROD_CODE"
-                                        displayFields={["PROD_CODE", "PROD_NAME"]}
-                                        loadOptions={async () => {
-                                          const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
-                                          const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
-                                          return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
-                                        }}
-                                        onChange={(val, row) => {
-                                          if (row) {
-                                            setItems((prev) => prev.map((it) => {
-                                              if ((it as any).id !== itemId) return it;
-                                              const tr = String(val ?? "").trim().toUpperCase();
-                                              if (tr) {
-                                                const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
-                                                if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
-                                              }
-                                              const updated: TPRItem = {
-                                                ...it,
-                                                ITEM_CODE: String(val ?? ""),
-                                                ITEM_DESP: String(row.PROD_NAME ?? ""),
-                                                P_UOM: String(row.P_UOM ?? ""),
-                                                L_UOM: String(row.L_UOM ?? ""),
-                                                UPPP: Number(row.UPPP) || 0,
-                                                ITEM_RATE: Number(row.BASE_PRICE) || 0,
-                                              };
-                                              updated.REQUEST_QUANTITY = computeQuantity(updated);
-                                              const ex = num(updated.CURRENCY_RATE) || 1;
-                                              return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
-                                            }));
-                                          }
-                                        }}
-                                        disabled={disabled}
-                                      />
-                                    </div>
-                                    <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Unit Per Primary: {item.UPPP || 0}</span>
-                                  </td>
+                            <th rowSpan={2} className="px-1 py-1.5 text-center align-middle">CAPEX</th>
+                            <th rowSpan={2} className="finance-action-col-head px-0 py-1.5 text-center align-middle">ACTION</th>
+                          </tr>
+                          <tr>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">PQTY</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">LUOM</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">LQTY</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">REQQTY</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">PQTY</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">LUOM</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">LQTY</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]">APRQTY</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#bbf7d0")}>DISC %</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#bbf7d0")}>DISC AMT</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#f5d0fe")}>TAX %</th>
+                            <th className="px-1 py-1 text-center align-middle text-[9px]" style={BAND("#f5d0fe")}>TAX AMT</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.length === 0 ? (
+                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>No detail lines yet — click "Add Line" to get started</td></tr>
+                          ) : filteredItems.length === 0 ? (
+                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={itemsColSpan}>No lines match "<strong>{lineSearch}</strong>"</td></tr>
+                          ) : filteredItems.map((item) => {
+                            const itemId = (item as any).id || String(item.ITEM_SRNO);
+                            const qty = computeQuantity(item);
+                            const approvedQty = computeApprovedQuantity(item);
+                            const discPrice = num((item as any).DISC_PRICE) || itemDiscPrice(item);
+                            const amount = num(item.AMOUNT) || itemAmount(item);
+                            const taxAmt = num(item.TX_COMPNT_AMT_1) || itemTaxAmount(item);
+                            const lcurrAmt = num((item as any).LCURR_AMT) || itemLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                            const taxLcurr = num((item as any).TX_COMPNT_LCURAMT_1) || itemTaxLcurrAmount(item, num(item.CURRENCY_RATE) || 1);
+                            const lcurrAfterDisc = num((item as any).LCURR_AFTER_DISCOUNT) || itemLcurrAfterDisc(item, num(item.CURRENCY_RATE) || 1);
 
-                                  <td className={`${UOM_LABEL} text-center`}>{item.P_UOM || ""}</td>
+                            const supplierCode = item.SUPPLIER ? String(item.SUPPLIER).split(" - ")[0].trim() : "";
+                            const supplierName = (item as any).SUPPLIER_NAME || supplierList.find((s: any) => s.SUPPLIER_CODE === supplierCode)?.SUPPLIER_NAME || "";
+                            const supplierDisplay = supplierCode && supplierName ? `${supplierCode} - ${supplierName}` : supplierCode;
 
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.001" value={item.QTY_PUOM || ""} onChange={(e) => updateItemField(itemId, "QTY_PUOM", Number(e.target.value) || 0)} disabled={!canEditRequested} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-                                  <td className={`${UOM_LABEL} text-center`}>{item.L_UOM || ""}</td>
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.001" value={isSameUom(item) ? 0 : item.QTY_LUOM || ""} onChange={(e) => updateItemField(itemId, "QTY_LUOM", Number(e.target.value) || 0)} disabled={!canEditRequested || isSameUom(item)} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-                                  <td className="bg-slate-200 px-1 py-1 text-right font-semibold text-[10px]">{fmt3(qty)}</td>
+                            const productDisplay = item.ITEM_CODE && item.ITEM_DESP ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` : (item.ITEM_CODE || "");
 
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_PUOM || ""} onChange={(e) => updateItemField(itemId, "APPROVED_QTY_PUOM" as any, Number(e.target.value) || 0)} disabled={!canEditApproved} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-                                  <td className={`${UOM_LABEL} text-center`}>{item.L_UOM || ""}</td>
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_LUOM || ""} onChange={(e) => updateItemField(itemId, "APPROVED_QTY_LUOM" as any, Number(e.target.value) || 0)} disabled={!canEditApproved || isSameUom(item)} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-                                  <td className="bg-slate-200 px-1 py-1 text-right font-semibold text-[10px]">{fmt3(approvedQty)}</td>
+                            const qtyForCalc = userApprovalLevel >= 2 ? approvedQty : qty;
+                            const grossAmount = num(item.ITEM_RATE) * qtyForCalc;
 
-                                  {shouldShowSupplier() && (
-                                    <td className="px-1 py-1" title={supplierDisplay}>
-                                      <LookupField
-                                        label="" compact placeholder="Search Supplier *"
-                                        value={item.SUPPLIER || ""}
-                                        displayValue={supplierDisplay}
-                                        columns={supplierColumns}
-                                        valueField="SUPPLIER_CODE"
-                                        displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
-                                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_SUPPLIERS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                        onChange={(val, row) => { updateItemField(itemId, "SUPPLIER", val); if (row) updateItemField(itemId, "SUPPLIER_NAME", row.SUPPLIER_NAME || ""); }}
-                                        disabled={disabled}
-                                      />
-                                    </td>
-                                  )}
-
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userApprovalLevel < 1} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-
-                                  <td className={AMOUNT_CELL}>{fmt3(grossAmount)}</td>
-
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.001" value={item.DISCOUNT_AMOUNT || ""} onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.001" value={discPrice || ""} onChange={(e) => updateItemField(itemId, "DISC_PRICE" as any, Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-
-                                  <td className={AMOUNT_CELL}>{fmt3(amount)}</td>
-                                  <td className="px-1 py-1">
-                                    <Input type="number" step="0.01" value={item.TX_COMPNT_PERC_1 || ""} onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)} disabled={disabled} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
-                                  </td>
-                                  <td className={AMOUNT_CELL}>{fmt3(taxAmt)}</td>
-                                  <td className={AMOUNT_CELL}>{fmt3(amount + taxAmt)}</td>
-
-                                  {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAmt)}</td>}
-                                  {showAllColumns && (
-                                    <td className="px-1 py-1">
-                                      <Select className="h-7 w-full text-[10px] px-1" value={item.TAX_TYPE || "Std."} onChange={(e) => updateItemField(itemId, "TAX_TYPE", e.target.value)} disabled={disabled}>
-                                        <option value="Std.">Std.</option>
-                                        <option value="Zero">Zero</option>
-                                        <option value="Exempt">Exempt</option>
-                                        <option value="No VAT">No VAT</option>
-                                      </Select>
-                                    </td>
-                                  )}
-                                  {showAllColumns && (
-                                    <td className="px-1 py-1">
-                                      <LookupField
-                                        label="" compact placeholder="Tax Cat"
-                                        value={item.TX_CAT_CODE || ""}
-                                        displayValue={item.TX_CAT_CODE && item.TX_CAT_NAME ? `${item.TX_CAT_CODE} - ${item.TX_CAT_NAME}` : item.TX_CAT_CODE || ""}
-                                        columns={taxCategoryColumns}
-                                        valueField="TX_CAT_CODE"
-                                        displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
-                                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                        onChange={(val, row) => { updateItemField(itemId, "TX_CAT_CODE", val); if (row) { updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || ""); updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || ""); } }}
-                                        disabled={disabled}
-                                      />
-                                    </td>
-                                  )}
-                                  {showAllColumns && (
-                                    <td className="px-1 py-1">
-                                      <LookupField
-                                        label="" compact placeholder="Tax Code"
-                                        value={item.TX_COMPNTCAT_CODE_1 || ""}
-                                        displayValue={item.TX_COMPNTCAT_CODE_1 && item.TX_COMPNTCAT_NAME ? `${item.TX_COMPNTCAT_CODE_1} - ${item.TX_COMPNTCAT_NAME}` : item.TX_COMPNTCAT_CODE_1 || ""}
-                                        columns={taxComponentColumns}
-                                        valueField="TX_COMPNTCAT_CODE"
-                                        displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
-                                        loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
-                                        onChange={(val, row) => { updateItemField(itemId, "TX_COMPNTCAT_CODE_1", val); if (row) { updateItemField(itemId, "TX_COMPNTCAT_NAME", row.TX_COMPNTCAT_NAME || ""); if (row.TX_PERCNT !== undefined) updateItemField(itemId, "TX_COMPNT_PERC_1", Number(row.TX_PERCNT) || 0); } }}
-                                        disabled={disabled}
-                                      />
-                                    </td>
-                                  )}
-                                  {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(taxLcurr)}</td>}
-                                  {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAfterDisc)}</td>}
-
-                                  <td className="px-1 py-1">
-                                    <Select
-                                      value={item.CAPEX_OPEX_NON_OPEX || ""}
-                                      onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX", e.target.value)}
+                            return (
+                              <tr className="border-t odd:bg-muted/20" key={itemId}>
+                                <td className="sticky left-0 z-20 bg-card px-1 py-1 text-center text-[10px]">{item.ITEM_SRNO}</td>
+                                <td className="group sticky left-[30px] z-20 bg-card px-1 py-1 !overflow-visible hover:!z-[25]">
+                                  <div className="w-full" title={productDisplay}>
+                                    <LookupField
+                                      label="" compact placeholder="Search Product *"
+                                      value={item.ITEM_CODE || ""}
+                                      displayValue={productDisplay}
+                                      columns={productColumns}
+                                      valueField="PROD_CODE"
+                                      displayFields={["PROD_CODE", "PROD_NAME"]}
+                                      loadOptions={async () => {
+                                        const all = await almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_PRODUCT_LIST", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" });
+                                        const sel = new Set(items.filter((it) => (it as any).id !== itemId).map((it) => String(it.ITEM_CODE || "").trim()).filter(Boolean));
+                                        return (all as any[]).filter((p: any) => !sel.has(String(p.PROD_CODE || "").trim()));
+                                      }}
+                                      onChange={(val, row) => {
+                                        if (row) {
+                                          setItems((prev) => prev.map((it) => {
+                                            if ((it as any).id !== itemId) return it;
+                                            const tr = String(val ?? "").trim().toUpperCase();
+                                            if (tr) {
+                                              const dup = prev.some((o) => (o as any).id !== itemId && String(o.ITEM_CODE || "").trim().toUpperCase() === tr);
+                                              if (dup) { toast.warning("This product is already added in another line.", 4000); return it; }
+                                            }
+                                            const updated: TPRItem = {
+                                              ...it,
+                                              ITEM_CODE: String(val ?? ""),
+                                              ITEM_DESP: String(row.PROD_NAME ?? ""),
+                                              P_UOM: String(row.P_UOM ?? ""),
+                                              L_UOM: String(row.L_UOM ?? ""),
+                                              UPPP: Number(row.UPPP) || 0,
+                                              ITEM_RATE: Number(row.BASE_PRICE) || 0,
+                                            };
+                                            updated.REQUEST_QUANTITY = computeQuantity(updated);
+                                            const ex = num(updated.CURRENCY_RATE) || 1;
+                                            return userApprovalLevel >= 2 ? recalcItemOnApprovedQty(updated, ex) : recalcItem(updated, ex);
+                                          }));
+                                        }
+                                      }}
                                       disabled={disabled}
-                                      className="h-7 w-full text-[10px] px-1"
-                                    >
-                                      <option value="" disabled>Select...</option>
-                                      <option value="N">No</option>
-                                      <option value="Y">Yes</option>
+                                    />
+                                  </div>
+                                  <span className="pointer-events-none absolute left-1/2 top-full z-50 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">Unit Per Primary: {item.UPPP || 0}</span>
+                                </td>
+
+                                <td className={`${UOM_LABEL} text-center`}>{item.P_UOM || ""}</td>
+
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.001" value={item.QTY_PUOM || ""} onChange={(e) => updateItemField(itemId, "QTY_PUOM", Number(e.target.value) || 0)} disabled={!canEditRequested} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+                                <td className={`${UOM_LABEL} text-center`}>{item.L_UOM || ""}</td>
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.001" value={isSameUom(item) ? 0 : item.QTY_LUOM || ""} onChange={(e) => updateItemField(itemId, "QTY_LUOM", Number(e.target.value) || 0)} disabled={!canEditRequested || isSameUom(item)} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+                                <td className="bg-slate-200 px-1 py-1 text-right font-semibold text-[10px]">{fmt3(qty)}</td>
+
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_PUOM || ""} onChange={(e) => updateItemField(itemId, "APPROVED_QTY_PUOM" as any, Number(e.target.value) || 0)} disabled={!canEditApproved} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+                                <td className={`${UOM_LABEL} text-center`}>{item.L_UOM || ""}</td>
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.001" value={(item as any).APPROVED_QTY_LUOM || ""} onChange={(e) => updateItemField(itemId, "APPROVED_QTY_LUOM" as any, Number(e.target.value) || 0)} disabled={!canEditApproved || isSameUom(item)} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+                                <td className="bg-slate-200 px-1 py-1 text-right font-semibold text-[10px]">{fmt3(approvedQty)}</td>
+
+                                {shouldShowSupplier() && (
+                                  <td className="px-1 py-1" title={supplierDisplay}>
+                                    <LookupField
+                                      label="" compact placeholder="Search Supplier *"
+                                      value={supplierCode}
+                                      displayValue={supplierDisplay}
+                                      columns={supplierColumns}
+                                      valueField="SUPPLIER_CODE"
+                                      displayFields={["SUPPLIER_CODE", "SUPPLIER_NAME"]}
+                                      loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_SUPPLIERS", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                                      onChange={(val, row) => {
+                                        const rawVal = String(row?.SUPPLIER_CODE ?? val ?? "");
+                                        const code = rawVal.split(" - ")[0].trim();
+                                        updateItemField(itemId, "SUPPLIER", code);
+                                        if (row) updateItemField(itemId, "SUPPLIER_NAME" as any, row.SUPPLIER_NAME || "");
+                                      }}
+                                      disabled={disabled}
+                                    />
+                                  </td>
+                                )}
+
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.0001" value={item.ITEM_RATE || ""} onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)} disabled={disabled || userApprovalLevel < 1} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+
+                                <td className={AMOUNT_CELL}>{fmt3(grossAmount)}</td>
+
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.001" value={item.DISCOUNT_AMOUNT || ""} onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.001" value={discPrice || ""} onChange={(e) => updateItemField(itemId, "DISC_PRICE" as any, Number(e.target.value) || 0)} disabled={disabled || discountScope === "PO"} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+
+                                <td className={AMOUNT_CELL}>{fmt3(amount)}</td>
+                                <td className="px-1 py-1">
+                                  <Input type="number" step="0.01" value={item.TX_COMPNT_PERC_1 || ""} onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)} disabled={disabled} className={`h-7 w-full text-right text-[10px] px-1 [appearance:textfield] ${INPUT_BG}`} placeholder="0" />
+                                </td>
+                                <td className={AMOUNT_CELL}>{fmt3(taxAmt)}</td>
+                                <td className={AMOUNT_CELL}>{fmt3(amount + taxAmt)}</td>
+
+                                {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAmt)}</td>}
+                                {showAllColumns && (
+                                  <td className="px-1 py-1">
+                                    <Select className="h-7 w-full text-[10px] px-1" value={item.TAX_TYPE || "Std."} onChange={(e) => updateItemField(itemId, "TAX_TYPE", e.target.value)} disabled={disabled}>
+                                      <option value="Std.">Std.</option>
+                                      <option value="Zero">Zero</option>
+                                      <option value="Exempt">Exempt</option>
+                                      <option value="No VAT">No VAT</option>
                                     </Select>
                                   </td>
-
-                                  <td className="finance-action-col px-1 py-1 text-center">
-                                    <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
-                                      <Trash2 size={13} />
-                                    </button>
+                                )}
+                                {showAllColumns && (
+                                  <td className="px-1 py-1">
+                                    <LookupField
+                                      label="" compact placeholder="Tax Cat"
+                                      value={item.TX_CAT_CODE || ""}
+                                      displayValue={item.TX_CAT_CODE && item.TX_CAT_NAME ? `${item.TX_CAT_CODE} - ${item.TX_CAT_NAME}` : item.TX_CAT_CODE || ""}
+                                      columns={taxCategoryColumns}
+                                      valueField="TX_CAT_CODE"
+                                      displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                                      loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                                      onChange={(val, row) => { updateItemField(itemId, "TX_CAT_CODE", val); if (row) { updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || ""); updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || ""); } }}
+                                      disabled={disabled}
+                                    />
                                   </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                )}
+                                {showAllColumns && (
+                                  <td className="px-1 py-1">
+                                    <LookupField
+                                      label="" compact placeholder="Tax Code"
+                                      value={item.TX_COMPNTCAT_CODE_1 || ""}
+                                      displayValue={item.TX_COMPNTCAT_CODE_1 && item.TX_COMPNTCAT_NAME ? `${item.TX_COMPNTCAT_CODE_1} - ${item.TX_COMPNTCAT_NAME}` : item.TX_COMPNTCAT_CODE_1 || ""}
+                                      columns={taxComponentColumns}
+                                      valueField="TX_COMPNTCAT_CODE"
+                                      displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                                      loadOptions={() => almsCommonSelect({ parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT", loginid, code1: companyCode, code2: loginid, code3: "", code4: "" })}
+                                      onChange={(val, row) => { updateItemField(itemId, "TX_COMPNTCAT_CODE_1", val); if (row) { updateItemField(itemId, "TX_COMPNTCAT_NAME", row.TX_COMPNTCAT_NAME || ""); if (row.TX_PERCNT !== undefined) updateItemField(itemId, "TX_COMPNT_PERC_1", Number(row.TX_PERCNT) || 0); } }}
+                                      disabled={disabled}
+                                    />
+                                  </td>
+                                )}
+                                {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(taxLcurr)}</td>}
+                                {showAllColumns && <td className={AMOUNT_CELL}>{fmt3(lcurrAfterDisc)}</td>}
 
-                      <div className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] px-3 py-2" style={{ backgroundColor: "#f8fafc", boxShadow: "0 -2px 6px rgba(0,0,0,0.06)", fontSize: 14 }}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Amount</span>
-                          <strong className="text-emerald-600">{fmt3(totalAmountBeforeDisc)}</strong>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Discount</span>
-                          <strong>{fmt3(totalDiscAmount)}</strong>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Total Amount Excluding Tax</span>
-                          <strong>{fmt3(totalAmount)}</strong>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Tax</span>
-                          <strong>{fmt3(totalTax)}</strong>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
-                          <span className="font-semibold" style={{ color: PO_BLUE }}>Total Amount Including Tax</span>
-                          <strong className="text-sm text-emerald-600">{fmt3(totalFinalAmount)}</strong>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                                <td className="px-1 py-1">
+                                  <Select
+                                    value={item.CAPEX_OPEX_NON_OPEX || ""}
+                                    onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX", e.target.value)}
+                                    disabled={disabled}
+                                    className="h-7 w-full text-[10px] px-1"
+                                  >
+                                    <option value="" disabled>Select...</option>
+                                    <option value="N">No</option>
+                                    <option value="Y">Yes</option>
+                                  </Select>
+                                </td>
 
-                  {activeTab === "terms" && shouldShowTermsTab() && (
-                    <>
-                      <div className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
-                        <table className="finance-lines-table w-full table-fixed border-collapse text-[10px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 [&_th]:whitespace-nowrap">
-                          <colgroup>
-                            <col style={{ width: "70px" }} />
-                            <col style={{ width: "340px" }} />
-                            <col style={{ width: "220px" }} />
-                            <col style={{ width: "240px" }} />
-                            <col style={{ width: "180px" }} />
-                            <col />
-                          </colgroup>
-                          <thead className="sticky top-0 z-30 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: PO_BLUE }}>
-                            <tr>
-                              <th className="px-2 py-2 text-center align-middle">Sr No</th>
-                              <th className="px-2 py-2 text-center align-middle">Supplier</th>
-                              <th className="px-2 py-2 text-center align-middle">Delivery Term *</th>
-                              <th className="px-2 py-2 text-center align-middle">Payment Terms *</th>
-                              <th className="px-2 py-2 text-center align-middle">Warranty *</th>
-                              <th className="px-2 py-2 text-center align-middle">Remarks *</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {terms.length === 0 ? (
-                              <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={6}>No terms yet — they are added automatically for each supplier selected on the items</td></tr>
-                            ) : terms.map((term, idx) => {
-                              const disp = term.SUPPLIER && term.SUPPLIER_NAME ? `${term.SUPPLIER} - ${term.SUPPLIER_NAME}` : (term.SUPPLIER || "");
-                              return (
-                                <tr className="border-t odd:bg-muted/20" key={term.id}>
-                                  <td className="px-2 py-1 text-center">{idx + 1}</td>
-                                  <td className="px-2 py-1 font-semibold text-slate-700 whitespace-normal break-words" title={disp}>{disp}</td>
-                                  <td className="px-1 py-1"><Input value={term.DLVR_TERM || ""} onChange={(e) => updateTermField(term.id, "DLVR_TERM", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
-                                  <td className="px-1 py-1"><Input value={term.PAYMENT_TERMS || ""} onChange={(e) => updateTermField(term.id, "PAYMENT_TERMS", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
-                                  <td className="px-1 py-1"><Input value={term.WARRANTY || ""} onChange={(e) => updateTermField(term.id, "WARRANTY", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
-                                  <td className="px-1 py-1"><Input value={term.REMARKS || ""} onChange={(e) => updateTermField(term.id, "REMARKS", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                <td className="finance-action-col px-1 py-1 text-center">
+                                  <button type="button" disabled={disabled} title="Delete row" className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeItem(itemId)}>
+                                    <Trash2 size={13} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                      <div className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] px-3 py-2" style={{ backgroundColor: "#f8fafc", boxShadow: "0 -2px 6px rgba(0,0,0,0.06)", fontSize: 14 }}>
-                        <div className="flex items-center gap-2"><span className="text-muted-foreground">Supplier Terms</span><strong>{terms.length}</strong></div>
+                    <div className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] px-3 py-2" style={{ backgroundColor: "#f8fafc", boxShadow: "0 -2px 6px rgba(0,0,0,0.06)", fontSize: 14 }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Amount</span>
+                        <strong className="text-emerald-600">{fmt3(totalAmountBeforeDisc)}</strong>
                       </div>
-                    </>
-                  )}
-                </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Discount</span>
+                        <strong>{fmt3(totalDiscAmount)}</strong>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Total Amount Excluding Tax</span>
+                        <strong>{fmt3(totalAmount)}</strong>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Tax</span>
+                        <strong>{fmt3(totalTax)}</strong>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1">
+                        <span className="font-semibold" style={{ color: PO_BLUE }}>Total Amount Including Tax</span>
+                        <strong className="text-sm text-emerald-600">{fmt3(totalFinalAmount)}</strong>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === "terms" && shouldShowTermsTab() && (
+                  <>
+                    <div className="commercial-lines-scroll min-h-0 flex-1 overflow-auto min-w-0" style={{ overscrollBehavior: "contain" }}>
+                      <table className="finance-lines-table w-full table-fixed border-collapse text-[10px] [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-300 [&_th]:whitespace-nowrap">
+                        <colgroup>
+                          <col style={{ width: "70px" }} />
+                          <col style={{ width: "340px" }} />
+                          <col style={{ width: "220px" }} />
+                          <col style={{ width: "240px" }} />
+                          <col style={{ width: "180px" }} />
+                          <col />
+                        </colgroup>
+                        <thead className="sticky top-0 z-30 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: PO_BLUE }}>
+                          <tr>
+                            <th className="px-2 py-2 text-center align-middle">Sr No</th>
+                            <th className="px-2 py-2 text-center align-middle">Supplier</th>
+                            <th className="px-2 py-2 text-center align-middle">Delivery Term *</th>
+                            <th className="px-2 py-2 text-center align-middle">Payment Terms *</th>
+                            <th className="px-2 py-2 text-center align-middle">Warranty *</th>
+                            <th className="px-2 py-2 text-center align-middle">Remarks *</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {terms.length === 0 ? (
+                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={6}>No terms yet — they are added automatically for each supplier selected on the items</td></tr>
+                          ) : terms.map((term, idx) => {
+                            const disp = term.SUPPLIER && term.SUPPLIER_NAME ? `${term.SUPPLIER} - ${term.SUPPLIER_NAME}` : (term.SUPPLIER || "");
+                            return (
+                              <tr className="border-t odd:bg-muted/20" key={term.id}>
+                                <td className="px-2 py-1 text-center">{idx + 1}</td>
+                                <td className="px-2 py-1 font-semibold text-slate-700 whitespace-normal break-words" title={disp}>{disp}</td>
+                                <td className="px-1 py-1"><Input value={term.DLVR_TERM || ""} onChange={(e) => updateTermField(term.id, "DLVR_TERM", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                <td className="px-1 py-1"><Input value={term.PAYMENT_TERMS || ""} onChange={(e) => updateTermField(term.id, "PAYMENT_TERMS", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                <td className="px-1 py-1"><Input value={term.WARRANTY || ""} onChange={(e) => updateTermField(term.id, "WARRANTY", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                                <td className="px-1 py-1"><Input value={term.REMARKS || ""} onChange={(e) => updateTermField(term.id, "REMARKS", e.target.value)} disabled={disabled} className={`h-7 w-full text-[10px] px-2 ${INPUT_BG}`} /></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="commercial-lines-footer flex flex-none flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] px-3 py-2" style={{ backgroundColor: "#f8fafc", boxShadow: "0 -2px 6px rgba(0,0,0,0.06)", fontSize: 14 }}>
+                      <div className="flex items-center gap-2"><span className="text-muted-foreground">Supplier Terms</span><strong>{terms.length}</strong></div>
+                    </div>
+                  </>
+                )}
               </div>
-            )}
+            </div>
           </CardContent>
         </form>
       </div>
@@ -2262,6 +2335,8 @@ const AddPRRequestPage = ({
           </div>
         </div>
       </Dialog>
+
+       <PurchaseReportPreview />
     </>
   );
 };

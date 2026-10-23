@@ -119,9 +119,58 @@ export function FreightInvoicePage() {
     }
   }, [companyCode, toast]);
 
+  const openNewForJob = useCallback(async (jobNo: string) => {
+    candidateRequestRef.current += 1;
+    setEditorMode("add");
+    setForm(emptyForm());
+    setSelectedRows([]);
+    setCandidateRows([]);
+    setCandidateSearch(jobNo);
+    setEditorOpen(true);
+
+    try {
+      const jobRes = await api.post<{ success?: boolean; data?: { header?: LookupRow; lines?: LookupRow[] } }>("/api/freight/job-activities/get", {
+        company_code: companyCode,
+        job_no: jobNo,
+      });
+      const jobHeader = jobRes.data?.data?.header;
+      const prinCode = text(jobHeader?.prin_code || jobHeader?.PRIN_CODE);
+      const prinName = text(jobHeader?.prin_name || jobHeader?.PRIN_NAME);
+      const currCode = text(jobHeader?.curr_code || jobHeader?.CURR_CODE) || "OMR";
+
+      if (prinCode) {
+        setForm((prev) => ({
+          ...prev,
+          prin_code: prinCode,
+          prin_name: prinName,
+          curr_code: currCode,
+        }));
+
+        const candRes = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
+          company_code: companyCode,
+          prin_code: prinCode,
+          search: jobNo,
+        });
+        const candList = (candRes.data?.data || []).map(normalizeRow);
+        setCandidateRows(candList);
+
+        const matchingLines = candList.filter((row) => text(row.job_no).toUpperCase() === jobNo.toUpperCase());
+        if (matchingLines.length > 0) {
+          setSelectedRows(matchingLines);
+        }
+      }
+    } catch {
+      // Non-fatal, user can still select manually
+    }
+  }, [companyCode]);
+
   useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
+    const params = new URLSearchParams(window.location.search);
+    const paramJobNo = params.get("job_no");
+    if (paramJobNo) {
+      void openNewForJob(paramJobNo);
+    }
+  }, [openNewForJob]);
 
   function openNew() {
     candidateRequestRef.current += 1;

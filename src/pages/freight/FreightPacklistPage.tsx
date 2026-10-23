@@ -2530,6 +2530,7 @@ function toPackDraftFromJob(row: LookupRow, companyCode: string, userId: string,
     hawb: lookupText(row, "hawb") || base.hawb,
     curr_code: lookupText(row, "curr_code") || base.curr_code,
     ex_rate: lookupText(row, "ex_rate") || base.ex_rate,
+    container_no: mode === "R" ? (lookupText(row, "voyage_no") || base.container_no) : base.container_no,
   };
 }
 
