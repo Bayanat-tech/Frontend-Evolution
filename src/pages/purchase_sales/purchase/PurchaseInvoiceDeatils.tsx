@@ -469,7 +469,7 @@ export function PurchaseInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_percent}
+                      value={row.disc_percent.toFixed(2)}
                       onChange={(event) => {
                         const discPercent = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);
@@ -489,7 +489,7 @@ export function PurchaseInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.disc_price}
+                      value={row.disc_price.toFixed(3)}
                       onChange={(event) => {
                         const discPrice = Number(event.target.value || 0);
                         const amount = amountBeforeDiscPrice(row);

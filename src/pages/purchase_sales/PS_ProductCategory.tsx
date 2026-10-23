@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Edit2, Eye, FileText, Plus, RefreshCw, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { Edit2, Eye, FileText, Plus, Save, Trash2, X, ArrowLeft, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookupaccount } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
@@ -53,7 +53,7 @@ export function ProductCategoryPage() {
   const companyCode = user?.company_code ?? "";
 
   const [rows, setRows] = useState<ProductCategoryRow[]>([]);
-  const [query, setQuery] = useState(""); // Added for controlled search
+  const [query, setQuery] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -135,29 +135,38 @@ export function ProductCategoryPage() {
       { accessorKey: "prodcat_name", header: "Prod Category Name", size: 260 },
       {
         id: "actions",
-        header: "Actions",
+        header: () => <div className="text-center">Actions</div>,
         size: 120,
         enableColumnFilter: false,
+        enableSorting: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
             <Button
               size="icon"
               variant="ghost"
               title="Edit"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => setPopup({ open: true, mode: "edit", data: row.original })}
             >
-              <Edit2 size={14} />
+              <Edit2 size={15} />
             </Button>
             <Button
               size="icon"
               variant="ghost"
               title="View"
+              className="h-7 w-7 text-slate-600 hover:text-[#00378C] hover:bg-[#eff6ff] rounded-md"
               onClick={() => setPopup({ open: true, mode: "view", data: row.original })}
             >
-              <Eye size={14} />
+              <Eye size={15} />
             </Button>
-            <Button size="icon" variant="ghost" title="Delete" onClick={() => setDeleteTarget(row.original)}>
-              <Trash2 size={14} />
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              title="Delete" 
+              className="h-7 w-7 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-md"
+              onClick={() => setDeleteTarget(row.original)}
+            >
+              <Trash2 size={15} />
             </Button>
           </div>
         ),
@@ -171,7 +180,7 @@ export function ProductCategoryPage() {
   const closeForm = () => setPopup((p) => ({ ...p, open: false }));
 
   /* ─────────────────────────────────────────────────────────
-     EDITOR — Full-page, WMS style header
+     EDITOR — Full-page, Freight-style header (with Save button)
      ───────────────────────────────────────────────────────── */
   if (formOpen) {
     return (
@@ -194,7 +203,7 @@ export function ProductCategoryPage() {
             </div>
           </div>
 
-          {/* WMS-style actions: List / Close / Reset / Save */}
+          {/* WMS-style actions */}
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {!readonly && (
               <Button
@@ -222,27 +231,33 @@ export function ProductCategoryPage() {
           </div>
         </div>
 
-        {/* Form content */}
-        <AddProductCategoryForm
-          key={`${popup.mode}-${popup.data.prodcat_code ?? "new"}-${resetKey}`}
-          mode={popup.mode}
-          existingData={popup.data}
-          onSavingChange={setFormSaving}
-          onClose={(shouldRefetch?: boolean) => {
-            const wasEdit = popup.mode === "edit";
-            closeForm();
-            if (shouldRefetch) {
-              setNotice({ type: "success", message: wasEdit ? "Successfully updated" : "Successfully created" });
-              void loadRows(false);
-            }
-          }}
-        />
+        {/* Form content wrapped in Freight tabs shell */}
+        <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+          <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
+            <div className="p-3 grid gap-3">
+              <AddProductCategoryForm
+                key={`${popup.mode}-${popup.data.prodcat_code ?? "new"}-${resetKey}`}
+                mode={popup.mode}
+                existingData={popup.data}
+                onSavingChange={setFormSaving}
+                onClose={(shouldRefetch?: boolean) => {
+                  const wasEdit = popup.mode === "edit";
+                  closeForm();
+                  if (shouldRefetch) {
+                    setNotice({ type: "success", message: wasEdit ? "Successfully updated" : "Successfully created" });
+                    void loadRows(false);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </section>
     );
   }
 
   /* ─────────────────────────────────────────────────────────
-     LIST VIEW — WMS style (buttons inside DataTable toolbar)
+     LIST VIEW — Freight style (buttons inside DataTable toolbar)
      ───────────────────────────────────────────────────────── */
   return (
     <section className="freight-enquiry-list-screen grid gap-2">
@@ -279,14 +294,6 @@ export function ProductCategoryPage() {
         exportFilename="product-categories.csv"
         toolbar={
           <div className="flex items-center gap-2">
-            {/* <button
-              type="button"
-              onClick={() => void loadRows(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-all text-xs font-medium shadow-sm cursor-pointer"
-            >
-              <RefreshCw size={14} />
-              Refresh
-            </button> */}
             <button
               type="button"
               onClick={() => setPopup({ open: true, mode: "add", data: {} })}
@@ -318,7 +325,7 @@ export function ProductCategoryPage() {
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground m-0">
           Confirm delete for product category <strong>{deleteTarget?.prodcat_code}</strong>?
         </p>
       </Dialog>
