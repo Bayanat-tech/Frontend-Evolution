@@ -716,49 +716,49 @@ export function FreightJobActivitiesPage({
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
           <table className="finance-lines-table w-full text-xs min-w-[1360px] border-collapse">
-            <thead className="sticky top-0 shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
-              {/* Tier 1 Header: Group Categories (PB Income & Expense Division) */}
-              <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none border-b border-slate-300">
-                <th colSpan={5} className="bg-slate-200/90 text-slate-700 border-r border-slate-300 py-1 px-2">
+            <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
+              {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
+              <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
+                <th colSpan={5} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
                   Service & Activity Details
                 </th>
-                <th colSpan={2} className="bg-blue-600 text-white border-r border-blue-700 py-1 px-2 shadow-inner">
+                <th colSpan={2} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Income (Billing)
                 </th>
-                <th colSpan={5} className="bg-amber-600 text-white border-r border-amber-700 py-1 px-2 shadow-inner">
+                <th colSpan={5} className="bg-[#002d72] text-white border-r border-white/20 py-1.5 px-2">
                   Expense (Costs & Vendors)
                 </th>
-                <th colSpan={1} className="bg-emerald-600 text-white border-r border-emerald-700 py-1 px-2">
+                <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Tax
                 </th>
-                <th colSpan={1} className="bg-slate-200/90 text-slate-700 py-1 px-2">
+                <th colSpan={1} className="bg-[#00245e] text-white/95 py-1.5 px-2">
                   Actions
                 </th>
               </tr>
 
-              {/* Tier 2 Header: Individual Columns */}
-              <tr className="bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="finance-sticky-col finance-col-no px-1.5 py-1.5 text-center w-8 bg-slate-100 text-slate-700 border-r border-slate-200" title="Tick / Select">
+              {/* Tier 2 Header: Individual Columns matching Finance Detail Tables */}
+              <tr className="bg-[#00378C] text-[11px] font-semibold text-white uppercase tracking-wider shadow-xs">
+                <th className="finance-sticky-col finance-col-no px-1.5 py-2 text-center w-8 bg-[#00378C] text-white border-r border-white/15" title="Tick / Select">
                   Tick
                 </th>
-                <th className="px-2 py-1.5 text-center w-9 bg-slate-100 text-slate-700 border-r border-slate-200">#</th>
-                <th className="px-2 py-1.5 text-left w-[185px] text-slate-700 border-r border-slate-200">Activity</th>
-                <th className="px-2 py-1.5 text-left min-w-[170px] text-slate-700 border-r border-slate-200">Description</th>
-                <th className="px-2 py-1.5 text-right w-[60px] text-slate-700 border-r border-slate-200" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
+                <th className="px-2 py-2 text-left w-[185px] text-white border-r border-white/15">Activity</th>
+                <th className="px-2 py-2 text-left min-w-[170px] text-white border-r border-white/15">Description</th>
+                <th className="px-2 py-2 text-right w-[60px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
                 {/* Income Columns */}
-                <th className="px-2 py-1.5 text-right w-[85px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Rate ({baseCurrency})</th>
-                <th className="px-2 py-1.5 text-right w-[95px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Bill Amt ({baseCurrency})</th>
-                {/* Expense Columns (With PB Distinct Yellow for Other Cost) */}
-                <th className="px-2 py-1.5 text-right w-[95px] bg-amber-100 text-amber-950 font-extrabold border-r border-amber-300" title="Other Cost Amt (PB actual_cost)">
-                  Other Cost Amt ({baseCurrency})
+                <th className="px-2 py-2 text-right w-[85px] bg-[#003380] text-blue-100 border-r border-white/15">Rate ({baseCurrency})</th>
+                <th className="px-2 py-2 text-right w-[95px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt ({baseCurrency})</th>
+                {/* Expense Columns */}
+                <th className="px-2 py-2 text-right w-[95px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
+                  Other Cost ({baseCurrency})
                 </th>
-                <th className="px-2 py-1.5 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Code</th>
-                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Price ({baseCurrency})</th>
-                <th className="px-2 py-2 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transporter Code</th>
-                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transp Price ({baseCurrency})</th>
+                <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Agent Code</th>
+                <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Agent Price ({baseCurrency})</th>
+                <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter Code</th>
+                <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Transp Price ({baseCurrency})</th>
                 {/* Tax & Action */}
-                <th className="px-2 py-1.5 text-center w-[110px] text-emerald-900 bg-emerald-50/80 border-r border-slate-200">Tax / VAT</th>
-                <th className="px-2 py-1.5 text-center w-[75px] text-slate-700">Actions</th>
+                <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
+                <th className="px-2 py-2 text-center w-[75px] text-white bg-[#00378C]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
