@@ -19,6 +19,7 @@ const statusTabs: TabDefinition[] = [
   { key: "request", label: "Pending" },
   { key: "inProgress", label: "In Progress" },
   { key: "closed", label: "Closed" },
+  { key: "sentBack", label: "Sent Back" },
   { key: "cancelled", label: "Cancelled" },
   { key: "rejected", label: "Rejected" },
   { key: "all", label: "All" },
@@ -28,21 +29,28 @@ const tabEndpoints: Record<LeaveFlowKey, string> = {
   request: "Pg_Leave_flow",
   inProgress: "Pg_leave_flow_InProgress",
   closed: "Pg_leave_flow_close",
+  sentBack: "Pg_leave_flow_SentBack",
   cancelled: "Pg_leave_flow_cancel",
   rejected: "Pg_leave_flow_Rejected",
 };
 
 type Row = Record<string, unknown>;
+function canReviewLeave(row: Row): boolean {
+  const permissions = row.WORKFLOW_PERMISSIONS as Record<string, unknown> | undefined;
+  return Boolean(permissions?.canApprove || permissions?.canSubmit);
+}
 
 export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: LeaveFlowKey }) {
   const { user } = useAuth();
   const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const isMhdl = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || ''));
 
   const [activeTab, setActiveTab] = useState<LeaveTabKey>(initialTab);
   const [dataByTab, setDataByTab] = useState<Record<LeaveFlowKey, Row[]>>({
     request: [],
     inProgress: [],
     closed: [],
+    sentBack: [],
     cancelled: [],
     rejected: [],
   });
@@ -50,6 +58,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     request: 0,
     inProgress: 0,
     closed: 0,
+    sentBack: 0,
     cancelled: 0,
     rejected: 0,
     all: 0,
@@ -73,15 +82,16 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     if (showNotice) setNotice(null);
 
     try {
-      const keys: LeaveFlowKey[] = ["request", "inProgress", "closed", "cancelled", "rejected"];
+      const keys: LeaveFlowKey[] = isMhdl ? ["request", "inProgress", "closed", "cancelled", "rejected"] : ["request", "inProgress", "closed", "sentBack", "cancelled", "rejected"];
       const results = await Promise.allSettled(
-        keys.map((key) => getHrLeaveFlow(tabEndpoints[key], loginId, 1, 1000))
+        keys.map((key) => getHrLeaveFlow(tabEndpoints[key], loginId, 1, 1000, isMhdl ? 'MHDL' : 'ALMS'))
       );
 
       const nextData: Record<LeaveFlowKey, Row[]> = {
         request: [],
         inProgress: [],
         closed: [],
+    sentBack: [],
         cancelled: [],
         rejected: [],
       };
@@ -91,6 +101,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         request: 0,
         inProgress: 0,
         closed: 0,
+    sentBack: 0,
         cancelled: 0,
         rejected: 0,
         all: 0,
@@ -120,7 +131,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     } finally {
       setLoading(false);
     }
-  }, [loginId]);
+  }, [loginId, isMhdl]);
 
   useEffect(() => {
     void loadAllData(false);
@@ -131,7 +142,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
     if (activeTab === "all") {
       const allRows: Row[] = [];
       const seenIds = new Set<string>();
-      const keys: LeaveFlowKey[] = ["request", "inProgress", "closed", "cancelled", "rejected"];
+      const keys: LeaveFlowKey[] = ["request", "inProgress", "closed", "sentBack", "cancelled", "rejected"];
       keys.forEach((k) => {
         dataByTab[k].forEach((row, i) => {
           const id = String(row.REQUEST_NUMBER ?? row.requestNumber ?? `${k}_${i}`);
@@ -229,7 +240,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleOpenView(row.original);
+                if (canReviewLeave(row.original)) handleOpenEdit(row.original); else handleOpenView(row.original);
               }}
               title="View Leave Request"
             >
@@ -347,7 +358,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         enableColumnFilter: false,
         cell: ({ row }) => {
           const tabKey = (row.original._inferredTab as LeaveFlowKey) || activeTab;
-          const isPending = tabKey === "request" || activeTab === "all";
+          const isPending = isMhdl ? tabKey === 'request' || activeTab === 'all' : canReviewLeave(row.original);
           return (
             <div className="flex items-center justify-center gap-1">
               <button
@@ -365,7 +376,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
                 <button
                   type="button"
                   className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                  title="Edit Leave Request"
+                  title="Review Leave Request"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleOpenEdit(row.original);
@@ -390,7 +401,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
         },
       },
     ],
-    [activeTab]
+    [activeTab, isMhdl]
   );
 
   return (
@@ -422,7 +433,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
 
       {/* Freight-style Status Pill Tabs */}
       <div className="flex flex-wrap items-center gap-1.5 pb-1">
-        {statusTabs.map((tab) => {
+        {statusTabs.filter(tab => !isMhdl || tab.key !== 'sentBack').map((tab) => {
           const count = counts[tab.key] || 0;
           const active = activeTab === tab.key;
           return (
@@ -498,6 +509,7 @@ function getStatusText(tabKey: string): string {
   if (tabKey === "request") return "Pending";
   if (tabKey === "inProgress") return "In Progress";
   if (tabKey === "closed") return "Closed";
+  if (tabKey === "sentBack") return "Sent Back";
   if (tabKey === "cancelled") return "Cancelled";
   if (tabKey === "rejected") return "Rejected";
   return "Active";
