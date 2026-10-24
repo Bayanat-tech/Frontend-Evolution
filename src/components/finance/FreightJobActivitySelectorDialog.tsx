@@ -342,7 +342,7 @@ export function FreightJobActivitySelectorDialog({
   }, [selectedMap]);
 
   const handleConfirm = () => {
-    const items = Array.from(selectedMap.values());
+    const items = Array.from(selectedMap.values()).filter((e) => !e.isBooked);
     if (items.length === 0) return;
     onSelect(items);
     onClose();
@@ -374,7 +374,7 @@ export function FreightJobActivitySelectorDialog({
             <Button
               type="button"
               size="sm"
-              disabled={selectedMap.size === 0}
+              disabled={selectedMap.size === 0 || allExpensesBooked}
               onClick={handleConfirm}
               className="bg-[#00378C] hover:bg-[#002d72] text-white"
             >

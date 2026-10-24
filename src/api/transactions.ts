@@ -170,6 +170,13 @@ export type CompanyInfo = {
   lcur_decimal_nos?: number;
   amount_decimal_nos?: number;
   ac_fy_period?: string;
+  financial_yr_start?: string;
+  financial_yr_end?: string;
+  doc_edit_from?: string;
+  doc_edit_to?: string;
+  doc_date_editable?: string;
+  current_fy_start?: string;
+  current_fy_end?: string;
   setup_required?: boolean;
   message?: string;
 };

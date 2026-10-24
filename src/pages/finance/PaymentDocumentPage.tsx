@@ -12,6 +12,7 @@ import {
   cancelTransactionDocument,
   Division,
   FyPeriod,
+  CompanyInfo,
   getCompanyInfo,
   getDefaultFyPeriod,
   getCheque,
@@ -102,6 +103,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [fyPeriod, setFyPeriod] = useState("");
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [pageIndex, setPageIndex] = useState(0);
@@ -120,11 +122,22 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportTitle, setReportTitle] = useState("Document Report");
   
-  // const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod), [fyPeriods, fyPeriod]);
+  const currentActiveFyPeriod = useMemo(
+    () => getDefaultFyPeriod(fyPeriods, companyInfo || undefined),
+    [fyPeriods, companyInfo]
+  );
+
+  const activeFyForEditor = editor?.mode === "create" ? currentActiveFyPeriod : fyPeriod;
+
   const fyRange = useMemo(
-  () => getFyRange(fyPeriods, fyPeriod, { docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined }),
-  [fyPeriods, fyPeriod, editor]
-);
+    () =>
+      getFyRange(fyPeriods, activeFyForEditor, {
+        docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined,
+        docEditFrom: companyInfo?.doc_edit_from,
+        docEditTo: companyInfo?.doc_edit_to,
+      }),
+    [fyPeriods, activeFyForEditor, editor, companyInfo]
+  );
   const handleOpenReport = async (docType: string, docNo: string, title?: string) => {
     if (!docNo) return;
 
@@ -146,10 +159,11 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
 
   const loadLookups = async () => {
     try {
-      const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
+      const [fyData, divisionData, cInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
       setFyPeriods(fyData);
       setDivisions(divisionData);
-      setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+      setCompanyInfo(cInfo);
+      setFyPeriod((current) => current || getDefaultFyPeriod(fyData, cInfo));
       if (companyInfo?.setup_required) {
         setSetupRequired(true);
       }
@@ -390,6 +404,7 @@ export function PaymentDocumentPage({ docType, menuTitle }: { docType: Transacti
         <div className="finance-document-editor finance-payment-editor finance-document-ui">
           <PaymentDocumentEditor
             fyRange={fyRange}
+            companyInfo={companyInfo}
             docType={docType}
             editor={editor}
             onClose={() => {
@@ -453,8 +468,10 @@ function PaymentDocumentEditor({
   onCancelled,
   onSaved,
   fyRange,
+  companyInfo,
 }: {
   fyRange: FyRange;
+  companyInfo?: CompanyInfo | null;
   docType: TransactionType;
   editor: EditorState;
   onClose: () => void;
@@ -1255,6 +1272,9 @@ function PaymentDocumentEditor({
    if (!form.doc_date) return setError("Doc Date is required");
    const fyErr = validateFyDate(form.doc_date, fyRange, "Doc Date");
    if (fyErr) return setError(fyErr);
+   if (companyInfo?.doc_edit_from && dateInput(form.doc_date) < dateInput(companyInfo.doc_edit_from)) {
+     return setError(`Account period is locked prior to ${formatDate(companyInfo.doc_edit_from)}. Backdated entry is not allowed.`);
+   }
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
@@ -1621,7 +1641,7 @@ function PaymentDocumentEditor({
                     </div>
                     <div className="finance-payment-header-fields">
 
-                      <Field label="Doc Date" required><BiscDatePicker {...fyDateProps(fyRange)}  disabled={disabled} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
+                      <Field label="Doc Date" required><BiscDatePicker {...fyDateProps(fyRange)}  disabled={disabled || companyInfo?.doc_date_editable === 'N'} value={dateInput(form.doc_date)} onChange={(val) => updateField("doc_date", val)} /></Field>
 
                       {(docType === "BP" || docType === "BR") && (
                         <>
