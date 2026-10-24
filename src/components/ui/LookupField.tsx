@@ -272,9 +272,10 @@ export function LookupField({
           ? getLookupText(
             rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
               [valueField]: value,
+              ...(displayFields.includes("label") ? { label: value } : {}),
             },
             displayFields.length ? displayFields : [valueField],
-          ) || (displayFields.length === 0 || displayFields.includes(valueField) ? String(value) : "")
+          ) || String(value)
           : "");
 
   const totalCols = columns.length + (renderRowActions ? 1 : 0);

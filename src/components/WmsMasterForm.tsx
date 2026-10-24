@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Save } from "lucide-react";
-import { getDynamicLookup } from "../api/lookups";
+import { getDynamicLookup, getLookupValue } from "../api/lookups";
 import { LookupField } from "./ui/LookupField";
 import { Input } from "./ui/Input";
 import { Textarea } from "./ui/Textarea";
@@ -67,10 +67,19 @@ export function WmsMasterForm({
   const hasTabs = Boolean(tabs && tabs.length > 0);
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
   const [fieldErrors, setFieldErrors] = useState<FieldError>({});
+  const [dropdownCache, setDropdownCache] = useState<Record<string, DropdownOption[]>>({});
 
   useEffect(() => {
     setActiveTab(tabs?.[0]?.key ?? "__default");
   }, [tabs]);
+
+  useEffect(() => {
+    fields.forEach((field) => {
+      if (field.dropdownParam && form[field.name] !== undefined && form[field.name] !== "" && form[field.name] !== null && !dropdownCache[field.name]) {
+        loadDropdownOptions(field);
+      }
+    });
+  }, [fields, form]);
 
   /* ---------------- helpers ---------------- */
 
@@ -202,16 +211,35 @@ export function WmsMasterForm({
       const valueKey = field.dropdownValueKey || "value";
       const separator = field.dropdownDisplaySeparator || " - ";
 
-      return results.map((row) => {
+      const options: DropdownOption[] = results.map((row) => {
         const displayLabel = field.dropdownDisplayFields?.length
-          ? field.dropdownDisplayFields.map((f) => String(row[f] || "")).filter(Boolean).join(separator)
-          : String(row[labelKey] ?? row.label ?? row.name ?? row.description ?? "");
+          ? field.dropdownDisplayFields
+              .map((f) => String(getLookupValue(row, f) ?? ""))
+              .filter(Boolean)
+              .join(separator)
+          : String(
+              getLookupValue(row, labelKey) ||
+              getLookupValue(row, "label") ||
+              getLookupValue(row, "name") ||
+              getLookupValue(row, "description") ||
+              ""
+            );
+        const optValue = String(
+          getLookupValue(row, valueKey) ||
+          getLookupValue(row, "value") ||
+          getLookupValue(row, "code") ||
+          getLookupValue(row, "id") ||
+          ""
+        );
         return {
-          label: displayLabel,
-          value: String(row[valueKey] ?? row.value ?? row.code ?? row.id ?? ""),
+          label: displayLabel || optValue,
+          value: optValue,
           raw: row,
         };
       });
+
+      setDropdownCache((prev) => ({ ...prev, [field.name]: options }));
+      return options;
     } catch (error) {
       console.error(`Error loading dropdown for ${field.name}:`, error);
       return [];
@@ -296,6 +324,11 @@ export function WmsMasterForm({
         );
       }
 
+      const stringVal = String(value ?? "").trim();
+      const cachedOption = (dropdownCache[field.name] || []).find(
+        (opt) => String(opt.value).trim() === stringVal
+      );
+
       // Lookup / async dropdown: render the same outer label as other fields so it is always
       // visible. Do not pass a label into LookupField when compact, to avoid a second (or
       // missing) label inside the component.
@@ -304,16 +337,30 @@ export function WmsMasterForm({
           {label}
           <LookupField
             key={`${field.name}__${getFieldDependencyKey(field, form)}`}
-            value={String(value ?? "")}
-            displayValue={undefined}
-            columns={[{ field: "label", header: "Label" }]}
+            value={stringVal}
+            displayValue={cachedOption ? cachedOption.label : undefined}
+            columns={[
+              { field: "value", header: "Code", width: 100 },
+              { field: "label", header: "Description" },
+            ]}
             valueField="value"
             displayFields={["label"]}
             loadOptions={async () => {
               const options = await loadDropdownOptions(field);
               return options.map((opt) => ({ ...(opt.raw || {}), value: opt.value, label: opt.label }));
             }}
-            onChange={(val) => handleFieldChange(field.name, val)}
+            onChange={(val, row) => {
+              handleFieldChange(field.name, val);
+              if (row && typeof row.label === "string") {
+                setDropdownCache((prev) => ({
+                  ...prev,
+                  [field.name]: [
+                    ...(prev[field.name] || []).filter((o) => o.value !== val),
+                    { label: row.label as string, value: val, raw: row },
+                  ],
+                }));
+              }
+            }}
             disabled={disabled}
             placeholder={`Search ${field.label}…`}
             compact

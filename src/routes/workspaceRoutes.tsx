@@ -2551,7 +2551,9 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const isFreight =
       matchText.includes("/freight") ||
       compact.includes("freight") ||
-      compact.includes("frieght");
+      compact.includes("frieght") ||
+      matchText.includes("/fms") ||
+      compact.includes("fms");
 
     if (!isFreight) return null;
 
