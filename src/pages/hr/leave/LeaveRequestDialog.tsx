@@ -11,6 +11,9 @@ import {
   type HrLeaveEntitlement,
   getleavedaycount,
   getRequestFlowUsers,
+  getHrWorkflowIdentity,
+  getHrWorkflowRequest,
+  saveHrWorkflowAction,
 } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
 import { LmsDialog } from "../../../components/ui/LmsDialog";
@@ -130,16 +133,37 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
 
   const [userFlowData, setUserFlowData] = useState<{ LOGIN_ID: string; USERNAME: string }[]>([]);
   const [loadingFlowUsers, setLoadingFlowUsers] = useState(false);
+  const [workflowRow, setWorkflowRow] = useState<Record<string, any> | null>(null);
+  const [workflowActor, setWorkflowActor] = useState('');
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [workflowError, setWorkflowError] = useState('');
 
-  const loginId = String( user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const loginId = workflowActor || String(user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
   const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
   const LOGINUSER = String(user?.LOGINID || user?.loginid || "")
   const tenantName = /[A-Za-z]/.test(LOGINUSER.trim()) ? "MHDL" : "ALMS";
-  const isCreator =initialRow?.CREATED_BY === user?.loginid1 || initialRow?.CREATED_BY === undefined || initialRow?.CREATED_BY === null || initialRow?.CREATED_BY === '';
+  const isAlms = tenantName === 'ALMS';
+  const isCreator = isAlms ? !initialRow || String(workflowRow?.CREATED_BY || initialRow.CREATED_BY || '').trim() === loginId
+    : initialRow?.CREATED_BY === user?.loginid1 || initialRow?.CREATED_BY === undefined || initialRow?.CREATED_BY === null || initialRow?.CREATED_BY === '';
   const createMode = !requestNumber;
-  const fieldsDisabled = readOnly || !isCreator;
+  const permissions = (isAlms ? workflowRow?.WORKFLOW_PERMISSIONS || {} : { canApprove: !isCreator }) as Record<string, any>;
+  const canPrimary = !isAlms || Boolean(permissions.canSubmit || permissions.canApprove);
+  const fieldsDisabled = readOnly || !isCreator || workflowLoading || Boolean(workflowError);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!isAlms) { setWorkflowRow(null); setWorkflowActor(''); setWorkflowLoading(false); setWorkflowError(''); return; }
+    let current = true;
+    setWorkflowLoading(true); setWorkflowError(''); setWorkflowRow(null); setWorkflowActor('');
+    const request = getRowString(initialRow, 'REQUEST_NUMBER', 'requestNumber');
+    Promise.all([getHrWorkflowIdentity(), request ? getHrWorkflowRequest(request) : Promise.resolve(null)])
+      .then(([actor, row]) => { if (current) { setWorkflowActor(actor); setWorkflowRow(row); if (row) setForm(formFromRow({ ...initialRow, ...row })); } })
+      .catch(error => { if (current) { const message = error instanceof Error ? error.message : 'Workflow verification failed.'; setWorkflowError(message); setNotice({ type: 'error', message }); } })
+      .finally(() => { if (current) setWorkflowLoading(false); });
+    return () => { current = false; };
+  }, [open, initialRow, isAlms]);
 
   useEffect(() => {
     console.log('user',user);
@@ -417,6 +441,9 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
   // console.log('save',form);
 
   const save = async (action: "SAVEASDRAFT" | "SUBMITTED" |"CANCEL" |"REJECTED" | "SENTBACK") => {
+    if (isAlms && (workflowLoading || workflowError || !workflowActor || readOnly)) {
+      setNotice({ type: 'error', message: workflowError || 'Please wait for workflow verification before saving.' }); return;
+    }
 
     const errors = getValidationErrors(form);
 
@@ -463,7 +490,7 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       const payload: Record<string, unknown> = {
         COMPANY_CODE: companyCode,
         EMPLOYEE_NAME: form.employeeName,
-        CREATED_BY: loginId,
+        CREATED_BY: isAlms ? workflowRow?.CREATED_BY || loginId : loginId,
         UPDATED_BY: loginId,
         LAST_ACTION: action,
         REQUEST_NUMBER: requestNumber,
@@ -505,11 +532,16 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
         payload.CANCEL_REMARK = rejectParams.CANCEL_REMARK;
       }
 
-      const saveResult = await saveHrLeaveApproval(payload as any, tenantName);
+      const saveResult = isAlms && requestNumber && ['SUBMITTED','REJECTED','SENTBACK'].includes(action)
+        ? await saveHrWorkflowAction(workflowRow || await getHrWorkflowRequest(requestNumber), action,
+            action === 'SENTBACK' ? sentBackParams.SENTBACK_HISTORY : rejectParams.CANCEL_REMARK,
+            sentBackParams.LOGIN_ID, payload)
+        : await saveHrLeaveApproval(payload as any, tenantName);
       
       const savedRequestNumber = getSavedRequestNumber(saveResult);
       if (savedRequestNumber) {
         setRequestNumber(savedRequestNumber);
+        if (isAlms && action === 'SAVEASDRAFT') setWorkflowRow(await getHrWorkflowRequest(savedRequestNumber));
       }
 
       if (action === "SAVEASDRAFT") {
@@ -559,8 +591,9 @@ export function LeaveRequestDialog({ open, initialRow, isEditMode , readOnly = f
       contentClassName={`leave-request-dialog${readOnly ? " is-readonly" : ""}`}
       onClose={onClose}
 footer={
-  readOnly ? (
+  readOnly || (!createMode && !canPrimary) ? (
     <div className="flex items-center justify-end p-4">
+      <Button type="button" variant="outline" onClick={openAttachments} disabled={!requestNumber}><Paperclip size={16} /><span>Attachments</span></Button>
       <Button type="button" variant="outline" onClick={onClose}>
         <X size={16} />
         <span>Close</span>
@@ -585,11 +618,11 @@ footer={
         <Button
           type="button"
           onClick={() => void save("SUBMITTED")}
-          disabled={Boolean(savingAction)}
+          disabled={Boolean(savingAction) || workflowLoading || Boolean(workflowError)}
           className="!w-auto shrink-0 whitespace-nowrap"
         >
           {savingAction === "SUBMITTED" ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-          <span>{isCreator ? "Submit" : "Approve"}</span>
+          <span>{permissions.mode === 'resumption' ? 'Approve Resumption' : isCreator ? "Submit" : "Approve"}</span>
         </Button>
 
         {!createMode && (
@@ -607,7 +640,7 @@ footer={
               </Button>
             )}
 
-            {!isCreator && (
+            {!isCreator && permissions.canApprove && (
               <>
               <Button
                 type="button"
@@ -654,6 +687,8 @@ footer={
     >
       <div className="leave-request-form">
         <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+        {workflowLoading && <p className="text-sm text-slate-500">Checking the current approver and available actions…</p>}
+        {!readOnly && permissions.mode === 'resumption' && <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">This request is waiting for your leave-resumption approval.</p>}
 
         <div className="leave-request-identity">
           <div className="leave-request-profile-icon">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Save } from "lucide-react";
-import { getDynamicLookup, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import type { MasterField, MasterFormTab } from "./MasterPage";
 import { UserProfile } from "../../types/auth";
 import { LookupField } from "./LookupField";
@@ -192,14 +192,28 @@ export function MasterForm({
       return results.map((row) => {
         const displayLabel = field.dropdownDisplayFields?.length
           ? field.dropdownDisplayFields
-              .map((f) => String(row[f] || ""))
+              .map((f) => String(getLookupValue(row, f) ?? ""))
               .filter(Boolean)
               .join(separator)
-          : String(row[labelKey] ?? row.label ?? row.name ?? row.description ?? "");
+          : String(
+              getLookupValue(row, labelKey) ||
+              getLookupValue(row, "label") ||
+              getLookupValue(row, "name") ||
+              getLookupValue(row, "description") ||
+              ""
+            );
+
+        const optValue = String(
+          getLookupValue(row, valueKey) ||
+          getLookupValue(row, "value") ||
+          getLookupValue(row, "code") ||
+          getLookupValue(row, "id") ||
+          ""
+        );
 
         return {
-          label: displayLabel,
-          value: String(row[valueKey] ?? row.value ?? row.code ?? row.id ?? ""),
+          label: displayLabel || optValue,
+          value: optValue,
           raw: row,
         };
       });
@@ -508,6 +522,5 @@ function getFieldDependencyKey(field: MasterField, form: Record<string, unknown>
     deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
   }
 
-  // If no dependencies, use a timestamp so it always remounts on open
-  return deps.length > 0 ? deps.join("__") : Date.now().toString();
+  return deps.length > 0 ? deps.join("__") : "static";
 }

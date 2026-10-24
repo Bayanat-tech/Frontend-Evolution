@@ -60,6 +60,7 @@ export async function deleteHrGm(endpoint: string, ids: unknown[]) {
 export type HrLeaveFlowResponse = {
   tableData: LookupRow[];
   count: number;
+  workflowLoginId?: string;
 };
 
 export type HrEmployee = {
@@ -92,12 +93,32 @@ export async function getHrLeaveCancel(loginid: string, page = 1, limit = 100) {
   return response.data.data || { tableData: [], count: 0 };
 }
 
-export async function getHrLeaveFlow(master: string, loginid: string, page = 1, limit = 1000) {
-  const response = await withHrFallback((prefix) => api.get<ApiResponse<HrLeaveFlowResponse>>(`${prefix}/${master}`, {
+export async function getHrLeaveFlow(master: string, loginid: string, page = 1, limit = 1000, tenantName?: string) {
+  const buckets: Record<string, string> = { Pg_Leave_flow: 'pending', Pg_leave_flow_InProgress: 'inProgress', Pg_leave_flow_close: 'closed', Pg_leave_flow_cancel: 'cancelled', Pg_leave_flow_Rejected: 'rejected', Pg_leave_flow_SentBack: 'sentBack' };
+  const endpoint = tenantName === 'ALMS' && buckets[master] ? `/workflow/leave/${buckets[master]}` : `/${master}`;
+  const response = await withHrFallback((prefix) => api.get<ApiResponse<HrLeaveFlowResponse>>(`${prefix}${endpoint}`, {
     params: { code: loginid, page, limit },
   }));
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
   return response.data.data || { tableData: [], count: 0 };
+}
+
+export async function getHrWorkflowIdentity(): Promise<string> {
+  const response = await withHrFallback(prefix => api.get<ApiResponse<{ workflowLoginId: string }>>(`${prefix}/workflow/identity`));
+  if (!response.data.data?.workflowLoginId) throw new Error('Your HR workflow identity could not be verified.');
+  return response.data.data.workflowLoginId;
+}
+export async function getHrWorkflowRequest(request: string): Promise<Record<string, any>> {
+  const response = await withHrFallback(prefix => api.get<ApiResponse<Record<string, any>>>(`${prefix}/workflow/leave/request/${encodeURIComponent(request)}`));
+  if (!response.data.success || !response.data.data) throw new Error(response.data.message || 'Leave request could not be verified.');
+  return response.data.data;
+}
+export async function saveHrWorkflowAction(row: Record<string, any>, action: string, reason: string, recipient: string, changes?: Record<string, unknown>) {
+  const response = await withHrFallback(prefix => api.post<ApiResponse<unknown> & { request_number?: unknown }>(`${prefix}/workflow/leave/${encodeURIComponent(String(row.REQUEST_NUMBER))}/action`, {
+    action, reason, recipient, changes, version: row.WORKFLOW_VERSION,
+  }));
+  if (!response.data.success) throw new Error(response.data.message || 'Leave action could not be saved.');
+  return response.data;
 }
 
 export async function getHrEmployees(supervisor_empid?: string) {
@@ -181,6 +202,10 @@ export async function getleavedaycount(payload:Record<string,unknown>,tenantName
   }
 
   export async function getRequestFlowUsers (payload:Record<string,unknown>,tenantName?:string){
+    if (tenantName === 'ALMS' && payload.doc_id) {
+      const response = await withHrFallback(prefix => api.get(`${prefix}/workflow/leave/${encodeURIComponent(String(payload.doc_id))}/targets`));
+      return response.data;
+    }
     if(tenantName === 'ALMS'){
       console.log('hit Alms getRequestFlowUsers',payload,tenantName)
       const response = await withHrFallback((prefix)=> api.get(`${prefix}/gm/getRequestFlowUsers`,{params:payload,}))

@@ -134,6 +134,14 @@ const btMasterRoutes: Record<string, string> = {
   line: "wms/masters/gm/line",
   "hs codes": "wms/masters/gm/harmonize",
   "hs code": "wms/masters/gm/harmonize",
+  transporter: "wms/masters/gm/transporter",
+  transporters: "wms/masters/gm/transporter",
+  customer: "wms/masters/gm/customer",
+  customers: "wms/masters/gm/customer",
+  forwarder: "wms/masters/gm/forwarder",
+  forwarders: "wms/masters/gm/forwarder",
+  container: "wms/masters/gm/container",
+  containers: "wms/masters/gm/container",
 };
 
 function normalizeBtMasterRoutes(nodes: MenuNode[]): MenuNode[] {

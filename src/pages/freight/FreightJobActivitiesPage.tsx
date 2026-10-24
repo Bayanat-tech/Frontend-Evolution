@@ -27,6 +27,8 @@ type ActivityLine = {
   act_code: string;
   activity: string;
   other_services: string;
+  consolidated_invno?: string;
+  pi_no?: string;
   quantity: string;
   bill_rate: string;
   bill: string;
@@ -716,49 +718,50 @@ export function FreightJobActivitiesPage({
         {/* Scrollable Table matching Finance Detail Tables */}
         <div className="commercial-lines-scroll overflow-auto max-h-[calc(100vh-250px)] min-h-[320px]">
           <table className="finance-lines-table w-full text-xs min-w-[1360px] border-collapse">
-            <thead className="sticky top-0 shadow-xs z-10 whitespace-nowrap border-b-2 border-slate-300">
-              {/* Tier 1 Header: Group Categories (PB Income & Expense Division) */}
-              <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none border-b border-slate-300">
-                <th colSpan={5} className="bg-slate-200/90 text-slate-700 border-r border-slate-300 py-1 px-2">
+            <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
+              {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
+              <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
+                <th colSpan={6} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
                   Service & Activity Details
                 </th>
-                <th colSpan={2} className="bg-blue-600 text-white border-r border-blue-700 py-1 px-2 shadow-inner">
+                <th colSpan={2} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Income (Billing)
                 </th>
-                <th colSpan={5} className="bg-amber-600 text-white border-r border-amber-700 py-1 px-2 shadow-inner">
+                <th colSpan={5} className="bg-[#002d72] text-white border-r border-white/20 py-1.5 px-2">
                   Expense (Costs & Vendors)
                 </th>
-                <th colSpan={1} className="bg-emerald-600 text-white border-r border-emerald-700 py-1 px-2">
+                <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Tax
                 </th>
-                <th colSpan={1} className="bg-slate-200/90 text-slate-700 py-1 px-2">
+                <th colSpan={1} className="bg-[#00245e] text-white/95 py-1.5 px-2">
                   Actions
                 </th>
               </tr>
 
-              {/* Tier 2 Header: Individual Columns */}
-              <tr className="bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                <th className="finance-sticky-col finance-col-no px-1.5 py-1.5 text-center w-8 bg-slate-100 text-slate-700 border-r border-slate-200" title="Tick / Select">
+              {/* Tier 2 Header: Individual Columns matching Finance Detail Tables */}
+              <tr className="bg-[#00378C] text-[11px] font-semibold text-white uppercase tracking-wider shadow-xs">
+                <th className="finance-sticky-col finance-col-no px-1.5 py-2 text-center w-8 bg-[#00378C] text-white border-r border-white/15" title="Tick / Select">
                   Tick
                 </th>
-                <th className="px-2 py-1.5 text-center w-9 bg-slate-100 text-slate-700 border-r border-slate-200">#</th>
-                <th className="px-2 py-1.5 text-left w-[185px] text-slate-700 border-r border-slate-200">Activity</th>
-                <th className="px-2 py-1.5 text-left min-w-[170px] text-slate-700 border-r border-slate-200">Description</th>
-                <th className="px-2 py-1.5 text-right w-[60px] text-slate-700 border-r border-slate-200" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
+                <th className="px-2 py-2 text-left min-w-[220px] text-white border-r border-white/15">Activity / Description</th>
+                <th className="px-2 py-2 text-right w-[60px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
+                <th className="px-2 py-2 text-center w-[110px] bg-[#681822] text-rose-100 border-r border-white/15" title="Freight Invoice Number">Invoice No</th>
+                <th className="px-2 py-2 text-center w-[120px] bg-[#0c3666] text-sky-100 border-r border-white/15" title="Purchase Booking PI Number">PI No</th>
                 {/* Income Columns */}
-                <th className="px-2 py-1.5 text-right w-[85px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Rate ({baseCurrency})</th>
-                <th className="px-2 py-1.5 text-right w-[95px] bg-blue-50/70 text-blue-900 border-r border-slate-200">Bill Amt ({baseCurrency})</th>
-                {/* Expense Columns (With PB Distinct Yellow for Other Cost) */}
-                <th className="px-2 py-1.5 text-right w-[95px] bg-amber-100 text-amber-950 font-extrabold border-r border-amber-300" title="Other Cost Amt (PB actual_cost)">
-                  Other Cost Amt ({baseCurrency})
+                <th className="px-2 py-2 text-right w-[85px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
+                <th className="px-2 py-2 text-right w-[95px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
+                {/* Expense Columns */}
+                <th className="px-2 py-2 text-right w-[95px] bg-[#002868] text-amber-200 font-extrabold border-r border-white/15" title="Other Cost Amt (PB actual_cost)">
+                  Other Cost
                 </th>
-                <th className="px-2 py-1.5 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Code</th>
-                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Agent Price ({baseCurrency})</th>
-                <th className="px-2 py-2 text-left w-[165px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transporter Code</th>
-                <th className="px-2 py-1.5 text-right w-[85px] bg-amber-50/40 text-slate-800 border-r border-slate-200">Transp Price ({baseCurrency})</th>
+                <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Agent</th>
+                <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Agent Price</th>
+                <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter</th>
+                <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
                 {/* Tax & Action */}
-                <th className="px-2 py-1.5 text-center w-[110px] text-emerald-900 bg-emerald-50/80 border-r border-slate-200">Tax / VAT</th>
-                <th className="px-2 py-1.5 text-center w-[75px] text-slate-700">Actions</th>
+                <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
+                <th className="px-2 py-2 text-center w-[75px] text-white bg-[#00378C]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -801,67 +804,65 @@ export function FreightJobActivitiesPage({
                       {index + 1}
                     </td>
 
-                    {/* Activity Lookup */}
-                    <td className="px-1.5 py-1 w-[185px] border-r border-slate-200">
-                      <ActivityLookup
-                        value={line.act_code}
-                        displayValue={line.activity}
-                        companyCode={companyCode}
-                        disabled={isLineLocked}
-                        onChange={async (value, row) => {
-                          const newBillRate = lookupText(row || undefined, "bill");
-                          const newCost = lookupText(row || undefined, "cost");
-                          const divCode = line.div_code || lookupText(header, "div_code") || "10";
-                          const txCat = line.tx_cat_code || lookupText(header, "tx_cat_code") || "11";
+                    {/* Activity / Description (Unified Column) */}
+                    <td className="px-1.5 py-1 min-w-[220px] max-w-[280px] border-r border-slate-200">
+                      <div className="flex flex-col gap-1">
+                        <ActivityLookup
+                          value={line.act_code}
+                          displayValue={line.activity}
+                          companyCode={companyCode}
+                          disabled={isLineLocked}
+                          onChange={async (value, row) => {
+                            const newBillRate = lookupText(row || undefined, "bill");
+                            const newCost = lookupText(row || undefined, "cost");
+                            const divCode = line.div_code || lookupText(header, "div_code") || "10";
+                            const txCat = line.tx_cat_code || lookupText(header, "tx_cat_code") || "11";
+                            const actName = lookupText(row || undefined, "activity");
 
-                          let updatedLine: ActivityLine = recalc({
-                            ...line,
-                            act_code: value,
-                            activity: lookupText(row || undefined, "activity"),
-                            // other_services: lookupText(row || undefined, "activity") || line.other_services,
-                            other_services: line.other_services,
-                            bill_rate: newBillRate !== "" ? newBillRate : line.bill_rate,
-                            actual_cost: newCost !== "" ? newCost : line.actual_cost,
-                            div_code: divCode,
-                            tx_cat_code: txCat,
-                          });
+                            let updatedLine: ActivityLine = recalc({
+                              ...line,
+                              act_code: value,
+                              activity: actName,
+                              other_services: actName || line.other_services,
+                              bill_rate: newBillRate !== "" ? newBillRate : line.bill_rate,
+                              actual_cost: newCost !== "" ? newCost : line.actual_cost,
+                              div_code: divCode,
+                              tx_cat_code: txCat,
+                            });
 
-                          if (value && companyCode && divCode && txCat) {
-                            try {
-                              const compRows = await freightTaxComponents<LookupRow>(companyCode, divCode, txCat, "", value);
-                              if (compRows.length > 0) {
-                                const firstComp = normalizeLookupRow(compRows[0]);
-                                const taxCode = lookupText(firstComp, "tx_compntcat_code");
-                                const taxPerc = lookupText(firstComp, "tx_percnt") || "0";
-                                const isStandard = numberValue(taxPerc) > 0 ? "S" : "N";
-                                updatedLine = recalcSalesTax({
-                                  ...updatedLine,
-                                  tx_compntcat_code_1: taxCode,
-                                  tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
-                                  tx_compnt_perc_1: taxPerc,
-                                  tx_compnt_1_expmt: isStandard,
-                                });
+                            if (value && companyCode && divCode && txCat) {
+                              try {
+                                const compRows = await freightTaxComponents<LookupRow>(companyCode, divCode, txCat, "", value);
+                                if (compRows.length > 0) {
+                                  const firstComp = normalizeLookupRow(compRows[0]);
+                                  const taxCode = lookupText(firstComp, "tx_compntcat_code");
+                                  const taxPerc = lookupText(firstComp, "tx_percnt") || "0";
+                                  const isStandard = numberValue(taxPerc) > 0 ? "S" : "N";
+                                  updatedLine = recalcSalesTax({
+                                    ...updatedLine,
+                                    tx_compntcat_code_1: taxCode,
+                                    tx_compntcat_name_1: lookupText(firstComp, "tx_compntcat_name"),
+                                    tx_compnt_perc_1: taxPerc,
+                                    tx_compnt_1_expmt: isStandard,
+                                  });
+                                }
+                              } catch (err) {
+                                console.warn("Could not auto-populate tax components:", err);
                               }
-                            } catch (err) {
-                              console.warn("Could not auto-populate tax components:", err);
                             }
-                          }
 
-                          updateLine(index, updatedLine);
-                        }}
-                      />
-                    </td>
-
-                    {/* Description */}
-                    <td className="px-1.5 py-1 min-w-[170px] border-r border-slate-200">
-                      <input
-                        className="h-7 w-full text-[11px] px-2 rounded border border-input bg-transparent shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 font-sans"
-                        placeholder="Service description..."
-                        value={line.other_services}
-                        disabled={isLineLocked}
-                        onChange={(event) => updateLine(index, { other_services: event.target.value })}
-                        maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}
-                      />
+                            updateLine(index, updatedLine);
+                          }}
+                        />
+                        <input
+                          className="h-6 w-full text-[11px] px-2 rounded border border-slate-300 bg-white/70 shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00378C] disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                          placeholder="Activity remarks / description..."
+                          value={line.other_services}
+                          disabled={isLineLocked}
+                          onChange={(event) => updateLine(index, { other_services: event.target.value })}
+                          maxLength={freightTextLimit("TN_INVOICE_DET", "other_services")}
+                        />
+                      </div>
                     </td>
 
                     {/* Qty */}
@@ -871,6 +872,34 @@ export function FreightJobActivitiesPage({
                         disabled={isLineLocked}
                         onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))}
                       />
+                    </td>
+
+                    {/* Freight Invoice No (Red badge) */}
+                    <td className="px-1.5 py-1 text-center w-[110px] border-r border-slate-200">
+                      {line.consolidated_invno ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs"
+                          title={`Freight Invoice #${line.consolidated_invno}`}
+                        >
+                          {line.consolidated_invno}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
+                      )}
+                    </td>
+
+                    {/* Purchase Booking PI No (Blue badge) */}
+                    <td className="px-1.5 py-1 text-center w-[120px] border-r border-slate-200">
+                      {line.pi_no ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs"
+                          title={`Purchase Booking PI #${line.pi_no}`}
+                        >
+                          {line.pi_no}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
+                      )}
                     </td>
 
                     {/* Rate (OMR) */}
@@ -1122,7 +1151,7 @@ export function FreightJobActivitiesPage({
 
               {!lines.length && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">No service & activity lines yet.</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Click "+ Add Line" to add services or "Populate Quotation" to import approved activities.
@@ -1133,7 +1162,7 @@ export function FreightJobActivitiesPage({
 
               {lines.length > 0 && filteredLines.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-3 py-8 text-center text-sm text-muted-foreground">
                     No activity lines match "<strong>{lineSearch}</strong>"
                   </td>
                 </tr>
@@ -1146,10 +1175,12 @@ export function FreightJobActivitiesPage({
                 <tr>
                   <td className="px-1 py-1.5 text-center text-slate-400">-</td>
                   <td className="px-1 py-1.5 text-center text-slate-400">-</td>
-                  <td colSpan={2} className="px-3 py-1.5 text-left font-extrabold uppercase text-slate-600">
+                  <td className="px-3 py-1.5 text-left font-extrabold uppercase text-slate-600">
                     Totals ({lines.length} {lines.length === 1 ? "line" : "lines"}):
                   </td>
                   <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
+                  <td className="px-2 py-1.5 text-center text-slate-400">-</td>
+                  <td className="px-2 py-1.5 text-center text-slate-400">-</td>
                   {/* Income Totals */}
                   <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
                   <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200">
@@ -2349,6 +2380,8 @@ function emptyLine(srno: number, header?: LookupRow | null): ActivityLine {
     act_code: "",
     activity: "",
     other_services: "",
+    consolidated_invno: "",
+    pi_no: "",
     quantity: "1",
     bill_rate: "0",
     bill: "0",
@@ -2400,6 +2433,8 @@ function toLine(row: LookupRow, index: number, header?: LookupRow | null): Activ
   line.broker_name = lookupText(row, "broker_name") || lookupText(row, "agent_name") || "";
   line.transporter_name = lookupText(row, "transporter_name") || "";
   line.activity = lookupText(row, "activity") || "";
+  line.consolidated_invno = lookupText(row, "consolidated_invno") || lookupText(row, "invoice_no") || "";
+  line.pi_no = lookupText(row, "pi_no") || lookupText(row, "booked_pi_no") || lookupText(row, "trans_docno") || "";
   line.tx_cat_name = lookupText(row, "tx_cat_name") || "";
   line.tx_compntcat_name_1 = lookupText(row, "tx_compntcat_name_1") || lookupText(row, "tx_compntcat_name") || "";
   line.tx_cat_name_cost = lookupText(row, "tx_cat_name_cost") || "";

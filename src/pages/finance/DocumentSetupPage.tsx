@@ -484,8 +484,14 @@ async function loadApprovedAccounts(loginid?: string, company_code?: string): Pr
     loginid: loginid || "",
     code1: company_code || "",
   });
+  const seen = new Set<string>();
   return rows.filter((r) => {
-    const active = String(getLookupValue(r, "ac_active") || "").trim().toUpperCase();
+    const code = String(getLookupValue(r, "ac_code") || "").trim();
+    if (!code || seen.has(code)) return false;
+    seen.add(code);
+
+    const rawActive = getLookupValue(r, "ac_active");
+    const active = rawActive ? String(rawActive).trim().toUpperCase() : "Y";
     const status = String(getLookupValue(r, "ac_status") || "A").trim().toUpperCase();
     return active === "Y" && status !== "C";
   });
