@@ -2280,6 +2280,7 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const normalized = pathname.toLowerCase();
     if (normalized.includes("/finance/accounts/transactions/lpo")) return "PO" as const;
     if (normalized.includes("/finance/accounts/transactions/purchase")) return "PI" as const;
+    if (normalized.includes("/purchase/purchase_booking") || normalized.includes("purchase_booking")) return "PI" as const;
     if (normalized.includes("/finance/accounts/transactions/sales")) return "SI" as const;
     if (normalized.includes("/finance/accounts/transactions/service-invoice") || normalized.includes("/finance/accounts/transactions/service_invoice")) return "SV" as const;
     return null;

@@ -189,8 +189,12 @@ export default function ConsolidatePayUnitPage() {
     const loadCodeOptions = async () => {
       try {
         const [payUnitStatusData, statusData] = await Promise.all([
-          getDynamicLookup({ parameter: "MST_HR_CODE_PAY_UNIT_STATUS" }),
-          getDynamicLookup({ parameter: "MST_HR_CODE_STATUS" }),
+          getDynamicLookup({ parameter: "MST_HR_CODE_PAY_UNIT_STATUS",
+            code1: companyCode,
+          }),
+          getDynamicLookup({ parameter: "MST_HR_CODE_STATUS" ,
+            code1: companyCode,
+          }),
         ]);
         setPayUnitStatusOptions(
           (payUnitStatusData || []).map((r) => normalizeCodeOption(r as Record<string, unknown>)),

@@ -46,8 +46,11 @@ import { FinanceListActionsMenu } from "../../components/finance/FinanceListActi
 import { FinanceDocumentActionButtons, FinanceStatusBadge } from "../../components/finance/FinanceDocumentActionButtons";
 import { exportToCsv } from "../../components/ui/ExportCSVButton";
 import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDialog";
-import { formatDate } from "../../utils/date";
+// import { formatDate } from "../../utils/date";
+import { formatDate, getFyRange, fyDateProps, clampToFy, validateFyDate } from "../../utils/date";
+import type { FyRange } from "../../utils/date";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
+import { FreightJobActivitySelectorDialog, SelectedFreightExpense } from "../../components/finance/FreightJobActivitySelectorDialog";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
 
@@ -199,7 +202,9 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
-
+  // const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod), [fyPeriods, fyPeriod]);
+  const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod, { docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined }), [fyPeriods, fyPeriod, editor]);
+// report
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -382,6 +387,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
+      <div className="finance-list-table-wrap">
       <DataTable
         columns={columns}
         data={rows}
@@ -433,6 +439,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
         }}
         rowClassName={(row) => (row.canceled === "Y" ? "finance-row-cancelled" : "")}
       />
+      </div>
 
       </>}
       {editor && (
@@ -440,6 +447,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
           <CommercialEditor
             docType={docType}
             editor={editor}
+            fyRange={fyRange}
             onClose={() => {
               setNotice(null);
               setEditor(null);
@@ -563,7 +571,9 @@ function CommercialEditor({
   editor,
   onClose,
   onSaved,
+  fyRange,
 }: {
+  fyRange: FyRange;
   docType: CommercialType;
   editor: { mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow };
   onClose: () => void;
@@ -571,7 +581,10 @@ function CommercialEditor({
 }) {
   const { user } = useAuth();
   const editMode = editor.mode === "edit";
-  const [form, setForm] = useState<FormState>(() => emptyForm(docType, editor.mode === "create" ? editor.div : undefined));
+  // const [form, setForm] = useState<FormState>(() => emptyForm(docType, editor.mode === "create" ? editor.div : undefined));
+  const [form, setForm] = useState<FormState>(() => { const f = emptyForm(docType, editor.mode === "create" ? editor.div : undefined); const d = clampToFy(f.doc_date, fyRange); 
+    return { ...f, doc_date: d, inv_date: d };
+  });
   const [loading, setLoading] = useState(editMode);
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -834,6 +847,7 @@ const limitProps = (f: keyof FormState) => ({
   
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [freightSelectorOpen, setFreightSelectorOpen] = useState(false);
   const [remarksFocus, setRemarksFocus] = useState(false);
 
   const filteredLines = useMemo(() => {
@@ -947,7 +961,12 @@ const limitProps = (f: keyof FormState) => ({
   event.preventDefault();
 
   const hErr: Record<string, string> = {};
+  // if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
   if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
+  else {
+  const fyErr = validateFyDate(form.doc_date, fyRange, "Doc Date");
+  if (fyErr) hErr.doc_date = fyErr;
+}
   if (!form.ac_code)                    hErr.ac_code   = isPO || isPI ? "Supplier is required" : "Customer is required";
   if (!form.curr_code)                  hErr.curr_code = "Currency is required";
   if (!form.ex_rate || form.ex_rate <= 0) hErr.ex_rate = "Exchange Rate must be > 0";
@@ -960,26 +979,6 @@ const limitProps = (f: keyof FormState) => ({
   if (form.dlvr_mobile && form.dlvr_mobile.trim() && !isValidPhoneNumber(form.dlvr_mobile)) {
     hErr.dlvr_mobile = "Mobile must contain numbers only";
   }
-
-  // Character limit validations
-  // if (form.ref_no && form.ref_no.length > 30) {
-  //   setError("You have exceeded the character limit for Ref No.");
-  //   return;
-  // }
-  // if (form.remarks && form.remarks.length > 250) {
-  //   setError("You have exceeded the character limit for Remarks.");
-  //   return;
-  // }
-  // for (const line of form.detail) {
-  //   if (line.remarks && line.remarks.length > 250) {
-  //     setError("You have exceeded the character limit for Remarks.");
-  //     return;
-  //   }
-  //   if (line.l4_description && line.l4_description.length > 250) {
-  //     setError("You have exceeded the character limit for Remarks.");
-  //     return;
-  //   }
-  // }
 
     // Character limit validations
   for (const [f, l] of Object.entries(HEADER_LIMITS)) {
@@ -1026,19 +1025,69 @@ const limitProps = (f: keyof FormState) => ({
   setSaving(true);
   setError("");
   try {
+    let savedDocNo = form.doc_no || "";
     if (docType === "PO") {
-      const payload  = buildCommercialPayload(form, user?.company_code || "");
-      const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
-      const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
-      if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
+  const payload = buildCommercialPayload(form, user?.company_code || "");
+  const endpoint = editMode
+    ? "/api/finance/transactions/lpo-update"
+    : "/api/finance/transactions/lpo-document";
+
+  const response = editMode
+    ? await api.put(endpoint, payload)
+    : await api.post(endpoint, payload);
+
+  console.log("PO save response:", response.data);
+  console.log("PO submitted document number:", form.doc_no);
+
+  if (!response.data?.success) {
+    throw new Error(
+      response.data?.message || "Unable to save LPO document"
+    );
+  }
+  savedDocNo =
+  response.data?.data?.purchase_doc_no ??
+  response.data?.purchase_doc_no ??
+  response.data?.doc_no ??
+  response.data?.data?.doc_no ??
+  response.data?.header?.doc_no ??
+  response.data?.data?.header?.doc_no ??
+  form.doc_no ??
+  "";
     } else {
-      const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
-      await upsertBulkAccountEntryApi(bulkPayload);
+      const bulkPayload = buildCommercialBulkAccountEntryPayload(
+        form,
+        user?.company_code || "",
+        user?.loginid || ""
+      );
+
+      const result: any = await upsertBulkAccountEntryApi(bulkPayload);
+
+      console.log("Commercial document save response:", result);
+
+      savedDocNo =
+        result?.doc_no ??
+        result?.data?.doc_no ??
+        result?.header?.doc_no ??
+        result?.data?.header?.doc_no ??
+        savedDocNo;
     }
-    await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
-  } catch (submitError) {
-    setError(submitError instanceof Error ? submitError.message : "Unable to save document");
-  } finally {
+
+    const docNo = String(savedDocNo || "").trim();
+
+    await onSaved(
+      `Document ${editMode ? "updated" : "created"} successfully${
+        docNo ? ` — Doc No: ${docNo}` : ""
+      }`
+    );
+    // } catch (submitError) {
+  //   setError(submitError instanceof Error ? submitError.message : "Unable to save document");
+   } catch (submitError: any) {
+      setError(
+        submitError?.response?.data?.message ||
+        submitError?.response?.data?.details ||
+        (submitError instanceof Error ? submitError.message : "Unable to save document")
+      );
+    } finally {
     setSaving(false);
   }
  };
@@ -1289,7 +1338,7 @@ const limitProps = (f: keyof FormState) => ({
                 <div className="flex flex-col gap-1.5">
                   <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
                     <CField label="Doc Date" required error={fieldErrors.doc_date} className="col-span-1">
-                      <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
+                      <BiscDatePicker compact {...fyDateProps(fyRange)} disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
                     </CField>
 
                     {!isPO && (
@@ -1372,7 +1421,7 @@ const limitProps = (f: keyof FormState) => ({
 
                     {isPO && (
                       <CField label="Ref Date" className="col-span-1">
-                        <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
+                        <BiscDatePicker compact max={dateInput(form.doc_date)} disabled={isCancelled} value={dateInput(form.ref_date)} onChange={(val) => update("ref_date", val)} />
                       </CField>
                     )}
 
@@ -1401,7 +1450,7 @@ const limitProps = (f: keyof FormState) => ({
                     {!isPO && (
                       <CField label="INV Date" required error={fieldErrors.inv_date} className="col-span-1">
                         <div className="relative">
-                          <BiscDatePicker compact disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
+                          <BiscDatePicker compact max={dateInput(form.doc_date)} disabled={isCancelled} value={dateInput(form.inv_date)} error={Boolean(fieldErrors.inv_date)} onChange={(val) => update("inv_date", val)} />
                           <input
                             tabIndex={-1}
                             aria-hidden="true"
@@ -1723,6 +1772,20 @@ const limitProps = (f: keyof FormState) => ({
                     )}
                   </div>
 
+                  {isPI && (
+                    <Button
+                      disabled={isCancelled}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => setFreightSelectorOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold border-amber-400 text-amber-900 bg-amber-50 hover:bg-amber-100 cursor-pointer"
+                      title="Load expense lines from Freight Job Activities (Purchase Booking)"
+                    >
+                      <Truck size={13} className="text-amber-700" />
+                      <span>Load from Freight Jobs</span>
+                    </Button>
+                  )}
                   <Button
                     disabled={isCancelled}
                     size="sm"
@@ -1736,7 +1799,7 @@ const limitProps = (f: keyof FormState) => ({
                 </div>
               </div>
               <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
-                <table className={`finance-lines-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
+                <table className={`finance-lines-table finance-detail-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
@@ -2037,6 +2100,60 @@ const limitProps = (f: keyof FormState) => ({
         // onOpenInNewWindow={...}   // you can remove this if you no longer want a new window
         // onDownloadPdf={...}
       />
+      {isPI && (
+        <FreightJobActivitySelectorDialog
+          open={freightSelectorOpen}
+          onClose={() => setFreightSelectorOpen(false)}
+          companyCode={user?.company_code || ""}
+          supplierCode={form.ac_code}
+          supplierName={form.ac_name}
+          onSelect={async (selectedExpenses: SelectedFreightExpense[]) => {
+            if (!selectedExpenses.length) return;
+            try {
+              const defaultAccounts = await getDocAccounts("PI", "D", form.div_code).catch(() => []);
+              const firstAcCode = String(defaultAccounts?.[0]?.ac_code || defaultAccounts?.[0]?.AC_CODE || "");
+              const firstAcName = String(defaultAccounts?.[0]?.ac_name || defaultAccounts?.[0]?.AC_NAME || "");
+
+              setForm((current) => {
+                let serial = current.detail.filter((l) => Number(l.serial_no) < 9000).length;
+                const newLines: Line[] = selectedExpenses.map((exp) => {
+                  serial++;
+                  const lineCurr = exp.curr_code || current.curr_code;
+                  const lineEx = Number(exp.ex_rate || current.ex_rate || 1);
+                  const lineAmt = Number(exp.amount || 0);
+                  const lcurAmt = lineAmt * lineEx;
+
+                  return {
+                    ...emptyLine("PI", serial, lineCurr, current.curr_name, lineEx),
+                    id: newId(),
+                    serial_no: serial,
+                    ac_code: firstAcCode,
+                    ac_name: firstAcName,
+                    remarks: `${exp.act_code} - ${exp.activity} (${exp.cost_type})${exp.vehicle_no ? ` - Veh: ${exp.vehicle_no}` : ""}`,
+                    qty: 1,
+                    price: lineAmt,
+                    amount: lineAmt,
+                    lcur_amount: lcurAmt,
+                    job_no: exp.job_no,
+                    curr_code: lineCurr,
+                    ex_rate: lineEx,
+                    sign_ind: 1,
+                    tx_cat_code: exp.tx_cat_code || current.tx_cat_code || "",
+                    tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "10100",
+                    tx_compnt_1_expmt: current.tx_compnt_1_expmt || "S",
+                    tx_compnt_perc_1: exp.tx_compnt_perc_1 != null && exp.tx_compnt_perc_1 !== 0
+                      ? exp.tx_compnt_perc_1
+                      : (current.tx_compnt_perc_1 || 5),
+                  };
+                });
+                return { ...current, detail: [...current.detail, ...newLines] };
+              });
+            } catch (err) {
+              console.error("Error populating freight job lines:", err);
+            }
+          }}
+        />
+      )}
     </form>
   );
 }

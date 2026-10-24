@@ -9,6 +9,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddCRRequestPage from "./AddCRRequestPage";
 import { getDynamicLookup } from "../../api/lookups";
+import AutoDismissAlert from "../../components/ui/AutoDismissAlert";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TAB_STATUS = ["PENDING", "INPROGRESS", "CLOSED", "CANCELED", "REJECTED", "SENDBACK"] as const;
@@ -37,6 +38,18 @@ function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   return out as T;
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  APPROVED: "bg-blue-50 text-blue-800 border-blue-200",
+  "A/C POSTED": "bg-blue-50 text-blue-800 border-blue-200",
+  PENDING: "bg-amber-50 text-amber-800 border-amber-200",
+  INPROGRESS: "bg-blue-100 text-blue-800 border-blue-300",
+  REJECTED: "bg-red-50 text-red-800 border-red-200",
+  SENTBACK: "bg-purple-50 text-purple-800 border-purple-200",
+  SENDBACK: "bg-purple-50 text-purple-800 border-purple-200",
+  "PO GENERATED": "bg-emerald-100 text-emerald-800 border-emerald-300",
+  CANCELED: "bg-zinc-100 text-zinc-600 border-zinc-300",
+};
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface CreditRequestPageProps {
   initialTab?: number;
@@ -53,6 +66,11 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const [tab, setTab] = useState<CRTab>(TAB_STATUS[initialTab] ?? "PENDING");
   const [query, setQuery] = useState("");
 
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({
+  PENDING: 0, INPROGRESS: 0, CLOSED: 0, CANCELED: 0, REJECTED: 0, SENDBACK: 0,
+});
+const isInProgressTab = tab === "INPROGRESS";
+
   // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
   const [taskPopup, setTaskPopup] = useState({
     open: false,
@@ -65,36 +83,62 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
   });
 
   // ── Fetch (server-side, tab-driven) ─────────────────────────────────────────
-  const fetchCreditRequest = async () => {
-    const response = await getDynamicLookup({
-      parameter: "PS_CREDITREQUEST_ENTRY_TAB_LIST",
-      code1: user?.company_code,
-      code2: user?.loginid || user?.username || "ADMIN",
-      code3: tab,
-    });
+ const fetchCreditRequest = async (tabValue: CRTab = tab) => {
+  const response = await getDynamicLookup({
+    parameter: "PS_CREDITREQUEST_ENTRY_TAB_LIST",
+    code1: user?.company_code,
+    code2: user?.loginid || user?.username || "ADMIN",
+    code3: tabValue,
+  });
+  const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
+  return rawRows.map(uppercaseKeys) as TPurchaseSummaryTxn[];
+};
 
-    const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
-    return rawRows.map(uppercaseKeys) as TPurchaseSummaryTxn[];
-  };
+const loadRows = async (clearNotice = true) => {
+  setLoading(true);
+  if (clearNotice) setNotice(null);
+  try {
+    const response = await fetchCreditRequest();
+    setRows(response);
+    setTotalRows(response.length);
+    setTabCounts((prev) => ({ ...prev, [tab]: response.length }));
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load credit requests" });
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const loadRows = async (clearNotice = true) => {
-    setLoading(true);
-    if (clearNotice) setNotice(null);
-    try {
-      const response = await fetchCreditRequest();
-      setRows(response);
-      setTotalRows(response.length);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load credit requests" });
-    } finally {
-      setLoading(false);
-    }
-  };
+const loadTabCounts = async () => {
+  const results = await Promise.all(
+    TAB_STATUS.map(async (t) => {
+      try {
+        const res = await fetchCreditRequest(t);
+        return { t, count: res.length };
+      } catch {
+        return { t, count: 0 };
+      }
+    })
+  );
+  setTabCounts((prev) => {
+    const next = { ...prev };
+    results.forEach(({ t, count }) => { next[t] = count; });
+    return next;
+  });
+};
 
   useEffect(() => {
     void loadRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, user?.company_code, user?.loginid, user?.username]);
+
+
+
+  useEffect(() => {
+  if (!user?.company_code) return;
+  void loadTabCounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user?.company_code, user?.loginid, user?.username]);
 
   // ── Client-side search filter ───────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -107,228 +151,187 @@ const CreditRequestPage = ({ initialTab = 0 }: CreditRequestPageProps) => {
     );
   }, [rows, query]);
 
-  // ── Popup handlers ──────────────────────────────────────────────────────────
+
   const openAddPopup = () => {
-    setTaskPopup({
-      open: true,
-      title: "Add CR",
-      data: { existingData: null, isEditMode: false, isViewMode: false },
-    });
-  };
+  setTaskPopup({
+    open: true,
+    title: "Add CR",
+    data: { existingData: null, isEditMode: false, isViewMode: false },
+  });
+};
 
-  const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
-    setTaskPopup({
-      open: true,
-      title: `${actionType === "edit" ? "Edit" : "View"} CR - ${row.REQUEST_NUMBER}`,
-      data: {
-        existingData: row,
-        isEditMode: actionType === "edit",
-        isViewMode: actionType === "view",
-      },
-    });
-  };
+const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
+  setTaskPopup({
+    open: true,
+    title: `${actionType === "edit" ? "Edit" : "View"} CR - ${row.REQUEST_NUMBER}`,
+    data: {
+      existingData: row,
+      isEditMode: actionType === "edit",
+      isViewMode: actionType === "view",
+    },
+  });
+};
 
-  const closePopup = (refresh?: boolean) => {
-    setTaskPopup((prev) => ({ ...prev, open: false }));
-    if (refresh) {
-      void loadRows(false);
-    }
-  };
+
+const closePopup = (refresh?: boolean, message?: string) => {
+  setTaskPopup((prev) => ({ ...prev, open: false }));
+  if (refresh) {
+    void loadRows(false).then(() => {
+      if (message) setNotice({ type: "success", message });
+    });
+    void loadTabCounts();
+  }
+};
 
   // ── Columns ──────────────────────────────────────────────────────────────────
   const columns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
-    () => [
-      {
-        accessorKey: "request_number",
-        header: "Request No",
-        size: 150,
-        cell: ({ row }) => (
-          <span style={{ color: "#082A89", fontWeight: 600, fontSize: "0.82rem" }}>
-            {row.original.REQUEST_NUMBER}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "request_date",
-        header: "Request Date",
-        size: 150,
-        cell: ({ row }) => fmtDate((row.original as any).REQUEST_DATE),
-      },
-      {
-        accessorKey: "company_name",
-        header: "Company Name",
-        size: 600,
-        cell: ({ row }) => (row.original as any).COMPANY_NAME || "—",
-      },
-      {
-        accessorKey: "description",
-        header: "Description",
-        size: 600,
-        cell: ({ row }) => (row.original as any).DESCRIPTION || "—",
-      },
-      {
-        accessorKey: "AMOUNT",
-        header: "Amount",
-        size: 120,
-        cell: ({ row }) => {
-          const amt = (row.original as any).AMOUNT || 0;
-          return <span style={{ fontWeight: 600 }}>{Number(amt).toLocaleString()}</span>;
-        },
-      },
-      {
-        accessorKey: "CREATE_USER",
-        header: "Create User",
-        size: 120,
-      },
-      {
-        accessorKey: "create_date",
-        header: "Create Date",
-        size: 120,
-        cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
-      },
-      {
-        accessorKey: "LAST_ACTION",
-        header: "Last Action",
-        size: 130,
-        cell: ({ row }) => {
-          const val = statusOf(row.original);
-          let bg = "#f4f4f5", color = "#52525b", border = "#d4d4d8";
-          if (val === "APPROVED" || val === "A/C POSTED") { bg = "#e8f0fe"; color = "#1a4fa0"; border = "#b3caf5"; }
-          else if (val === "PENDING") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
-          else if (val === "INPROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
-          else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-          else if (val === "SENTBACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
-          else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
-          return (
-            <span
-              style={{
-                display: "inline-block", padding: "2px 10px", borderRadius: "999px",
-                fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
-                background: bg, color, border: `1px solid ${border}`,
-              }}
-            >
-              {(row.original as any).LAST_ACTION || (row.original as any).last_action || "—"}
+  () => [
+    {
+      accessorKey: "REQUEST_NUMBER",
+      header: "Request No",
+      size: 150,
+      cell: ({ row }) => <span className="text-xs font-semibold text-[#082A89]">{row.original.REQUEST_NUMBER}</span>,
+    },
+    { accessorKey: "REQUEST_DATE", header: "Request Date", size: 120, cell: ({ getValue }) => fmtDate(getValue()) },
+    { accessorKey: "COMPANY_NAME", header: "Company Name", size: 260, cell: ({ getValue }) => String(getValue() || "—") },
+    { accessorKey: "DESCRIPTION", header: "Description", size: 300, cell: ({ getValue }) => String(getValue() || "—") },
+    {
+      accessorKey: "AMOUNT",
+      header: () => <div className="text-right">Amount</div>,
+      size: 120,
+      cell: ({ getValue }) => (
+        <div className="text-right font-semibold">{Number(getValue() || 0).toLocaleString()}</div>
+      ),
+    },
+    { accessorKey: "CREATE_USER", header: "Create User", size: 120 },
+    { accessorKey: "CREATE_DATE", header: "Create Date", size: 120, cell: ({ getValue }) => fmtDate(getValue()) },
+    {
+      accessorKey: "LAST_ACTION",
+      header: () => <div className="text-center">Last Action</div>,
+      size: 130,
+      cell: ({ row }) => {
+        const val = statusOf(row.original);
+        const style = STATUS_STYLES[val] ?? "bg-zinc-100 text-zinc-600 border-zinc-300";
+        return (
+          <div className="flex justify-center">
+            <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${style}`}>
+              {(row.original as any).LAST_ACTION || "—"}
             </span>
-          );
-        },
-      },
-      {
-        accessorKey: "next_action_by",
-        header: "Next Action By",
-        size: 160,
-        cell: ({ row }) => (row.original as any).NEXT_ACTION_BY || "—",
-      },
-      {
-        id: "actions",
-        header: "Actions",
-        size: 100,
-        cell: ({ row }) => (
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <Button
-              size="sm" variant="ghost" title="View"
-              onClick={() => handleActions("view", row.original)}
-              style={{ padding: "4px", height: "28px", width: "28px" }}
-            >
-              <Eye size={14} />
-            </Button>
-            {tab !== "INPROGRESS" && (
-              <Button
-                size="sm" variant="ghost" title="Edit"
-                onClick={() => handleActions("edit", row.original)}
-                style={{ padding: "4px", height: "28px", width: "28px" }}
-              >
-                <Edit2 size={14} />
-              </Button>
-            )}
           </div>
-        ),
+        );
       },
-    ],
-    [tab]
-  );
+    },
+    { accessorKey: "NEXT_ACTION_BY", header: "Next Action By", size: 160, cell: ({ getValue }) => String(getValue() || "—") },
+        {
+      id: "actions",
+      header: "Actions",
+      size: 100,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => handleActions("view", row.original)} title="View">
+            <Eye size={15} />
+          </Button>
+          {!isInProgressTab && (
+            <Button size="icon" variant="ghost" onClick={() => handleActions("edit", row.original)} title="Edit">
+              <Edit2 size={15} />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ],
+  [isInProgressTab]
+);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ FULL-PAGE CR EDITOR — sidebar visible rahega (Dialog wrapper hata diya)
-  // ═══════════════════════════════════════════════════════════════════════
+
   if (taskPopup.open) {
-    return (
-      <AddCRRequestPage
-        isEditMode={taskPopup.data.isEditMode}
-        isViewMode={taskPopup.data.isViewMode}
-        existingData={
-          taskPopup.data.existingData
-            ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-            : undefined
-        }
-        onClose={closePopup}
-      />
-    );
-  }
+  return (
+    <AddCRRequestPage
+      isEditMode={taskPopup.data.isEditMode}
+      isViewMode={taskPopup.data.isViewMode}
+    
+      existingData={
+        taskPopup.data.existingData
+          ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+          : undefined
+      }
+      onClose={closePopup}
+    />
+  );
+}
 
   // ── Render (List page) ─────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
-      {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
-        <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <a href="/alms" style={{ color: "#6b7280", textDecoration: "none" }}>ALMS</a>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#111827", fontWeight: 500 }}>Credit Request</span>
-      </div>
+  <section className="finance-list-page grid gap-4">
+    <div className="finance-list-title">
+      <h6 className="m-0 text-xl font-semibold tracking-tight">Credit Request</h6>
+    </div>
 
-      {/* Notice */}
-      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
+    <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-        <div className="flex flex-wrap gap-2 rounded-md">
-          {TAB_LABELS.map((label, index) => (
-            <Button
-              key={index}
-              size="default"
-              variant={tab === TAB_STATUS[index] ? "default" : "outline"}
-              onClick={() => setTab(TAB_STATUS[index])}
-              className="px-6 py-2.5 min-w-[120px]"
-              style={{
-                fontSize: "15px",
-                fontWeight: tab === TAB_STATUS[index] ? 600 : 500,
-                transition: "all 0.2s ease",
-                ...(tab === TAB_STATUS[index] && {
-                  boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
-                })
-              }}
+    <div className="flex flex-wrap items-center gap-1.5 pb-1">
+      {TAB_STATUS.map((value, index) => {
+        const active = tab === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTab(value)}
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+              active
+                ? "bg-[#00378C] font-semibold text-white shadow-sm"
+                : "border border-border bg-card text-foreground hover:bg-secondary"
+            }`}
+          >
+            <span>{TAB_LABELS[index]}</span>
+            <span
+              className={`rounded-full px-1.5 text-[10px] font-bold ${
+                active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+              }`}
             >
-              {label}
-            </Button>
-          ))}
-        </div>
+              {tabCounts[value] ?? 0}
+            </span>
+          </button>
+        );
+      })}
+    </div>
 
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <Button onClick={openAddPopup} style={{ background: "#0a6640" }}>
-            <Plus size={15} /> Add CR
-          </Button>
-        </div>
-      </div>
-
-      {/* Data Table */}
+    <div className="min-h-[650px]">
       <DataTable
         columns={columns}
         data={filteredRows}
-        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
-        subtitle={`${TAB_LABELS[TAB_STATUS.indexOf(tab)]} Requests`}
+        toolbar={
+          tab === "PENDING" && (
+            <button
+              title="Add CR"
+              onClick={openAddPopup}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
+            >
+              <Plus size={14} />
+              Add CR
+            </button>
+          )
+        }
         searchValue={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search request..."
+        searchPlaceholder="Search request no, description, user..."
         loading={loading}
-        height={500}
-        density="compact"
+        emptyText="No credit requests found"
+        height={620}
+        minWidth={1200}
+        density="grid"
         enablePagination
         pageSize={50}
         enableColumnFilters
-        getRowId={(row, index) => row.REQUEST_NUMBER || `temp-${index}`}
+        enableExport
+        exportFilename="credit-requests.csv"
+        initialSorting={[{ id: "REQUEST_DATE", desc: true }]}
+        getRowId={(row, index) => `${row.REQUEST_NUMBER}_${index}`}
       />
     </div>
-  );
+  </section>
+);
 };
 
 export default CreditRequestPage;
