@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import {
   Division,
   FyPeriod,
+  CompanyInfo,
   cancelTransactionDocument,
   getCompanyInfo,
   getDefaultFyPeriod,
@@ -193,6 +194,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [fyPeriod, setFyPeriod] = useState("");
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [pageIndex, setPageIndex] = useState(0);
@@ -202,8 +204,22 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
-  // const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod), [fyPeriods, fyPeriod]);
-  const fyRange = useMemo(() => getFyRange(fyPeriods, fyPeriod, { docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined }), [fyPeriods, fyPeriod, editor]);
+  const currentActiveFyPeriod = useMemo(
+    () => getDefaultFyPeriod(fyPeriods, companyInfo || undefined),
+    [fyPeriods, companyInfo]
+  );
+
+  const activeFyForEditor = editor?.mode === "create" ? currentActiveFyPeriod : fyPeriod;
+
+  const fyRange = useMemo(
+    () =>
+      getFyRange(fyPeriods, activeFyForEditor, {
+        docDate: editor?.mode === "edit" ? editor.row.doc_date : undefined,
+        docEditFrom: companyInfo?.doc_edit_from,
+        docEditTo: companyInfo?.doc_edit_to,
+      }),
+    [fyPeriods, activeFyForEditor, editor, companyInfo]
+  );
 // report
   const [reportOpen, setReportOpen] = useState(false);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -231,10 +247,11 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
   };
 
   const loadLookups = async () => {
-    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
+    const [fyData, divisionData, cInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+    setCompanyInfo(cInfo);
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, cInfo));
   };
 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
@@ -448,6 +465,7 @@ export function CommercialDocumentPage({ docType, menuTitle }: { docType: Commer
             docType={docType}
             editor={editor}
             fyRange={fyRange}
+            companyInfo={companyInfo}
             onClose={() => {
               setNotice(null);
               setEditor(null);
@@ -572,8 +590,10 @@ function CommercialEditor({
   onClose,
   onSaved,
   fyRange,
+  companyInfo,
 }: {
   fyRange: FyRange;
+  companyInfo?: CompanyInfo | null;
   docType: CommercialType;
   editor: { mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow };
   onClose: () => void;
@@ -964,9 +984,12 @@ const limitProps = (f: keyof FormState) => ({
   // if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
   if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
   else {
-  const fyErr = validateFyDate(form.doc_date, fyRange, "Doc Date");
-  if (fyErr) hErr.doc_date = fyErr;
-}
+    const fyErr = validateFyDate(form.doc_date, fyRange, "Doc Date");
+    if (fyErr) hErr.doc_date = fyErr;
+    else if (companyInfo?.doc_edit_from && dateInput(form.doc_date) < dateInput(companyInfo.doc_edit_from)) {
+      hErr.doc_date = `Account period is locked prior to ${formatDate(companyInfo.doc_edit_from)}. Backdated entry is not allowed.`;
+    }
+  }
   if (!form.ac_code)                    hErr.ac_code   = isPO || isPI ? "Supplier is required" : "Customer is required";
   if (!form.curr_code)                  hErr.curr_code = "Currency is required";
   if (!form.ex_rate || form.ex_rate <= 0) hErr.ex_rate = "Exchange Rate must be > 0";
@@ -1338,7 +1361,7 @@ const limitProps = (f: keyof FormState) => ({
                 <div className="flex flex-col gap-1.5">
                   <HeaderBlock label="Document Details" icon={<FileText size={11} />} gridCols="grid-cols-2" grow>
                     <CField label="Doc Date" required error={fieldErrors.doc_date} className="col-span-1">
-                      <BiscDatePicker compact {...fyDateProps(fyRange)} disabled={isCancelled} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
+                      <BiscDatePicker compact {...fyDateProps(fyRange)} disabled={isCancelled || companyInfo?.doc_date_editable === 'N'} value={dateInput(form.doc_date)} error={Boolean(fieldErrors.doc_date)} onChange={(val) => update("doc_date", val)} />
                     </CField>
 
                     {!isPO && (

@@ -15,6 +15,7 @@
   import { CommercialDocumentPage } from "../pages/finance/CommercialDocumentPage";
   import { FinanceDashboardPanel } from "../pages/finance/FinanceDashboardPanel";
   import { DocumentSetupPage } from "../pages/finance/DocumentSetupPage";
+  import { CompanyFinanceSetupPage } from "../pages/finance/CompanyFinanceSetupPage";
   import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
   import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
   import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
@@ -742,6 +743,11 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
       name: "Finance Document Setup",
       match: ({ pathname }) => isDocumentSetupRoute(pathname),
       element: () => <DocumentSetupPage />,
+    },
+    {
+      name: "Company Finance Setup",
+      match: ({ pathname }) => isCompanyFinanceSetupRoute(pathname),
+      element: () => <CompanyFinanceSetupPage />,
     },
     {
       name: "Budget Allocation Setup",
@@ -1979,6 +1985,19 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     return normalized.includes("/finance/accounts/masters/budget_version") || normalized.includes("/finance/accounts/masters/budget-version");
   }
 
+  function isCompanyFinanceSetupRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/finance/utilities/setup") ||
+      normalized.includes("/finance/utilities/setup") ||
+      normalized.includes("/finance/utilities/company_setup") ||
+      normalized.includes("/finance/utilities/company-setup") ||
+      normalized.includes("/finance/utilities/companysetup") ||
+      normalized.includes("/finance/settings/company") ||
+      normalized.includes("/finance/utilities/company")
+    );
+  }
+
   function isDocumentSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
@@ -2520,7 +2539,8 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
   function getWmsSimpleMasterConfig(pathname: string) {
     const normalized = pathname.toLowerCase();
     if (!normalized.includes("/wms/")) return null;
-    const matches = Object.values(wmsSimpleMasterConfigs)
+    const allConfigs = { ...wmsSimpleMasterConfigs, ...freightMasterConfigs };
+    const matches = Object.values(allConfigs)
       .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
       .sort((a, b) => b.key.length - a.key.length);
     return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
@@ -2532,7 +2552,9 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const isFreight =
       matchText.includes("/freight") ||
       compact.includes("freight") ||
-      compact.includes("frieght");
+      compact.includes("frieght") ||
+      matchText.includes("/fms") ||
+      compact.includes("fms");
 
     if (!isFreight) return null;
 

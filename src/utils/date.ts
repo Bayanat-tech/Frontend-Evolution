@@ -101,20 +101,50 @@ const ymdLocal = (v: unknown): string => {
   return Number.isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
-export function getFyRange(fyPeriods: any[], fyPeriod: string, opts?: { docDate?: string }): FyRange {
+export function getFyRange(
+  fyPeriods: any[],
+  fyPeriod: string,
+  opts?: { docDate?: string; docEditFrom?: string; docEditTo?: string }
+): FyRange {
   const rows = (fyPeriods || [])
     .map((p) => ({ code: String(pick(p, "fy_period")), min: ymdLocal(pick(p, "date_from")), max: ymdLocal(pick(p, "date_to")) }))
     .filter((r) => ISO_DATE.test(r.min) && ISO_DATE.test(r.max));
   const byDate = (d: string) => rows.find((r) => d >= r.min && d <= r.max);
   const pack = (r?: { min: string; max: string }): FyRange => (r ? { min: r.min, max: r.max } : null);
 
+  let target: { min: string; max: string } | null = null;
   if (opts?.docDate) {                       // edit mode: FY of the saved date
     const hit = byDate(ymdLocal(opts.docDate));
-    if (hit) return pack(hit);
+    if (hit) target = { min: hit.min, max: hit.max };
   }
-  const selected = rows.find((r) => r.code === String(fyPeriod));
-  if (selected) return pack(selected);       // dropdown FY
-  return pack(byDate(localToday()));         // "All": FY containing today
+  if (!target) {
+    const selected = rows.find((r) => r.code === String(fyPeriod));
+    if (selected) target = { min: selected.min, max: selected.max };
+    else {
+      const todayHit = byDate(localToday());
+      if (todayHit) target = { min: todayHit.min, max: todayHit.max };
+    }
+  }
+
+  if (target) {
+    // If account period is locked prior to a specific date (docEditFrom), clamp min to prevent backdated entries
+    if (opts?.docEditFrom) {
+      const editFrom = ymdLocal(opts.docEditFrom);
+      if (ISO_DATE.test(editFrom) && editFrom > target.min && editFrom <= target.max) {
+        target.min = editFrom;
+      }
+    }
+    // If account period is locked after a specific date (docEditTo), clamp max
+    if (opts?.docEditTo) {
+      const editTo = ymdLocal(opts.docEditTo);
+      if (ISO_DATE.test(editTo) && editTo < target.max && editTo >= target.min) {
+        target.max = editTo;
+      }
+    }
+    return pack(target);
+  }
+
+  return null;
 }
 
 /** Spread onto BiscDatePicker: <BiscDatePicker {...fyDateProps(fyRange)} /> */

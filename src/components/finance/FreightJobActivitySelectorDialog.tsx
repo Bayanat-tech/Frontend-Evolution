@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Search, Truck, CheckSquare, Square, RefreshCw, X, AlertCircle, Filter, DollarSign, Package } from "lucide-react";
+import { Search, Truck, CheckSquare, Square, RefreshCw, AlertCircle, Package, CheckCircle2 } from "lucide-react";
 import { Dialog } from "../ui/Dialog";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -22,6 +22,8 @@ export interface SelectedFreightExpense {
   tx_cat_code?: string;
   tx_compntcat_code_1?: string;
   tx_compnt_perc_1?: number;
+  booked_pi_no?: string;
+  isBooked?: boolean;
 }
 
 interface FreightJobActivitySelectorDialogProps {
@@ -53,10 +55,13 @@ export function FreightJobActivitySelectorDialog({
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
 
   const [activities, setActivities] = useState<any[]>([]);
+  const [bookedPIList, setBookedPIList] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
-  // Filter state
+  // PowerBuilder Filters
   const [filterBySupplier, setFilterBySupplier] = useState<boolean>(Boolean(supplierCode));
+  const [hideAlreadyBooked, setHideAlreadyBooked] = useState<boolean>(true); // PB default: do not show booked
+  const [hideFullyBookedJobs, setHideFullyBookedJobs] = useState<boolean>(true); // PB default: do not show fully booked jobs
   const [expenseSearch, setExpenseSearch] = useState("");
 
   // Map of selected items: key -> SelectedFreightExpense
@@ -68,7 +73,10 @@ export function FreightJobActivitySelectorDialog({
       setSelectedMap(new Map());
       setSelectedJob(null);
       setActivities([]);
+      setBookedPIList([]);
       setFilterBySupplier(Boolean(supplierCode));
+      setHideAlreadyBooked(true);
+      setHideFullyBookedJobs(true);
       void fetchJobs("");
     }
   }, [open, companyCode, supplierCode]);
@@ -95,7 +103,7 @@ export function FreightJobActivitySelectorDialog({
     setSelectedJob(job);
     setLoadingActivities(true);
     try {
-      const response = await api.post<{ success?: boolean; data?: { header?: any; lines?: any[] } }>(
+      const response = await api.post<{ success?: boolean; data?: { header?: any; lines?: any[]; booked_pi?: any[] } }>(
         "/api/freight/job-activities/get",
         {
           company_code: companyCode,
@@ -104,10 +112,13 @@ export function FreightJobActivitySelectorDialog({
         }
       );
       const lines = response.data?.data?.lines || [];
+      const bookedPi = response.data?.data?.booked_pi || [];
       setActivities(Array.isArray(lines) ? lines : []);
+      setBookedPIList(Array.isArray(bookedPi) ? bookedPi : []);
     } catch (err) {
       console.error("Failed to load job activities:", err);
       setActivities([]);
+      setBookedPIList([]);
     } finally {
       setLoadingActivities(false);
     }
@@ -121,6 +132,24 @@ export function FreightJobActivitySelectorDialog({
     const cleanSupplier = supplierCode.trim().toUpperCase();
 
     const items: FlattenedExpenseItem[] = [];
+
+    // Helper to check if an expense was already booked in TR_AC_DETAIL (DOC_TYPE = 'PI')
+    const findBookedPI = (costType: string, actCode: string, amount: number) => {
+      if (!bookedPIList.length) return undefined;
+      const match = bookedPIList.find((pi: any) => {
+        const rem = String(pi.REMARKS || "").toUpperCase();
+        const typeMatch =
+          costType === "Agent Cost"
+            ? rem.includes("AGENT") || rem.includes("BROKER")
+            : costType === "Transporter Cost"
+            ? rem.includes("TRANS")
+            : rem.includes("OTHER") || rem.includes("ACTUAL");
+        const actMatch = rem.includes(actCode.toUpperCase());
+        const amtMatch = Math.abs(Number(pi.AMOUNT) - amount) < 0.001;
+        return (typeMatch && actMatch) || (typeMatch && amtMatch);
+      });
+      return match ? String(match.DOC_NO) : undefined;
+    };
 
     activities.forEach((act: any, idx: number) => {
       const srno = String(act.srno || act.SRNO || idx + 1);
@@ -146,6 +175,7 @@ export function FreightJobActivitySelectorDialog({
         const isMatch = Boolean(cleanSupplier && brokerCode.toUpperCase() === cleanSupplier);
         const curr = String(act.partner_curr_code || "");
         const ex = Number(act.partner_ex_rate || 1);
+        const bookedDoc = findBookedPI("Agent Cost", actCode, partnerPrice);
         items.push({
           key: `${jobNo}_${srno}_AGENT`,
           srno,
@@ -164,6 +194,8 @@ export function FreightJobActivitySelectorDialog({
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          booked_pi_no: bookedDoc,
+          isBooked: Boolean(bookedDoc),
         });
       }
 
@@ -172,6 +204,7 @@ export function FreightJobActivitySelectorDialog({
         const isMatch = Boolean(cleanSupplier && transporterCode.toUpperCase() === cleanSupplier);
         const curr = String(act.tp_curr_code || "");
         const ex = Number(act.tp_ex_rate || 1);
+        const bookedDoc = findBookedPI("Transporter Cost", actCode, transportPrice);
         items.push({
           key: `${jobNo}_${srno}_TRANS`,
           srno,
@@ -191,6 +224,8 @@ export function FreightJobActivitySelectorDialog({
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          booked_pi_no: bookedDoc,
+          isBooked: Boolean(bookedDoc),
         });
       }
 
@@ -199,6 +234,7 @@ export function FreightJobActivitySelectorDialog({
         const isMatch = Boolean(cleanSupplier && brokerCode && brokerCode.toUpperCase() === cleanSupplier);
         const curr = String(act.ac_curr_code || "");
         const ex = Number(act.ac_ex_rate || 1);
+        const bookedDoc = findBookedPI("Other Cost", actCode, actualCost);
         items.push({
           key: `${jobNo}_${srno}_OTHER`,
           srno,
@@ -217,34 +253,57 @@ export function FreightJobActivitySelectorDialog({
           tx_cat_code: txCat,
           tx_compntcat_code_1: txCompntCat,
           tx_compnt_perc_1: txPerc,
+          booked_pi_no: bookedDoc,
+          isBooked: Boolean(bookedDoc),
         });
       }
     });
 
     return items;
-  }, [selectedJob, activities, supplierCode]);
+  }, [selectedJob, activities, bookedPIList, supplierCode]);
 
-  // Filtered by supplier and search
+  // Filtered jobs for left panel: Only jobs with activities & expense amounts can be booked in Purchase Booking
+  const visibleJobs = useMemo(() => {
+    return jobs.filter((j) => {
+      const actCount = Number(j.activity_count ?? j.ACTIVITY_COUNT ?? 0);
+      const expense = Number(j.expense ?? j.EXPENSE ?? 0);
+      if (actCount <= 0 || expense <= 0) return false;
+      if (hideFullyBookedJobs && j.is_fully_booked) return false;
+      return true;
+    });
+  }, [jobs, hideFullyBookedJobs]);
+
+  // Filtered expenses (PowerBuilder logic: hide booked by default)
   const visibleExpenses = useMemo(() => {
     let list = flattenedExpenses;
+    if (hideAlreadyBooked) {
+      list = list.filter((item) => !item.isBooked);
+    }
     if (filterBySupplier && supplierCode) {
       list = list.filter((item) => item.isSupplierMatch);
     }
     if (expenseSearch.trim()) {
       const q = expenseSearch.trim().toLowerCase();
-      list = list.filter((item) =>
-        item.act_code.toLowerCase().includes(q) ||
-        item.activity.toLowerCase().includes(q) ||
-        item.cost_type.toLowerCase().includes(q) ||
-        (item.vendor_code && item.vendor_code.toLowerCase().includes(q)) ||
-        (item.vendor_name && item.vendor_name.toLowerCase().includes(q)) ||
-        (item.vehicle_no && item.vehicle_no.toLowerCase().includes(q))
+      list = list.filter(
+        (item) =>
+          item.act_code.toLowerCase().includes(q) ||
+          item.activity.toLowerCase().includes(q) ||
+          item.cost_type.toLowerCase().includes(q) ||
+          (item.vendor_code && item.vendor_code.toLowerCase().includes(q)) ||
+          (item.vendor_name && item.vendor_name.toLowerCase().includes(q)) ||
+          (item.vehicle_no && item.vehicle_no.toLowerCase().includes(q)) ||
+          (item.booked_pi_no && item.booked_pi_no.toLowerCase().includes(q))
       );
     }
     return list;
-  }, [flattenedExpenses, filterBySupplier, supplierCode, expenseSearch]);
+  }, [flattenedExpenses, hideAlreadyBooked, filterBySupplier, supplierCode, expenseSearch]);
+
+  const allExpensesCount = flattenedExpenses.length;
+  const bookedExpensesCount = useMemo(() => flattenedExpenses.filter((e) => e.isBooked).length, [flattenedExpenses]);
+  const allExpensesBooked = allExpensesCount > 0 && bookedExpensesCount === allExpensesCount;
 
   const toggleSelectExpense = (item: FlattenedExpenseItem) => {
+    if (item.isBooked) return; // Prevent selecting already booked lines
     setSelectedMap((prev) => {
       const next = new Map(prev);
       if (next.has(item.key)) {
@@ -258,13 +317,15 @@ export function FreightJobActivitySelectorDialog({
   };
 
   const handleSelectAllVisible = () => {
+    const selectable = visibleExpenses.filter((e) => !e.isBooked);
+    if (!selectable.length) return;
     setSelectedMap((prev) => {
       const next = new Map(prev);
-      const allSelected = visibleExpenses.every((e) => next.has(e.key));
+      const allSelected = selectable.every((e) => next.has(e.key));
       if (allSelected) {
-        visibleExpenses.forEach((e) => next.delete(e.key));
+        selectable.forEach((e) => next.delete(e.key));
       } else {
-        visibleExpenses.forEach((e) => {
+        selectable.forEach((e) => {
           const { key, srno, isSupplierMatch, ...cleanData } = e;
           next.set(e.key, cleanData);
         });
@@ -273,7 +334,9 @@ export function FreightJobActivitySelectorDialog({
     });
   };
 
-  const allVisibleSelected = visibleExpenses.length > 0 && visibleExpenses.every((e) => selectedMap.has(e.key));
+  const selectableVisible = useMemo(() => visibleExpenses.filter((e) => !e.isBooked), [visibleExpenses]);
+  const allVisibleSelected =
+    selectableVisible.length > 0 && selectableVisible.every((e) => selectedMap.has(e.key));
 
   const totalSelectedAmount = useMemo(() => {
     let sum = 0;
@@ -284,7 +347,7 @@ export function FreightJobActivitySelectorDialog({
   }, [selectedMap]);
 
   const handleConfirm = () => {
-    const items = Array.from(selectedMap.values());
+    const items = Array.from(selectedMap.values()).filter((e) => !e.isBooked);
     if (items.length === 0) return;
     onSelect(items);
     onClose();
@@ -316,7 +379,7 @@ export function FreightJobActivitySelectorDialog({
             <Button
               type="button"
               size="sm"
-              disabled={selectedMap.size === 0}
+              disabled={selectedMap.size === 0 || allExpensesBooked}
               onClick={handleConfirm}
               className="bg-[#00378C] hover:bg-[#002d72] text-white"
             >
@@ -337,15 +400,17 @@ export function FreightJobActivitySelectorDialog({
               </span>
               <span className="font-medium text-slate-700">{supplierName}</span>
             </div>
-            <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-blue-950">
-              <input
-                type="checkbox"
-                checked={filterBySupplier}
-                onChange={(e) => setFilterBySupplier(e.target.checked)}
-                className="rounded border-slate-300 text-[#00378C] focus:ring-[#00378C]"
-              />
-              <span>Filter activities matching this Supplier</span>
-            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-blue-950">
+                <input
+                  type="checkbox"
+                  checked={filterBySupplier}
+                  onChange={(e) => setFilterBySupplier(e.target.checked)}
+                  className="rounded border-slate-300 text-[#00378C] focus:ring-[#00378C]"
+                />
+                <span>Filter activities matching this Supplier</span>
+              </label>
+            </div>
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 shrink-0">
@@ -386,20 +451,41 @@ export function FreightJobActivitySelectorDialog({
                   className="h-7 pl-7 text-xs"
                 />
               </div>
+              {/* PB Filter: Hide fully booked jobs */}
+              <div className="flex items-center justify-between text-[10px] text-slate-600 pt-0.5">
+                <label className="flex items-center gap-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideFullyBookedJobs}
+                    onChange={(e) => setHideFullyBookedJobs(e.target.checked)}
+                    className="rounded border-slate-300 text-[#00378C]"
+                  />
+                  <span>Hide fully booked jobs (PB Mode)</span>
+                </label>
+                <span className="text-slate-400 font-mono">
+                  {visibleJobs.length}/{jobs.length}
+                </span>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
               {loadingJobs ? (
                 <div className="p-4 text-center text-slate-500 text-xs">Loading freight jobs...</div>
-              ) : jobs.length === 0 ? (
-                <div className="p-4 text-center text-slate-400 text-xs">No freight jobs found</div>
+              ) : visibleJobs.length === 0 ? (
+                <div className="p-4 text-center text-slate-400 text-xs">
+                  {jobs.length > 0 && hideFullyBookedJobs
+                    ? "All jobs are already fully booked. Uncheck 'Hide fully booked jobs' to inspect."
+                    : "No freight jobs found"}
+                </div>
               ) : (
-                jobs.map((job: any) => {
+                visibleJobs.map((job: any) => {
                   const jobNo = job.job_no || job.JOB_NO;
                   const isCurrent = (selectedJob?.job_no || selectedJob?.JOB_NO) === jobNo;
                   const dateStr = formatDate(job.job_date || job.JOB_DATE);
                   const prinName = job.prin_name || job.PRIN_NAME || job.prin_code || job.PRIN_CODE || "-";
                   const expense = Number(job.expense || job.EXPENSE || 0);
+                  const isFullyBooked = Boolean(job.is_fully_booked);
+                  const lastPiNo = job.last_pi_no;
 
                   return (
                     <button
@@ -409,12 +495,25 @@ export function FreightJobActivitySelectorDialog({
                       className={`w-full text-left p-2.5 transition-colors cursor-pointer flex flex-col gap-1 ${
                         isCurrent
                           ? "bg-blue-50/80 border-l-4 border-l-[#00378C]"
+                          : isFullyBooked
+                          ? "bg-slate-50/60 opacity-75 hover:bg-slate-100/70"
                           : "hover:bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-[#00378C]">{jobNo}</span>
-                        <span className="text-[10px] text-slate-500">{dateStr}</span>
+                        <div className="flex items-center gap-1">
+                          {isFullyBooked && lastPiNo ? (
+                            <span className="rounded bg-emerald-100 border border-emerald-300 px-1.5 py-0.2 text-[9px] font-bold text-emerald-800">
+                              Booked: {lastPiNo}
+                            </span>
+                          ) : job.pi_line_count > 0 ? (
+                            <span className="rounded bg-amber-100 border border-amber-200 px-1.5 py-0.2 text-[9px] font-semibold text-amber-800">
+                              Part Booked
+                            </span>
+                          ) : null}
+                          <span className="text-[10px] text-slate-500">{dateStr}</span>
+                        </div>
                       </div>
                       <div className="truncate text-[11px] text-slate-600 font-medium">
                         {prinName}
@@ -424,7 +523,7 @@ export function FreightJobActivitySelectorDialog({
                           {job.transport_mode || job.TRANSPORT_MODE || "Mode"} / {job.job_type || job.JOB_TYPE || "Type"}
                         </span>
                         {expense > 0 && (
-                          <span className="font-semibold text-rose-700">
+                          <span className={`font-semibold ${isFullyBooked ? "text-slate-500 line-through" : "text-rose-700"}`}>
                             Exp: {expense.toFixed(3)}
                           </span>
                         )}
@@ -451,28 +550,49 @@ export function FreightJobActivitySelectorDialog({
                     {visibleExpenses.length} lines
                   </span>
                 )}
+                {bookedExpensesCount > 0 && (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.2 text-[10px] font-semibold text-emerald-800">
+                    {bookedExpensesCount} booked in PI
+                  </span>
+                )}
               </div>
 
-              {selectedJob && visibleExpenses.length > 0 && (
+              {selectedJob && (
                 <div className="flex items-center gap-2">
-                  <div className="relative w-44">
-                    <Search size={12} className="absolute left-2 top-2 text-slate-400" />
-                    <Input
-                      value={expenseSearch}
-                      onChange={(e) => setExpenseSearch(e.target.value)}
-                      placeholder="Filter lines..."
-                      className="h-6 pl-6 text-[11px]"
+                  {/* PB Mode toggle: Hide already booked lines */}
+                  <label className="flex items-center gap-1 cursor-pointer select-none text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
+                    <input
+                      type="checkbox"
+                      checked={hideAlreadyBooked}
+                      onChange={(e) => setHideAlreadyBooked(e.target.checked)}
+                      className="rounded border-slate-300 text-[#00378C]"
                     />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleSelectAllVisible}
-                    className="h-6 text-[11px] px-2"
-                  >
-                    {allVisibleSelected ? "Deselect All" : "Select All"}
-                  </Button>
+                    <span>Hide already booked (PB Mode)</span>
+                  </label>
+
+                  {visibleExpenses.length > 0 && (
+                    <>
+                      <div className="relative w-36">
+                        <Search size={12} className="absolute left-2 top-2 text-slate-400" />
+                        <Input
+                          value={expenseSearch}
+                          onChange={(e) => setExpenseSearch(e.target.value)}
+                          placeholder="Filter lines..."
+                          className="h-6 pl-6 text-[11px]"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleSelectAllVisible}
+                        disabled={selectableVisible.length === 0}
+                        className="h-6 text-[11px] px-2"
+                      >
+                        {allVisibleSelected ? "Deselect All" : "Select All"}
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -482,11 +602,50 @@ export function FreightJobActivitySelectorDialog({
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-400">
                   <Package size={36} className="text-slate-300 mb-2" />
                   <p className="text-xs font-medium">Please select a freight job from the left list.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Activities with booked costs (Agent, Transporter, Other) will appear here.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Unbooked activities with supplier costs will appear here for purchase booking.
+                  </p>
                 </div>
               ) : loadingActivities ? (
                 <div className="flex h-full items-center justify-center p-8 text-slate-500 text-xs">
                   <RefreshCw size={16} className="animate-spin mr-2 text-[#00378C]" /> Loading activities...
+                </div>
+              ) : allExpensesBooked && hideAlreadyBooked ? (
+                /* Pure PowerBuilder View: When all expenses are already booked in PI, they are NOT shown! */
+                <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-600">
+                  <div className="rounded-full bg-emerald-100 p-3 text-emerald-600 mb-3">
+                    <CheckCircle2 size={36} />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800">
+                    All Expenses Already Booked in Purchase Invoice
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md">
+                    All supplier and agent costs for Job{" "}
+                    <strong className="text-[#00378C] font-mono">
+                      {selectedJob.job_no || selectedJob.JOB_NO}
+                    </strong>{" "}
+                    have already been booked into Purchase Invoice:
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    {Array.from(new Set(flattenedExpenses.map((e) => e.booked_pi_no).filter(Boolean))).map((pi) => (
+                      <span
+                        key={pi}
+                        className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 font-mono font-bold text-emerald-800 text-xs shadow-2xs"
+                      >
+                        {pi}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-3">
+                    Per PowerBuilder ERP rules, already-booked expenses are hidden to prevent duplicate bookings.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setHideAlreadyBooked(false)}
+                    className="mt-2 text-xs font-semibold text-[#00378C] hover:underline cursor-pointer"
+                  >
+                    View already booked lines with [Booked in PI] badge
+                  </button>
                 </div>
               ) : visibleExpenses.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-400">
@@ -507,49 +666,55 @@ export function FreightJobActivitySelectorDialog({
                 </div>
               ) : (
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-semibold text-slate-700 border-b border-slate-200 z-10">
+                  <thead className="sticky top-0 bg-[#00378C] text-[11px] font-semibold text-white shadow-sm z-10">
                     <tr>
-                      <th className="p-2 w-8 text-center">
+                      <th className="p-2 w-8 text-center text-white border-r border-white/15">
                         <button
                           type="button"
                           onClick={handleSelectAllVisible}
-                          className="cursor-pointer"
+                          disabled={selectableVisible.length === 0}
+                          className="cursor-pointer disabled:opacity-40"
                         >
                           {allVisibleSelected ? (
-                            <CheckSquare size={14} className="text-[#00378C]" />
+                            <CheckSquare size={14} className="text-white" />
                           ) : (
-                            <Square size={14} className="text-slate-400" />
+                            <Square size={14} className="text-white/60" />
                           )}
                         </button>
                       </th>
-                      <th className="p-2 w-12">Sr#</th>
-                      <th className="p-2 w-28">Cost Type</th>
-                      <th className="p-2">Activity</th>
-                      <th className="p-2 w-44">Vendor / Party</th>
-                      <th className="p-2 w-20">Currency</th>
-                      <th className="p-2 w-24 text-right">Amount</th>
+                      <th className="p-2 w-12 text-white border-r border-white/15">Sr#</th>
+                      <th className="p-2 w-28 text-white border-r border-white/15">Cost Type</th>
+                      <th className="p-2 text-white border-r border-white/15">Activity</th>
+                      <th className="p-2 w-44 text-white border-r border-white/15">Vendor / Party</th>
+                      <th className="p-2 w-20 text-white border-r border-white/15">Currency</th>
+                      <th className="p-2 w-24 text-right text-white">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {visibleExpenses.map((item) => {
                       const isChecked = selectedMap.has(item.key);
+                      const isBooked = Boolean(item.isBooked);
                       return (
                         <tr
                           key={item.key}
-                          onClick={() => toggleSelectExpense(item)}
-                          className={`cursor-pointer transition-colors ${
-                            isChecked
-                              ? "bg-blue-50/70"
+                          onClick={() => !isBooked && toggleSelectExpense(item)}
+                          className={`transition-colors ${
+                            isBooked
+                              ? "bg-slate-50/80 text-slate-400 cursor-not-allowed"
+                              : isChecked
+                              ? "bg-blue-50/70 cursor-pointer"
                               : item.isSupplierMatch
-                              ? "bg-emerald-50/40 hover:bg-slate-50"
-                              : "hover:bg-slate-50"
+                              ? "bg-emerald-50/40 hover:bg-slate-50 cursor-pointer"
+                              : "hover:bg-slate-50 cursor-pointer"
                           }`}
                         >
                           <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
+                              disabled={isBooked}
                               onClick={() => toggleSelectExpense(item)}
-                              className="cursor-pointer"
+                              className={`cursor-pointer ${isBooked ? "opacity-30 cursor-not-allowed" : ""}`}
+                              title={isBooked ? `Already booked in ${item.booked_pi_no}` : "Select for invoice"}
                             >
                               {isChecked ? (
                                 <CheckSquare size={14} className="text-[#00378C]" />
@@ -560,20 +725,31 @@ export function FreightJobActivitySelectorDialog({
                           </td>
                           <td className="p-2 font-mono text-[11px] text-slate-500">{item.srno}</td>
                           <td className="p-2">
-                            <span
-                              className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                                item.cost_type === "Agent Cost"
-                                  ? "bg-purple-100 text-purple-800"
-                                  : item.cost_type === "Transporter Cost"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-slate-200 text-slate-800"
-                              }`}
-                            >
-                              {item.cost_type}
-                            </span>
+                            <div className="flex flex-col items-start gap-1">
+                              <span
+                                className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                  isBooked
+                                    ? "bg-slate-200 text-slate-500"
+                                    : item.cost_type === "Agent Cost"
+                                    ? "bg-purple-100 text-purple-800"
+                                    : item.cost_type === "Transporter Cost"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-slate-200 text-slate-800"
+                                }`}
+                              >
+                                {item.cost_type}
+                              </span>
+                              {isBooked && (
+                                <span className="inline-flex items-center gap-1 rounded bg-emerald-100 border border-emerald-300 px-1.5 py-0.2 font-mono text-[9px] font-bold text-emerald-800">
+                                  Booked: {item.booked_pi_no}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-2">
-                            <div className="font-semibold text-slate-900">{item.activity}</div>
+                            <div className={`font-semibold ${isBooked ? "text-slate-500 line-through" : "text-slate-900"}`}>
+                              {item.activity}
+                            </div>
                             <div className="text-[10px] text-slate-500 font-mono">{item.act_code}</div>
                           </td>
                           <td className="p-2">
@@ -589,7 +765,7 @@ export function FreightJobActivitySelectorDialog({
                             {item.curr_code || "OMR"}
                             {Number(item.ex_rate || 1) !== 1 && ` @ ${item.ex_rate}`}
                           </td>
-                          <td className="p-2 text-right font-mono font-bold text-slate-900">
+                          <td className={`p-2 text-right font-mono font-bold ${isBooked ? "text-slate-400" : "text-slate-900"}`}>
                             {item.amount.toFixed(3)}
                           </td>
                         </tr>
@@ -605,4 +781,3 @@ export function FreightJobActivitySelectorDialog({
     </Dialog>
   );
 }
-
