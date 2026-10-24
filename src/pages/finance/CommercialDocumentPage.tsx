@@ -50,6 +50,7 @@ import { DivisionPickerDialog } from "../../components/finance/DivisionPickerDia
 import { formatDate, getFyRange, fyDateProps, clampToFy, validateFyDate } from "../../utils/date";
 import type { FyRange } from "../../utils/date";
 import { BiscDatePicker } from "../../components/ui/BiscDatePicker";
+import { FreightJobActivitySelectorDialog, SelectedFreightExpense } from "../../components/finance/FreightJobActivitySelectorDialog";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
 
@@ -846,6 +847,7 @@ const limitProps = (f: keyof FormState) => ({
   
   const [lineSearch, setLineSearch] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [freightSelectorOpen, setFreightSelectorOpen] = useState(false);
   const [remarksFocus, setRemarksFocus] = useState(false);
 
   const filteredLines = useMemo(() => {
@@ -1770,6 +1772,20 @@ const limitProps = (f: keyof FormState) => ({
                     )}
                   </div>
 
+                  {isPI && (
+                    <Button
+                      disabled={isCancelled}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => setFreightSelectorOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-semibold border-amber-400 text-amber-900 bg-amber-50 hover:bg-amber-100 cursor-pointer"
+                      title="Load expense lines from Freight Job Activities (Purchase Booking)"
+                    >
+                      <Truck size={13} className="text-amber-700" />
+                      <span>Load from Freight Jobs</span>
+                    </Button>
+                  )}
                   <Button
                     disabled={isCancelled}
                     size="sm"
@@ -1783,7 +1799,7 @@ const limitProps = (f: keyof FormState) => ({
                 </div>
               </div>
               <div className="commercial-lines-scroll max-h-[56vh] min-h-[260px] overflow-auto">
-                <table className={`finance-lines-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
+                <table className={`finance-lines-table finance-detail-table commercial-lines-table-separated w-full text-xs ${showAllColumns ? "min-w-[1780px]" : "min-w-full"}`}>
                   <thead className="sticky top-0 bg-[#00378C] text-xs font-semibold text-white shadow-sm z-10">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
@@ -2084,6 +2100,60 @@ const limitProps = (f: keyof FormState) => ({
         // onOpenInNewWindow={...}   // you can remove this if you no longer want a new window
         // onDownloadPdf={...}
       />
+      {isPI && (
+        <FreightJobActivitySelectorDialog
+          open={freightSelectorOpen}
+          onClose={() => setFreightSelectorOpen(false)}
+          companyCode={user?.company_code || ""}
+          supplierCode={form.ac_code}
+          supplierName={form.ac_name}
+          onSelect={async (selectedExpenses: SelectedFreightExpense[]) => {
+            if (!selectedExpenses.length) return;
+            try {
+              const defaultAccounts = await getDocAccounts("PI", "D", form.div_code).catch(() => []);
+              const firstAcCode = String(defaultAccounts?.[0]?.ac_code || defaultAccounts?.[0]?.AC_CODE || "");
+              const firstAcName = String(defaultAccounts?.[0]?.ac_name || defaultAccounts?.[0]?.AC_NAME || "");
+
+              setForm((current) => {
+                let serial = current.detail.filter((l) => Number(l.serial_no) < 9000).length;
+                const newLines: Line[] = selectedExpenses.map((exp) => {
+                  serial++;
+                  const lineCurr = exp.curr_code || current.curr_code;
+                  const lineEx = Number(exp.ex_rate || current.ex_rate || 1);
+                  const lineAmt = Number(exp.amount || 0);
+                  const lcurAmt = lineAmt * lineEx;
+
+                  return {
+                    ...emptyLine("PI", serial, lineCurr, current.curr_name, lineEx),
+                    id: newId(),
+                    serial_no: serial,
+                    ac_code: firstAcCode,
+                    ac_name: firstAcName,
+                    remarks: `${exp.act_code} - ${exp.activity} (${exp.cost_type})${exp.vehicle_no ? ` - Veh: ${exp.vehicle_no}` : ""}`,
+                    qty: 1,
+                    price: lineAmt,
+                    amount: lineAmt,
+                    lcur_amount: lcurAmt,
+                    job_no: exp.job_no,
+                    curr_code: lineCurr,
+                    ex_rate: lineEx,
+                    sign_ind: 1,
+                    tx_cat_code: exp.tx_cat_code || current.tx_cat_code || "",
+                    tx_compntcat_code_1: exp.tx_compntcat_code_1 || current.tx_compntcat_code_1 || "10100",
+                    tx_compnt_1_expmt: current.tx_compnt_1_expmt || "S",
+                    tx_compnt_perc_1: exp.tx_compnt_perc_1 != null && exp.tx_compnt_perc_1 !== 0
+                      ? exp.tx_compnt_perc_1
+                      : (current.tx_compnt_perc_1 || 5),
+                  };
+                });
+                return { ...current, detail: [...current.detail, ...newLines] };
+              });
+            } catch (err) {
+              console.error("Error populating freight job lines:", err);
+            }
+          }}
+        />
+      )}
     </form>
   );
 }
