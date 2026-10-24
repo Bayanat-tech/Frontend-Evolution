@@ -100,6 +100,101 @@ type ApiResponse<T = unknown> = {
   details?: string;
 };
 
+const DOC_TYPE_OPTIONS = [
+  { value: "ADV", label: "Salary Advance" },
+  { value: "LON", label: "Loan Recovery" },
+  { value: "TRP", label: "Transport Recovery" },
+] as const;
+
+const DOC_TYPE_PAY_COMP_MAP: Record<string, string> = {
+  ADV: "SA",
+  LON: "003",
+  TRP: "013",
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  ADV: "Salary Advance",
+  LON: "Loan Recovery",
+  TRP: "Transport Recovery",
+  SA: "Salary Advance", // legacy
+};
+
+const normalizeDocType = (dt: string | null | undefined): string => {
+  if (!dt) return "ADV";
+  if (dt === "SA") return "ADV"; // legacy → new code
+  return ["ADV", "LON", "TRP"].includes(dt) ? dt : "ADV";
+};
+
+// ---------- Oracle column widths (subset used by the form) ----------
+const FIELD_LIMITS = {
+  // HDR
+  ref_no:               30,     // REF_NO VARCHAR2(30)
+  name_from:           100,     // NAME_FROM VARCHAR2(100)
+  addr_from:           250,     // ADDR_FROM VARCHAR2(250)
+  name_to:             100,     // NAME_TO VARCHAR2(100)
+  addr_to:             250,     // ADDR_TO VARCHAR2(250)
+  lettr_subject:       250,     // LETTR_SUBJECT VARCHAR2(250)
+  remarks_1:          1000,     // REMARKS_1 VARCHAR2(1000)
+  remarks_2:          1000,     // REMARKS_2 VARCHAR2(1000)
+  signatory_name:      100,     // SIGNATORY_NAME VARCHAR2(100)
+  signatory_position:  100,     // SIGNATORY_POSITION VARCHAR2(100)
+  // DTL — description is persisted into REMARKS VARCHAR2(20)
+  description:          20,     // DTL.REMARKS VARCHAR2(20)
+} as const;
+
+function countDecimals(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  const s = String(Math.abs(n));
+  const m = s.match(/e-(\d+)/i);
+  if (m) return Number(m[1]);
+  const dot = s.indexOf(".");
+  return dot >= 0 ? s.length - dot - 1 : 0;
+}
+
+function validateForm(header: Partial<MainRow>, details: DetailRow[]): string | null {
+  const hdrChecks: Array<[keyof typeof FIELD_LIMITS, string | null | undefined, string]> = [
+    ["ref_no",             header.ref_no,             "Ref No"],
+    ["name_from",          header.name_from,          "Name From"],
+    ["addr_from",          header.addr_from,          "Addr From"],
+    ["name_to",            header.name_to,            "Name To"],
+    ["addr_to",            header.addr_to,            "Addr To"],
+    ["lettr_subject",      header.lettr_subject,      "Letter Subject"],
+    ["remarks_1",          header.remarks_1,          "Remarks 1"],
+    ["remarks_2",          header.remarks_2,          "Remarks 2"],
+    ["signatory_name",     header.signatory_name,     "Signatory Name"],
+    ["signatory_position", header.signatory_position, "Signatory Position"],
+  ];
+  for (const [key, val, label] of hdrChecks) {
+    if ((val?.length ?? 0) > FIELD_LIMITS[key]) {
+      return `${label} exceeds ${FIELD_LIMITS[key]} characters (currently ${val?.length}).`;
+    }
+  }
+
+  const amt = Number(header.amount ?? 0);
+  if (Number.isFinite(amt) && Math.abs(amt) >= 1e14) {
+    return "Amount is too large (max 14 integer digits, 4 decimals).";
+  }
+  if (countDecimals(amt) > 4) {
+    return "Amount can have at most 4 decimal places.";
+  }
+  const period = Number(header.recovery_period ?? 0);
+  if (period < 0 || period > 99999) {
+    return "Period must be between 0 and 99999.";
+  }
+
+  for (let i = 0; i < details.length; i++) {
+    const d = details[i];
+    if ((d.description?.length ?? 0) > FIELD_LIMITS.description) {
+      return `Line ${i + 1}: Description exceeds ${FIELD_LIMITS.description} characters.`;
+    }
+    if (countDecimals(Number(d.recover_mth_amt ?? 0)) > 6) {
+      return `Line ${i + 1}: Month Amount can have at most 6 decimal places.`;
+    }
+  }
+
+  return null; // OK
+}
+
 // ---------- API helper ----------
 function extractApiErrorMessage(error: unknown, fallback: string): string {
   const anyErr = error as {
@@ -139,83 +234,101 @@ const toInputDate = (val: unknown): string => {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 };
 
-const emptyHeader = (): Partial<MainRow> => ({
-  doc_type: "SA",
-  doc_date: new Date().toISOString().slice(0, 10),
-  ref_no: "",
-  name_from: "",
-  addr_from: "",
-  name_to: "",
-  addr_to: "",
-  lettr_subject: "Salary Advance",
-  remarks_1: "",
-  remarks_2: "",
-  remarks_3: "",
-  curr_code: null,
-  ex_rate: 1,
-  amount: 0,
-  recover_from_dt: new Date().toISOString().slice(0, 10),
-  recovery_period: 0,
-  signatory_name: "",
-  signatory_position: "",
-  employee_code: "",
-  employee_id: "",
-  employee_name: "",
-  pay_comp_id: "",
-  recover_mth_amt: 0,
-  allocated_amt: 0,
-  balance_amt: 0,
-  deduct_from_leave: "N",
-  deduct_noof_leavedays: 0,
-  ref_hdr_lve_slno: null,
-  ref_leave_doc_no: null,
-  cancel_by: null,
-  cancel_date: null,
-  doc_status: "N",
-  user_id: null,
-  user_dt: null,
-});
+const DOC_TYPE_DEFAULTS: Record<string, { pay_comp_id: string; description: string }> = {
+  ADV: { pay_comp_id: "SA",  description: "Salary Advance" },
+  LON: { pay_comp_id: "003", description: "Loan Recovery" },
+  TRP: { pay_comp_id: "013", description: "Transport Recovery" },
+};
+
+const getDocTypeDefaults = (docType: string | null | undefined) => {
+  const dt = normalizeDocType(docType);
+  return DOC_TYPE_DEFAULTS[dt] ?? DOC_TYPE_DEFAULTS.ADV;
+};
+
+const emptyHeader = (): Partial<MainRow> => {
+  const defaults = getDocTypeDefaults("ADV");
+  return {
+    doc_type: "ADV",
+    doc_date: new Date().toISOString().slice(0, 10),
+    ref_no: "",
+    name_from: "",
+    addr_from: "",
+    name_to: "",
+    addr_to: "",
+    lettr_subject: "Salary Advance",
+    remarks_1: "",
+    remarks_2: "",
+    remarks_3: "",
+    curr_code: null,
+    ex_rate: 1,
+    amount: 0,
+    recover_from_dt: new Date().toISOString().slice(0, 10),
+    recovery_period: 0,
+    signatory_name: "",
+    signatory_position: "",
+    employee_code: "",
+    employee_id: "",
+    employee_name: "",
+    pay_comp_id: defaults.pay_comp_id,
+    recover_mth_amt: 0,
+    allocated_amt: 0,
+    balance_amt: 0,
+    deduct_from_leave: "N",
+    deduct_noof_leavedays: 0,
+    ref_hdr_lve_slno: null,
+    ref_leave_doc_no: null,
+    cancel_by: null,
+    cancel_date: null,
+    doc_status: "N",
+    user_id: null,
+    user_dt: null,
+  };
+};
 
 const emptyDetailRow = (
   companyCode: string,
   docType: string,
   docNo: string | number,
   serial: number,
-): DetailRow => ({
-  company_code: companyCode,
-  doc_type: docType || "SA",
-  doc_no: docNo || "",
-  serial_no: serial,
-  employee_id: null,
-  emplyee_code: null,
-  pay_comp_id: "",
-  description: "",
-  recover_mth_amt: 0,
-  recover_from_dt: new Date().toISOString().slice(0, 10),
-  allocated_amt: 0,
-  balance_amt: 0,
-  deduct_from_leave: "N",
-  deduct_noof_leavedays: 0,
-  ref_leave_doc_no: null,
-  ref_hdr_lve_slno: null,
-  amount: 0,
-  cancel_by: null,
-  cancel_date: null,
-  cancel_status: "N",
-  sr_no: serial,
-  post_payroll: null,
-  payroll_closed: "N",
-  recover_in: 0,
-  remarks: null,
-  last_posted_month: null,
-  post_date: null,
-  leave_days_paid: null,
-  sal_type_flag: "N",
-  last_updated_by: null,
-  sys_gen: "N",
-  pay_month: null,
-  pay_year: null,
-});
+): DetailRow => {
+  const dt = docType || "ADV";
+  const defaults = getDocTypeDefaults(dt);
+  return {
+    company_code: companyCode,
+    doc_type: docType || "ADV",
+    doc_no: docNo || "",
+    serial_no: serial,
+    employee_id: null,
+    emplyee_code: null,
+    pay_comp_id: defaults.pay_comp_id,
+    description: defaults.description,
+    recover_mth_amt: 0,
+    recover_from_dt: new Date().toISOString().slice(0, 10),
+    allocated_amt: 0,
+    balance_amt: 0,
+    deduct_from_leave: "N",
+    deduct_noof_leavedays: 0,
+    ref_leave_doc_no: null,
+    ref_hdr_lve_slno: null,
+    amount: 0,
+    cancel_by: null,
+    cancel_date: null,
+    cancel_status: "N",
+    sr_no: serial,
+    post_payroll: null,
+    payroll_closed: "N",
+    recover_in: 0,
+    remarks: null,
+    last_posted_month: null,
+    post_date: null,
+    leave_days_paid: null,
+    sal_type_flag: "N",
+    last_updated_by: null,
+    sys_gen: "N",
+    pay_month: null,
+    pay_year: null,
+  };
+};
 
 const formatDisplayDate = (val: string | null | undefined) => {
   if (!val) return "";
@@ -236,7 +349,7 @@ function buildSavePayload(
 
   const headerPayload: Record<string, unknown> = {
     company_code: companyCode,
-    doc_type: "SA",
+    doc_type: header.doc_type || "ADV",
     doc_no: isNew ? 0 : Number(header.doc_no),
     doc_date: header.doc_date || null,
     ref_no: header.ref_no || null,
@@ -281,7 +394,7 @@ function buildSavePayload(
 
   const detailPayload = details.map((d, idx) => ({
     company_code: companyCode,
-    doc_type: "SA",
+    doc_type: header.doc_type || "ADV",
     doc_no: isNew ? 0 : Number(header.doc_no),
     serial_no: d.serial_no != null ? Number(d.serial_no) : idx + 1,
     employee_id: d.employee_id || header.employee_id || null,
@@ -305,7 +418,7 @@ function buildSavePayload(
     cancel_status: d.cancel_status || "N",
     leave_days_paid: d.leave_days_paid != null ? Number(d.leave_days_paid) : null,
     sal_type_flag: d.sal_type_flag || "N",
-    sr_no: null, // generated by procedure
+    sr_no: null,
     payroll_closed: d.payroll_closed || "N",
     remarks: d.remarks || d.description || null,
     pay_month: d.pay_month != null ? Number(d.pay_month) : null,
@@ -317,14 +430,12 @@ function buildSavePayload(
   return { header: headerPayload, details: detailPayload };
 }
 
-// ---------- UI building blocks (same as the Absent Memo form) ----------
+// ---------- UI building blocks ----------
 
-// Control styles shared by the header form.
 const CTL = "h-7 text-xs";
 const TEXTAREA =
   "h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
 
-// Group card: icon + title strip, then a tight field area.
 function HeaderBlock({
   label,
   icon,
@@ -339,7 +450,6 @@ function HeaderBlock({
   children: ReactNode;
   actions?: ReactNode;
   gridCols?: string;
-  /** Replaces the default grid body classes (e.g. for a flex row of short fields). */
   bodyClass?: string;
   className?: string;
 }) {
@@ -361,7 +471,6 @@ function HeaderBlock({
   );
 }
 
-// Compact label above the control (10px).
 function CField({
   label,
   required,
@@ -448,10 +557,10 @@ export default function SalaryAdvanceRecoveryPage() {
           code1: companyCode,
           code2: String(docNo),
         });
-        // native date inputs need YYYY-MM-DD
         setDetails(
           ((rows as DetailRow[]) || []).map((r) => ({
             ...r,
+            description: r.description ?? r.remarks ?? "",
             recover_from_dt: toInputDate(r.recover_from_dt) || null,
           })),
         );
@@ -478,9 +587,11 @@ export default function SalaryAdvanceRecoveryPage() {
   };
 
   const openEdit = (row: MainRow) => {
+    const dt = normalizeDocType(row.doc_type);
     setHeader({
       ...row,
-      doc_type: "SA",
+      doc_type: dt,
+      pay_comp_id: row.pay_comp_id ?? DOC_TYPE_PAY_COMP_MAP[dt] ?? "",
       doc_date: toInputDate(row.doc_date),
       recover_from_dt: toInputDate(row.recover_from_dt),
     });
@@ -504,6 +615,12 @@ export default function SalaryAdvanceRecoveryPage() {
 
     if (!header.doc_date) {
       toast.warning("Document Date is required.");
+      return;
+    }
+
+    const validationError = validateForm(header, details);
+    if (validationError) {
+      toast.warning(validationError);
       return;
     }
 
@@ -538,19 +655,38 @@ export default function SalaryAdvanceRecoveryPage() {
   }, [companyCode]);
 
   const loadPayComponentOptions = useCallback(async (): Promise<LookupRow[]> => {
-    if (!companyCode || !header.employee_id) return [];
+    const defaults = getDocTypeDefaults(header.doc_type);
+    const defaultOption = {
+      value_code: defaults.pay_comp_id,
+      value_desc: defaults.description,
+    } as LookupRow;
+
+    if (!companyCode || !header.employee_id) {
+      return [defaultOption];
+    }
+
     const rows = await getDynamicLookup({
       parameter: "PAY_COMPONENT_DependentPayCompId",
       code1: companyCode,
       code2: header.employee_id,
     });
-    return (rows as LookupRow[]) || [];
-  }, [companyCode, header.employee_id]);
+    const list = (rows as LookupRow[]) || [];
+
+    if (!list.some((r) => (r as { value_code?: string }).value_code === defaults.pay_comp_id)) {
+      return [defaultOption, ...list];
+    }
+    return list;
+  }, [companyCode, header.employee_id, header.doc_type]);
 
   const addDetailRow = () => {
     setDetails((prev) => [
       ...prev,
-      emptyDetailRow(companyCode, header.doc_type || "SA", header.doc_no || "", prev.length + 1),
+      emptyDetailRow(
+        companyCode,
+        header.doc_type || "ADV",
+        header.doc_no || "",
+        prev.length + 1,
+      ),
     ]);
   };
 
@@ -565,57 +701,52 @@ export default function SalaryAdvanceRecoveryPage() {
       return next;
     });
   }, []);
-    const handleAllocate = useCallback(() => {
-      const amount = Number(header.amount || 0);
-      const period = Number(header.recovery_period || 0);
 
-      if (!Number.isFinite(amount) || amount <= 0) {
-        toast.warning("Enter a valid Amount (greater than 0) before allocating.");
-        return;
-      }
-      if (!Number.isFinite(period) || period <= 0 || !Number.isInteger(period)) {
-        toast.warning("Enter a valid Period (positive whole months) before allocating.");
-        return;
-      }
+  const handleAllocate = useCallback(() => {
+    const amount = Number(header.amount || 0);
+    const period = Number(header.recovery_period || 0);
 
-      const perRow = Number((amount / period).toFixed(3));
-      const startDate = header.recover_from_dt || new Date().toISOString().slice(0, 10);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.warning("Enter a valid Amount (greater than 0) before allocating.");
+      return;
+    }
+    if (!Number.isFinite(period) || period <= 0 || !Number.isInteger(period)) {
+      toast.warning("Enter a valid Period (positive whole months) before allocating.");
+      return;
+    }
 
-      let running = 0;
-      const newDetails: DetailRow[] = Array.from({ length: period }, (_, i) => {
-        // Give the last row the remainder so Σ rows === header.amount
-        const isLast = i === period - 1;
-        const rowAmount = isLast ? Number((amount - running).toFixed(3)) : perRow;
-        running += rowAmount;
+    const perRow = Number((amount / period).toFixed(3));
+    const startDate = header.recover_from_dt || new Date().toISOString().slice(0, 10);
+    const dt = header.doc_type || "ADV";
 
-        const rowDate = new Date(startDate);
-        rowDate.setMonth(rowDate.getMonth() + i);
+    let running = 0;
+    const newDetails: DetailRow[] = Array.from({ length: period }, (_, i) => {
+      const isLast = i === period - 1;
+      const rowAmount = isLast ? Number((amount - running).toFixed(3)) : perRow;
+      running += rowAmount;
 
-        const base = emptyDetailRow(
-          companyCode,
-          header.doc_type || "SA",
-          header.doc_no || "",
-          i + 1,
-        );
+      const rowDate = new Date(startDate);
+      rowDate.setMonth(rowDate.getMonth() + i);
 
-        return {
-          ...base,
-          employee_id: header.employee_id || null,
-          emplyee_code: header.employee_code || null,
-          recover_mth_amt: rowAmount,
-          amount: rowAmount,
-          recover_from_dt: rowDate.toISOString().slice(0, 10),
-          allocated_amt: 0,
-          balance_amt: rowAmount,
-          pay_comp_id: header.pay_comp_id || "",
-        };
-      });
+      const base = emptyDetailRow(companyCode, dt, header.doc_no || "", i + 1);
+      return {
+        ...base,
+        employee_id: header.employee_id || null,
+        emplyee_code: header.employee_code || null,
+        recover_mth_amt: rowAmount,
+        amount: rowAmount,
+        recover_from_dt: rowDate.toISOString().slice(0, 10),
+        allocated_amt: 0,
+        balance_amt: rowAmount,
+      };
+    });
 
-      setDetails(newDetails);
-      toast.success(
-        `Allocated ${period} row${period === 1 ? "" : "s"} of ${perRow.toFixed(3)} each.`,
-      );
-    }, [header, companyCode, toast]);
+    setDetails(newDetails);
+    toast.success(
+      `Allocated ${period} row${period === 1 ? "" : "s"} of ${perRow.toFixed(3)} each.`,
+    );
+  }, [header, companyCode, toast]);
+
   const mainColumns = useMemo<ColumnDef<MainRow>[]>(
     () => [
       { accessorKey: "doc_no", header: "Doc No", size: 90, enableSorting: false },
@@ -631,7 +762,7 @@ export default function SalaryAdvanceRecoveryPage() {
         header: "Doc Type",
         size: 120,
         enableSorting: false,
-        cell: () => "Salary Advance",
+        cell: ({ getValue }) => DOC_TYPE_LABELS[String(getValue() ?? "")] || String(getValue() ?? ""),
       },
       { accessorKey: "employee_code", header: "Emp Code", size: 100, enableSorting: false },
       { accessorKey: "employee_name", header: "Employee Name", size: 170, enableSorting: false },
@@ -734,6 +865,7 @@ export default function SalaryAdvanceRecoveryPage() {
             value={row.original.description ?? ""}
             onChange={(e) => updateDetail(row.index, "description", e.target.value)}
             placeholder="Enter description"
+            maxLength={FIELD_LIMITS.description}
           />
         ),
       },
@@ -745,7 +877,7 @@ export default function SalaryAdvanceRecoveryPage() {
         cell: ({ row }) => (
           <Input
             type="number"
-            step="0.001"
+            step="0.000001"
             className="h-7 px-2 text-right font-mono text-sm"
             value={row.original.recover_mth_amt ?? 0}
             onChange={(e) => updateDetail(row.index, "recover_mth_amt", Number(e.target.value) || 0)}
@@ -805,15 +937,11 @@ export default function SalaryAdvanceRecoveryPage() {
     [loadPayComponentOptions, header.employee_id, updateDetail, removeDetailRow],
   );
 
-  // No per-column filter icons in the lines grid (keeps the header clean).
   const gridDetailColumns = useMemo(
     () => detailColumns.map((c) => ({ ...c, enableColumnFilter: false })),
     [detailColumns],
   );
 
-  /* ─────────────────────────────────────────────────────────
-     LIST VIEW — Freight-style transaction header
-     ───────────────────────────────────────────────────────── */
   if (mode === "list") {
     return (
       <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
@@ -866,16 +994,12 @@ export default function SalaryAdvanceRecoveryPage() {
     );
   }
 
-  /* ─────────────────────────────────────────────────────────
-     EDITOR — full-page, Freight-style header (List / Close / Save)
-     ───────────────────────────────────────────────────────── */
   const isEdit = mode === "edit";
   const totalAmount = details.reduce((sum, r) => sum + Number(r.recover_mth_amt || 0), 0);
   const lineCount = details.length;
 
   return (
     <section className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
-      {/* Freight-style transaction header */}
       <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -913,7 +1037,6 @@ export default function SalaryAdvanceRecoveryPage() {
       </div>
 
       {!showHeader ? (
-        /* Collapsed: one-line summary */
         <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50/70 px-3.5 py-1.5 text-xs shadow-xs">
           <div className="flex min-w-0 flex-wrap items-center gap-4 text-slate-700">
             <SummaryItem label="Doc No" value={header.doc_no ? String(header.doc_no) : "Auto"} />
@@ -972,7 +1095,34 @@ export default function SalaryAdvanceRecoveryPage() {
               </CField>
 
               <CField label="Doc Type">
-                <Input className={CTL} value="Salary Advance" readOnly disabled />
+                <Select
+                  className={CTL}
+                  value={header.doc_type ?? "ADV"}
+                  onChange={(e) => {
+                    const newDocType = e.target.value;
+                    const newDefaults = getDocTypeDefaults(newDocType);
+
+                    patchHeader({
+                      doc_type: newDocType,
+                      pay_comp_id: newDefaults.pay_comp_id,
+                    });
+
+                    setDetails((prev) =>
+                      prev.map((d) => ({
+                        ...d,
+                        doc_type: newDocType,
+                        pay_comp_id: newDefaults.pay_comp_id,
+                        description: newDefaults.description,
+                      })),
+                    );
+                  }}
+                >
+                  {DOC_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
               </CField>
 
               <CField label="Ref No">
@@ -980,6 +1130,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.ref_no ?? ""}
                   onChange={(e) => patchHeader({ ref_no: e.target.value })}
+                  maxLength={FIELD_LIMITS.ref_no}
                 />
               </CField>
 
@@ -1015,6 +1166,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.name_from ?? ""}
                   onChange={(e) => patchHeader({ name_from: e.target.value })}
+                  maxLength={FIELD_LIMITS.name_from}
                 />
               </CField>
 
@@ -1023,6 +1175,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.name_to ?? ""}
                   onChange={(e) => patchHeader({ name_to: e.target.value })}
+                  maxLength={FIELD_LIMITS.name_to}
                 />
               </CField>
 
@@ -1031,6 +1184,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.addr_from ?? ""}
                   onChange={(e) => patchHeader({ addr_from: e.target.value })}
+                  maxLength={FIELD_LIMITS.addr_from}
                 />
               </CField>
 
@@ -1039,6 +1193,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.addr_to ?? ""}
                   onChange={(e) => patchHeader({ addr_to: e.target.value })}
+                  maxLength={FIELD_LIMITS.addr_to}
                 />
               </CField>
 
@@ -1047,6 +1202,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.signatory_name ?? ""}
                   onChange={(e) => patchHeader({ signatory_name: e.target.value })}
+                  maxLength={FIELD_LIMITS.signatory_name}
                 />
               </CField>
 
@@ -1055,17 +1211,19 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={CTL}
                   value={header.signatory_position ?? ""}
                   onChange={(e) => patchHeader({ signatory_position: e.target.value })}
+                  maxLength={FIELD_LIMITS.signatory_position}
                 />
               </CField>
             </HeaderBlock>
 
-            {/* ══ Block 3: Letter Details (widest — remarks live here) ══ */}
+            {/* ══ Block 3: Letter Details ══ */}
             <HeaderBlock label="Letter Details" icon={<StickyNote size={11} />}>
               <CField label="Letter Subject" className="col-span-2">
                 <Input
                   className={CTL}
                   value={header.lettr_subject ?? ""}
                   onChange={(e) => patchHeader({ lettr_subject: e.target.value })}
+                  maxLength={FIELD_LIMITS.lettr_subject}
                 />
               </CField>
 
@@ -1074,6 +1232,7 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={TEXTAREA}
                   value={header.remarks_1 ?? ""}
                   onChange={(e) => patchHeader({ remarks_1: e.target.value })}
+                  maxLength={FIELD_LIMITS.remarks_1}
                 />
               </CField>
 
@@ -1082,11 +1241,12 @@ export default function SalaryAdvanceRecoveryPage() {
                   className={TEXTAREA}
                   value={header.remarks_2 ?? ""}
                   onChange={(e) => patchHeader({ remarks_2: e.target.value })}
+                  maxLength={FIELD_LIMITS.remarks_2}
                 />
               </CField>
             </HeaderBlock>
 
-            {/* ══ Block 4: Recovery Details — one slim row, like the old form ══ */}
+            {/* ══ Block 4: Recovery Details ══ */}
             <HeaderBlock
               label="Recovery Details"
               icon={<Banknote size={11} />}
@@ -1106,7 +1266,7 @@ export default function SalaryAdvanceRecoveryPage() {
                 <Input
                   className={`${CTL} text-right font-mono`}
                   type="number"
-                  step="0.001"
+                  step="0.0001"
                   value={header.amount ?? 0}
                   onChange={(e) => patchHeader({ amount: Number(e.target.value) })}
                 />
@@ -1116,27 +1276,30 @@ export default function SalaryAdvanceRecoveryPage() {
                 <Input
                   className={`${CTL} text-right`}
                   type="number"
+                  step="1"
+                  min={0}
+                  max={99999}
                   value={header.recovery_period ?? 0}
                   onChange={(e) => patchHeader({ recovery_period: Number(e.target.value) })}
                 />
               </CField>
-              
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1 border-[#00378C] px-2.5 text-xs font-semibold text-[#00378C] hover:bg-blue-50"
-              onClick={handleAllocate}
-              title="Split Amount ÷ Period into detail rows"
-            >
-              <Calculator size={13} /> Allocate
-            </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 border-[#00378C] px-2.5 text-xs font-semibold text-[#00378C] hover:bg-blue-50"
+                onClick={handleAllocate}
+                title="Split Amount ÷ Period into detail rows"
+              >
+                <Calculator size={13} /> Allocate
+              </Button>
             </HeaderBlock>
           </div>
         </div>
       )}
 
-      {/* ══ Lines card: toolbar (title · count · Add Row), grid, total chip ══ */}
+      {/* ══ Lines card ══ */}
       <div className="min-w-0 overflow-hidden rounded-md border border-[#cbd5e1] bg-card shadow-sm">
         <div className="flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
           <div className="flex items-center gap-2">
@@ -1169,7 +1332,7 @@ export default function SalaryAdvanceRecoveryPage() {
             height={240}
             minWidth={950}
             density="grid"
-            getRowId={(_row, index) => String(index)}
+            getRowId={(row) => String(row.serial_no)}
           />
         </div>
 

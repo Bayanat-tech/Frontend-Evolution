@@ -42,6 +42,12 @@ type AbsentMemoFormState = {
   signatoryPosition: string;
 };
 
+/* ── defaults ── */
+const DEFAULT_NAME_FROM = "Abdullah Khalfan Al Fulaiti";
+const DEFAULT_ADDR_FROM = "Hr Manager";
+const DEFAULT_SIGNATORY_NAME = "Abdullah Khalfan Al Fulaiti";
+const DEFAULT_SIGNATORY_POSITION = "Hr Manager";
+
 /* ── helpers ── */
 
 // Stored/saved value is the code ("ABS"); the UI shows the label ("Absent").
@@ -68,6 +74,88 @@ const normalizeDateValue = (value: any) => {
 };
 
 const round3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
+
+// ---------- Oracle column widths (HR_SALARY_ADV_DED header + details) ----------
+const FIELD_LIMITS = {
+  // HDR
+  ref_no:               30,     // REF_NO VARCHAR2(30)
+  name_from:           100,     // NAME_FROM VARCHAR2(100)
+  addr_from:           250,     // ADDR_FROM VARCHAR2(250)
+  lettr_subject:       250,     // LETTR_SUBJECT VARCHAR2(250)
+  remarks_1:          1000,     // REMARKS_1 VARCHAR2(1000)
+  remarks_2:          1000,     // REMARKS_2 VARCHAR2(1000)
+  signatory_name:      100,     // SIGNATORY_NAME VARCHAR2(100)
+  signatory_position:  100,     // SIGNATORY_POSITION VARCHAR2(100)
+  employee_code:        15,     // EMPLOYEE_CODE VARCHAR2(15)
+  // DTL
+  ref_leave_doc_no:     10,     // REF_LEAVE_DOC_NO VARCHAR2(10)
+  description:          20,     // DTL.REMARKS VARCHAR2(20)
+} as const;
+
+function countDecimals(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  const s = String(Math.abs(n));
+  const m = s.match(/e-(\d+)/i);
+  if (m) return Number(m[1]);
+  const dot = s.indexOf(".");
+  return dot >= 0 ? s.length - dot - 1 : 0;
+}
+
+function validateAbsentMemo(
+  form: AbsentMemoFormState,
+  rows: AbsentMemoDetailRow[],
+): string | null {
+  // ---- header string fields ----
+  const hdrChecks: Array<[keyof typeof FIELD_LIMITS, string | undefined, string]> = [
+    ["ref_no",             form.refNo,             "Ref No"],
+    ["name_from",          form.nameFrom,          "Name From"],
+    ["addr_from",          form.addrFrom,          "Addr From"],
+    ["lettr_subject",      form.lettrSubject,      "Letter Subject"],
+    ["remarks_1",          form.remarks1,          "Remarks 1"],
+    ["remarks_2",          form.remarks2,          "Remarks 2"],
+    ["signatory_name",     form.signatoryName,     "Signatory Name"],
+    ["signatory_position", form.signatoryPosition, "Signatory Position"],
+    ["employee_code",      form.employeeCode,      "Employee Code"],
+  ];
+  for (const [key, val, label] of hdrChecks) {
+    if ((val?.length ?? 0) > FIELD_LIMITS[key]) {
+      return `${label} exceeds ${FIELD_LIMITS[key]} characters (currently ${val?.length}).`;
+    }
+  }
+
+  // ---- detail rows ----
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const tag = `Line ${r.srNo || i + 1}`;
+
+    // Mandatory fields (Ref Leave Doc No is optional)
+    if (!r.payUnit?.trim())        return `${tag}: Pay Unit is required.`;
+    if (!r.description?.trim())    return `${tag}: Description is required.`;
+    if (!r.effectiveFrom)          return `${tag}: Effective From is required.`;
+    if (!r.absentFromDate)         return `${tag}: Absent From is required.`;
+    if (!r.absentToDate)           return `${tag}: Absent To is required.`;
+    if (!r.noOfDays || Number(r.noOfDays) <= 0)
+      return `${tag}: No. of Days must be greater than zero.`;
+    if (!r.amount || Number(r.amount) <= 0)
+      return `${tag}: Amount must be greater than zero.`;
+
+    // Length / precision checks
+    if ((r.description?.length ?? 0) > FIELD_LIMITS.description) {
+      return `${tag}: Description exceeds ${FIELD_LIMITS.description} characters.`;
+    }
+    if ((r.refLeaveDocNo?.length ?? 0) > FIELD_LIMITS.ref_leave_doc_no) {
+      return `${tag}: Ref Leave Doc No exceeds ${FIELD_LIMITS.ref_leave_doc_no} characters.`;
+    }
+    if (countDecimals(Number(r.amount || 0)) > 4) {
+      return `${tag}: Amount can have at most 4 decimal places.`;
+    }
+    if (countDecimals(Number(r.noOfDays || 0)) > 6) {
+      return `${tag}: No. of Days can have at most 6 decimal places.`;
+    }
+  }
+
+  return null; // OK
+}
 
 /** Inclusive day count between two "YYYY-MM-DD" strings (same day = 1). */
 const calcDaysBetween = (from: string, to: string): number => {
@@ -158,7 +246,7 @@ const mapDetailRows = (rows: any[]): AbsentMemoDetailRow[] =>
   rows.map((row, index) => ({
     srNo: row?.sr_no ?? row?.SR_NO ?? row?.serial_no ?? row?.SERIAL_NO ?? index + 1,
     payUnit: String(row?.pay_comp_id ?? row?.PAY_COMP_ID ?? ""),
-    description: String(row?.sal_type_flag ?? row?.SAL_TYPE_FLAG ?? row?.description ?? ""),
+    description: String(row?.remarks ?? row?.REMARKS ?? row?.description ?? row?.sal_type_flag ?? row?.SAL_TYPE_FLAG ?? ""),
     effectiveFrom: normalizeDateValue(row?.recover_from_dt ?? row?.RECOVER_FROM_DT),
     absentFromDate: normalizeDateValue(row?.leave_start_date ?? row?.LEAVE_START_DATE ?? row?.recover_from_dt),
     absentToDate: normalizeDateValue(row?.leave_end_date ?? row?.LEAVE_END_DATE),
@@ -174,13 +262,17 @@ const getInitialFormValues = (rowData?: any): AbsentMemoFormState => ({
   docDate: normalizeDateValue(rowData?.docDate ?? rowData?.doc_date) || new Date().toISOString().slice(0, 10),
   refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
   employeeCode: normalizeValue(rowData?.employeeCode ?? rowData?.employee_code),
-  nameFrom: normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
-  addrFrom: normalizeValue(rowData?.addrFrom ?? rowData?.addr_from),
+  nameFrom:
+    normalizeValue(rowData?.nameFrom ?? rowData?.name_from) || DEFAULT_NAME_FROM,
+  addrFrom:
+    normalizeValue(rowData?.addrFrom ?? rowData?.addr_from) || DEFAULT_ADDR_FROM,
   lettrSubject: normalizeValue(rowData?.lettrSubject ?? rowData?.lettr_subject ?? "Salary Deduction"),
   remarks1: normalizeValue(rowData?.remarks1 ?? rowData?.remarks_1),
   remarks2: normalizeValue(rowData?.remarks2 ?? rowData?.remarks_2),
-  signatoryName: normalizeValue(rowData?.signatoryName ?? rowData?.signatory_name),
-  signatoryPosition: normalizeValue(rowData?.signatoryPosition ?? rowData?.signatory_position),
+  signatoryName:
+    normalizeValue(rowData?.signatoryName ?? rowData?.signatory_name) || DEFAULT_SIGNATORY_NAME,
+  signatoryPosition:
+    normalizeValue(rowData?.signatoryPosition ?? rowData?.signatory_position) || DEFAULT_SIGNATORY_POSITION,
 });
 
 /* ─────────────────────────────────────────────────────────────
@@ -359,7 +451,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
     const picked = (row ?? {}) as Record<string, unknown>;
     setForm((prev) => ({ ...prev, employeeCode: code }));
     setEmployeeName(String(picked.rpt_name ?? picked.RPT_NAME ?? ""));
-    grossCache.current = {}; 
+    grossCache.current = {};
     if (!code) return;
 
     detailRows.forEach((r) => {
@@ -392,6 +484,16 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       return;
     }
 
+    if (!form.docDate) {
+      toast.warning("Document Date is required");
+      return;
+    }
+    const validationError = validateAbsentMemo(form, detailRows);
+    if (validationError) {
+      toast.warning(validationError);
+      return;
+    }
+
     try {
       const header = {
         company_code: user?.company_code ?? "",
@@ -417,8 +519,8 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
         doc_type: form.docType || DOC_TYPE_ABSENT,
         doc_no: form.docNo ? Number(form.docNo) : 0,
         sr_no: Number(row.srNo) || index + 1,
-        employee_id: form.employeeCode || "",
-        emplyee_code: form.employeeCode || "", // matches DB column spelling
+        employee_id: undefined,
+        emplyee_code: form.employeeCode || "",
         pay_comp_id: row.payUnit || "",
         amount: Number(row.amount || 0),
         recover_mth_amt: Number(row.amount || 0),
@@ -430,6 +532,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
         deduct_from_leave: row.cancel === "Yes" ? "Y" : "N",
         deduct_noof_leavedays: Number(row.noOfDays || 0),
         ref_leave_doc_no: row.refLeaveDocNo || "",
+        remarks: row.description || null, // DTL.REMARKS VARCHAR2(20)
       }));
 
       const success = await hrSalaryAdvDedServiceInstance.upsertHrSalaryAdvDed({
@@ -461,7 +564,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       { accessorKey: "srNo", header: "No", size: 44, enableSorting: false },
       {
         accessorKey: "payUnit",
-        header: "Pay Unit",
+        header: "Pay Unit *",
         size: 140,
         enableSorting: false,
         cell: ({ row }) => (
@@ -489,7 +592,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       },
       {
         accessorKey: "description",
-        header: "Description",
+        header: "Description *",
         size: 190,
         enableSorting: false,
         cell: ({ row }) => (
@@ -497,12 +600,13 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
             className="h-7 px-2 text-sm"
             value={row.original.description}
             onChange={(e) => updateRow(row.original.srNo, { description: e.target.value })}
+            maxLength={FIELD_LIMITS.description}
           />
         ),
       },
       {
         accessorKey: "effectiveFrom",
-        header: "Effective From",
+        header: "Effective From *",
         size: 130,
         enableSorting: false,
         cell: ({ row }) => (
@@ -516,7 +620,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       },
       {
         accessorKey: "absentFromDate",
-        header: "Absent From",
+        header: "Absent From *",
         size: 130,
         enableSorting: false,
         cell: ({ row }) => (
@@ -530,7 +634,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       },
       {
         accessorKey: "absentToDate",
-        header: "Absent To",
+        header: "Absent To *",
         size: 130,
         enableSorting: false,
         cell: ({ row }) => (
@@ -545,13 +649,14 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       {
         // Calculated from From/To — read-only so it can't drift from the amount.
         accessorKey: "noOfDays",
-        header: "No. of Days",
+        header: "No. of Days *",
         size: 90,
         enableSorting: false,
         cell: ({ row }) => (
           <Input
             className="h-7 px-2 text-right text-sm"
             type="number"
+            step="0.000001"
             value={String(row.original.noOfDays ?? "")}
             readOnly
             disabled
@@ -560,14 +665,14 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       },
       {
         accessorKey: "amount",
-        header: "Amount",
+        header: "Amount *",
         size: 100,
         enableSorting: false,
         cell: ({ row }) => (
           <Input
             className="h-7 px-2 text-right font-mono text-sm"
             type="number"
-            step="0.001"
+            step="0.0001"
             value={String(row.original.amount ?? "")}
             onChange={(e) => updateRow(row.original.srNo, { amount: e.target.value })}
           />
@@ -575,7 +680,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
       },
       {
         accessorKey: "refLeaveDocNo",
-        header: "Ref Leave Doc No",
+        header: "Ref Leave Doc No",  // optional
         size: 130,
         enableSorting: false,
         cell: ({ row }) => (
@@ -583,6 +688,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
             className="h-7 px-2 text-sm"
             value={row.original.refLeaveDocNo}
             onChange={(e) => updateRow(row.original.srNo, { refLeaveDocNo: e.target.value })}
+            maxLength={FIELD_LIMITS.ref_leave_doc_no}
           />
         ),
       },
@@ -717,6 +823,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="refNo"
                   value={form.refNo}
                   onChange={(e) => set("refNo", e.target.value)}
+                  maxLength={FIELD_LIMITS.ref_no}
                 />
               </CField>
 
@@ -745,6 +852,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="nameFrom"
                   value={form.nameFrom}
                   onChange={(e) => set("nameFrom", e.target.value)}
+                  maxLength={FIELD_LIMITS.name_from}
                 />
               </CField>
 
@@ -754,6 +862,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="addrFrom"
                   value={form.addrFrom}
                   onChange={(e) => set("addrFrom", e.target.value)}
+                  maxLength={FIELD_LIMITS.addr_from}
                 />
               </CField>
 
@@ -763,6 +872,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="signatoryName"
                   value={form.signatoryName}
                   onChange={(e) => set("signatoryName", e.target.value)}
+                  maxLength={FIELD_LIMITS.signatory_name}
                 />
               </CField>
 
@@ -772,6 +882,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="signatoryPosition"
                   value={form.signatoryPosition}
                   onChange={(e) => set("signatoryPosition", e.target.value)}
+                  maxLength={FIELD_LIMITS.signatory_position}
                 />
               </CField>
             </HeaderBlock>
@@ -784,6 +895,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="lettrSubject"
                   value={form.lettrSubject}
                   onChange={(e) => set("lettrSubject", e.target.value)}
+                  maxLength={FIELD_LIMITS.lettr_subject}
                 />
               </CField>
 
@@ -793,6 +905,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="remarks1"
                   value={form.remarks1}
                   onChange={(e) => set("remarks1", e.target.value)}
+                  maxLength={FIELD_LIMITS.remarks_1}
                 />
               </CField>
 
@@ -802,6 +915,7 @@ const AddAbsentMemoPage = forwardRef<AbsentMemoFormHandle, Props>(function AddAb
                   name="remarks2"
                   value={form.remarks2}
                   onChange={(e) => set("remarks2", e.target.value)}
+                  maxLength={FIELD_LIMITS.remarks_2}
                 />
               </CField>
             </HeaderBlock>

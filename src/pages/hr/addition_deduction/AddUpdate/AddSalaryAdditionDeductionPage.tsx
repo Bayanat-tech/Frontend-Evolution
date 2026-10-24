@@ -1,15 +1,29 @@
 import { useFormik } from "formik";
 import {
-  ChevronDown, ChevronUp, FileText, List, Plus, StickyNote, Trash2, UserCheck,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  ListChecks,
+  Plus,
+  StickyNote,
+  Trash2,
+  UserCheck,
 } from "lucide-react";
 import {
-  forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
   type ReactNode,
 } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import hrSalaryAdvDedServiceInstance from "../../../../api/hr/upsertHrSalaryAdvDed";
 import { getDynamicLookup } from "../../../../api/lookups";
 import { useToast } from "../../../../components/ui/AlertToast";
 import { Button } from "../../../../components/ui/Button";
+import { DataTable } from "../../../../components/ui/DataTable";
 import { Input } from "../../../../components/ui/Input";
 import { LookupField } from "../../../../components/ui/LookupField";
 import { Select } from "../../../../components/ui/Select";
@@ -30,6 +44,43 @@ type Props = {
 
 /* ───────────────────────── helpers ───────────────────────── */
 
+const CTL = "h-7 text-xs";
+
+/* Defaults applied only for new (add-mode) documents */
+const NEW_DEFAULTS = {
+  nameFrom: "Abdullah Khalfan Al Fulaiti",
+  nameTo: "Sibu Mathew",
+  addrFrom: "Hr Manager",
+  addrTo: "Finance Manager",
+  signatoryName: "Abdullah Khalfan Al Fulaiti",
+  signatoryPosition: "Hr Manager",
+} as const;
+
+/* Header column sizes (matches DB DDL) */
+const HEADER_LIMITS = {
+  refNo: 30,
+  nameFrom: 100,
+  nameTo: 100,
+  addrFrom: 250,
+  addrTo: 250,
+  lettrSubject: 250,
+  remarks1: 1000,
+  remarks2: 1000,
+  signatoryName: 100,
+  signatoryPosition: 100,
+} as const;
+
+/* Detail column sizes (matches DB DDL) */
+const DETAIL_LIMITS = {
+  employeeId: 5, // EMPLOYEE_ID  VARCHAR2(5)
+  employeeCode: 15, // EMPLYEE_CODE VARCHAR2(15)
+  payUnit: 5, // PAY_COMP_ID  VARCHAR2(5)
+} as const;
+
+/* NUMBER(18,4) → 14 integer digits + 4 decimals */
+const AMOUNT_MAX = 99999999999999.9999;
+const AMOUNT_DECIMALS = 4;
+
 const normalizeValue = (value: any) =>
   value === null || value === undefined ? "" : String(value);
 
@@ -40,23 +91,58 @@ const normalizeDateValue = (value: any) => {
   return date.toISOString().slice(0, 10);
 };
 
-const toDisplayDate = (ymd: string) => (ymd ? ymd.split("-").reverse().join("/") : "-");
+const formatDisplayDate = (val: string | null | undefined) => {
+  if (!val) return "";
+  try {
+    return new Date(val).toLocaleDateString("en-GB");
+  } catch {
+    return val;
+  }
+};
 
-const getInitialFormValues = (rowData: any) => ({
-  docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
-  docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? "ADD"),
-  docDate: normalizeDateValue(rowData?.doc_date) || (rowData ? "" : normalizeDateValue(new Date())),
-  refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
-  nameFrom: normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
-  nameTo: normalizeValue(rowData?.nameTo ?? rowData?.name_to),
-  addrFrom: normalizeValue(rowData?.addrFrom ?? rowData?.addr_from),
-  addrTo: normalizeValue(rowData?.addrTo ?? rowData?.addr_to),
-  lettrSubject: normalizeValue(rowData?.lettrSubject ?? rowData?.lettr_subject),
-  remarks1: normalizeValue(rowData?.remarks1 ?? rowData?.remarks_1),
-  remarks2: normalizeValue(rowData?.remarks2 ?? rowData?.remarks_2),
-  signatoryName: normalizeValue(rowData?.signatoryName ?? rowData?.signatory_name),
-  signatoryPosition: normalizeValue(rowData?.signatoryPosition ?? rowData?.signatory_position),
-});
+const getInitialFormValues = (rowData: any) => {
+  const isNew = !rowData;
+  const orDefault = (val: string, def: string) => val || (isNew ? def : "");
+
+  return {
+    docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
+    docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? "ADD"),
+    docDate:
+      normalizeDateValue(rowData?.doc_date) ||
+      (isNew ? normalizeDateValue(new Date()) : ""),
+    refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
+
+    nameFrom: orDefault(
+      normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
+      NEW_DEFAULTS.nameFrom,
+    ),
+    nameTo: orDefault(
+      normalizeValue(rowData?.nameTo ?? rowData?.name_to),
+      NEW_DEFAULTS.nameTo,
+    ),
+    addrFrom: orDefault(
+      normalizeValue(rowData?.addrFrom ?? rowData?.addr_from),
+      NEW_DEFAULTS.addrFrom,
+    ),
+    addrTo: orDefault(
+      normalizeValue(rowData?.addrTo ?? rowData?.addr_to),
+      NEW_DEFAULTS.addrTo,
+    ),
+
+    lettrSubject: normalizeValue(rowData?.lettrSubject ?? rowData?.lettr_subject),
+    remarks1: normalizeValue(rowData?.remarks1 ?? rowData?.remarks_1),
+    remarks2: normalizeValue(rowData?.remarks2 ?? rowData?.remarks_2),
+
+    signatoryName: orDefault(
+      normalizeValue(rowData?.signatoryName ?? rowData?.signatory_name),
+      NEW_DEFAULTS.signatoryName,
+    ),
+    signatoryPosition: orDefault(
+      normalizeValue(rowData?.signatoryPosition ?? rowData?.signatory_position),
+      NEW_DEFAULTS.signatoryPosition,
+    ),
+  };
+};
 
 const mapDetailApiRow = (row: any, index: number): SalaryAdditionDeductionDetailRow => {
   const deductFromLeave = String(
@@ -65,6 +151,12 @@ const mapDetailApiRow = (row: any, index: number): SalaryAdditionDeductionDetail
   return {
     srNo: row?.SERIAL_NO ?? row?.serial_no ?? row?.SR_NO ?? row?.sr_no ?? index + 1,
     employeeId: normalizeValue(row?.EMPLOYEE_ID ?? row?.employee_id),
+    employeeCode: normalizeValue(
+      row?.EMPLYEE_CODE ??
+        row?.emplyee_code ??
+        row?.EMPLOYEE_CODE ??
+        row?.employee_code,
+    ),
     employee: normalizeValue(row?.EMP_NAME ?? row?.emp_name),
     payUnit: normalizeValue(row?.PAY_COMP_ID ?? row?.pay_comp_id),
     description: normalizeValue(row?.DESCRIPTION ?? row?.description),
@@ -74,20 +166,15 @@ const mapDetailApiRow = (row: any, index: number): SalaryAdditionDeductionDetail
   };
 };
 
-/* ───────────── UI building blocks (same as the Absent Memo form) ───────────── */
+/* ───────────────────── UI building blocks ───────────────────── */
 
-// Control styles shared by the header form.
-const CTL = "h-7 text-xs";
-const TEXTAREA =
-  "h-[68px] w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
-
-// Group card: icon + title strip, then a tight field grid.
 function HeaderBlock({
   label,
   icon,
   children,
   actions,
   gridCols = "grid-cols-2",
+  bodyClass,
   className = "",
 }: {
   label: string;
@@ -95,21 +182,29 @@ function HeaderBlock({
   children: ReactNode;
   actions?: ReactNode;
   gridCols?: string;
+  bodyClass?: string;
   className?: string;
 }) {
   return (
     <div className={`overflow-hidden rounded-md border border-[#cbd5e1] bg-card ${className}`}>
       <div className="flex items-center gap-2 border-b border-[#cbd5e1] bg-slate-50 px-2.5 py-1">
-        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">{icon}</span>
+        <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
+          {icon}
+        </span>
         <span className="text-xs font-bold text-[#00378C]">{label}</span>
         {actions && <span className="ml-auto">{actions}</span>}
       </div>
-      <div className={`grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`}>{children}</div>
+      <div
+        className={
+          bodyClass ?? `grid gap-x-2 gap-y-1.5 px-2.5 py-2 ${gridCols} max-md:grid-cols-1`
+        }
+      >
+        {children}
+      </div>
     </div>
   );
 }
 
-// Compact label above the control (10px), with an optional inline error.
 function CField({
   label,
   required,
@@ -125,14 +220,12 @@ function CField({
 }) {
   return (
     <label className={`flex min-w-0 flex-col gap-0.5 ${className}`}>
-      <span className="flex items-center justify-between gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-        <span>
-          {label}
-          {required && <span className="ml-1 text-destructive">*</span>}
-        </span>
-        {error && <span className="font-semibold normal-case tracking-tight text-destructive">{error}</span>}
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-destructive">*</span>}
       </span>
       {children}
+      {error && <span className="text-[10px] text-destructive">{error}</span>}
     </label>
   );
 }
@@ -165,7 +258,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
     const formik = useFormik({
       enableReinitialize: true,
       initialValues,
-      onSubmit: () => undefined, // submit is driven by the page header via save()
+      onSubmit: () => undefined,
     });
 
     /* ── lookups ── */
@@ -222,9 +315,14 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
     }, [mode, existingData, user?.loginid, user?.company_code]);
 
     /* ── line handlers ── */
-    const updateRow = (rowKey: number | string, patch: Partial<SalaryAdditionDeductionDetailRow>) => {
+    const updateRow = (
+      rowKey: number | string,
+      patch: Partial<SalaryAdditionDeductionDetailRow>,
+    ) => {
       setDetailRows((prev) =>
-        prev.map((row) => (String(row.srNo) === String(rowKey) ? { ...row, ...patch } : row)),
+        prev.map((row) =>
+          String(row.srNo) === String(rowKey) ? { ...row, ...patch } : row,
+        ),
       );
     };
 
@@ -234,6 +332,7 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
         {
           srNo: prev.length > 0 ? Number(prev[prev.length - 1]?.srNo || 0) + 1 : 1,
           employeeId: "",
+          employeeCode: "",
           employee: "",
           payUnit: "",
           description: "",
@@ -248,21 +347,77 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       setDetailRows((prev) => prev.filter((row) => String(row.srNo) !== String(rowKey)));
     };
 
-    const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-    const totalAmountText = totalAmount.toLocaleString(undefined, {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3,
-    });
-    const lineCount = detailRows.length;
+    const totalAmount = detailRows.reduce(
+      (sum, row) => sum + (Number(row.amount) || 0),
+      0,
+    );
 
     /* ── validation ── */
     const validate = (): string | null => {
+      /* ── Header: required ── */
       const next: { docDate?: string } = {};
       if (!formik.values.docDate) next.docDate = "Doc Date is required";
       setErrors(next);
-
       if (next.docDate) return next.docDate;
+
+      /* ── Header: max length ── */
+      const v = formik.values;
+      const headerChecks: Array<[string, string | undefined, number]> = [
+        ["Ref No", v.refNo, HEADER_LIMITS.refNo],
+        ["Name From", v.nameFrom, HEADER_LIMITS.nameFrom],
+        ["Name To", v.nameTo, HEADER_LIMITS.nameTo],
+        ["Addr From", v.addrFrom, HEADER_LIMITS.addrFrom],
+        ["Addr To", v.addrTo, HEADER_LIMITS.addrTo],
+        ["Letter Subject", v.lettrSubject, HEADER_LIMITS.lettrSubject],
+        ["Remarks 1", v.remarks1, HEADER_LIMITS.remarks1],
+        ["Remarks 2", v.remarks2, HEADER_LIMITS.remarks2],
+        ["Signatory Name", v.signatoryName, HEADER_LIMITS.signatoryName],
+        ["Signatory Position", v.signatoryPosition, HEADER_LIMITS.signatoryPosition],
+      ];
+      for (const [label, val, max] of headerChecks) {
+        if ((val || "").length > max) return `${label} must be ≤ ${max} characters`;
+      }
+
+      /* ── Detail: at least one line ── */
       if (detailRows.length === 0) return "Please add at least one detail line";
+
+      /* ── Detail: per-line required + length + numeric ── */
+      for (const row of detailRows) {
+        const at = `Row ${row.srNo}`;
+
+        // Employee (id + code together, both from the lookup)
+        if (!row.employeeId) return `${at}: Employee is required`;
+        if (!row.employeeCode) return `${at}: Employee Code is required`;
+        if (row.employeeId.length > DETAIL_LIMITS.employeeId)
+          return `${at}: Employee ID must be ≤ ${DETAIL_LIMITS.employeeId} characters`;
+        if (row.employeeCode.length > DETAIL_LIMITS.employeeCode)
+          return `${at}: Employee Code must be ≤ ${DETAIL_LIMITS.employeeCode} characters`;
+
+        // Pay Unit
+        if (!row.payUnit) return `${at}: Pay Unit is required`;
+        if (row.payUnit.length > DETAIL_LIMITS.payUnit)
+          return `${at}: Pay Unit must be ≤ ${DETAIL_LIMITS.payUnit} characters`;
+
+        // Effective From
+        if (!row.effectiveFrom) return `${at}: Effective From is required`;
+
+        // Amount — NUMBER(18,4)
+        const amtRaw = String(row.amount ?? "").trim();
+        if (!amtRaw) return `${at}: Amount is required`;
+        const amt = Number(amtRaw);
+        if (!Number.isFinite(amt)) return `${at}: Amount is not a valid number`;
+        if (amt < 0) return `${at}: Amount cannot be negative`;
+        if (amt > AMOUNT_MAX) return `${at}: Amount exceeds allowed size`;
+        const [intPart = "", decPart = ""] = amtRaw.split(".");
+        if (intPart.replace(/^-/, "").length > 14)
+          return `${at}: Amount can have at most 14 integer digits`;
+        if (decPart.length > AMOUNT_DECIMALS)
+          return `${at}: Amount can have at most ${AMOUNT_DECIMALS} decimals`;
+
+        // Cancel (defaults to "No", kept for safety)
+        if (!row.cancel) return `${at}: Cancel is required`;
+      }
+
       return null;
     };
 
@@ -275,13 +430,16 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       }
 
       const values = formik.values;
+      console.log("form values", values);
 
       try {
         const header = {
           company_code: user?.company_code ?? "",
           doc_type: values.docType,
           doc_no: values.docNo ? Number(values.docNo) : null,
-          doc_date: values.docDate ? new Date(values.docDate).toISOString() : new Date().toISOString(),
+          doc_date: values.docDate
+            ? new Date(values.docDate).toISOString()
+            : new Date().toISOString(),
           ref_no: values.refNo || "",
           name_from: values.nameFrom || "",
           addr_from: values.addrFrom || "",
@@ -302,11 +460,13 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
           doc_no: values.docNo ? Number(values.docNo) : null,
           sr_no: Number(row.srNo) || index + 1,
           employee_id: row.employeeId || "",
-          emplyee_code: row.employeeId || "",
+          emplyee_code: row.employeeCode || "",
           pay_comp_id: row.payUnit || "",
           amount: Number(row.amount || 0),
           recover_mth_amt: Number(row.amount || 0),
-          recover_from_dt: row.effectiveFrom ? new Date(row.effectiveFrom).toISOString() : undefined,
+          recover_from_dt: row.effectiveFrom
+            ? new Date(row.effectiveFrom).toISOString()
+            : undefined,
           deduct_from_leave: row.cancel === "Yes" ? "Y" : "N",
         }));
 
@@ -325,7 +485,6 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       }
     };
 
-    /* ✅ Expose save() to parent */
     useImperativeHandle(ref, () => ({
       save: handleSubmit,
     }));
@@ -337,20 +496,210 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
       disabled: readonly,
     });
 
-    const docTypeLabel = formik.values.docType === "DED" ? "Deduction" : "Addition";
+    /* ── detail grid columns (DataTable) ── */
+    const detailColumns = useMemo<ColumnDef<SalaryAdditionDeductionDetailRow>[]>(
+      () => [
+        {
+          id: "sno",
+          header: "No",
+          size: 55,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <span className="text-xs font-medium text-muted-foreground">
+              {row.index + 1}
+            </span>
+          ),
+        },
+        {
+          accessorKey: "employeeId",
+          header: "Employee",
+          size: 220,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <LookupField
+              label="Employee"
+              compact
+              dense
+              disabled={readonly}
+              value={row.original.employeeCode}
+              displayValue={row.original.employee}
+              columns={[
+                { field: "employee_code", header: "Employee Code" },
+                { field: "employee_id", header: "Employee ID" },
+                { field: "rpt_name", header: "Employee Name" },
+              ]}
+              valueField="employee_code"
+              displayFields={["rpt_name"]}
+              loadOptions={loadEmployees}
+              onChange={(value: any, opt: any) =>
+                updateRow(row.original.srNo, {
+                  employeeId: String(opt?.employee_id ?? opt?.EMPLOYEE_ID ?? ""),
+                  employeeCode: String(
+                    opt?.employee_code ?? opt?.EMPLOYEE_CODE ?? value ?? "",
+                  ),
+                  employee: String(
+                    opt?.rpt_name ??
+                      opt?.RPT_NAME ??
+                      opt?.employee_name ??
+                      opt?.EMPLOYEE_NAME ??
+                      "",
+                  ),
+                })
+              }
+            />
+          ),
+        },
+        {
+          accessorKey: "payUnit",
+          header: "Pay Unit",
+          size: 200,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <LookupField
+              label="Pay Unit"
+              compact
+              dense
+              disabled={readonly}
+              value={row.original.payUnit}
+              columns={[
+                { field: "value_code", header: "Value Code" },
+                { field: "value_desc", header: "Description" },
+              ]}
+              valueField="value_code"
+              displayFields={["value_code", "value_desc"]}
+              loadOptions={loadPayUnits}
+              onChange={(value: any, selected: any) =>
+                updateRow(row.original.srNo, {
+                  payUnit: String(value ?? ""),
+                  description: String(
+                    selected?.value_desc ??
+                      selected?.VALUE_DESC ??
+                      row.original.description ??
+                      "",
+                  ),
+                })
+              }
+            />
+          ),
+        },
+        {
+          accessorKey: "description",
+          header: "Description",
+          size: 240,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <Input
+              className="h-7 px-2 text-sm"
+              disabled={readonly}
+              value={row.original.description}
+              onChange={(e) =>
+                updateRow(row.original.srNo, { description: e.target.value })
+              }
+            />
+          ),
+        },
+        {
+          accessorKey: "amount",
+          header: "Amount",
+          size: 130,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <Input
+              type="number"
+              step="0.0001"
+              min="0"
+              max={String(AMOUNT_MAX)}
+              className="h-7 px-2 text-right font-mono text-sm"
+              disabled={readonly}
+              value={String(row.original.amount ?? "")}
+              onChange={(e) => updateRow(row.original.srNo, { amount: e.target.value })}
+            />
+          ),
+        },
+        {
+          accessorKey: "effectiveFrom",
+          header: "Effective From",
+          size: 150,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <Input
+              type="date"
+              className="h-7 px-2 text-sm"
+              disabled={readonly}
+              value={row.original.effectiveFrom}
+              onChange={(e) =>
+                updateRow(row.original.srNo, { effectiveFrom: e.target.value })
+              }
+            />
+          ),
+        },
+        {
+          accessorKey: "cancel",
+          header: "Cancel",
+          size: 100,
+          enableSorting: false,
+          enableColumnFilter: false,
+          cell: ({ row }) => (
+            <Select
+              className="h-7 px-2 text-sm"
+              disabled={readonly}
+              value={row.original.cancel}
+              onChange={(e) => updateRow(row.original.srNo, { cancel: e.target.value })}
+            >
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </Select>
+          ),
+        },
+        ...(readonly
+          ? []
+          : ([
+              {
+                id: "actions",
+                header: "",
+                size: 50,
+                enableSorting: false,
+                enableColumnFilter: false,
+                cell: ({ row }: { row: { original: SalaryAdditionDeductionDetailRow } }) => (
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                      onClick={() => handleRemoveDetailRow(row.original.srNo)}
+                      title="Remove row"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ),
+              } as ColumnDef<SalaryAdditionDeductionDetailRow>,
+            ])),
+      ],
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [readonly, loadEmployees, loadPayUnits],
+    );
 
     // ── UI ──────────────────────────────────────────────────
     return (
-      <div className="freight-workspace-ui freight-dense-form freight-ui-standard flex flex-col gap-2">
+      <div className="freight-workspace-ui freight-enquiry-editor freight-dense-form freight-ui-standard grid gap-2">
         {!showHeader ? (
           /* Collapsed: one-line summary */
           <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50/70 px-3.5 py-1.5 text-xs shadow-xs">
             <div className="flex min-w-0 flex-wrap items-center gap-4 text-slate-700">
               <SummaryItem label="Doc No" value={formik.values.docNo || "Auto"} />
-              <SummaryItem label="Doc Date" value={toDisplayDate(formik.values.docDate)} />
-              <SummaryItem label="Type" value={docTypeLabel} />
-              {formik.values.refNo && <SummaryItem label="Ref" value={formik.values.refNo} />}
-              <SummaryItem label="Total" value={totalAmountText} />
+              <SummaryItem
+                label="Doc Date"
+                value={formatDisplayDate(formik.values.docDate) || "-"}
+              />
+              <SummaryItem label="Doc Type" value={formik.values.docType} />
+              <SummaryItem label="Lines" value={String(detailRows.length)} />
+              <SummaryItem label="Total" value={totalAmount.toFixed(4)} />
             </div>
             <Button
               type="button"
@@ -388,8 +737,13 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                   />
                 </CField>
 
-                <CField label="Doc Date" required error={errors.docDate} className="max-w-[150px]">
-                  <Input className={CTL} type="date" {...text("docDate")} />
+                <CField
+                  label="Doc Date"
+                  required
+                  error={errors.docDate}
+                  className="max-w-[150px]"
+                >
+                  <Input type="date" className={CTL} {...text("docDate")} />
                 </CField>
 
                 <CField label="Doc Type">
@@ -406,67 +760,96 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                 </CField>
 
                 <CField label="Ref No">
-                  <Input className={CTL} {...text("refNo")} />
+                  <Input className={CTL} {...text("refNo")} maxLength={HEADER_LIMITS.refNo} />
                 </CField>
               </HeaderBlock>
 
               {/* ══ Block 2: From, To & Signatory ══ */}
               <HeaderBlock label="From, To & Signatory" icon={<UserCheck size={11} />}>
                 <CField label="Name From">
-                  <Input className={CTL} {...text("nameFrom")} />
+                  <Input
+                    className={CTL}
+                    {...text("nameFrom")}
+                    maxLength={HEADER_LIMITS.nameFrom}
+                  />
                 </CField>
-
                 <CField label="Name To">
-                  <Input className={CTL} {...text("nameTo")} />
+                  <Input
+                    className={CTL}
+                    {...text("nameTo")}
+                    maxLength={HEADER_LIMITS.nameTo}
+                  />
                 </CField>
-
                 <CField label="Addr From">
-                  <Input className={CTL} {...text("addrFrom")} />
+                  <Input
+                    className={CTL}
+                    {...text("addrFrom")}
+                    maxLength={HEADER_LIMITS.addrFrom}
+                  />
                 </CField>
-
                 <CField label="Addr To">
-                  <Input className={CTL} {...text("addrTo")} />
+                  <Input
+                    className={CTL}
+                    {...text("addrTo")}
+                    maxLength={HEADER_LIMITS.addrTo}
+                  />
                 </CField>
-
                 <CField label="Signatory Name">
-                  <Input className={CTL} {...text("signatoryName")} />
+                  <Input
+                    className={CTL}
+                    {...text("signatoryName")}
+                    maxLength={HEADER_LIMITS.signatoryName}
+                  />
                 </CField>
-
                 <CField label="Signatory Position">
-                  <Input className={CTL} {...text("signatoryPosition")} />
+                  <Input
+                    className={CTL}
+                    {...text("signatoryPosition")}
+                    maxLength={HEADER_LIMITS.signatoryPosition}
+                  />
                 </CField>
               </HeaderBlock>
 
-              {/* ══ Block 3: Letter Details (widest — remarks live here) ══ */}
+              {/* ══ Block 3: Letter Details ══ */}
               <HeaderBlock label="Letter Details" icon={<StickyNote size={11} />}>
                 <CField label="Letter Subject" className="col-span-2">
-                  <Input className={CTL} {...text("lettrSubject")} />
+                  <Input
+                    className={CTL}
+                    {...text("lettrSubject")}
+                    maxLength={HEADER_LIMITS.lettrSubject}
+                  />
                 </CField>
-
                 <CField label="Remarks 1">
-                  <textarea className={TEXTAREA} {...text("remarks1")} />
+                  <Input
+                    className={CTL}
+                    {...text("remarks1")}
+                    maxLength={HEADER_LIMITS.remarks1}
+                  />
                 </CField>
-
                 <CField label="Remarks 2">
-                  <textarea className={TEXTAREA} {...text("remarks2")} />
+                  <Input
+                    className={CTL}
+                    {...text("remarks2")}
+                    maxLength={HEADER_LIMITS.remarks2}
+                  />
                 </CField>
               </HeaderBlock>
             </div>
           </div>
         )}
 
-        {/* ══ Lines card: toolbar (title · count · Add Line), table, total chip ══ */}
+        {/* ══ Lines card: toolbar (title · count · Add Row), grid, total chip ══ */}
         <div className="min-w-0 overflow-hidden rounded-md border border-[#cbd5e1] bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-[#cbd5e1] bg-slate-50 px-3 py-1.5">
             <div className="flex items-center gap-2">
               <span className="grid h-5 w-5 place-items-center rounded bg-[#00378C] text-white">
-                <List size={11} />
+                <ListChecks size={11} />
               </span>
               <h3 className="m-0 text-xs font-bold uppercase tracking-wider text-[#00378C]">
-                Addition / Deduction Lines
+                Detail Lines
               </h3>
               <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#00378C]">
-                {lineCount} {lineCount === 1 ? "line" : "lines"}
+                {detailRows.length} {detailRows.length === 1 ? "line" : "lines"}
               </span>
             </div>
 
@@ -475,165 +858,35 @@ export const AddSalaryAdditionDeductionForm = forwardRef<SalaryFormHandle, Props
                 type="button"
                 size="sm"
                 className="h-7 gap-1 px-2.5 text-xs"
-                title="Add line"
+                title="Add row"
                 onClick={handleAddDetailRow}
               >
-                <Plus size={13} /> Add Line
+                <Plus size={13} /> Add Row
               </Button>
             )}
           </div>
 
-          <div className="max-h-[56vh] min-h-[160px] overflow-auto">
-            <table className="w-full min-w-[900px] text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-semibold text-slate-700">
-                <tr className="border-b border-[#cbd5e1]">
-                  <th className="w-12 px-2 py-1.5 text-left">No</th>
-                  <th className="w-56 px-2 py-1.5 text-left">Employee</th>
-                  <th className="w-44 px-2 py-1.5 text-left">Pay Unit</th>
-                  <th className="px-2 py-1.5 text-left">Description</th>
-                  <th className="w-32 px-2 py-1.5 text-right">Amount</th>
-                  <th className="w-40 px-2 py-1.5 text-left">Effective From</th>
-                  <th className="w-24 px-2 py-1.5 text-left">Cancel</th>
-                  {!readonly && <th className="w-12 px-2 py-1.5 text-center">Action</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {detailRows.length === 0 ? (
-                  <tr>
-                    <td
-                      className="px-3 py-8 text-center text-muted-foreground"
-                      colSpan={readonly ? 7 : 8}
-                    >
-                      {readonly ? "No lines" : "No lines — click Add Line"}
-                    </td>
-                  </tr>
-                ) : (
-                  detailRows.map((row, index) => (
-                    <tr className="border-t odd:bg-muted/20" key={String(row.srNo)}>
-                      <td className="px-2 py-1 text-xs">{index + 1}</td>
-                      <td className="px-2 py-1">
-                        <LookupField
-                          label="Employee"
-                          compact
-                          disabled={readonly}
-                          value={row.employeeId}
-                          displayValue={row.employee}
-                          columns={[
-                            { field: "employee_code", header: "Employee Code" },
-                            { field: "rpt_name", header: "Employee Name" },
-                          ]}
-                          valueField="employee_code"
-                          displayFields={["rpt_name"]}
-                          loadOptions={loadEmployees}
-                          onChange={(value: any, opt: any) =>
-                            updateRow(row.srNo, {
-                              employeeId: String(
-                                opt?.employee_id ??
-                                  opt?.EMPLOYEE_ID ??
-                                  opt?.employee_code ??
-                                  opt?.EMPLOYEE_CODE ??
-                                  value ??
-                                  "",
-                              ),
-                              employee: String(
-                                opt?.rpt_name ??
-                                  opt?.RPT_NAME ??
-                                  opt?.employee_name ??
-                                  opt?.EMPLOYEE_NAME ??
-                                  "",
-                              ),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <LookupField
-                          label="Pay Unit"
-                          compact
-                          disabled={readonly}
-                          value={row.payUnit}
-                          columns={[
-                            { field: "value_code", header: "Value Code" },
-                            { field: "value_desc", header: "Description" },
-                          ]}
-                          valueField="value_code"
-                          displayFields={["value_code", "value_desc"]}
-                          loadOptions={loadPayUnits}
-                          onChange={(value: any, selected: any) =>
-                            updateRow(row.srNo, {
-                              payUnit: String(value ?? ""),
-                              description: String(
-                                selected?.value_desc ??
-                                  selected?.VALUE_DESC ??
-                                  row.description ??
-                                  "",
-                              ),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className={CTL}
-                          disabled={readonly}
-                          value={row.description}
-                          onChange={(e) => updateRow(row.srNo, { description: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className={`${CTL} text-right font-mono`}
-                          type="number"
-                          step="0.001"
-                          disabled={readonly}
-                          value={String(row.amount ?? "")}
-                          onChange={(e) => updateRow(row.srNo, { amount: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className={CTL}
-                          type="date"
-                          disabled={readonly}
-                          value={row.effectiveFrom}
-                          onChange={(e) => updateRow(row.srNo, { effectiveFrom: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Select
-                          className={CTL}
-                          disabled={readonly}
-                          value={row.cancel}
-                          onChange={(e) => updateRow(row.srNo, { cancel: e.target.value })}
-                        >
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </Select>
-                      </td>
-                      {!readonly && (
-                        <td className="px-2 py-1 text-center">
-                          <button
-                            type="button"
-                            title="Remove line"
-                            onClick={() => handleRemoveDetailRow(row.srNo)}
-                            className="inline-grid h-6 w-6 cursor-pointer place-items-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="p-2">
+            <DataTable
+              columns={detailColumns}
+              data={detailRows}
+              emptyText={
+                readonly ? "No lines" : "No lines — click Add Row to start."
+              }
+              height={240}
+              minWidth={1000}
+              density="grid"
+              getRowId={(_row, index) => String(index)}
+            />
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#cbd5e1] bg-slate-50/95 px-4 py-2">
             <div className="flex min-h-9 items-center gap-3 rounded-md border-2 border-[#00378c]/50 bg-blue-50 px-4 py-1.5 shadow-2xs">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">Total Amount</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-[#00378c]">
+                Total Amount
+              </span>
               <strong className="font-mono text-base font-black tabular-nums text-[#00378c]">
-                {totalAmountText}
+                {totalAmount.toFixed(4)}
               </strong>
             </div>
           </div>
