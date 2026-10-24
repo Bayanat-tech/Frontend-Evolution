@@ -218,20 +218,38 @@ function normalizeParams(params: AlmsProcedureParams) {
   return normalized;
 }
 
-// Recursively uppercase all keys AND string values (frontend-only transform)
+// Free-text fields jinki value ka case waisa hi rehna chahiye
+const PRESERVE_CASE_KEYS = new Set([
+  "DESCRIPTION",
+  "REMARKS",
+  "REMARKS_HISTRY",
+  "SENTBACK_REASON",
+  "REJECT_REASON",
+  "CANCEL_REMARK",
+  "PR_DESCRIPTION",
+  "PO_REMARKS",
+  "DLVR_TERM",
+  "PAYMENT_TERMS",
+  "WARRANTY",
+  "COMMENTS",
+]);
+
+// Keys uppercase hongi; string values bhi, siraf PRESERVE_CASE_KEYS ko chhodkar
 function uppercaseData<T = Record<string, unknown>>(data: T[]): T[] {
-  const transformValue = (value: unknown): unknown => {
+  const transformValue = (value: unknown, keepCase = false): unknown => {
     if (typeof value === "string") {
-      return value.toUpperCase();
+      return keepCase ? value : value.toUpperCase();
     }
     if (Array.isArray(value)) {
-      return value.map(transformValue);
+      return value.map((v) => transformValue(v, keepCase));
     }
     if (value !== null && typeof value === "object") {
       const result: Record<string, unknown> = {};
       for (const key of Object.keys(value as Record<string, unknown>)) {
-        result[key.toUpperCase()] = transformValue(
-          (value as Record<string, unknown>)[key]
+        const upperKey = key.toUpperCase();
+        result[upperKey] = transformValue(
+          (value as Record<string, unknown>)[key],
+          PRESERVE_CASE_KEYS.has(upperKey)
         );
       }
       return result;
