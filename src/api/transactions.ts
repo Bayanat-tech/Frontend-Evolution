@@ -200,6 +200,100 @@ export async function getCompanyInfo() {
   return response.data.data || {};
 }
 
+export type CompanyFinanceSetupData = {
+  company_info: {
+    COMPANY_CODE: string;
+    COMPANY_NAME: string;
+    AC_FY_PERIOD: string;
+    OPN_FY_PERIOD: string;
+    CURRENCY: string;
+    COMPANY_SHORT_NAME?: string;
+    TRN_NO?: string;
+  } | null;
+  ac_setup: {
+    COMPANY_CODE: string;
+    BASE_CURR_CODE: string;
+    PRICE_DECIMAL_NOS: number;
+    AMOUNT_DECIMAL_NOS: number;
+    LCUR_DECIMAL_NOS: number;
+    QTY_DECIMAL_NOS: number;
+    FINANCIAL_YR_START: string;
+    FINANCIAL_YR_END: string;
+    DOC_EDIT_FROM: string;
+    DOC_EDIT_TO: string;
+    DOC_DATE_EDITABLE: string;
+    DOCNO_TYPE?: string;
+    MULTY_DIV_ACCOUNTING?: string;
+    BILL_SETTLE_LCUR?: string;
+    DEFAULT_TAX_BSTYPE?: string;
+    TAX_PERC?: number;
+    UPDATED_BY?: string;
+    UPDATED_AT?: string;
+  } | null;
+  fy_periods: {
+    COMPANY_CODE: string;
+    FY_PERIOD: string;
+    DATE_FROM: string;
+    DATE_TO: string;
+    SORT_ORDER: number;
+  }[];
+};
+
+export type SaveCompanyFinanceSetupPayload = {
+  company_code?: string;
+  ac_fy_period?: string;
+  opn_fy_period?: string;
+  doc_edit_from?: string | null;
+  doc_edit_to?: string | null;
+  doc_date_editable?: string;
+  base_curr_code?: string;
+  amount_decimal_nos?: number;
+  price_decimal_nos?: number;
+  lcur_decimal_nos?: number;
+};
+
+export type SaveFyPeriodPayload = {
+  company_code?: string;
+  fy_period: string;
+  date_from: string;
+  date_to: string;
+  sort_order?: number;
+  action: "INS" | "UPD" | "DEL";
+};
+
+export async function getCompanyFinanceSetup(companyCode?: string) {
+  const response = await api.get<ApiResponse<CompanyFinanceSetupData>>(
+    "/api/finance/transactions/company-setup",
+    { params: { company_code: companyCode } }
+  );
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Failed to load company finance setup");
+  }
+  return response.data.data;
+}
+
+export async function saveCompanyFinanceSetup(payload: SaveCompanyFinanceSetupPayload) {
+  const response = await api.post<ApiResponse<void>>(
+    "/api/finance/transactions/company-setup",
+    payload
+  );
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Failed to save company finance setup");
+  }
+  return response.data;
+}
+
+export async function saveFyPeriod(payload: SaveFyPeriodPayload) {
+  const response = await api.post<ApiResponse<void>>(
+    "/api/finance/transactions/company-setup/fy-period",
+    payload
+  );
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Failed to save financial period");
+  }
+  return response.data;
+}
+
 export async function initializeCompanyFinance(companyCode?: string) {
   const response = await api.post<ApiResponse<Record<string, unknown>>>(
     "/api/finance/transactions/initialize_company_finance",
