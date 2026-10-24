@@ -262,10 +262,15 @@ export function FreightJobActivitySelectorDialog({
     return items;
   }, [selectedJob, activities, bookedPIList, supplierCode]);
 
-  // Filtered jobs for left panel
+  // Filtered jobs for left panel: Only jobs with activities & expense amounts can be booked in Purchase Booking
   const visibleJobs = useMemo(() => {
-    if (!hideFullyBookedJobs) return jobs;
-    return jobs.filter((j) => !j.is_fully_booked);
+    return jobs.filter((j) => {
+      const actCount = Number(j.activity_count ?? j.ACTIVITY_COUNT ?? 0);
+      const expense = Number(j.expense ?? j.EXPENSE ?? 0);
+      if (actCount <= 0 || expense <= 0) return false;
+      if (hideFullyBookedJobs && j.is_fully_booked) return false;
+      return true;
+    });
   }, [jobs, hideFullyBookedJobs]);
 
   // Filtered expenses (PowerBuilder logic: hide booked by default)
