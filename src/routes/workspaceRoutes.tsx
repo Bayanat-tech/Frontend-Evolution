@@ -2539,7 +2539,8 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
   function getWmsSimpleMasterConfig(pathname: string) {
     const normalized = pathname.toLowerCase();
     if (!normalized.includes("/wms/")) return null;
-    const matches = Object.values(wmsSimpleMasterConfigs)
+    const allConfigs = { ...wmsSimpleMasterConfigs, ...freightMasterConfigs };
+    const matches = Object.values(allConfigs)
       .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
       .sort((a, b) => b.key.length - a.key.length);
     return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;

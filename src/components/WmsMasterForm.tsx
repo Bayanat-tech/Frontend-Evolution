@@ -238,7 +238,14 @@ export function WmsMasterForm({
         };
       });
 
-      setDropdownCache((prev) => ({ ...prev, [field.name]: options }));
+      setDropdownCache((prev) => {
+        const prevOpts = prev[field.name];
+        if (prevOpts && prevOpts.length === options.length) {
+          const isSame = prevOpts.every((p, i) => p.value === options[i]?.value && p.label === options[i]?.label);
+          if (isSame) return prev;
+        }
+        return { ...prev, [field.name]: options };
+      });
       return options;
     } catch (error) {
       console.error(`Error loading dropdown for ${field.name}:`, error);
@@ -555,5 +562,5 @@ function getFieldDependencyKey(field: WmsMasterField, form: Record<string, unkno
     }
   }
   if (field.asyncOptions?.dependsOn) deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
-  return deps.length > 0 ? deps.join("__") : Date.now().toString();
+  return deps.length > 0 ? deps.join("__") : "static";
 }
