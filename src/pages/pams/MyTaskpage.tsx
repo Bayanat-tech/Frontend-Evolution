@@ -752,7 +752,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                 onClick={() => handleNotifyNextLevel(HOD_READY_FLOW_LEVEL, batch.PERIOD_NUMBER)}
                 style={{ background: "#082a89" }}
               >
-                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Notify Next Reviewer"}
+                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Completed Appraisal"}
               </Button>
             </div>
           );

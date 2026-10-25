@@ -41,6 +41,8 @@ type AddPRRequestPageProps = {
   flowDescription?: string;
   docType?: string;
   docNo?: string;
+  divCode?: string;
+  divName?: string;
   onClose: (refresh?: boolean) => void;
 };
 
@@ -287,7 +289,7 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
 }
 
 const AddPRRequestPage = ({
-  isEditMode, isViewMode = false, existingData, flowCode, flowDescription, docType = "PR", docNo, onClose,
+  isEditMode, isViewMode = false, existingData, flowCode, flowDescription, docType = "PR", docNo, divCode, divName, onClose,
 }: AddPRRequestPageProps) => {
   const { user } = useAuth();
   const companyCode = String(user?.company_code ?? "").trim();
@@ -533,18 +535,27 @@ const AddPRRequestPage = ({
     enabled: !!flowCode && !!companyCode && !isEditMode && !isViewMode,
   });
 
+
+
   useEffect(() => {
     if (isEditMode || isViewMode) return;
-    if (!flowDetailData || flowDetailData.length === 0) return;
-    const flow = flowDetailData[0];
-    const divCode = flow.DIV_CODE || "";
+
+   
     if (divCode) {
       setHdr("DIV_CODE", divCode);
-      const div = divisionList.find((d: any) => d.DIV_CODE === divCode);
+      setHdr("DIV_NAME", divName || "");
+      return;
+    }
+
+    if (!flowDetailData || flowDetailData.length === 0) return;
+    const flow = flowDetailData[0];
+    const flowDivCode = flow.DIV_CODE || "";
+    if (flowDivCode) {
+      setHdr("DIV_CODE", flowDivCode);
+      const div = divisionList.find((d: any) => d.DIV_CODE === flowDivCode);
       if (div) setHdr("DIV_NAME", div.DIV_NAME || "");
     }
-  }, [flowDetailData, divisionList, isEditMode, isViewMode]);
-
+  }, [flowDetailData, divisionList, isEditMode, isViewMode, divCode, divName]);
   useEffect(() => {
     if (!isEditMode && !isViewMode) {
       if (flowCode) {
@@ -837,7 +848,19 @@ const AddPRRequestPage = ({
   const validateAndShowErrors = (): boolean => {
     const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel, isSupplierUser);
     if (!valid) {
-      setNotice({ type: "error", message: errors.join(". ") });
+      // Agar saari errors sirf Terms ki hain, to Terms tab khol do
+      const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
+      if (onlyTermErrors && shouldShowTermsTab()) {
+        setActiveTab("terms");
+      } else {
+        setActiveTab("items");
+      }
+      setNotice({
+        type: "error",
+        message: onlyTermErrors
+          ? `Please fill Terms & Conditions. ${errors.join(". ")}`
+          : errors.join(". "),
+      });
       return false;
     }
     return true;
@@ -1174,8 +1197,8 @@ const AddPRRequestPage = ({
         );
         const sup = r.supplierCode
           ? supplierList.find(
-              (s) => String(s.SUPPLIER_CODE).trim().toUpperCase() === r.supplierCode.trim().toUpperCase()
-            )
+            (s) => String(s.SUPPLIER_CODE).trim().toUpperCase() === r.supplierCode.trim().toUpperCase()
+          )
           : undefined;
 
         const blank = blankItem(start + i + 1, requestNumber ?? "", companyCode, header);
@@ -1440,9 +1463,11 @@ const AddPRRequestPage = ({
                     </Button>
                   )}
 
-                  <Button type="button" onClick={() => setAttachmentOpen(true)} className={BTN_BLUE}>
-                    <Paperclip size={15} /> Files
-                  </Button>
+                  {requestNumber && (
+                    <Button type="button" onClick={() => setAttachmentOpen(true)} className={BTN_BLUE}>
+                      <Paperclip size={15} /> Files
+                    </Button>
+                  )}
                   {requestNumber && (
                     <Button type="button" onClick={handlePrint} className={BTN_BLUE}>
                       <Printer size={15} /> Print
@@ -2336,7 +2361,7 @@ const AddPRRequestPage = ({
         </div>
       </Dialog>
 
-       <PurchaseReportPreview />
+      <PurchaseReportPreview />
     </>
   );
 };

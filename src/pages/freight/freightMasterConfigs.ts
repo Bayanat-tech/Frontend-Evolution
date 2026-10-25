@@ -219,24 +219,137 @@ const freightMasterDefinitions: Record<string, FreightMasterConfig> = {
 
   broker: {
     title: "Broker Master",
-    subtitle: "Maintain broker contact and address details for freight operations.",
+    subtitle: "Maintain broker and partner contact, address, tax TRN, and GL account details.",
     master: "freight-broker",
     gmEndpoint: "freight/broker",
     routeKeys: ["broker", "brokers", "partner", "freight_broker", "freight-broker", "ms_broker"],
     keyField: "broker_code",
     fieldsPerRow: 3,
     fields: [
-      { name: "broker_code", label: "Broker Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "broker_name", label: "Broker Name", required: true, width: 260 },
-      { name: "country_code", label: "Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownValueKey: "country_code", dropdownDisplayFields: ["country_code", "country_name"], dropdownDisplaySeparator: " - ", width: 150 },
-      { name: "broker_city", label: "City", width: 150 },
-      { name: "broker_contact1", label: "Contact", width: 180 },
-      { name: "broker_telno1", label: "Telephone", width: 150 },
-      { name: "broker_email1", label: "Email", type: "email", width: 220 },
-      { name: "broker_addr1", label: "Address 1", table: false },
-      { name: "broker_addr2", label: "Address 2", table: false },
-      { name: "broker_addr3", label: "Address 3", table: false },
-      { name: "broker_addr4", label: "Address 4", table: false },
+      // Identity
+      { name: "broker_code", label: "Broker Code", required: true, disabledOnEdit: true, width: 140, maxLength: 5, tab: "basic", section: "Identity" },
+      { name: "broker_name", label: "Broker Name", required: true, width: 260, maxLength: 110, tab: "basic", section: "Identity" },
+      { name: "partner_type", label: "Partner Type", type: "select", options: [
+        { label: "Broker", value: "B" },
+        { label: "Partner", value: "P" },
+        { label: "Agent", value: "A" },
+        { label: "Forwarder", value: "F" },
+        { label: "Customer", value: "C" },
+      ], width: 130, tab: "basic", section: "Identity" },
+      { name: "broker_stat", label: "Status", type: "select", options: [
+        { label: "Active", value: "Y" },
+        { label: "Inactive", value: "N" },
+      ], width: 110, tab: "basic", section: "Identity" },
+      { name: "country_code", label: "Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownValueKey: "country_code", dropdownDisplayFields: ["country_code", "country_name"], dropdownDisplaySeparator: " - ", width: 150, maxLength: 5, tab: "basic", section: "Identity" },
+      { name: "broker_city", label: "City", width: 150, maxLength: 50, tab: "basic", section: "Identity" },
+      { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownValueKey: "territory_code", dropdownDisplayFields: ["territory_code", "territory_name"], dropdownDisplaySeparator: " - ", width: 150, maxLength: 10, tab: "basic", section: "Identity" },
+      { name: "price_check", label: "Price Check", type: "select", options: [
+        { label: "Yes", value: "Y" },
+        { label: "No", value: "N" },
+      ], width: 110, tab: "basic", section: "Identity" },
+
+      // Finance & Tax
+      { name: "curr_code", label: "Currency", dropdownParam: "DROP_DOWN_CURRENCY", dropdownValueKey: "curr_code", dropdownDisplayFields: ["curr_code", "curr_name"], dropdownDisplaySeparator: " - ", width: 130, maxLength: 3, tab: "finance", section: "Finance" },
+      { name: "broker_acref", label: "GL Account", dropdownParam: "DROP_DOWN_AC_CODES", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 200, maxLength: 10, tab: "finance", section: "Finance" },
+      { name: "payment_terms", label: "Payment Terms (Days)", type: "number", width: 140, tab: "finance", section: "Finance" },
+      { name: "broker_credit", label: "Credit Limit", type: "number", width: 140, tab: "finance", section: "Finance" },
+      { name: "trn_no", label: "Tax TRN", width: 150, maxLength: 30, tab: "finance", section: "Tax" },
+      { name: "tax_registrd", label: "Tax Registered", type: "select", options: [
+        { label: "Yes", value: "Y" },
+        { label: "No", value: "N" },
+      ], width: 120, tab: "finance", section: "Tax" },
+      { name: "tax_country_code", label: "Tax Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownValueKey: "country_code", dropdownDisplayFields: ["country_code", "country_name"], dropdownDisplaySeparator: " - ", width: 150, maxLength: 5, tab: "finance", section: "Tax" },
+      { name: "prin_infze", label: "In Designated Zone", type: "select", options: [
+        { label: "Yes", value: "Y" },
+        { label: "No", value: "N" },
+      ], width: 130, tab: "finance", section: "Tax" },
+
+      // Address
+      { name: "broker_addr1", label: "Address 1", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+      { name: "broker_addr2", label: "Address 2", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+      { name: "broker_addr3", label: "Address 3", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+      { name: "broker_addr4", label: "Address 4", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+
+      // Contacts
+      { name: "broker_contact1", label: "Contact 1", width: 180, maxLength: 50, tab: "contact", section: "Contact 1" },
+      { name: "broker_telno1", label: "Telephone 1", width: 150, maxLength: 50, tab: "contact", section: "Contact 1" },
+      { name: "broker_faxno1", label: "Fax 1", width: 140, maxLength: 50, tab: "contact", section: "Contact 1", table: false },
+      { name: "broker_email1", label: "Email 1", type: "email", width: 220, maxLength: 50, tab: "contact", section: "Contact 1" },
+      { name: "broker_contact2", label: "Contact 2", width: 180, maxLength: 50, tab: "contact", section: "Contact 2", table: false },
+      { name: "broker_telno2", label: "Telephone 2", width: 150, maxLength: 50, tab: "contact", section: "Contact 2", table: false },
+      { name: "broker_faxno2", label: "Fax 2", width: 140, maxLength: 50, tab: "contact", section: "Contact 2", table: false },
+      { name: "broker_email2", label: "Email 2", type: "email", width: 220, maxLength: 50, tab: "contact", section: "Contact 2", table: false },
+      { name: "broker_contact3", label: "Contact 3", width: 180, maxLength: 50, tab: "contact", section: "Contact 3", table: false },
+      { name: "broker_telno3", label: "Telephone 3", width: 150, maxLength: 50, tab: "contact", section: "Contact 3", table: false },
+      { name: "broker_faxno3", label: "Fax 3", width: 140, maxLength: 50, tab: "contact", section: "Contact 3", table: false },
+      { name: "broker_email3", label: "Email 3", type: "email", width: 220, maxLength: 50, tab: "contact", section: "Contact 3", table: false },
+
+      // Customs & License
+      { name: "broker_imp_code", label: "Customs Broker Code", width: 160, maxLength: 25, tab: "customs", section: "Customs" },
+      { name: "broker_lic_no", label: "License No", width: 150, maxLength: 25, tab: "customs", section: "Customs" },
+      { name: "broker_lic_type", label: "License Type", width: 150, maxLength: 25, tab: "customs", section: "Customs" },
+      { name: "importer_code", label: "Importer Code", width: 150, maxLength: 40, tab: "customs", section: "Customs" },
+    ],
+    formTabs: [
+      { key: "basic", label: "Basic" },
+      { key: "finance", label: "Finance & Tax" },
+      { key: "contact", label: "Contacts" },
+      { key: "address", label: "Address" },
+      { key: "customs", label: "Customs & License" },
+    ],
+    deleteConfig: disableDelete,
+  },
+
+  transporter: {
+    title: "Transporter Master",
+    subtitle: "Maintain transporter contact, address, tax TRN, and GL account details.",
+    master: "freight-transporter",
+    gmEndpoint: "freight/transporter",
+    routeKeys: ["transporter", "transporters", "freight_transporter", "freight-transporter", "ms_transporter", "tp_transporter", "transport_transporter"],
+    keyField: "transporter_code",
+    fieldsPerRow: 3,
+    fields: [
+      // Identity
+      { name: "transporter_code", label: "Transporter Code", required: true, disabledOnEdit: true, width: 140, maxLength: 10, tab: "basic", section: "Identity" },
+      { name: "transporter_name", label: "Transporter Name", required: true, width: 260, maxLength: 50, tab: "basic", section: "Identity" },
+      { name: "transporter_type", label: "Transporter Type", type: "select", options: [
+        { label: "Subcontractor", value: "SUBCON" },
+        { label: "Own Fleet", value: "OWN" },
+      ], width: 140, tab: "basic", section: "Identity" },
+      { name: "country_code", label: "Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownValueKey: "country_code", dropdownDisplayFields: ["country_code", "country_name"], dropdownDisplaySeparator: " - ", width: 150, maxLength: 5, tab: "basic", section: "Identity" },
+      { name: "trns_city", label: "City", width: 150, maxLength: 30, tab: "basic", section: "Identity" },
+      { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownValueKey: "territory_code", dropdownDisplayFields: ["territory_code", "territory_name"], dropdownDisplaySeparator: " - ", width: 150, maxLength: 10, tab: "basic", section: "Identity" },
+
+      // Finance & Tax
+      { name: "ac_code", label: "GL Account", dropdownParam: "DROP_DOWN_AC_CODES", dropdownValueKey: "ac_code", dropdownDisplayFields: ["ac_code", "ac_name"], dropdownDisplaySeparator: " - ", width: 200, maxLength: 15, tab: "finance", section: "Finance" },
+      { name: "trn_no", label: "Tax TRN", width: 150, maxLength: 30, tab: "finance", section: "Tax" },
+      { name: "tax_registrd", label: "Tax Registered", type: "select", options: [
+        { label: "Yes", value: "Y" },
+        { label: "No", value: "N" },
+      ], width: 120, tab: "finance", section: "Tax" },
+      { name: "tax_country_code", label: "Tax Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownValueKey: "country_code", dropdownDisplayFields: ["country_code", "country_name"], dropdownDisplaySeparator: " - ", width: 150, maxLength: 5, tab: "finance", section: "Tax" },
+      { name: "prin_infze", label: "In Designated Zone", type: "select", options: [
+        { label: "Yes", value: "Y" },
+        { label: "No", value: "N" },
+      ], width: 130, tab: "finance", section: "Tax" },
+
+      // Address
+      { name: "trns_addr1", label: "Address 1", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+      { name: "trns_addr2", label: "Address 2", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+      { name: "trns_addr3", label: "Address 3", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+      { name: "trns_addr4", label: "Address 4", width: 250, maxLength: 50, tab: "address", section: "Address", table: false },
+
+      // Contacts
+      { name: "trns_contact1", label: "Contact Person", width: 180, maxLength: 50, tab: "contact", section: "Contact" },
+      { name: "trns_telno1", label: "Telephone", width: 150, maxLength: 20, tab: "contact", section: "Contact" },
+      { name: "trns_faxno1", label: "Fax", width: 140, maxLength: 20, tab: "contact", section: "Contact", table: false },
+      { name: "trns_email1", label: "Email", type: "email", width: 220, maxLength: 50, tab: "contact", section: "Contact" },
+    ],
+    formTabs: [
+      { key: "basic", label: "Basic" },
+      { key: "finance", label: "Finance & Tax" },
+      { key: "contact", label: "Contact" },
+      { key: "address", label: "Address" },
     ],
     deleteConfig: disableDelete,
   },

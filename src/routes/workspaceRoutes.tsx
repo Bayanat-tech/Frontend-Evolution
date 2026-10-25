@@ -15,6 +15,7 @@
   import { CommercialDocumentPage } from "../pages/finance/CommercialDocumentPage";
   import { FinanceDashboardPanel } from "../pages/finance/FinanceDashboardPanel";
   import { DocumentSetupPage } from "../pages/finance/DocumentSetupPage";
+  import { CompanyFinanceSetupPage } from "../pages/finance/CompanyFinanceSetupPage";
   import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
   import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
   import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
@@ -243,6 +244,7 @@ import PrRegisterPage from "../pages/almswf/PurchaseRequestRegisterReport";
   import HrEmployeeDetailsReport from "../pages/hr/Reports/HrEmployeeDetailsReport";
   import HrEmployeeWiseCostReport from "../pages/hr/Reports/HrEmployeeWiseCostReport";
 import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
+import { useAuth } from "../state/AuthContext";
 
   type WorkspaceRouteContext = {
     pathname: string;
@@ -261,6 +263,35 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const element = route?.element(context);
     return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;
   }
+
+  const PurchaseSalesDashboardWrapper = () => {
+  const { user } = useAuth();
+
+  // Debug: Check console to see exactly what the user object looks like
+  console.log("User Object:", user);
+
+  // Check for tenant_id, TENANT_ID, tenantId, tenant, etc.
+  const rawTenant = String(
+    (user as any)?.tenant_id || 
+    (user as any)?.TENANT_ID || 
+    (user as any)?.tenantId || 
+    (user as any)?.tenant ||
+    (user as any)?.company_code || 
+    ""
+  ).trim().toUpperCase();
+
+  const isWmsDev = rawTenant.includes("WMSDEV");
+
+  if (isWmsDev) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <p className="text-lg font-semibold text-red-500">No data found</p>
+      </div>
+    );
+  }
+
+  return <PurchaseSalesDashboard />;
+};
 
   export const workspaceRoutes: WorkspaceRoute[] = [
 
@@ -742,6 +773,11 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
       name: "Finance Document Setup",
       match: ({ pathname }) => isDocumentSetupRoute(pathname),
       element: () => <DocumentSetupPage />,
+    },
+    {
+      name: "Company Finance Setup",
+      match: ({ pathname }) => isCompanyFinanceSetupRoute(pathname),
+      element: () => <CompanyFinanceSetupPage />,
     },
     {
       name: "Budget Allocation Setup",
@@ -1648,9 +1684,10 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     },
 
     {
-      name: "Purchase & Sales Dashboard",
-      match: ({ pathname }) => isPnSRoute(pathname),
-      element: () => <PurchaseSalesDashboard />},
+  name: "Purchase & Sales Dashboard",
+  match: ({ pathname }) => isPnSRoute(pathname),
+  element: () => <PurchaseSalesDashboardWrapper />, 
+},
 
     {
       name: "Purchase Sales Stock Inquiry",
@@ -1979,6 +2016,19 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     return normalized.includes("/finance/accounts/masters/budget_version") || normalized.includes("/finance/accounts/masters/budget-version");
   }
 
+  function isCompanyFinanceSetupRoute(pathname: string) {
+    const normalized = pathname.toLowerCase();
+    return (
+      normalized.includes("/finance/finance/utilities/setup") ||
+      normalized.includes("/finance/utilities/setup") ||
+      normalized.includes("/finance/utilities/company_setup") ||
+      normalized.includes("/finance/utilities/company-setup") ||
+      normalized.includes("/finance/utilities/companysetup") ||
+      normalized.includes("/finance/settings/company") ||
+      normalized.includes("/finance/utilities/company")
+    );
+  }
+
   function isDocumentSetupRoute(pathname: string) {
     const normalized = pathname.toLowerCase();
     return (
@@ -2280,6 +2330,7 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const normalized = pathname.toLowerCase();
     if (normalized.includes("/finance/accounts/transactions/lpo")) return "PO" as const;
     if (normalized.includes("/finance/accounts/transactions/purchase")) return "PI" as const;
+    if (normalized.includes("/purchase/purchase_booking") || normalized.includes("purchase_booking")) return "PI" as const;
     if (normalized.includes("/finance/accounts/transactions/sales")) return "SI" as const;
     if (normalized.includes("/finance/accounts/transactions/service-invoice") || normalized.includes("/finance/accounts/transactions/service_invoice")) return "SV" as const;
     return null;
@@ -2519,7 +2570,8 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
   function getWmsSimpleMasterConfig(pathname: string) {
     const normalized = pathname.toLowerCase();
     if (!normalized.includes("/wms/")) return null;
-    const matches = Object.values(wmsSimpleMasterConfigs)
+    const allConfigs = { ...wmsSimpleMasterConfigs, ...freightMasterConfigs };
+    const matches = Object.values(allConfigs)
       .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
       .sort((a, b) => b.key.length - a.key.length);
     return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
@@ -2531,7 +2583,9 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
     const isFreight =
       matchText.includes("/freight") ||
       compact.includes("freight") ||
-      compact.includes("frieght");
+      compact.includes("frieght") ||
+      matchText.includes("/fms") ||
+      compact.includes("fms");
 
     if (!isFreight) return null;
 

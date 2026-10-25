@@ -69,7 +69,8 @@ export function LeaveFlowTable({
     }
     setLoading(true);
     try {
-      const response = await getHrLeaveFlow(config.endpoint, loginId);
+      const tenantName = /[a-z]/i.test(String(user?.LOGINID || user?.loginid || '')) ? 'MHDL' : 'ALMS';
+      const response = await getHrLeaveFlow(config.endpoint, loginId, 1, 1000, tenantName);
       setRows(response.tableData || []);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
