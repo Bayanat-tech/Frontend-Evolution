@@ -18,7 +18,7 @@ import { useToast } from "../../components/ui/AlertToast";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
-const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated", "Cancelled"];
+const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "PO Generated", "Cancelled"];
 
 const QUERY_ROOT = "purchase-request-page";
 
