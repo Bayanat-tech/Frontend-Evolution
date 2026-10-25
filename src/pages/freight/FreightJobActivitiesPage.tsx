@@ -424,29 +424,6 @@ export function FreightJobActivitiesPage({
       <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
         {notice && <NoticeChip notice={notice} />}
         {!onEmbeddedList && (<Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))} aria-label="Back to list" title="Back to list"><ArrowLeft size={14} /></Button>)}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            const jobNo = lookupText(header, "job_no");
-            if (jobNo) window.location.href = `/freight_invoice/invoice?job_no=${encodeURIComponent(jobNo)}`;
-          }}
-          title="Generate Customer Invoice"
-          className="text-xs"
-        >
-          <FileText size={14} />Invoice
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => window.print()}
-          title="Print Job Invoice & Activities"
-          className="text-xs"
-        >
-          <Printer size={14} />Print
-        </Button>
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
@@ -568,27 +545,6 @@ export function FreightJobActivitiesPage({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {notice && <NoticeChip notice={notice} />}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const jobNo = lookupText(header, "job_no");
-                if (jobNo) window.location.href = `/freight_invoice/invoice?job_no=${encodeURIComponent(jobNo)}`;
-              }}
-              title="Generate Customer Invoice"
-            >
-              <FileText size={14} /> Generate Invoice
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => window.print()}
-              title="Print Job Invoice & Activities"
-            >
-              <Printer size={14} /> Print Invoice
-            </Button>
             <Button type="button" size="sm" onClick={addLine} disabled={isLineLocked} className="!bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72]">
               <Plus size={14} /> Add Line
             </Button>
@@ -721,7 +677,7 @@ export function FreightJobActivitiesPage({
             <thead className="sticky top-0 shadow-md z-10 whitespace-nowrap">
               {/* Tier 1 Header: Group Categories (PB Income & Expense Division) in matching Corporate Navy */}
               <tr className="text-[11px] font-extrabold uppercase tracking-wider text-center select-none bg-[#002d72] text-white border-b border-[#002052]">
-                <th colSpan={6} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
+                <th colSpan={4} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
                   Service & Activity Details
                 </th>
                 <th colSpan={2} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
@@ -732,6 +688,9 @@ export function FreightJobActivitiesPage({
                 </th>
                 <th colSpan={1} className="bg-[#00378C] text-white border-r border-white/20 py-1.5 px-2">
                   Tax
+                </th>
+                <th colSpan={2} className="bg-[#00245e] text-white/95 border-r border-white/20 py-1.5 px-2">
+                  Invoiced / Booked
                 </th>
                 <th colSpan={1} className="bg-[#00245e] text-white/95 py-1.5 px-2">
                   Actions
@@ -746,8 +705,6 @@ export function FreightJobActivitiesPage({
                 <th className="px-2 py-2 text-center w-9 bg-[#00378C] text-white border-r border-white/15">#</th>
                 <th className="px-2 py-2 text-left min-w-[220px] text-white border-r border-white/15">Activity / Description</th>
                 <th className="px-2 py-2 text-right w-[60px] text-white border-r border-white/15" title="Type of Measure is Quantity or Volume or Weight">Q* / V / W</th>
-                <th className="px-2 py-2 text-center w-[110px] bg-[#681822] text-rose-100 border-r border-white/15" title="Freight Invoice Number">Invoice No</th>
-                <th className="px-2 py-2 text-center w-[120px] bg-[#0c3666] text-sky-100 border-r border-white/15" title="Purchase Booking PI Number">PI No</th>
                 {/* Income Columns */}
                 <th className="px-2 py-2 text-right w-[85px] bg-[#003380] text-blue-100 border-r border-white/15">Rate</th>
                 <th className="px-2 py-2 text-right w-[95px] bg-[#003380] text-white font-bold border-r border-white/15">Bill Amt</th>
@@ -759,8 +716,12 @@ export function FreightJobActivitiesPage({
                 <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Agent Price</th>
                 <th className="px-2 py-2 text-left w-[165px] bg-[#002f78] text-white/95 border-r border-white/15">Transporter</th>
                 <th className="px-2 py-2 text-right w-[85px] bg-[#002f78] text-white border-r border-white/15">Transp Price</th>
-                {/* Tax & Action */}
+                {/* Tax */}
                 <th className="px-2 py-2 text-center w-[110px] text-emerald-200 bg-[#00378C] border-r border-white/15">Tax / VAT</th>
+                {/* Vouchers: Freight Invoice & Purchase Booking */}
+                <th className="px-2 py-2 text-center w-[110px] bg-[#681822] text-rose-100 border-r border-white/15" title="Freight Invoice Number">Invoice No</th>
+                <th className="px-2 py-2 text-center w-[120px] bg-[#0c3666] text-sky-100 border-r border-white/15" title="Purchase Booking PI Number">PI No</th>
+                {/* Action */}
                 <th className="px-2 py-2 text-center w-[75px] text-white bg-[#00378C]">Actions</th>
               </tr>
             </thead>
@@ -872,34 +833,6 @@ export function FreightJobActivitiesPage({
                         disabled={isLineLocked}
                         onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))}
                       />
-                    </td>
-
-                    {/* Freight Invoice No (Red badge) */}
-                    <td className="px-1.5 py-1 text-center w-[110px] border-r border-slate-200">
-                      {line.consolidated_invno ? (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs"
-                          title={`Freight Invoice #${line.consolidated_invno}`}
-                        >
-                          {line.consolidated_invno}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
-                      )}
-                    </td>
-
-                    {/* Purchase Booking PI No (Blue badge) */}
-                    <td className="px-1.5 py-1 text-center w-[120px] border-r border-slate-200">
-                      {line.pi_no ? (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs"
-                          title={`Purchase Booking PI #${line.pi_no}`}
-                        >
-                          {line.pi_no}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
-                      )}
                     </td>
 
                     {/* Rate (OMR) */}
@@ -1112,6 +1045,34 @@ export function FreightJobActivitiesPage({
                       </button>
                     </td>
 
+                    {/* Freight Invoice No (Red badge) */}
+                    <td className="px-1.5 py-1 text-center w-[110px] border-r border-slate-200">
+                      {line.consolidated_invno ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 font-mono shadow-2xs"
+                          title={`Freight Invoice #${line.consolidated_invno}`}
+                        >
+                          {line.consolidated_invno}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
+                      )}
+                    </td>
+
+                    {/* Purchase Booking PI No (Blue badge) */}
+                    <td className="px-1.5 py-1 text-center w-[120px] border-r border-slate-200">
+                      {line.pi_no ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-300 font-mono shadow-2xs"
+                          title={`Purchase Booking PI #${line.pi_no}`}
+                        >
+                          {line.pi_no}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium italic">—</span>
+                      )}
+                    </td>
+
                     {/* Action Buttons: Currency Calculator & Delete */}
                     <td className="px-1.5 py-1 w-[75px] text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -1179,8 +1140,6 @@ export function FreightJobActivitiesPage({
                     Totals ({lines.length} {lines.length === 1 ? "line" : "lines"}):
                   </td>
                   <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-center text-slate-400">-</td>
-                  <td className="px-2 py-1.5 text-center text-slate-400">-</td>
                   {/* Income Totals */}
                   <td className="px-2 py-1.5 text-right font-mono text-slate-400">-</td>
                   <td className="px-2 py-1.5 text-right font-mono font-bold text-blue-900 bg-blue-50/70 border-r border-slate-200">
@@ -1202,8 +1161,11 @@ export function FreightJobActivitiesPage({
                   <td className="px-2 py-1.5 text-center font-mono font-bold text-emerald-800 bg-emerald-50/80 border-r border-slate-200">
                     {money(totals.tax)}
                   </td>
-                  <td className="px-2 py-1.5 text-center text-[10px] text-slate-500 font-mono">
-                    OMR
+                  {/* Vouchers / Invoices Totals */}
+                  <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
+                  <td className="px-2 py-1.5 text-center text-slate-400 border-r border-slate-200">-</td>
+                  <td className="px-2 py-1.5 text-center text-[10px] text-slate-400 font-mono">
+                    —
                   </td>
                 </tr>
               </tfoot>
@@ -1730,13 +1692,13 @@ export function FreightJobActivitiesPage({
       {activeTaxIndex !== null && lines[activeTaxIndex] && (
         <Dialog
           open={true}
-          title={`Tax & VAT Configuration (Line #${activeTaxIndex + 1})`}
+          title={`Sales Tax Configuration (Line #${activeTaxIndex + 1})`}
           onClose={() => setActiveTaxIndex(null)}
           contentClassName="w-[min(96vw,860px)]"
           footer={
             <div className="flex items-center justify-between w-full">
               <span className="text-[11px] text-muted-foreground italic">
-                * Taxes are computed dynamically based on base OMR revenue and cost.
+                * Customer Sales Tax is computed dynamically based on revenue. Vendor/Cost Tax is handled directly during Purchase Booking.
               </span>
               <Button type="button" size="sm" onClick={() => setActiveTaxIndex(null)}>
                 Apply & Close
@@ -1767,7 +1729,7 @@ export function FreightJobActivitiesPage({
             {/* 1. Sales / Output Tax */}
             <div className="rounded-lg border border-border p-3 space-y-3 bg-card">
               <div className="font-bold text-primary flex items-center justify-between uppercase tracking-wider text-[11px]">
-                <span>1. Sales Tax / Output VAT (Customer Billing)</span>
+                <span>Customer Sales Tax / Output VAT</span>
                 <span className="text-[11px] font-mono text-muted-foreground">
                   Sales Tax Amt: <strong className="text-primary font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1)}</strong>
                   {Boolean(lines[activeTaxIndex].bill_curr_code && lines[activeTaxIndex].bill_curr_code !== "OMR") && (
@@ -1856,98 +1818,7 @@ export function FreightJobActivitiesPage({
               </div>
             </div>
 
-            {/* 2. Cost / Input Tax */}
-            <div className="rounded-lg border border-border p-3 space-y-3 bg-card">
-              <div className="font-bold text-emerald-700 flex items-center justify-between uppercase tracking-wider text-[11px]">
-                <span>2. Vendor Cost Tax / Input VAT (Expenses)</span>
-                <span className="text-[11px] font-mono text-muted-foreground">
-                  Cost Tax Amt: <strong className="text-emerald-700 font-bold">{baseCurrency} {money(lines[activeTaxIndex].tx_compnt_lcuramt_1_cost)}</strong>
-                  {Boolean(lines[activeTaxIndex].ac_curr_code && lines[activeTaxIndex].ac_curr_code !== "OMR") && (
-                    <span className="ml-1 text-[10px] text-emerald-700 font-normal">
-                      ({money(lines[activeTaxIndex].tx_compnt_amt_1_cost)} {lines[activeTaxIndex].ac_curr_code})
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_1.5fr_1fr_80px] gap-2.5 items-end">
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax Category</label>
-                  <TaxCategoryLookup
-                    companyCode={companyCode}
-                    divisionCode={lines[activeTaxIndex].div_code || lookupText(header, "div_code") || "10"}
-                    value={lines[activeTaxIndex].tx_cat_code_cost}
-                    displayValue={lines[activeTaxIndex].tx_cat_name_cost}
-                    disabled={isLineLocked}
-                    placeholder="Cost Category"
-                    onChange={(val, row) => {
-                      const catName = lookupText(row, "tx_cat_name");
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_cat_code_cost: val,
-                        tx_cat_name_cost: catName,
-                        tx_compntcat_code_1_cost: "",
-                        tx_compntcat_name_1_cost: "",
-                        tx_compnt_perc_1_cost: "0",
-                        tx_compnt_1_expmt_cost: "N",
-                      }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax Code</label>
-                  <TaxCodeLookup
-                    companyCode={companyCode}
-                    divisionCode={lines[activeTaxIndex].div_code || lookupText(header, "div_code") || "10"}
-                    taxCategory={lines[activeTaxIndex].tx_cat_code_cost}
-                    activityCode={lines[activeTaxIndex].act_code}
-                    value={lines[activeTaxIndex].tx_compntcat_code_1_cost}
-                    displayValue={lines[activeTaxIndex].tx_compntcat_name_1_cost}
-                    disabled={isLineLocked}
-                    placeholder="Cost Tax Code"
-                    onChange={(val, row) => {
-                      const perc = lookupText(row, "tx_percnt") || "0";
-                      const codeName = lookupText(row, "tx_compntcat_name");
-                      const treatment = numberValue(perc) > 0 ? "S" : "Z";
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_compntcat_code_1_cost: val,
-                        tx_compntcat_name_1_cost: codeName,
-                        tx_compnt_perc_1_cost: perc,
-                        tx_compnt_1_expmt_cost: treatment,
-                      }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Treatment</label>
-                  <TaxTreatmentSelect
-                    value={lines[activeTaxIndex].tx_compnt_1_expmt_cost}
-                    disabled={isLineLocked}
-                    onChange={(treatment) => {
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_compnt_1_expmt_cost: treatment,
-                      }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Cost Tax %</label>
-                  <Input
-                    className="h-7 text-right text-xs font-mono"
-                    value={lines[activeTaxIndex].tx_compnt_perc_1_cost}
-                    disabled={isLineLocked}
-                    onChange={(e) => {
-                      updateLine(activeTaxIndex, recalcCostTax({
-                        ...lines[activeTaxIndex],
-                        tx_compnt_perc_1_cost: e.target.value,
-                      }));
-                    }}
-                  />
-                </div>
-              </div>
             </div>
-          </div>
         </Dialog>
       )}
       

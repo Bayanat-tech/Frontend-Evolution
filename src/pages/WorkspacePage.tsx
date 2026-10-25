@@ -261,7 +261,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       {/* Top Header - BISC style: clean white/card, logo + company left, dark mode + profile right */}
       <header className="workspace-top-header h-[45px] bg-card border-b border-border flex items-center justify-between px-5 shrink-0 z-20">
         {/* Left: Company Logo */}
-        <div className="flex items-center gap-3 min-w-[200px]">
+        {/* Left: Company Logo */}
+        <div className="flex items-center gap-3 min-w-[200px] shrink-0">
           <Link to="/apps" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity" title={companyName}>
             {companyLogoUrl && !logoLoadFailed ? (
               <img
@@ -278,6 +279,63 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             )}
           </Link>
         </div>
+
+        {/* Center: Search (constrained so it can't push the right block out) */}
+        {/* Search: fills all space between logo and right block */}
+        <div className="flex-1 min-w-0 pl-3 pr-18">
+          <div
+            className="bisc-sidebar-search-container w-full min-w-0"
+            style={{ padding: 20, margin: 15, border: 0, width: "200%" }}
+          >
+            <div className="bisc-sidebar-search-box" role="search">
+              <Search size={14} className="bisc-sidebar-search-icon" />
+              <input
+                ref={menuSearchRef}
+                aria-label="Search menu"
+                autoComplete="off"
+                type="text"
+                value={menuSearchQuery}
+                onChange={(e) => {
+                  setMenuSearchQuery(e.target.value);
+                  setSelectedSearchIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev + 1) % filteredScreens.length : 0));
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSelectedSearchIndex((prev) => (filteredScreens.length ? (prev - 1 + filteredScreens.length) % filteredScreens.length : 0));
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (filteredScreens[selectedSearchIndex]) {
+                      navigate(filteredScreens[selectedSearchIndex].target);
+                      setMenuSearchQuery("");
+                      handleMenuNavigate();
+                    }
+                  } else if (e.key === "Escape") {
+                    setMenuSearchQuery("");
+                  }
+                }}
+                placeholder="Search menu..."
+                className="bisc-sidebar-search-input"
+              />
+              {menuSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setMenuSearchQuery(""); menuSearchRef.current?.focus(); }}
+                  className="bisc-sidebar-search-clear"
+                  title="Clear search"
+                  aria-label="Clear menu search"
+                >
+                  <X size={11} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+
 
         {/* Center spacer */}
         <div className="flex-1" />
@@ -365,7 +423,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             </button>
           </div>
 
-            {!displayCollapsed ? (
+          {/* {!displayCollapsed ? (
               <div className="bisc-sidebar-search-container">
                 <div className="bisc-sidebar-search-box" role="search">
                   <Search size={14} className="bisc-sidebar-search-icon" />
@@ -423,7 +481,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               >
                 <Search size={15} />
               </button>
-            )}
+            )} */}
 
           <nav className="sidebar-nav">
             {menuSearchQuery.trim() ? (

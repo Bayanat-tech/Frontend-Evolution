@@ -18,9 +18,19 @@ import { useToast } from "../../components/ui/AlertToast";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TAB_CODE3 = ["PENDING", "INPROGRESS", "REJECTED", "SENDBACK", "CLOSED", "POGENERATED", "CANCELLED"] as const;
-const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated", "Cancelled"];
+const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "PO Generated", "Cancelled"];
 
 const QUERY_ROOT = "purchase-request-page";
+
+// Level field returned by PS_PREQUEST_ENTRY_UserFlowCode (from ms_flow_levels / VW_GLOBAL_APPROVER_LEVELS)
+const LEVEL_FIELD_CANDIDATES = [
+  "USER_LEVEL", "user_level",
+  "LEVEL", "level",
+  "FLOW_LEVEL", "flow_level",
+  "APPROVAL_LEVEL", "approval_level",
+  "LEVEL_ID", "level_id",
+  "LEVEL_NO", "level_no",
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
@@ -66,6 +76,8 @@ type TaskPopupData = {
   flowDescription: string;
   docType?: string;
   docNo?: string;
+  divCode?: string;
+  divName?: string;
 };
 
 type FlowRow = { flowCode: string; flowDescription: string; divCode: string; divName: string };
@@ -79,6 +91,20 @@ function pick(obj: any, ...keys: string[]): string {
     }
   }
   return "";
+}
+
+/** Read numeric level (1..5) from a user-flow row (ms_flow_levels row). */
+function pickLevelFromRow(row: Record<string, unknown> | null | undefined): number | null {
+  if (!row) return null;
+  for (const k of LEVEL_FIELD_CANDIDATES) {
+    const v = (row as any)[k];
+    if (v === null || v === undefined) continue;
+    const m = String(v).match(/\d+/);
+    if (!m) continue;
+    const n = Number(m[0]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -141,6 +167,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
       isViewMode: false,
       flowCode: "",
       flowDescription: "",
+      divCode: "",
+      divName: "",
     },
   });
 
@@ -163,9 +191,55 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
 
   const [flowFetching, setFlowFetching] = useState(false);
 
+  const [pendingDivision, setPendingDivision] = useState<{ code: string; name: string }>({ code: "", name: "" });
+
   const activeCode3 = TAB_CODE3[activeTab] ?? TAB_CODE3[0];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
   const isPendingTab = activeCode3 === "PENDING";
+
+  // ── Level-1 detection from PS_PREQUEST_ENTRY_UserFlowCode (USER_LEVEL column) ─
+  // Rule:
+  //   USER_LEVEL === 1 (kisi bhi flow me) → button dikhe
+  //   USER_LEVEL 2, 3, 4, 5 (aur level 1 kisi flow me nahi) → button chhupe
+  //   USER_LEVEL field hi nahi aayi (backend patch nahi hua) → fail-safe: chhupe
+  const userFlowsQuery = useQuery({
+    queryKey: [QUERY_ROOT, "user-admin-flows", loginid, companyCode],
+    queryFn: () =>
+      almsCommonSelect<Record<string, unknown>>({
+        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
+      }),
+    enabled: !!loginid && !!companyCode,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { isLevel1User, levelSummary } = useMemo(() => {
+    const rows = (Array.isArray(userFlowsQuery.data) ? userFlowsQuery.data : []) as Record<string, unknown>[];
+    if (rows.length === 0) {
+      return { isLevel1User: false, levelSummary: { rows: 0, levels: [] as number[] } };
+    }
+    const levels: number[] = [];
+    for (const row of rows) {
+      const lvl = pickLevelFromRow(row);
+      if (lvl !== null) levels.push(lvl);
+    }
+    return {
+      isLevel1User: levels.includes(1),
+      levelSummary: { rows: rows.length, levels },
+    };
+  }, [userFlowsQuery.data]);
+
+  // Dev aid — remove later if you want
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[PurchaseRequest] level check →", { loginid, ...levelSummary, isLevel1User });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [levelSummary.rows, isLevel1User, loginid]);
+
+  // Show Add PR only when: Pending tab + Level-1 confirmed + data loaded
+  const canAddPR = isPendingTab && isLevel1User && !userFlowsQuery.isLoading;
 
   // ── Active tab data ────────────────────────────────────────────────────────
   const prQuery = useQuery({
@@ -188,7 +262,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
 
-  // ── Tab counts (same query keys → active tab cache share karto) ───────────
   const tabCountQueries = useQueries({
     queries: TAB_CODE3.map((code) => {
       const isPo = code === "POGENERATED";
@@ -244,22 +317,64 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     }
   }, [isError, error]);
 
-  // ── Add PR: flow / division resolution ─────────────────────────────────────
+  // ── Add PR: division → flow → editor ───────────────────────────────────────
+  const openPrEditor = (flow: FlowRow, div: { code: string; name: string }) => {
+    setTaskPopup({
+      open: true,
+      title: "Add PR",
+      data: {
+        existingData: null,
+        isEditMode: false,
+        isViewMode: false,
+        flowCode: flow.flowCode,
+        flowDescription: flow.flowDescription,
+        divCode: div.code,
+        divName: div.name,
+      },
+    });
+  };
+
+  const continueWithDivision = (div: { code: string; name: string }, allFlows: FlowRow[]) => {
+    const code = div.code.trim().toUpperCase();
+    const matched = code ? allFlows.filter((f) => String(f.divCode || "").trim().toUpperCase() === code) : [];
+    const usable = matched.length > 0 ? matched : allFlows;
+
+    setPendingDivision(div);
+
+    if (usable.length === 1) {
+      openPrEditor(usable[0], div);
+      return;
+    }
+    setFlowConfirm({ open: true, loading: false, rows: usable, selectedFlowCode: "" });
+  };
+
   const openAddPopup = async () => {
+    if (!isLevel1User) {
+      setNotice({ type: "error", message: "Only Level-1 users can create PR." });
+      return;
+    }
+
     setFlowFetching(true);
     setNotice(null);
     try {
-      const rawRows = (await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-        loginid, code1: companyCode, code2: loginid, code3: "Admin", code4: "",
-      })) as unknown as Record<string, unknown>[];
+      // Reuse level-check response; filter to level-1 flows only
+      const rawRows = (Array.isArray(userFlowsQuery.data) ? userFlowsQuery.data : []) as Record<string, unknown>[];
+      const level1Rows = rawRows.filter((r) => pickLevelFromRow(r) === 1);
+
+      if (level1Rows.length === 0) {
+        setNotice({
+          type: "error",
+          message: "No Level-1 approval flow assigned to you. Please contact admin.",
+        });
+        return;
+      }
 
       const divisionsRaw = (await almsCommonSelect<Record<string, unknown>>({
         parameter: "PS_PREQUEST_ENTRY_DIVISION",
         loginid, code1: companyCode, code2: loginid, code3: "", code4: "",
       })) as unknown as Record<string, unknown>[];
 
-      const flowRows: FlowRow[] = (rawRows || [])
+      const flowRows: FlowRow[] = level1Rows
         .map((row) => {
           const flowCode = pick(row, "FLOW_CODE", "flow_code");
           const flowDivCode = pick(row, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code");
@@ -285,49 +400,36 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
-      // Case A: only ONE flow → open PR page directly
-      if (flowRows.length === 1) {
-        const only = flowRows[0];
-        setTaskPopup({
-          open: true,
-          title: "Add PR",
-          data: {
-            existingData: null,
-            isEditMode: false,
-            isViewMode: false,
-            flowCode: only.flowCode,
-            flowDescription: only.flowDescription,
-          },
-        });
-        return;
-      }
+      let divisions: Division[] = (divisionsRaw || [])
+        .map((d) => ({
+          div_code: pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
+          div_name: pick(d, "DIV_NAME", "div_name", "DIVISION_NAME", "division_name"),
+        }))
+        .filter((d) => d.div_code) as unknown as Division[];
 
-      // Build unique divisions
-      const divMap = new Map<string, Division>();
-      for (const row of flowRows) {
-        const code = (row.divCode || "__NO_DIV__").toUpperCase();
-        if (!divMap.has(code)) {
-          divMap.set(code, {
-            div_code: row.divCode || "—",
-            div_name: row.divName || row.divCode || "—",
-          } as unknown as Division);
+      if (divisions.length === 0) {
+        const divMap = new Map<string, Division>();
+        for (const row of flowRows) {
+          const code = (row.divCode || "").toUpperCase();
+          if (code && !divMap.has(code)) {
+            divMap.set(code, { div_code: row.divCode, div_name: row.divName || row.divCode } as unknown as Division);
+          }
         }
+        divisions = Array.from(divMap.values());
       }
-      const uniqueDivisions = Array.from(divMap.values());
 
-      // Case B: only ONE division but multiple flows → flow confirm directly
-      if (uniqueDivisions.length === 1) {
-        setFlowConfirm({
-          open: true,
-          loading: false,
-          rows: flowRows,
-          selectedFlowCode: "",
-        });
+      if (divisions.length === 0) {
+        continueWithDivision({ code: "", name: "" }, flowRows);
         return;
       }
 
-      // Case C: multiple divisions → division picker
-      setDivisionPicker({ open: true, divisions: uniqueDivisions, allFlows: flowRows });
+      if (divisions.length === 1) {
+        const only = divisions[0] as any;
+        continueWithDivision({ code: String(only.div_code), name: String(only.div_name || "") }, flowRows);
+        return;
+      }
+
+      setDivisionPicker({ open: true, divisions, allFlows: flowRows });
     } catch (err) {
       setNotice({
         type: "error",
@@ -339,66 +441,20 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   };
 
   const handleDivisionSelect = (division: Division) => {
-    const selectedCode = String(
-      (division as any).div_code ?? (division as any).DIV_CODE ?? ""
-    ).trim().toUpperCase();
-
-    const filteredFlows = divisionPicker.allFlows.filter((f) => {
-      const c = String(f.divCode || "").trim().toUpperCase();
-      if (selectedCode === "__NO_DIV__" || selectedCode === "—") return !c;
-      return c === selectedCode;
-    });
-
+    const div = {
+      code: String((division as any).div_code ?? (division as any).DIV_CODE ?? "").trim(),
+      name: String((division as any).div_name ?? (division as any).DIV_NAME ?? "").trim(),
+    };
+    const flows = divisionPicker.allFlows;
     setDivisionPicker({ open: false, divisions: [], allFlows: [] });
-
-    if (filteredFlows.length === 0) {
-      if (divisionPicker.allFlows.length > 0) {
-        setFlowConfirm({
-          open: true,
-          loading: false,
-          rows: divisionPicker.allFlows,
-          selectedFlowCode: divisionPicker.allFlows.length === 1 ? divisionPicker.allFlows[0].flowCode : "",
-        });
-        return;
-      }
-      setNotice({ type: "error", message: "No approval flow found for selected division." });
-      return;
-    }
-
-    if (filteredFlows.length === 1) {
-      const selected = filteredFlows[0];
-      setTaskPopup({
-        open: true,
-        title: "Add PR",
-        data: {
-          existingData: null,
-          isEditMode: false,
-          isViewMode: false,
-          flowCode: selected.flowCode,
-          flowDescription: selected.flowDescription,
-        },
-      });
-      return;
-    }
-
-    setFlowConfirm({ open: true, loading: false, rows: filteredFlows, selectedFlowCode: "" });
+    continueWithDivision(div, flows);
   };
 
   const confirmFlowAndOpenPR = () => {
     const selected = flowConfirm.rows.find((row) => row.flowCode === flowConfirm.selectedFlowCode);
     if (!selected) return;
     setFlowConfirm((prev) => ({ ...prev, open: false }));
-    setTaskPopup({
-      open: true,
-      title: "Add PR",
-      data: {
-        existingData: null,
-        isEditMode: false,
-        isViewMode: false,
-        flowCode: selected.flowCode,
-        flowDescription: selected.flowDescription,
-      },
-    });
+    openPrEditor(selected, pendingDivision);
   };
 
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
@@ -416,7 +472,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   };
 
-  // Save / submit nantar sagle tabs refresh (counts pan badaltat)
   const closePopup = useCallback(
     (refresh?: boolean) => {
       setTaskPopup((prev) => ({ ...prev, open: false }));
@@ -578,7 +633,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         cell: ({ row }) => {
           const r = row.original as any;
           const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
-          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+
           const code = isDraft
             ? (r.USER_ID || r.user_id || "")
             : (r.NEXT_ACTION_BY || r.next_action_by || "");
@@ -691,6 +746,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         }
         flowCode={taskPopup.data.flowCode}
         flowDescription={taskPopup.data.flowDescription}
+        divCode={taskPopup.data.divCode}
+        divName={taskPopup.data.divName}
         docType={taskPopup.data.docType}
         docNo={taskPopup.data.docNo}
         onClose={closePopup}
@@ -719,17 +776,15 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
                 setPageIndex(0);
                 setQuery("");
               }}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                active
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${active
                   ? "bg-[#00378C] font-semibold text-white shadow-sm"
                   : "border border-border bg-card text-foreground hover:bg-secondary"
-              }`}
+                }`}
             >
               <span>{label}</span>
               <span
-                className={`rounded-full px-1.5 text-[10px] font-bold ${
-                  active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                }`}
+                className={`rounded-full px-1.5 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                  }`}
               >
                 {tabCounts[index] ?? 0}
               </span>
@@ -742,13 +797,9 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
           data={filteredRows}
-          title={
-            isLoading
-              ? "Loading"
-              : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`
-          }
+
           subtitle={
-            isPendingTab ? (
+            canAddPR ? (
               <button
                 type="button"
                 onClick={() => void openAddPopup()}
@@ -759,11 +810,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
                 {flowFetching ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 {flowFetching ? "Loading..." : "Add PR"}
               </button>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {isPoGeneratedTab ? "Generated PO List" : `${TAB_LABELS[activeTab]} Requests`}
-              </span>
-            )
+            ) : undefined
           }
           searchValue={query}
           onSearchChange={(value) => {
