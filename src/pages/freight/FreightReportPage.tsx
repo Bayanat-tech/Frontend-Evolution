@@ -262,7 +262,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     title: "Freight Brokerage",
     subtitle: "Broker-linked jobs and brokerage base values.",
     icon: WalletCards,
-    amountFields: ["BROKERAGE_BASE"],
+    amountFields: ["BILL_AMOUNT", "BROKERAGE_BASE"],
     filters: ["date"],
     advancedFilters: ["brokerRange", "division", "periodMode", "variant"],
     primaryMetric: "Brokerage",
@@ -275,7 +275,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
       { key: "BROKER_NAME", label: "Broker Name" },
       { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" },
       { key: "JOB_TYPE", label: "Type", kind: "type" },
-      { key: "BROKERAGE_BASE", label: "Base", kind: "amount" },
+      { key: "BILL_AMOUNT", label: "Bill Amount", kind: "amount" },
+      { key: "BROKERAGE_BASE", label: "Brokerage", kind: "amount" },
     ],
   },
   query_report: {
