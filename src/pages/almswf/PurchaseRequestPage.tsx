@@ -166,7 +166,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
   });
 
   const [flowFetching, setFlowFetching] = useState(false);
-  // Nivadlela division (flow select nantar PR page la pass hoto)
+
   const [pendingDivision, setPendingDivision] = useState<{ code: string; name: string }>({ code: "", name: "" });
 
   const activeCode3 = TAB_CODE3[activeTab] ?? TAB_CODE3[0];
@@ -194,7 +194,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
 
-  // ── Tab counts (same query keys → active tab cache share karto) ───────────
+
   const tabCountQueries = useQueries({
     queries: TAB_CODE3.map((code) => {
       const isPo = code === "POGENERATED";
@@ -267,8 +267,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   };
 
-  // Division nivadlyavar: tya division che flows ghe.
-  // Match nasel (division-agnostic flows) tar sagle flows dakhav.
+
   const continueWithDivision = (div: { code: string; name: string }, allFlows: FlowRow[]) => {
     const code = div.code.trim().toUpperCase();
     const matched = code ? allFlows.filter((f) => String(f.divCode || "").trim().toUpperCase() === code) : [];
@@ -323,7 +322,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
-      // 1) Division list: master list varun
+  
       let divisions: Division[] = (divisionsRaw || [])
         .map((d) => ({
           div_code: pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
@@ -331,7 +330,6 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         }))
         .filter((d) => d.div_code) as unknown as Division[];
 
-      // 2) Master list rikamya asel tar flows madhle divisions
       if (divisions.length === 0) {
         const divMap = new Map<string, Division>();
         for (const row of flowRows) {
@@ -343,20 +341,19 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         divisions = Array.from(divMap.values());
       }
 
-      // 3) Division ch nasel tar division shivay pudhe ja
       if (divisions.length === 0) {
         continueWithDivision({ code: "", name: "" }, flowRows);
         return;
       }
 
-      // 4) Ek-ch division asel tar auto-select
+    
       if (divisions.length === 1) {
         const only = divisions[0] as any;
         continueWithDivision({ code: String(only.div_code), name: String(only.div_name || "") }, flowRows);
         return;
       }
 
-      // 5) Ekapeksha jast: picker dakhav
+    
       setDivisionPicker({ open: true, divisions, allFlows: flowRows });
     } catch (err) {
       setNotice({
@@ -400,7 +397,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
     });
   };
 
-  // Save / submit nantar sagle tabs refresh (counts pan badaltat)
+
   const closePopup = useCallback(
     (refresh?: boolean) => {
       setTaskPopup((prev) => ({ ...prev, open: false }));
@@ -562,7 +559,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         cell: ({ row }) => {
           const r = row.original as any;
           const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
-          // Draft: next action usi ke paas hai jisne draft save kiya (USER_ID)
+       
           const code = isDraft
             ? (r.USER_ID || r.user_id || "")
             : (r.NEXT_ACTION_BY || r.next_action_by || "");
