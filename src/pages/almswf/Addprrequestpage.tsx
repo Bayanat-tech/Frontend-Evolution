@@ -548,7 +548,7 @@ const AddPRRequestPage = ({
   // }, [flowDetailData, divisionList, isEditMode, isViewMode]);
 
 
-    useEffect(() => {
+  useEffect(() => {
     if (isEditMode || isViewMode) return;
 
     // User ne nivadlela division asel tar toch vapar

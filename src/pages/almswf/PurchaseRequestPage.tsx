@@ -322,7 +322,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
-  
+
       let divisions: Division[] = (divisionsRaw || [])
         .map((d) => ({
           div_code: pick(d, "DIV_CODE", "div_code", "DIVISION_CODE", "division_code"),
@@ -346,14 +346,14 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         return;
       }
 
-    
+
       if (divisions.length === 1) {
         const only = divisions[0] as any;
         continueWithDivision({ code: String(only.div_code), name: String(only.div_name || "") }, flowRows);
         return;
       }
 
-    
+
       setDivisionPicker({ open: true, divisions, allFlows: flowRows });
     } catch (err) {
       setNotice({
@@ -559,7 +559,7 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         cell: ({ row }) => {
           const r = row.original as any;
           const isDraft = String(r.LAST_ACTION || "").toUpperCase() === "SAVEASDRAFT";
-       
+
           const code = isDraft
             ? (r.USER_ID || r.user_id || "")
             : (r.NEXT_ACTION_BY || r.next_action_by || "");
@@ -702,17 +702,15 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
                 setPageIndex(0);
                 setQuery("");
               }}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                active
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${active
                   ? "bg-[#00378C] font-semibold text-white shadow-sm"
                   : "border border-border bg-card text-foreground hover:bg-secondary"
-              }`}
+                }`}
             >
               <span>{label}</span>
               <span
-                className={`rounded-full px-1.5 text-[10px] font-bold ${
-                  active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                }`}
+                className={`rounded-full px-1.5 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                  }`}
               >
                 {tabCounts[index] ?? 0}
               </span>
@@ -725,12 +723,8 @@ const PurchaseRequestpage = ({ initialTab = 0 }: PurchaseRequestPageProps) => {
         <DataTable
           columns={columns as ColumnDef<any, unknown>[]}
           data={filteredRows}
-          title={
-            isLoading
-              ? "Loading"
-              : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`
-          }
-                   subtitle={
+
+          subtitle={
             isPendingTab ? (
               <button
                 type="button"
