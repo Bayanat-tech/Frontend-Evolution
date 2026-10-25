@@ -237,6 +237,10 @@ export type CompanyFinanceSetupData = {
     DATE_TO: string;
     SORT_ORDER: number;
   }[];
+  currencies?: {
+    CURR_CODE: string;
+    CURR_NAME: string;
+  }[];
 };
 
 export type SaveCompanyFinanceSetupPayload = {
