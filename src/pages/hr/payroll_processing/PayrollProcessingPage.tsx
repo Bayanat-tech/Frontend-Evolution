@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Play, Users, Lock } from "lucide-react";
+import { Loader2, Play, Users, Lock, X, Download } from "lucide-react";
 
 import { DataTable } from "../../../components/ui/DataTable";
 import { Button } from "../../../components/ui/Button";
@@ -22,8 +22,19 @@ function formatDateForInput(d: Date | string | null | undefined): string {
   return date.toISOString().slice(0, 10);
 }
 
+function formatDateDMY(d: Date | string | null | undefined): string {
+  const iso = formatDateForInput(d);
+  return iso ? iso.split("-").reverse().join("/") : "";
+}
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Reads a value from an Oracle row regardless of key casing. */
+function pick(row: any, key: string): any {
+  if (!row) return undefined;
+  return row[key] ?? row[key.toLowerCase()] ?? row[key.toUpperCase()];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -74,6 +85,20 @@ export interface ApiResponse<T = unknown> {
   data?: T;
 }
 
+export interface AddDedRow {
+  doc_no: string | number | null;
+  doc_date: string | Date | null;
+  employee_code: string;
+  employee_name: string;
+  pay_comp_desc: string | null;
+  pay_comp_earn_ded: string | null; // E / D
+  recover_mth_amt: number;
+  cancel_status: "Y" | "N";
+  _rowKey: string;
+}
+
+type TxnType = "E" | "D";
+
 /* -------------------------------------------------------------------------- */
 /* API                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -87,10 +112,10 @@ async function processBulkSalary(
   const res = await api.post("/api/wms/common/procBuildCommonProcedurewmc", {
     parameter: "PROC_BULK_PROCESS_SALARY",
     loginid: loginId || "",
-    val1s1: companyCode || "",       // P_VAL1S1 (Company Code)
-    val1s2: employeeIds,             // P_VAL1S2 (Employee IDs - comma separated)
+    val1s1: companyCode || "", // P_VAL1S1 (Company Code)
+    val1s2: employeeIds, // P_VAL1S2 (Employee IDs - comma separated)
     // val1s3 is the OUT parameter (L_PROCESS_FLAG), so we skip it
-    val1s4: divCode || "",           // P_VAL1S4 (Division Code)
+    val1s4: divCode || "", // P_VAL1S4 (Division Code)
   });
 
   if (!res.data.success)
@@ -117,7 +142,48 @@ async function fetchPayrollProcessingData(params: {
   };
 
   const rows = await getDynamicLookup(queryParams);
-return (rows ?? []) as unknown as PayrollEmployeeRow[];
+  return (rows ?? []) as unknown as PayrollEmployeeRow[];
+}
+
+/**
+ * Populate Addition / Deductions
+ * PROC_PAY_CONSOLIDATE -> PAY_CONSOLIDATE_VW_HR_SALARY_ADVDED_FROM
+ * (builds the SQL, run through the dynamic SQL endpoint via getDynamicLookup)
+ *   code1 = company code      (P_CODE1)
+ *   code2 = division code     (P_CODE2)
+ *   code3 = employee code     (P_CODE3)
+ *   code4 = PAY_COMP_EARN_DED (P_CODE4) -> E / D
+ */
+async function fetchAddDedData(params: {
+  companyCode: string;
+  divCode: string;
+  employeeCode: string;
+  txnType: TxnType;
+  loginId?: string;
+}): Promise<AddDedRow[]> {
+  const queryParams: DynamicQueryParams = {
+    parameter: "PAY_CONSOLIDATE_VW_HR_SALARY_ADVDED_FROM",
+    loginid: params.loginId || "",
+    code1: params.companyCode || "",
+    code2: params.divCode || "",
+    code3: params.employeeCode || "",
+    code4: params.txnType,
+  };
+
+  const rows = (await getDynamicLookup(queryParams)) ?? [];
+
+  return (rows as any[]).map((r, i) => ({
+    doc_no: pick(r, "DOC_NO") ?? null,
+    doc_date: pick(r, "DOC_DATE") ?? null,
+    employee_code: String(pick(r, "EMPLOYEE_CODE") ?? ""),
+    employee_name: String(pick(r, "EMPLOYEE_NAME") ?? ""),
+    pay_comp_desc: pick(r, "PAY_COMP_DESC") ?? null,
+    pay_comp_earn_ded: pick(r, "PAY_COMP_EARN_DED") ?? null,
+    recover_mth_amt: Number(pick(r, "RECOVER_MTH_AMT") ?? 0) || 0,
+    cancel_status:
+      String(pick(r, "CANCEL_STATUS") ?? "N").toUpperCase() === "Y" ? "Y" : "N",
+    _rowKey: `adv-${pick(r, "DOC_NO") ?? i}-${i}`,
+  }));
 }
 
 async function deleteAccrualTempData(
@@ -135,7 +201,6 @@ async function deleteAccrualTempData(
     throw new Error(res.data.message || "Failed to clear accrual temp data");
   return res.data;
 }
-
 
 async function processEmployeePayroll(
   companyCode: string,
@@ -179,8 +244,6 @@ async function calcEmployeeSalary(
   return res.data;
 }
 
-
-
 async function adjustPayColaForCompany(
   companyCode: string,
   loginId: string
@@ -193,6 +256,375 @@ async function adjustPayColaForCompany(
   if (!res.data.success)
     throw new Error(res.data.message || "Failed to adjust pay COLA");
   return res.data;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Populate Addition / Deductions modal                                       */
+/* -------------------------------------------------------------------------- */
+
+interface PopulateAddDedModalProps {
+  open: boolean;
+  companyCode: string;
+  loginId: string;
+  initialDivCode: string;
+  initialDivName: string;
+  initialEmpCode: string;
+  initialEmpName: string;
+  onClose: () => void;
+  /** Called when the user clicks "Continue Processing" inside the modal. */
+  onContinue: () => void | Promise<void>;
+  continueDisabled?: boolean;
+}
+
+function PopulateAddDedModal({
+  open,
+  companyCode,
+  loginId,
+  initialDivCode,
+  initialDivName,
+  initialEmpCode,
+  initialEmpName,
+  onClose,
+  onContinue,
+  continueDisabled,
+}: PopulateAddDedModalProps) {
+  const [mDivCode, setMDivCode] = useState("");
+  const [mDivName, setMDivName] = useState("");
+  const [mEmpCode, setMEmpCode] = useState("");
+  const [mEmpName, setMEmpName] = useState("");
+  const [txnType, setTxnType] = useState<TxnType>("E");
+
+  const [data, setData] = useState<AddDedRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [populated, setPopulated] = useState(false);
+  const [error, setError] = useState("");
+  const [running, setRunning] = useState(false);
+
+  // Reset every time the modal opens, pre-filling from page filters
+  useEffect(() => {
+    if (!open) return;
+    setMDivCode(initialDivCode);
+    setMDivName(initialDivName);
+    setMEmpCode(initialEmpCode);
+    setMEmpName(initialEmpName);
+    setTxnType("E");
+    setData([]);
+    setPopulated(false);
+    setError("");
+    setLoading(false);
+    setRunning(false);
+  }, [open, initialDivCode, initialDivName, initialEmpCode, initialEmpName]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const handlePopulate = useCallback(async () => {
+    setError("");
+    if (!mDivCode) {
+      setError("Division is required.");
+      return;
+    }
+    if (!mEmpCode) {
+      setError("Employee is required.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const rows = await fetchAddDedData({
+        companyCode,
+        divCode: mDivCode,
+        employeeCode: mEmpCode,
+        txnType,
+        loginId,
+      });
+      setData(rows);
+      setPopulated(true);
+    } catch (e) {
+      setData([]);
+      setPopulated(true);
+      setError((e as Error).message || "Failed to populate data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyCode, loginId, mDivCode, mEmpCode, txnType]);
+
+  const updateCancelStatus = useCallback(
+    (rowKey: string, value: "Y" | "N") => {
+      setData((prev) =>
+        prev.map((r) =>
+          r._rowKey === rowKey ? { ...r, cancel_status: value } : r
+        )
+      );
+    },
+    []
+  );
+
+  const total = useMemo(
+    () => data.reduce((sum, r) => sum + (Number(r.recover_mth_amt) || 0), 0),
+    [data]
+  );
+
+  const handleContinue = async () => {
+    setRunning(true);
+    try {
+      await onContinue();
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  if (!open) return null;
+
+  const th =
+    "sticky top-0 z-10 whitespace-nowrap border-b border-[#E3E6EB] bg-[#F9FAFB] px-3 py-2 text-left text-[12px] font-semibold text-[#344054]";
+  const td = "whitespace-nowrap border-b border-[#EDEFF2] px-3 py-1.5 text-[13px] text-[#101828]";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#101828]/50 p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Populate Addition / Deductions"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border border-[#E3E6EB] bg-white shadow-[0_20px_40px_rgba(16,24,40,0.25)]">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#EDEFF2] px-5 py-3.5">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight text-[#101828]">
+              Populate Addition / Deductions
+            </h2>
+            <p className="text-[12px] text-[#667085]">
+              Select division, employee and transaction type, then populate.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1.5 text-[#667085] transition-colors hover:bg-[#F2F4F7]"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="border-b border-[#EDEFF2] bg-[#F7F8FA] px-5 py-4">
+          <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
+              <span>
+                Division <span className="text-[#DC2626]">*</span>
+              </span>
+              <DynamicDropDown
+                type="division"
+                value={mDivCode}
+                displayName={mDivName}
+                onChange={(value: string, row: any) => {
+                  setMDivCode(value);
+                  setMDivName(row?.div_name ?? row?.name ?? "");
+                  // employee depends on division
+                  setMEmpCode("");
+                  setMEmpName("");
+                  setData([]);
+                  setPopulated(false);
+                }}
+                code1={companyCode}
+                required
+              />
+            </label>
+
+            <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
+              <span className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-[#98A2B3]" />
+                Employee <span className="text-[#DC2626]">*</span>
+              </span>
+              <DynamicDropDown
+                type="employee"
+                value={mEmpCode}
+                displayName={mEmpName}
+                onChange={(value: string, row: any) => {
+                  setMEmpCode(row?.employee_code ?? value ?? "");
+                  setMEmpName(row?.rpt_name ?? row?.name ?? "");
+                  setData([]);
+                  setPopulated(false);
+                }}
+                code1={mDivCode || ""}
+                code2=""
+                code3=""
+                code4={companyCode}
+              />
+            </label>
+
+            <label className="grid gap-1.5 text-[12px] font-medium text-[#344054]">
+              <span>
+                Type of Transaction <span className="text-[#DC2626]">*</span>
+              </span>
+              <select
+                className="h-8 w-full rounded-md border border-[#E3E6EB] bg-white px-2 text-[13px] text-[#101828] outline-none transition-colors focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15"
+                value={txnType}
+                onChange={(e) => {
+                  setTxnType(e.target.value as TxnType);
+                  setData([]);
+                  setPopulated(false);
+                }}
+              >
+                <option value="E">Earning</option>
+                <option value="D">Deduction</option>
+              </select>
+            </label>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                className="bg-[#4F46E5] text-white hover:bg-[#4338CA]"
+                disabled={loading || !mDivCode || !mEmpCode}
+                onClick={handlePopulate}
+              >
+                {loading ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-1.5 h-4 w-4" />
+                )}
+                Populate
+              </Button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-3 rounded-md bg-[#FEF3F2] px-2.5 py-1.5 text-[12px] text-[#B42318]">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Grid */}
+        <div className="min-h-[260px] flex-1 overflow-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={th}>Doc No</th>
+                <th className={th}>Doc Date</th>
+                <th className={th}>Employee Code</th>
+                <th className={th}>Employee Name</th>
+                <th className={th}>Pay Component</th>
+                <th className={th}>Type</th>
+                <th className={`${th} text-right`}>Recover Month Amt</th>
+                <th className={th}>Cancel Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-[13px] text-[#667085]">
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading…
+                    </span>
+                  </td>
+                </tr>
+              ) : data.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-[13px] text-[#667085]">
+                    {populated
+                      ? "No records found for the selected criteria."
+                      : "Select Division, Employee and Type, then click Populate."}
+                  </td>
+                </tr>
+              ) : (
+                data.map((r) => (
+                  <tr key={r._rowKey} className="hover:bg-[#F9FAFB]">
+                    <td className={td}>{r.doc_no ?? ""}</td>
+                    <td className={td}>{formatDateDMY(r.doc_date)}</td>
+                    <td className={td}>{r.employee_code}</td>
+                    <td className={td}>{r.employee_name}</td>
+                    <td className={td}>{r.pay_comp_desc ?? ""}</td>
+                    <td className={td}>
+                      {String(r.pay_comp_earn_ded).toUpperCase() === "E"
+                        ? "Addition"
+                        : "Deduction"}
+                    </td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {r.recover_mth_amt.toLocaleString(undefined, {
+                        minimumFractionDigits: 3,
+                        maximumFractionDigits: 3,
+                      })}
+                    </td>
+                    <td className={td}>
+                      <select
+                        className="h-7 w-20 rounded-md border border-[#E3E6EB] bg-white px-1.5 text-xs text-[#101828] outline-none transition-colors focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15"
+                        value={r.cancel_status}
+                        onChange={(e) =>
+                          updateCancelStatus(r._rowKey, e.target.value as "Y" | "N")
+                        }
+                      >
+                        <option value="N">No</option>
+                        <option value="Y">Yes</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Summary */}
+        <div className="flex items-center justify-between border-t border-[#EDEFF2] bg-[#F9FAFB] px-5 py-2.5 text-[13px] text-[#667085]">
+          <span>
+            Record Count:{" "}
+            <strong className="font-semibold text-[#101828]">{data.length}</strong>
+          </span>
+          <span>
+            Total:{" "}
+            <strong className="font-semibold tabular-nums text-[#101828]">
+              {total.toLocaleString(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </strong>
+          </span>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-[#EDEFF2] px-5 py-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onClose}
+            disabled={running}
+          >
+            Close
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-[#101828] text-white hover:bg-[#1D2939]"
+            disabled={running || continueDisabled}
+            onClick={handleContinue}
+          >
+            {running ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="mr-1.5 h-4 w-4" />
+            )}
+            Continue Processing
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -221,6 +653,9 @@ export default function PayrollProcessingPage() {
   const [rows, setRows] = useState<PayrollEmployeeRow[]>([]);
   const [selectedRows, setSelectedRows] = useState<PayrollEmployeeRow[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Modal
+  const [addDedOpen, setAddDedOpen] = useState(false);
 
   const filtersReady = Boolean(companyCode && payDate);
   const hasHeaderEmployee = Boolean(empId && empRow);
@@ -272,63 +707,75 @@ export default function PayrollProcessingPage() {
     setHasLoaded(true);
   }, [loadQuery.data, empId]);
 
-  /* ── Process Payroll ───────────────────────────────────────────────────── */
-const handleProcessPayroll = useCallback(async () => {
-  if (!divCode) {
-    alert("Division is required.");
-    return;
-  }
-  if (selectedRows.length === 0) return;
-
-  try {
-    await deleteAccrualTempData(companyCode, divCode, loginid);
-
-    const checkRows = await getDynamicLookup({
-      parameter: "PAYROLL_Process",
-      code1: companyCode,
-    });
-
-    const checkValue = Number(
-      (checkRows?.[0] as any)?.check_value ??
-        (checkRows?.[0] as any)?.CHECK_VALUE ??
-        0
-    );
-
-    if (checkValue !== 0) {
-      alert("Memo mismatch found. Please resolve before processing payroll.");
+  /* ── Process Payroll (actual processing – runs from the modal) ─────────── */
+  const runProcessPayroll = useCallback(async () => {
+    if (!divCode) {
+      alert("Division is required.");
       return;
     }
+    if (selectedRows.length === 0) return;
 
-    // 1. Extract employee IDs and join them into a comma-separated string
-    const employeeIdsStr = selectedRows
-      .map((row) => row.employee_id)
-      .filter(Boolean)
-      .join(",");
+    try {
+      await deleteAccrualTempData(companyCode, divCode, loginid);
 
-    // 2. Call the bulk process procedure (NOW HITTING THE CORRECT ENDPOINT)
-    await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
+      const checkRows = await getDynamicLookup({
+        parameter: "PAYROLL_Process",
+        code1: companyCode,
+      });
 
-    // 3. Adjust Pay COLA for the company
-    await adjustPayColaForCompany(companyCode, loginid);
+      const checkValue = Number(
+        (checkRows?.[0] as any)?.check_value ??
+          (checkRows?.[0] as any)?.CHECK_VALUE ??
+          0
+      );
 
-    // 4. Update local state
-    setRows((prev) =>
-      prev.map((r) =>
-        selectedRows.some(
-          (s) =>
-            (s._rowKey && s._rowKey === r._rowKey) ||
-            (s.employee_id && s.employee_id === r.employee_id)
+      if (checkValue !== 0) {
+        alert("Memo mismatch found. Please resolve before processing payroll.");
+        return;
+      }
+
+      // 1. Extract employee IDs and join them into a comma-separated string
+      const employeeIdsStr = selectedRows
+        .map((row) => row.employee_id)
+        .filter(Boolean)
+        .join(",");
+
+      // 2. Call the bulk process procedure
+      await processBulkSalary(companyCode, employeeIdsStr, divCode, loginid);
+
+      // 3. Adjust Pay COLA for the company
+      await adjustPayColaForCompany(companyCode, loginid);
+
+      // 4. Update local state
+      setRows((prev) =>
+        prev.map((r) =>
+          selectedRows.some(
+            (s) =>
+              (s._rowKey && s._rowKey === r._rowKey) ||
+              (s.employee_id && s.employee_id === r.employee_id)
+          )
+            ? { ...r, processed: 1, select_emp: 1 }
+            : r
         )
-          ? { ...r, processed: 1, select_emp: 1 }
-          : r
-      )
-    );
+      );
 
-    alert(`${selectedRows.length} employee(s) marked for process.`);
-  } catch (err) {
-    alert((err as Error).message || "Failed to process payroll.");
-  }
-}, [divCode, companyCode, loginid, selectedRows]);
+      setAddDedOpen(false);
+      alert(`${selectedRows.length} employee(s) marked for process.`);
+    } catch (err) {
+      alert((err as Error).message || "Failed to process payroll.");
+    }
+  }, [divCode, companyCode, loginid, selectedRows]);
+
+  /* ── "Process Payroll" button → opens the Add/Ded modal ────────────────── */
+  const handleProcessPayroll = useCallback(() => {
+    if (!divCode) {
+      alert("Division is required.");
+      return;
+    }
+    if (selectedRows.length === 0) return;
+    setAddDedOpen(true);
+  }, [divCode, selectedRows.length]);
+
   /* ── Cascade handlers ──────────────────────────────────────────────────── */
   const onDivChange = (value: string, row: any) => {
     setDivCode(value);
@@ -812,6 +1259,20 @@ const handleProcessPayroll = useCallback(async () => {
           </span>
         )}
       </div>
+
+      {/* Populate Addition / Deductions modal */}
+      <PopulateAddDedModal
+        open={addDedOpen}
+        companyCode={companyCode}
+        loginId={loginid}
+        initialDivCode={divCode}
+        initialDivName={divName}
+        initialEmpCode={empRow?.employee_code ?? ""}
+        initialEmpName={empName}
+        onClose={() => setAddDedOpen(false)}
+        onContinue={runProcessPayroll}
+        continueDisabled={selectedRows.length === 0}
+      />
     </div>
   );
 }

@@ -216,7 +216,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const userInitials = (displayName || "U").slice(0, 3).toUpperCase();
   const isFreightModule = (appCode || "").toLowerCase() === "fms";
   const isFinanceModule = /^(finance|accounts?|fin|fas|f&a)$/i.test(appCode || "") || /\/finance(?:\/|$)/i.test(location.pathname);
-  const keepSidebarOpen = isFreightModule || isFinanceModule;
+  // Keep sidebar open consistently across all modules (WMS, HR, Masters, Freight, Finance, etc.)
+  const keepSidebarOpen = true;
   const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
   const moduleSubtitle = moduleMeta?.fullForm || "Transactions";
   const searchModuleName = moduleMeta?.fullForm
