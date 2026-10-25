@@ -352,7 +352,7 @@ async function fontVfs() {
 
 export async function createPurchasePdf(report: PurchaseReportDocument, identity: ReportIdentity) {
   const [{ default: pdfMake }, definition, vfs] = await Promise.all([
-    import("pdfmake/build/pdfmake.js"), buildPurchasePdfDefinition(report, identity), fontVfs(),
+    import("pdfmake/build/pdfmake"), buildPurchasePdfDefinition(report, identity), fontVfs(),
   ]);
   const fonts = { Inter: { normal: "Inter-Regular.ttf", bold: "Inter-Bold.ttf", italics: "Inter-Regular.ttf", bolditalics: "Inter-Bold.ttf" } };
   const tableLayouts = {

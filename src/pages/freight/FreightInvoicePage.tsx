@@ -119,6 +119,10 @@ export function FreightInvoicePage() {
     }
   }, [companyCode, toast]);
 
+  useEffect(() => {
+    void loadRows();
+  }, [loadRows]);
+
   const openNewForJob = useCallback(async (jobNo: string) => {
     candidateRequestRef.current += 1;
     setEditorMode("add");
