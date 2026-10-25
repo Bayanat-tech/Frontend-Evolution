@@ -60,7 +60,7 @@ export function FreightJobActivitySelectorDialog({
 
   // PowerBuilder Filters
   const [filterBySupplier, setFilterBySupplier] = useState<boolean>(Boolean(supplierCode));
-  const [hideAlreadyBooked, setHideAlreadyBooked] = useState<boolean>(true); // PB default: do not show booked
+  const [statusFilter, setStatusFilter] = useState<"unbooked" | "booked" | "all">("unbooked"); // PB default: unbooked only
   const [hideFullyBookedJobs, setHideFullyBookedJobs] = useState<boolean>(true); // PB default: do not show fully booked jobs
   const [expenseSearch, setExpenseSearch] = useState("");
 
@@ -117,8 +117,8 @@ export function FreightJobActivitySelectorDialog({
       setBookedPIList([]);
       const shouldFilter = Boolean(supplierCode);
       setFilterBySupplier(shouldFilter);
-      setHideAlreadyBooked(false);
-      setHideFullyBookedJobs(false);
+      setStatusFilter("unbooked");
+      setHideFullyBookedJobs(true);
       void fetchJobs("", shouldFilter ? supplierCode.trim() : null);
     }
   }, [open, companyCode, supplierCode]);
@@ -316,8 +316,10 @@ export function FreightJobActivitySelectorDialog({
   // Filtered expenses (PowerBuilder logic: hide booked by default)
   const visibleExpenses = useMemo(() => {
     let list = flattenedExpenses;
-    if (hideAlreadyBooked) {
+    if (statusFilter === "unbooked") {
       list = list.filter((item) => !item.isBooked);
+    } else if (statusFilter === "booked") {
+      list = list.filter((item) => item.isBooked);
     }
     if (filterBySupplier && supplierCode) {
       list = list.filter((item) => item.isSupplierMatch);
@@ -336,7 +338,7 @@ export function FreightJobActivitySelectorDialog({
       );
     }
     return list;
-  }, [flattenedExpenses, hideAlreadyBooked, filterBySupplier, supplierCode, expenseSearch]);
+  }, [flattenedExpenses, statusFilter, filterBySupplier, supplierCode, expenseSearch]);
 
   const allExpensesCount = flattenedExpenses.length;
   const bookedExpensesCount = useMemo(() => flattenedExpenses.filter((e) => e.isBooked).length, [flattenedExpenses]);
@@ -603,15 +605,18 @@ export function FreightJobActivitySelectorDialog({
               {selectedJob && (
                 <div className="flex items-center gap-2">
                   {/* PB Mode toggle: Hide already booked lines */}
-                  <label className="flex items-center gap-1 cursor-pointer select-none text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
-                    <input
-                      type="checkbox"
-                      checked={hideAlreadyBooked}
-                      onChange={(e) => setHideAlreadyBooked(e.target.checked)}
-                      className="rounded border-slate-300 text-[#00378C]"
-                    />
-                    <span>Hide already booked</span>
-                  </label>
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded px-2 py-0.5 shadow-2xs">
+                    <span className="text-[11px] font-semibold text-slate-600">Filter:</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as any)}
+                      className="h-5.5 text-[11px] font-bold rounded border-0 bg-transparent py-0 pl-1 pr-5 text-[#00378C] focus:ring-0 cursor-pointer"
+                    >
+                      <option value="unbooked">Unbooked Only (Default)</option>
+                      <option value="booked">Already Booked in PI</option>
+                      <option value="all">All Expenses (Booked & Unbooked)</option>
+                    </select>
+                  </div>
 
                   {visibleExpenses.length > 0 && (
                     <>
@@ -653,42 +658,49 @@ export function FreightJobActivitySelectorDialog({
                 <div className="flex h-full items-center justify-center p-8 text-slate-500 text-xs">
                   <RefreshCw size={16} className="animate-spin mr-2 text-[#00378C]" /> Loading activities...
                 </div>
-              ) : allExpensesBooked && hideAlreadyBooked ? (
-                /* Pure PowerBuilder View: When all expenses are already booked in PI, they are NOT shown! */
+              ) : allExpensesBooked && statusFilter === "unbooked" ? (
+                /* Attractive PowerBuilder View: When all expenses are already booked in PI */
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-600">
-                  <div className="rounded-full bg-emerald-100 p-3 text-emerald-600 mb-3">
-                    <CheckCircle2 size={36} />
+                  <div className="rounded-full bg-emerald-100 p-3 text-emerald-600 mb-3 border border-emerald-200 shadow-xs">
+                    <CheckCircle2 size={38} />
                   </div>
                   <h4 className="text-sm font-bold text-slate-800">
-                    All Expenses Already Booked in Purchase Invoice
+                    All Expenses for this Job are Already Booked
                   </h4>
-                  <p className="text-xs text-slate-500 mt-1 max-w-md">
-                    All supplier and agent costs for Job{" "}
+                  <p className="text-xs text-slate-600 mt-1.5 max-w-md">
+                    All supplier and agent expenses for Job{" "}
                     <strong className="text-[#00378C] font-mono">
                       {selectedJob.job_no || selectedJob.JOB_NO}
                     </strong>{" "}
-                    have already been booked into Purchase Invoice:
+                    have already been booked into Purchase Invoice(s):
                   </p>
-                  <div className="mt-2.5 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                     {Array.from(new Set(flattenedExpenses.map((e) => e.booked_pi_no).filter(Boolean))).map((pi) => (
                       <span
                         key={pi}
-                        className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 font-mono font-bold text-emerald-800 text-xs shadow-2xs"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 font-mono font-bold text-emerald-800 text-xs shadow-2xs"
                       >
+                        <CheckCircle2 size={13} className="text-emerald-600" />
                         {pi}
                       </span>
                     ))}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-3">
-                    Per PowerBuilder ERP rules, already-booked expenses are hidden to prevent duplicate bookings.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setHideAlreadyBooked(false)}
-                    className="mt-2 text-xs font-semibold text-[#00378C] hover:underline cursor-pointer"
-                  >
-                    View already booked lines with [Booked in PI] badge
-                  </button>
+                  <div className="mt-4 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("booked")}
+                      className="rounded-md bg-[#00378C] hover:bg-[#002d72] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs transition-colors cursor-pointer"
+                    >
+                      View Booked Lines in History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("all")}
+                      className="rounded-md border border-slate-300 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      Show All Lines
+                    </button>
+                  </div>
                 </div>
               ) : visibleExpenses.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center text-slate-400">
