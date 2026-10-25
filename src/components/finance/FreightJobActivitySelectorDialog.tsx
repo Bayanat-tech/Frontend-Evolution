@@ -88,16 +88,33 @@ export function FreightJobActivitySelectorDialog({
       const response = await api.post<{ success?: boolean; data?: any[] }>("/api/freight/job-activities/jobs", {
         company_code: companyCode,
         search: query || "",
+        supplier_code: filterBySupplier && supplierCode ? supplierCode.trim() : undefined,
       });
       const data = response.data?.data || [];
-      setJobs(Array.isArray(data) ? data : []);
+      const jobList = Array.isArray(data) ? data : [];
+      setJobs(jobList);
+      if (jobList.length > 0) {
+        void handleSelectJob(jobList[0]);
+      } else {
+        setSelectedJob(null);
+        setActivities([]);
+      }
     } catch (err) {
       console.error("Failed to load freight jobs:", err);
       setJobs([]);
+      setSelectedJob(null);
+      setActivities([]);
     } finally {
       setLoadingJobs(false);
     }
-  }, [companyCode]);
+  }, [companyCode, filterBySupplier, supplierCode]);
+
+  // Re-fetch jobs whenever filterBySupplier toggle changes
+  useEffect(() => {
+    if (open && companyCode) {
+      void fetchJobs(jobSearch);
+    }
+  }, [filterBySupplier]);
 
   const handleSelectJob = async (job: any) => {
     setSelectedJob(job);
@@ -374,7 +391,6 @@ export function FreightJobActivitySelectorDialog({
       open={open}
       onClose={onClose}
       title="Load Freight Job Activities (Purchase Booking)"
-      description="Select freight cost and activity lines to auto-populate into Purchase Invoice"
       wide
       footer={
         <div className="flex w-full items-center justify-between gap-3">
@@ -438,7 +454,7 @@ export function FreightJobActivitySelectorDialog({
         {/* Master / Detail Split Grid */}
         <div className="grid grid-cols-12 gap-3 min-h-0 flex-1 overflow-hidden">
           {/* Left Column: Freight Jobs List (col-span-4) */}
-          <div className="col-span-4 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
+          <div className="col-span-12 md:col-span-3 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 p-2 flex flex-col gap-1.5 shrink-0">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
@@ -552,7 +568,7 @@ export function FreightJobActivitySelectorDialog({
           </div>
 
           {/* Right Column: Activities & Expenses (col-span-8) */}
-          <div className="col-span-8 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
+          <div className="col-span-12 md:col-span-9 flex flex-col rounded-md border border-slate-200 bg-white shadow-2xs overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 p-2 flex items-center justify-between shrink-0 gap-2">
               <div className="flex items-center gap-2">
                 <Truck size={14} className="text-[#00378C]" />
@@ -583,7 +599,7 @@ export function FreightJobActivitySelectorDialog({
                       onChange={(e) => setHideAlreadyBooked(e.target.checked)}
                       className="rounded border-slate-300 text-[#00378C]"
                     />
-                    <span>Hide already booked (PB Mode)</span>
+                    <span>Hide already booked</span>
                   </label>
 
                   {visibleExpenses.length > 0 && (
