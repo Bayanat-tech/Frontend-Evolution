@@ -51,7 +51,7 @@
   import { PamsAppraisalViewPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton } from "../pages/pams/PamsPages";
   import { HrMasterPage } from "../pages/hr/HrMasterPage";
   import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
-  import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+  import { MasterWithReportPage } from "../pages/hr/Reports/SectionMasterMainPage";  import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
   import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
   import {
     OxAssetInventoryPage,
@@ -1593,6 +1593,81 @@ import EmployeeJVProcess from "../pages/hr/utilities/Employeejvprocess";
       name: "Vacation Settlement",
       match: ({ pathname }) => isVacationSettlementRoute(pathname),
       element: () => <VacationSettlementPage />
+    },
+
+    {
+    name: "HR Section Master",
+    match: (context) =>
+    isHrRoute(context) &&
+    isHrSectionMasterRoute(context),
+    element: () => (
+  <MasterWithReportPage config={{
+    title: "Section Master",
+    gridParameter: "MST_HR_MS_HR_SECTION",
+    reportUrl: "/api/wms/reports/section-master/html",
+    keyField: "section_code",
+    source: "dynamic",
+    gmEndpoint: "section",
+    fields: [
+      { name: "section_code", label: "Section Code", required: true, disabledOnEdit: true },
+      { name: "section_name", label: "Section Name", required: true },
+      { name: "section_short_name", label: "Short Name" },
+      { name: "div_code", label: "Division", required: true },
+      { name: "dept_code", label: "Department", required: true },
+      { name: "sect_head_id", label: "Section Head" },
+      { name: "phone", label: "Phone" },
+      { name: "email", label: "Email" },
+      { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
+    ],
+    defaults: { status: "A" }
+    }} />
+    ),
+    },
+
+        {
+      name: "HR Formal Designation",
+      match: (context) => isHrRoute(context) && isHrFormalDesignationRoute(context),
+      element: () => (
+        <MasterWithReportPage config={{
+          title: "Formal Designation Master",
+          gridEndpoint: "formaldesignation", // 👈 Changed from gridParameter to gridEndpoint
+          reportUrl: "/api/wms/reports/formal-designation/html",
+          keyField: "labour_desg_code",
+          source: "gm",
+          gmEndpoint: "formaldesignation",
+          fields: [
+            { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true },
+            { name: "labour_desg_name", label: "Formal Designation", required: true },
+            { name: "labour_desg_short_name", label: "Short Name" },
+            { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
+          ],
+          defaults: { status: "A" }
+        }} />
+      )
+    },
+
+                {
+      name: "HR Category Master",
+      match: (context) => isHrRoute(context) && isHrCategoryMasterRoute(context),
+      element: () => (
+        <MasterWithReportPage config={{
+          title: "Category Master",
+          // 👇 CHANGE THIS:
+          gridParameter: "MST_HR_MS_HR_CATEGORY", 
+          reportUrl: "/api/wms/reports/category/html",
+          keyField: "category_code",
+          source: "dynamic", // 👈 CHANGE TO DYNAMIC
+          gmEndpoint: "categorymaster",
+          fields: [
+            { name: "category_code", label: "Category Code", required: true, disabledOnEdit: true },
+            { name: "category_name", label: "Category Name", required: true },
+            { name: "category_short_name", label: "Short Name" },
+            { name: "status", label: "Status", type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }] },
+            { name: "remarks", label: "Remarks" },
+          ],
+          defaults: { status: "A" }
+        }} />
+      )
     },
 
     {
@@ -3397,5 +3472,42 @@ function isHrEmployeeWiseCostRoute(pathname: string) {
     normalized.includes("/hcm/hcm/reports/payroll/employee_wise_cost_report") ||
     normalized.includes("/hcm/hcm/reports/payroll/employee-wise-cost-report") ||
     compact.includes("employeewisecostreport")
+  );
+}
+
+function isHrSectionMasterRoute(context: WorkspaceRouteContext) {
+  const normalized = decodeRouteText(context.pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/general master/section") ||
+    normalized.includes("/hcm/hcm/general%20master/section") ||
+    normalized.includes("/hcm/hcm/general-master/section") ||
+    compact.includes("generalmastersection") ||
+    compact.endsWith("section")
+  );
+}
+
+function isHrFormalDesignationRoute(context: WorkspaceRouteContext) {
+  const normalized = decodeRouteText(context.pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hr/general_master/formal_designation") ||
+    normalized.includes("/hcm/hcm/general_master/formal_designation") ||
+    normalized.includes("/hcm/hr/general_master/labour_designation") ||
+    compact.includes("formald") ||
+    compact.includes("labourdesg")
+  );
+}
+
+
+function isHrCategoryMasterRoute(context: WorkspaceRouteContext) {
+  const normalized = decodeRouteText(context.pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/general master/category") ||
+    normalized.includes("/hcm/hcm/general%20master/category") ||
+    normalized.includes("/hcm/hr/general_master/category") ||
+    compact.includes("generalmastercategory") ||
+    compact.includes("categorymaster")
   );
 }
