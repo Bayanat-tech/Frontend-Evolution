@@ -1582,7 +1582,7 @@ function setJobField(setJob: (updater: (current: JobForm) => JobForm) => void, f
 }
 
 async function lookup(parameter: string, companyCode: string, code2 = "NULL", code3 = "NULL", query = "") {
-  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2, code3, code4: query || "NULL", number1: 50 })).map(normalizeLookupRow);
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2, code3, code4: query || "NULL", number1: 1000 })).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {

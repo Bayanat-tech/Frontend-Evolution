@@ -7,7 +7,7 @@ import {
   saveFyPeriod,
   SaveFyPeriodPayload
 } from "../../api/transactions";
-import { getMasterLookup } from "../../api/lookups";
+import { getDynamicLookup } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -88,7 +88,7 @@ export function CompanyFinanceSetupPage() {
       setLoading(true);
       const [res, currMaster] = await Promise.all([
         getCompanyFinanceSetup(companyCode),
-        getMasterLookup("wms", "currency").catch(() => []),
+        getDynamicLookup({ parameter: "DROP_DOWN_CURRENCY" }).catch(() => []),
       ]);
 
       if (Array.isArray(currMaster) && currMaster.length > 0) {
@@ -708,7 +708,7 @@ export function CompanyFinanceSetupPage() {
                 <label className={labelClass}>
                   Base Currency <span className="text-rose-500">*</span>
                 </label>
-                {currencyList.length > 0 ? (
+                {true ? (
                   <select
                     value={form.base_curr_code}
                     onChange={(e) => setForm((prev) => ({ ...prev, base_curr_code: e.target.value }))}
