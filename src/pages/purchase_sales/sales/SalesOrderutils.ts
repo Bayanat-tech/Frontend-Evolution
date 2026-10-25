@@ -165,8 +165,17 @@ export async function fetchSalesOrderDetail(
 
   const rows: any[] = Array.isArray(response) ? response : (response?.data ?? []);
 
+
   return rows.map((raw) => {
     const row = lowerRecord(raw as Record<string, unknown>);
+    const grossAmount =
+      numberOrZero(row.unit_price) *
+      (numberOrZero(row.quantity) ||
+        numberOrZero(row.qty_puom) * numberOrZero(row.uppp) + numberOrZero(row.qty_luom));
+    const exactDiscPercent =
+      grossAmount > 0 && numberOrZero(row.disc_price) > 0
+        ? (numberOrZero(row.disc_price) / grossAmount) * 100
+        : numberOrZero(row.disc_percent);
     return {
       id: newId(),
       div_code: text(row.so_div_code ?? row.div_code),
@@ -179,7 +188,7 @@ export async function fetchSalesOrderDetail(
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
-      disc_percent: numberOrZero(row.disc_percent),
+      disc_percent: exactDiscPercent,
       disc_price: numberOrZero(row.disc_price),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
@@ -347,7 +356,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     // SDN reference
     si_ref_doc_no: form.sdn_doc_no,
     discount_scoope: form.discount_scoope || "ITEM",
-    job_card_no : form.job_card_no
+    job_card_no: form.job_card_no
 
   };
 }
@@ -471,6 +480,8 @@ export function LcurrDisAmount(row: SalesOrderLineRow, ex_rate?: number) {
   return lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate);
 }
 
+
+
 // buildDetailsPayload — uses computed values
 export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number) {
   return rows.map((row) => ({
@@ -546,7 +557,8 @@ export async function runWorkflow(
 ) {
   return upsertBulkSaleseEntryApi(
     {
-      header: {...buildHeaderPayload(form, companyCode, loginid, docType, rows),
+      header: {
+        ...buildHeaderPayload(form, companyCode, loginid, docType, rows),
         cancelled: status === "CANCELED" ? "Y" : form.canceled || "N",
       },
       details: buildDetailsPayload(rows, form.ex_rate),

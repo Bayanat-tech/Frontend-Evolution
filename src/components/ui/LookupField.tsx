@@ -182,13 +182,43 @@ export function LookupField({
     }
   }, [highlightedIndex, open]);
 
+  const loadOptionsRef = useRef(loadOptions);
   useEffect(() => {
-    if (!open) return;
+    loadOptionsRef.current = loadOptions;
+  }, [loadOptions]);
+
+  const lastFetchedQueryRef = useRef<string | null>(null);
+
+  const openLookup = async () => {
+    if (disabled) return;
+    setOpen(true);
+    setLoading(true);
+    setError("");
+    setHighlightedIndex(0);
+    lastFetchedQueryRef.current = query;
+    try {
+      setRows(await loadOptionsRef.current(query));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load lookup");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) {
+      lastFetchedQueryRef.current = null;
+      return;
+    }
+    if (lastFetchedQueryRef.current === query) {
+      return;
+    }
     const timer = window.setTimeout(async () => {
       setLoading(true);
       setError("");
+      lastFetchedQueryRef.current = query;
       try {
-        setRows(await loadOptions(query));
+        setRows(await loadOptionsRef.current(query));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load lookup");
       } finally {
@@ -197,22 +227,7 @@ export function LookupField({
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [loadOptions, open, query]);
-
-  const openLookup = async () => {
-    if (disabled) return;
-    setOpen(true);
-    setLoading(true);
-    setError("");
-    setHighlightedIndex(0);
-    try {
-      setRows(await loadOptions(query));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load lookup");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [open, query]);
 
   const selectRow = (row: LookupRow) => {
     const rowValue = String(getLookupValue(row, valueField) ?? "");
@@ -272,9 +287,10 @@ export function LookupField({
           ? getLookupText(
             rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
               [valueField]: value,
+              ...(displayFields.includes("label") ? { label: value } : {}),
             },
             displayFields.length ? displayFields : [valueField],
-          ) || (displayFields.length === 0 || displayFields.includes(valueField) ? String(value) : "")
+          ) || String(value)
           : "");
 
   const totalCols = columns.length + (renderRowActions ? 1 : 0);

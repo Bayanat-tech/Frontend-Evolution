@@ -3,16 +3,19 @@
 //  • Add / Edit opens the full-page editor (same page, no dialog)
 //  • Editor header owns Back / Save; the form owns the logic
 //  • Header Save calls formRef.current?.save()
+//  • Print icon (actions column) opens a dialog with the single-employee report
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Edit2, FileText, Loader2, Plus, RefreshCw, Save, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Edit2, FileText, Loader2, Plus, Printer, RefreshCw, Save, Trash2, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../../../api/client";
 import { executeDynamicDelete, getDynamicLookup } from "../../../api/lookups";
 import { useToast } from "../../../components/ui/AlertToast";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
+import { NewReportDialog } from "../../../components/new_report_format";
 import { useAuth } from "../../../state/AuthContext";
 import { formatDate } from "../../../hooks/apiDate";
 import AddEmployeeHrForm, { type EmployeeFormHandle } from "./AddEmployeeHrForm";
@@ -33,6 +36,14 @@ export function EmployeeMasterPage() {
   const [editor, setEditor] = useState<Editor>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TEmployeeHr | null>(null);
+
+  /* ── Print dialog state ── */
+  const [printTarget, setPrintTarget] = useState<TEmployeeHr | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printLoading, setPrintLoading] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [printHtml, setPrintHtml] = useState<string | null>(null);
+  const [printExporting, setPrintExporting] = useState(false);
 
   const formRef = useRef<EmployeeFormHandle>(null);
 
@@ -77,6 +88,96 @@ export function EmployeeMasterPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Unable to delete employee"),
   });
 
+  /* ── Print ── */
+  const openPrint = useCallback(
+    async (row: TEmployeeHr) => {
+      setPrintTarget(row);
+      setPrintHtml(null);
+      setPrintError(null);
+      setPrintOpen(true);
+      setPrintLoading(true);
+      try {
+        // WHERE conditions of the report: COMPANY_CODE + EMPLOYEE_ID
+        const res = await api.post(
+          "/api/hr/hr-reports/employee-master/print/html",
+          {
+            company_code: companyCode,
+            employee_id: String(row.employee_id),
+            loginid,
+          },
+          {
+            responseType: "text",
+            headers: { Accept: "text/html" },
+            transformResponse: [(d) => d],
+          },
+        );
+        const data = res.data;
+        if (typeof data === "string" && data.trim().startsWith("{")) {
+          const json = JSON.parse(data);
+          if (json?.success === false) throw new Error(json.message || "No data found");
+        }
+        setPrintHtml(typeof data === "string" ? data : String(data));
+      } catch (e: any) {
+        let msg = e?.message || "Unable to generate report";
+        const d = e?.response?.data;
+        if (typeof d === "string") {
+          try {
+            msg = JSON.parse(d)?.message || d;
+          } catch {
+            msg = d;
+          }
+        } else if (d?.message) {
+          msg = d.message;
+        }
+        setPrintError(msg);
+      } finally {
+        setPrintLoading(false);
+      }
+    },
+    [companyCode, loginid],
+  );
+
+  const exportPrintExcel = useCallback(async () => {
+    if (!printTarget) return;
+    setPrintExporting(true);
+    try {
+      const res = await api.post(
+        "/api/hr/hr-reports/employee-master/print/excel",
+        { company_code: companyCode, employee_id: String(printTarget.employee_id), loginid },
+        { responseType: "blob" },
+      );
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Employee_Report_${printTarget.employee_code}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setPrintError(e?.response?.data?.message || e?.message || "Excel export failed");
+    } finally {
+      setPrintExporting(false);
+    }
+  }, [printTarget, companyCode, loginid]);
+
+  const closePrint = () => {
+    setPrintOpen(false);
+    setPrintTarget(null);
+    setPrintHtml(null);
+    setPrintError(null);
+  };
+
+  const openPrintInNewWindow = useCallback(() => {
+    if (!printHtml) return;
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(printHtml);
+      w.document.close();
+    }
+  }, [printHtml]);
+
   /* ── Editor open / close ── */
   const openAdd = () => setEditor({ editMode: false });
   const openEdit = useCallback((row: TEmployeeHr) => setEditor({ editMode: true, row }), []);
@@ -106,10 +207,18 @@ export function EmployeeMasterPage() {
       {
         id: "actions",
         header: "Actions",
-        size: 90,
+        size: 120,
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              onClick={() => openPrint(row.original)}
+              title="Print employee report"
+            >
+              <Printer size={13} />
+            </button>
             <button
               type="button"
               className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -130,7 +239,7 @@ export function EmployeeMasterPage() {
         ),
       },
     ],
-    [openEdit],
+    [openEdit, openPrint],
   );
 
   /* ── Editor view ── */
@@ -217,6 +326,19 @@ export function EmployeeMasterPage() {
         minWidth={900}
         density="grid"
         getRowId={(row) => `${row.employee_code}-${row.employee_id}`}
+      />
+
+      {/* ── Print report dialog ── */}
+      <NewReportDialog
+        open={printOpen}
+        onClose={closePrint}
+        title={printTarget ? `Employee Report - ${printTarget.employee_code}` : "Employee Report"}
+        htmlContent={printHtml}
+        loading={printLoading}
+        error={printError}
+        onExportExcel={exportPrintExcel}
+        exportingExcel={printExporting}
+        onOpenInNewWindow={openPrintInNewWindow}
       />
 
       {/* ── Delete confirmation dialog ── */}

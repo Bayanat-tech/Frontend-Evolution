@@ -837,7 +837,19 @@ const AddPRRequestPage = ({
   const validateAndShowErrors = (): boolean => {
     const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel, isSupplierUser);
     if (!valid) {
-      setNotice({ type: "error", message: errors.join(". ") });
+      // Agar saari errors sirf Terms ki hain, to Terms tab khol do
+      const onlyTermErrors = errors.every((e) => e.startsWith("Term "));
+      if (onlyTermErrors && shouldShowTermsTab()) {
+        setActiveTab("terms");
+      } else {
+        setActiveTab("items");
+      }
+      setNotice({
+        type: "error",
+        message: onlyTermErrors
+          ? `Please fill Terms & Conditions. ${errors.join(". ")}`
+          : errors.join(". "),
+      });
       return false;
     }
     return true;
@@ -1174,8 +1186,8 @@ const AddPRRequestPage = ({
         );
         const sup = r.supplierCode
           ? supplierList.find(
-              (s) => String(s.SUPPLIER_CODE).trim().toUpperCase() === r.supplierCode.trim().toUpperCase()
-            )
+            (s) => String(s.SUPPLIER_CODE).trim().toUpperCase() === r.supplierCode.trim().toUpperCase()
+          )
           : undefined;
 
         const blank = blankItem(start + i + 1, requestNumber ?? "", companyCode, header);
@@ -1440,9 +1452,11 @@ const AddPRRequestPage = ({
                     </Button>
                   )}
 
-                  <Button type="button" onClick={() => setAttachmentOpen(true)} className={BTN_BLUE}>
-                    <Paperclip size={15} /> Files
-                  </Button>
+                  {requestNumber && (
+                    <Button type="button" onClick={() => setAttachmentOpen(true)} className={BTN_BLUE}>
+                      <Paperclip size={15} /> Files
+                    </Button>
+                  )}
                   {requestNumber && (
                     <Button type="button" onClick={handlePrint} className={BTN_BLUE}>
                       <Printer size={15} /> Print
@@ -1737,7 +1751,7 @@ const AddPRRequestPage = ({
                   </div>
                   <div className="ml-2 flex shrink-0 items-center gap-2">
                     <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setCommentsOpen(true)}>
-                      <MessageSquare size={12} className="mr-1" /> Comments & Activity
+                      <MessageSquare size={12} className="mr-1" /> Comments & History
                     </Button>
                     <Button type="button" size="sm" className={`h-6 text-xs ${BTN_BLUE}`} onClick={() => setHeaderOpen(true)}>
                       Show Header Fields <ChevronDown size={13} className="ml-1" />
@@ -2336,7 +2350,7 @@ const AddPRRequestPage = ({
         </div>
       </Dialog>
 
-       <PurchaseReportPreview />
+      <PurchaseReportPreview />
     </>
   );
 };
