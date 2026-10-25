@@ -3123,7 +3123,7 @@ async function loadReferenceEnquiryLookup(companyCode: string) {
 }
 
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
-  const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 });
+  const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 1000 });
   return Array.isArray(rows) ? rows.map(normalizeLookupRow) : [];
 }
 

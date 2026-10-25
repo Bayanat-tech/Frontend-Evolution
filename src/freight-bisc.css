@@ -1871,26 +1871,26 @@ input[tabindex="-1"].opacity-0,
 }
 
 
-/* Keep tariff tables on the shared enquiry styles and compact its editor. */
-.freight-airline-tariff-screen .tariff-page-header { min-height:38px; padding:4px 0; }
-.freight-airline-tariff-screen .tariff-page-header h1 { font-size:18px !important; font-weight:600 !important; margin:0 !important; }
-.freight-airline-tariff-screen .tariff-page-icon { display:grid; place-items:center; width:28px; height:28px; border-radius:6px; background:#00378c0d; color:#00378c; }
-.freight-airline-tariff-screen.freight-dense-form .tariff-page-header { padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); }
-.freight-airline-tariff-screen .freight-master-form-header { padding:6px 10px !important; }
-.freight-airline-tariff-screen .freight-master-form-body { padding:8px 10px !important; }
-.freight-airline-tariff-screen .freight-master-label { flex-direction:row !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important; text-transform:none !important; letter-spacing:normal !important; font-size:12px !important; line-height:16px !important; }
-.freight-airline-tariff-screen .freight-master-form-card { border-radius:6px !important; box-shadow:none !important; }
+/* Keep tariff and master form tables on the shared enquiry styles and compact its editor. */
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .tariff-page-header { min-height:38px; padding:6px 12px; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .tariff-page-header h1 { font-size:18px !important; font-weight:700 !important; margin:0 !important; color:#0f172a !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .tariff-page-icon { display:grid; place-items:center; width:30px; height:30px; border-radius:8px; background:#00378c0d; color:#00378c; border: 1px solid rgba(0, 55, 140, 0.12); }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page).freight-dense-form .tariff-page-header { padding:8px 14px; border:1px solid #cbd5e1; border-radius:10px; background:#ffffff; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04); }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-header { padding:6px 12px !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-body { padding:10px 12px !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-label { flex-direction:row !important; justify-content:flex-start !important; align-items:center !important; text-align:left !important; text-transform:uppercase !important; letter-spacing:0.03em !important; font-size:11px !important; font-weight:600 !important; color:#475569 !important; line-height:16px !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-card { border-radius:10px !important; box-shadow:none !important; }
 
-/* Icon-led BISC groups, matching enquiry panels. */
-.freight-airline-tariff-screen #airline-tariff-form { padding:10px; border:1px solid #d5dfeb; border-radius:10px; background:#eef3f9; }
-.freight-airline-tariff-screen .freight-master-form-card { border:1px solid #cbd5e1 !important; border-radius:10px !important; background:#fff !important; }
-.freight-airline-tariff-screen .freight-master-form-header { min-height:40px; background:#f4f7fb !important; padding:6px 12px !important; }
-.freight-airline-tariff-screen .freight-master-form-header h3 { text-transform:none !important; font-size:12px !important; gap:8px !important; }
-.freight-airline-tariff-screen .freight-master-form-header h3::before { display:none !important; }
-.freight-airline-tariff-screen .freight-section-icon { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:6px; background:#00378c; color:#fff; }
-.freight-airline-tariff-screen .freight-section-icon svg { stroke:white !important; }
-.freight-airline-tariff-screen .freight-master-form-body { padding:10px 12px !important; }
-.freight-airline-tariff-screen .tariff-currency-row { max-width:320px; margin-bottom:10px; }
+/* Icon-led BISC groups, matching enquiry panels and Airline Tariff screen. */
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) :is(#airline-tariff-form, #wms-master-form, .wms-master-form-container) { padding:10px; border:1px solid #d5dfeb; border-radius:10px; background:#eef3f9; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-card { border:1px solid #cbd5e1 !important; border-radius:10px !important; background:#ffffff !important; overflow:hidden !important; margin-bottom: 0px !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-header { min-height:40px; background:#f4f7fb !important; padding:6px 12px !important; display: flex !important; align-items: center !important; justify-content: space-between !important; border-bottom: 1px solid #e2e8f0 !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-header h3 { text-transform:none !important; font-size:13px !important; font-weight: 700 !important; color: #0f172a !important; gap:8px !important; display: inline-flex !important; align-items: center !important; margin: 0 !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-header h3::before { display:none !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-section-icon { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:6px; background:#00378c; color:#fff; flex-shrink: 0; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-section-icon svg { stroke:white !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .freight-master-form-body { padding:10px 12px !important; background:#ffffff !important; }
+:is(.freight-airline-tariff-screen, .wms-master-screen, .freight-master-screen, .wms-simple-master-page) .tariff-currency-row { max-width:320px; margin-bottom:10px; }
 
 /* ==========================================================================
    Freight Control Center & Landing Page - BISC UI Style

@@ -7,6 +7,7 @@ import {
   saveFyPeriod,
   SaveFyPeriodPayload
 } from "../../api/transactions";
+import { getDynamicLookup } from "../../api/lookups";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -80,20 +81,49 @@ export function CompanyFinanceSetupPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [periodToDelete, setPeriodToDelete] = useState<string | null>(null);
   const [deletingPeriod, setDeletingPeriod] = useState(false);
+  const [currencyMasterList, setCurrencyMasterList] = useState<{ CURR_CODE: string; CURR_NAME: string }[]>([]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const res = await getCompanyFinanceSetup(companyCode);
+      const [res, currMaster] = await Promise.all([
+        getCompanyFinanceSetup(companyCode),
+        getDynamicLookup({ parameter: "DROP_DOWN_CURRENCY" }).catch(() => []),
+      ]);
+
+      if (Array.isArray(currMaster) && currMaster.length > 0) {
+        const mapped = currMaster
+          .map((r: any) => ({
+            CURR_CODE: String(r.CURR_CODE || r.curr_code || "").trim().toUpperCase(),
+            CURR_NAME: String(r.CURR_NAME || r.curr_name || "").trim(),
+          }))
+          .filter((c: any) => c.CURR_CODE);
+        setCurrencyMasterList(mapped);
+      }
+
       if (res) {
         setData(res);
+        const cleanPeriods = (res.fy_periods || []).filter(
+          (p) => p && p.FY_PERIOD && String(p.FY_PERIOD).trim().toLowerCase() !== "all" && p.DATE_FROM && p.DATE_TO
+        );
+        const activePeriod = res.company_info?.AC_FY_PERIOD || cleanPeriods[cleanPeriods.length - 1]?.FY_PERIOD || "";
+        const activePeriodObj = cleanPeriods.find((p) => p.FY_PERIOD === activePeriod);
+
+        const activeYearStart = activePeriodObj?.DATE_FROM ? new Date(activePeriodObj.DATE_FROM).getFullYear() : null;
+        let opnPeriod = res.company_info?.OPN_FY_PERIOD || activePeriod;
+        const opnPeriodObj = cleanPeriods.find((p) => p.FY_PERIOD === opnPeriod);
+        const opnYear = opnPeriodObj?.DATE_FROM ? new Date(opnPeriodObj.DATE_FROM).getFullYear() : null;
+        if (activeYearStart && opnYear && activeYearStart !== opnYear) {
+          opnPeriod = activePeriod;
+        }
+
         setForm({
-          ac_fy_period: res.company_info?.AC_FY_PERIOD || res.fy_periods[res.fy_periods.length - 1]?.FY_PERIOD || "",
-          opn_fy_period: res.company_info?.OPN_FY_PERIOD || res.company_info?.AC_FY_PERIOD || "",
-          doc_edit_from: res.ac_setup?.DOC_EDIT_FROM || "",
-          doc_edit_to: res.ac_setup?.DOC_EDIT_TO || "",
+          ac_fy_period: activePeriod,
+          opn_fy_period: opnPeriod,
+          doc_edit_from: res.ac_setup?.DOC_EDIT_FROM || activePeriodObj?.DATE_FROM || "",
+          doc_edit_to: res.ac_setup?.DOC_EDIT_TO || activePeriodObj?.DATE_TO || "",
           doc_date_editable: (res.ac_setup?.DOC_DATE_EDITABLE as any) === "N" ? "N" : "Y",
-          base_curr_code: res.ac_setup?.BASE_CURR_CODE || res.company_info?.CURRENCY || "SAR",
+          base_curr_code: res.ac_setup?.BASE_CURR_CODE || res.company_info?.CURRENCY || "OMR",
           amount_decimal_nos: res.ac_setup?.AMOUNT_DECIMAL_NOS ?? 2,
           price_decimal_nos: res.ac_setup?.PRICE_DECIMAL_NOS ?? 2,
           lcur_decimal_nos: res.ac_setup?.LCUR_DECIMAL_NOS ?? 2,
@@ -109,6 +139,70 @@ export function CompanyFinanceSetupPage() {
     }
   };
 
+  // Deduplicated and filtered financial periods
+  const validPeriods = useMemo(() => {
+    const list = data?.fy_periods || [];
+    const unique = new Map<string, CompanyFinanceSetupData["fy_periods"][0]>();
+    for (const p of list) {
+      const code = String(p.FY_PERIOD || "").trim();
+      if (
+        code &&
+        code.toLowerCase() !== "all" &&
+        p.DATE_FROM &&
+        p.DATE_TO &&
+        !unique.has(code)
+      ) {
+        unique.set(code, p);
+      }
+    }
+    return Array.from(unique.values()).sort((a, b) => (a.SORT_ORDER || 0) - (b.SORT_ORDER || 0));
+  }, [data?.fy_periods]);
+
+  // Deduplicated currency list
+  const currencyList = useMemo(() => {
+    const list = currencyMasterList.length > 0 ? currencyMasterList : data?.currencies || [];
+    const unique = new Map<string, { CURR_CODE: string; CURR_NAME: string }>();
+    for (const c of list) {
+      const code = String(c.CURR_CODE || "").trim().toUpperCase();
+      if (code && !unique.has(code)) {
+        unique.set(code, {
+          CURR_CODE: code,
+          CURR_NAME: String(c.CURR_NAME || "").trim(),
+        });
+      }
+    }
+    return Array.from(unique.values()).sort((a, b) => a.CURR_CODE.localeCompare(b.CURR_CODE));
+  }, [currencyMasterList, data?.currencies]);
+
+  const activePeriodObj = useMemo(() => {
+    return validPeriods.find((p) => p.FY_PERIOD === form.ac_fy_period);
+  }, [validPeriods, form.ac_fy_period]);
+
+  // Opening Financial Period must belong to the active fiscal year
+  const validOpeningPeriods = useMemo(() => {
+    if (!form.ac_fy_period || !activePeriodObj) return validPeriods;
+    const activeYearStart = activePeriodObj.DATE_FROM ? new Date(activePeriodObj.DATE_FROM).getFullYear() : null;
+    return validPeriods.filter((p) => {
+      if (p.FY_PERIOD === form.ac_fy_period) return true;
+      if (!p.DATE_FROM || !activeYearStart) return false;
+      const periodYear = new Date(p.DATE_FROM).getFullYear();
+      return periodYear === activeYearStart;
+    });
+  }, [validPeriods, form.ac_fy_period, activePeriodObj]);
+
+  const handleActivePeriodChange = (selectedPeriod: string) => {
+    const periodObj = validPeriods.find((p) => p.FY_PERIOD === selectedPeriod);
+    setForm((prev) => ({
+      ...prev,
+      ac_fy_period: selectedPeriod,
+      // Automatically sync Opening Financial Period to selected active period
+      opn_fy_period: selectedPeriod,
+      // Automatically sync Lock Dates to the period's start and end date
+      doc_edit_from: periodObj?.DATE_FROM || prev.doc_edit_from,
+      doc_edit_to: periodObj?.DATE_TO || prev.doc_edit_to,
+    }));
+  };
+
   useEffect(() => {
     loadData();
   }, [companyCode]);
@@ -121,8 +215,64 @@ export function CompanyFinanceSetupPage() {
         setNotice({ type: "error", message: "Please select an Active Financial Period." });
         return;
       }
-      if (form.doc_edit_from && form.doc_edit_to && form.doc_edit_from > form.doc_edit_to) {
-        setNotice({ type: "error", message: "Lock From Date cannot be after Lock To Date." });
+
+      if (!activePeriodObj) {
+        setNotice({ type: "error", message: `Selected Active Financial Period "${form.ac_fy_period}" does not exist.` });
+        return;
+      }
+
+      if (!form.opn_fy_period) {
+        setNotice({ type: "error", message: "Please select an Opening Financial Period." });
+        return;
+      }
+
+      const activeYear = activePeriodObj.DATE_FROM ? new Date(activePeriodObj.DATE_FROM).getFullYear() : null;
+      const opnPeriodObj = validPeriods.find((p) => p.FY_PERIOD === form.opn_fy_period);
+      const opnYear = opnPeriodObj?.DATE_FROM ? new Date(opnPeriodObj.DATE_FROM).getFullYear() : null;
+      if (activeYear && opnYear && activeYear !== opnYear) {
+        setNotice({
+          type: "error",
+          message: `Opening Financial Period (${form.opn_fy_period}) belongs to year ${opnYear}, which cannot be used with Active Financial Period (${form.ac_fy_period}) for year ${activeYear}.`,
+        });
+        return;
+      }
+
+      if (!form.doc_edit_from || !form.doc_edit_to) {
+        setNotice({ type: "error", message: "Both Lock From Date and Lock To Date are required." });
+        return;
+      }
+
+      if (form.doc_edit_from > form.doc_edit_to) {
+        setNotice({ type: "error", message: "Doc Edit From (Lock Date) cannot be after Doc Edit To (Max Date)." });
+        return;
+      }
+
+      if (activePeriodObj.DATE_FROM && form.doc_edit_from < activePeriodObj.DATE_FROM) {
+        setNotice({
+          type: "error",
+          message: `Doc Edit From (${form.doc_edit_from}) cannot be earlier than Active Period Start (${activePeriodObj.DATE_FROM}).`,
+        });
+        return;
+      }
+
+      if (activePeriodObj.DATE_TO && form.doc_edit_to > activePeriodObj.DATE_TO) {
+        setNotice({
+          type: "error",
+          message: `Doc Edit To (${form.doc_edit_to}) cannot exceed Active Period End (${activePeriodObj.DATE_TO}).`,
+        });
+        return;
+      }
+
+      if (!form.base_curr_code || !form.base_curr_code.trim()) {
+        setNotice({ type: "error", message: "Base Currency is required. Please select a valid currency." });
+        return;
+      }
+
+      if (currencyList.length > 0 && !currencyList.some((c) => c.CURR_CODE === form.base_curr_code)) {
+        setNotice({
+          type: "error",
+          message: `Invalid Currency "${form.base_curr_code}". Please select from the currency dropdown.`,
+        });
         return;
       }
 
@@ -459,41 +609,38 @@ export function CompanyFinanceSetupPage() {
                 </label>
                 <select
                   value={form.ac_fy_period}
-                  onChange={(e) => {
-                    const sel = e.target.value;
-                    const periodObj = data?.fy_periods.find((p) => p.FY_PERIOD === sel);
-                    setForm((prev) => ({
-                      ...prev,
-                      ac_fy_period: sel,
-                      doc_edit_from: periodObj?.DATE_FROM || prev.doc_edit_from,
-                      doc_edit_to: periodObj?.DATE_TO || prev.doc_edit_to,
-                    }));
-                  }}
+                  onChange={(e) => handleActivePeriodChange(e.target.value)}
                   className={inputClass}
                 >
                   <option value="">-- Select Active FY --</option>
-                  {data?.fy_periods.map((p) => (
+                  {validPeriods.map((p) => (
                     <option key={p.FY_PERIOD} value={p.FY_PERIOD}>
-                      {p.FY_PERIOD} ({p.DATE_FROM || "?"} to {p.DATE_TO || "?"})
+                      {p.FY_PERIOD} ({p.DATE_FROM} to {p.DATE_TO})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className={labelClass}>Opening Financial Period</label>
+                <label className={labelClass}>
+                  Opening Financial Period <span className="text-rose-500">*</span>
+                </label>
                 <select
                   value={form.opn_fy_period}
                   onChange={(e) => setForm((prev) => ({ ...prev, opn_fy_period: e.target.value }))}
                   className={inputClass}
                 >
-                  <option value="">-- Match Active FY --</option>
-                  {data?.fy_periods.map((p) => (
+                  {validOpeningPeriods.map((p) => (
                     <option key={p.FY_PERIOD} value={p.FY_PERIOD}>
-                      {p.FY_PERIOD}
+                      {p.FY_PERIOD} ({p.DATE_FROM} to {p.DATE_TO})
                     </option>
                   ))}
                 </select>
+                {activePeriodObj && (
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Restricted to {new Date(activePeriodObj.DATE_FROM).getFullYear()} fiscal period(s)
+                  </p>
+                )}
               </div>
 
               <div>
@@ -503,9 +650,14 @@ export function CompanyFinanceSetupPage() {
                 <input
                   type="date"
                   value={form.doc_edit_from}
+                  min={activePeriodObj?.DATE_FROM}
+                  max={form.doc_edit_to || activePeriodObj?.DATE_TO}
                   onChange={(e) => setForm((prev) => ({ ...prev, doc_edit_from: e.target.value }))}
                   className={inputClass}
                 />
+                {activePeriodObj?.DATE_FROM && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">Min: {activePeriodObj.DATE_FROM}</p>
+                )}
               </div>
 
               <div>
@@ -515,9 +667,14 @@ export function CompanyFinanceSetupPage() {
                 <input
                   type="date"
                   value={form.doc_edit_to}
+                  min={form.doc_edit_from || activePeriodObj?.DATE_FROM}
+                  max={activePeriodObj?.DATE_TO}
                   onChange={(e) => setForm((prev) => ({ ...prev, doc_edit_to: e.target.value }))}
                   className={inputClass}
                 />
+                {activePeriodObj?.DATE_TO && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">Max: {activePeriodObj.DATE_TO}</p>
+                )}
               </div>
             </div>
 
@@ -548,15 +705,32 @@ export function CompanyFinanceSetupPage() {
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
-                <label className={labelClass}>Base Currency</label>
-                <input
-                  type="text"
-                  maxLength={3}
-                  value={form.base_curr_code}
-                  onChange={(e) => setForm((prev) => ({ ...prev, base_curr_code: e.target.value.toUpperCase() }))}
-                  className={`${inputClass} uppercase`}
-                  placeholder="SAR"
-                />
+                <label className={labelClass}>
+                  Base Currency <span className="text-rose-500">*</span>
+                </label>
+                {true ? (
+                  <select
+                    value={form.base_curr_code}
+                    onChange={(e) => setForm((prev) => ({ ...prev, base_curr_code: e.target.value }))}
+                    className={inputClass}
+                  >
+                    <option value="">-- Select Base Currency --</option>
+                    {currencyList.map((c) => (
+                      <option key={c.CURR_CODE} value={c.CURR_CODE}>
+                        {c.CURR_CODE} - {c.CURR_NAME}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    maxLength={3}
+                    value={form.base_curr_code}
+                    onChange={(e) => setForm((prev) => ({ ...prev, base_curr_code: e.target.value.toUpperCase() }))}
+                    className={`${inputClass} uppercase`}
+                    placeholder="e.g. OMR, SAR, USD"
+                  />
+                )}
               </div>
 
               <div>
