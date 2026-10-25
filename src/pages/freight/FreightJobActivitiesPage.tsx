@@ -577,38 +577,33 @@ export function FreightJobActivitiesPage({
 
       <div className="commercial-lines-card rounded-md border bg-card shadow-xs">
         {/* Finance Line Actions Header */}
-        <div className="finance-line-actions flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50/90 border-b border-slate-200">
-          <div className="finance-line-actions-left flex flex-wrap items-center gap-2">
-            <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded">
-              <List size={14} />
+        <div className="finance-line-actions flex flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1 bg-slate-50/90 border-b border-slate-200 overflow-x-auto min-w-0">
+          <div className="finance-line-actions-left flex items-center gap-1.5 min-w-0 shrink">
+            <span className="finance-line-actions-icon p-1 bg-blue-100/70 text-[#00378C] rounded shrink-0">
+              <List size={13} />
             </span>
-            <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide">
+            <span className="finance-line-actions-title font-bold text-xs text-slate-800 uppercase tracking-wide whitespace-nowrap shrink-0">
               Service & Activity Lines
             </span>
-            <span className="finance-line-actions-badge text-[11px] font-semibold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-full">
+            <span className="finance-line-actions-badge text-[10px] font-semibold text-slate-600 bg-slate-200/80 px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0">
               {lineSearch.trim()
-                ? `${filteredLines.length} of ${lines.length} lines`
+                ? `${filteredLines.length}/${lines.length} lines`
                 : `${lines.length} ${lines.length === 1 ? "line" : "lines"}`}
             </span>
-            {lineSearch.trim() && (
-              <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                Filtered ({filteredLines.length})
-              </span>
-            )}
 
             {/* Inline KPI Strip */}
-            <div className="hidden md:flex items-center gap-1.5 ml-2 text-[11px]">
-              <span className="inline-flex items-center gap-1 rounded bg-blue-50 border border-blue-200 px-2 py-0.5 font-medium text-blue-900">
-                <span className="text-blue-700 font-bold">Revenue:</span> {money(totals.revenue)} {baseCurrency}
+            <div className="hidden lg:flex items-center gap-1 ml-1 text-[10px] whitespace-nowrap shrink-0">
+              <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-medium text-blue-900">
+                <span className="text-blue-700 font-bold">Rev:</span> {money(totals.revenue)} {baseCurrency}
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-medium text-emerald-900">
+              <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 font-medium text-emerald-900">
                 <span className="text-emerald-700 font-bold">Tax:</span> {money(totals.tax)} {baseCurrency}
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-slate-100 border border-slate-200 px-2 py-0.5 font-medium text-slate-800">
-                <span className="text-slate-600 font-bold">Expense:</span> {money(totals.expense)} {baseCurrency}
+              <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 border border-slate-200 px-1.5 py-0.5 font-medium text-slate-800">
+                <span className="text-slate-600 font-bold">Exp:</span> {money(totals.expense)} {baseCurrency}
               </span>
               <span
-                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-bold ${
+                className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 font-bold ${
                   totals.profit >= 0
                     ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                     : "bg-rose-50 border-rose-300 text-rose-800"
@@ -619,12 +614,12 @@ export function FreightJobActivitiesPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             {/* Search Filter input */}
-            <div className="bisc-table-search relative flex items-center">
-              <Search size={13} className="bisc-table-search-icon absolute left-2 text-slate-400" />
+            <div className="bisc-table-search relative flex items-center shrink-0">
+              <Search size={12} className="bisc-table-search-icon absolute left-2 text-slate-400" />
               <input
-                className="bisc-search-input h-7 pl-6 pr-6 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-36 sm:w-48"
+                className="bisc-search-input h-7 pl-6 pr-5 text-xs rounded border border-slate-300 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00378C] w-28 sm:w-36 md:w-40"
                 type="text"
                 value={lineSearch}
                 onChange={(e) => setLineSearch(e.target.value)}
@@ -637,7 +632,7 @@ export function FreightJobActivitiesPage({
                   className="bisc-table-search-clear absolute right-1.5 text-slate-400 hover:text-slate-700"
                   title="Clear"
                 >
-                  <X size={12} />
+                  <X size={11} />
                 </button>
               )}
             </div>
@@ -653,9 +648,9 @@ export function FreightJobActivitiesPage({
                   ? `Load missing activities from ${lookupText(header, "quotation_ref")}`
                   : "Job has no quotation reference"
               }
-              className="h-7 text-xs font-medium"
+              className="h-7 px-2 text-[11px] font-medium whitespace-nowrap shrink-0"
             >
-              <ListPlus size={13} className="mr-1" /> {populating ? "Loading..." : "Populate Quotation"}
+              <ListPlus size={12} className="mr-1 shrink-0" /> {populating ? "..." : "Populate Quotation"}
             </Button>
 
             <Button
@@ -663,10 +658,10 @@ export function FreightJobActivitiesPage({
               size="sm"
               onClick={addLine}
               disabled={isLineLocked}
-              className="h-7 text-xs font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer"
+              className="h-7 px-2.5 text-[11px] font-semibold !bg-[#00378C] !text-white !border-[#002d72] hover:!bg-[#002d72] shadow-xs cursor-pointer whitespace-nowrap shrink-0"
               title="Add activity line (Alt + A)"
             >
-              <Plus size={13} className="mr-1" /> Add Line
+              <Plus size={12} className="mr-1 shrink-0" /> Add Line
             </Button>
           </div>
         </div>
